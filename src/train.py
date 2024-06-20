@@ -18,7 +18,7 @@ raw_data_train = file_utils.get_raw_data(f_train_cha)
 
 data_ids = list(raw_data_train.keys())
 
-for id in range(14, len(data_ids)):
+for id in range(len(data_ids)):
     args.demo_id = id
     first_data = raw_data_train[data_ids[args.demo_id]]
     patch_input, patch_output = grouping.data2patch(args, first_data['train'])

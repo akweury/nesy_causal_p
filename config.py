@@ -5,6 +5,10 @@ from pathlib import Path
 
 root = Path(__file__).parents[0]
 output = root / 'output'
+
+if not os.path.exists(output):
+    os.mkdir(output)
+
 tile_pad_width = 1
 color_tiles = [
     (0, 0, 0),  # 0

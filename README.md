@@ -1,2 +1,14 @@
 # nesy_causal_p
 The perception model based on neuro-symbolic and causal approaches
+
+
+# Setup
+
+1. install pytorch
+```
+conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvidia
+```
+2. install requirements.txt
+``` 
+pip install -r requirements.txt
+```
