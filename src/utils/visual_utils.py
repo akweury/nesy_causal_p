@@ -3,12 +3,12 @@
 import cv2 as cv
 import torch
 import numpy as np
-from PIL import Image, ImageDraw
-import imageio
+from tqdm import tqdm
 import IPython.display as display
 import tempfile
 
 import config
+from src.utils import data_utils
 
 
 def tile_zoom_in(tile_array, zoom_factor, tile_border=True, lbw=0, rbw=0, tbw=0, bbw=0):
@@ -135,47 +135,18 @@ def save_image(final_image, image_output_path):
     cv.imwrite(image_output_path, final_image)
 
 
-def export_task_img(args, patch_inputs, patch_outputs):
+def export_task_img(data, output_path):
     """ reasoning process visualization as a gif image.
     From left to right: input, output, reasoning_process."""
-
-    task_img = get_task_img(patch_inputs, patch_outputs)
-    task_img_file = config.output / f'task_{args.demo_id}.png'
-    # save task img
-    save_image(task_img, str(task_img_file))
-    # inputs = []
-    # outputs = []
-    #
-    # for example in task:
-    #     example_input = uncompress_data(example["input"])
-    #     inputs.append(example_input)
-    #     if "output" in example.keys():
-    #         example_output = uncompress_data(example["output"])
-    #         outputs.append(example_output)
-    #
-    # # appending and resizing
-    # input_imgs = []
-    # output_imgs = []
-    # for e_i in range(len(task)):
-    #     input_zoom_factor = 512 // max(inputs[e_i].shape[:2])
-    #     input_img = tile_zoom_in(inputs[e_i].numpy(), input_zoom_factor, lbw=50, rbw=200, tbw=50, bbw=200)
-    #     input_imgs.append(input_img)
-    #
-    #     if len(outputs) > 0:
-    #         output_zoom_factor = 512 // max(outputs[e_i].shape[:2])
-    #         output_img = tile_zoom_in(outputs[e_i].numpy(), output_zoom_factor, lbw=50, rbw=200, tbw=50, bbw=200)
-    #         output_imgs.append(output_img)
-    #
-    # input_imgs_vc = vconcat_resize(input_imgs)
-    # if len(output_imgs) > 0:
-    #     output_imgs_vc = vconcat_resize(output_imgs)
-    #     visual_img = hconcat_resize([input_imgs_vc, output_imgs_vc])
-    #     show_array(visual_img, "train-00")
-    #     return visual_img
-    # else:
-    #     show_array(input_imgs_vc, "test-00")
-    #     return input_imgs_vc
-
+    data = list(data.values())
+    total_data_num = len(data)
+    for id in tqdm(range(total_data_num), desc=f"exporting data to {output_path}"):
+        task = data[id]
+        patch_input, patch_output = data_utils.data2patch(task['train'])
+        task_img = get_task_img(patch_input, patch_output)
+        task_img_file = output_path / f'{id:03d}.png'
+        # save task img
+        save_image(task_img, str(task_img_file))
 
 def visual_horizontal(patch_imgs, img_name):
     img = hconcat_resize(patch_imgs)

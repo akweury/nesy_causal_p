@@ -25,3 +25,6 @@ color_tiles = [
 
 data_file_train_cha = root / "dataset" / "arc-prize-2024" / "arc-agi_training_challenges.json"
 data_file_train_sol = root / "dataset" / "arc-prize-2024" / "arc-agi_training_solutions.json"
+data_file_test_cha = root / "dataset" / "arc-prize-2024" / "arc-agi_test_challenges.json"
+data_file_eval_cha = root / "dataset" / "arc-prize-2024" / "arc-agi_evaluation_challenges.json"
+data_file_eval_sol = root / "dataset" / "arc-prize-2024" / "arc-agi_evaluation_solutions.json"
