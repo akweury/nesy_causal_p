@@ -12,15 +12,15 @@ def get_raw_data():
     f_test_cha = config.data_file_test_cha
 
     with open(f_train_cha, 'r') as f:
-        train_data_cha = json.load(f)
+        train_data_cha = list(json.load(f).values())
     with open(f_train_sol, 'r') as f:
-        train_data_sol = json.load(f)
+        train_data_sol = list(json.load(f).values())
     with open(f_eval_cha, 'r') as f:
-        eval_data_cha = json.load(f)
+        eval_data_cha = list(json.load(f).values())
     with open(f_eval_sol, 'r') as f:
-        eval_data_sol = json.load(f)
+        eval_data_sol = list(json.load(f).values())
     with open(f_test_cha, 'r') as f:
-        test_data_cha = json.load(f)
+        test_data_cha = list(json.load(f).values())
     data = {
         "train_cha": train_data_cha,
         "train_sol": train_data_sol,

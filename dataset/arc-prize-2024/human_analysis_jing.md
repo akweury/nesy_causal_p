@@ -49,6 +49,11 @@
 100
 ##### with indicators
 0,74,94
+##### divide by x 
+- with remainder
+  - 2
+- without remainder
+
 
 
 ---

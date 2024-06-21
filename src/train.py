@@ -10,5 +10,8 @@ args = args_utils.get_args()
 
 # data file
 raw_data = file_utils.get_raw_data()
+train_cha = raw_data["train_cha"]
+train_sol = raw_data["train_sol"]
 
 
+print("program finished.")

@@ -148,6 +148,7 @@ def export_task_img(data, output_path):
         # save task img
         save_image(task_img, str(task_img_file))
 
+
 def visual_horizontal(patch_imgs, img_name):
     img = hconcat_resize(patch_imgs)
     show_array(img, img_name)
@@ -294,3 +295,12 @@ def visual_reasoning(args, patch_input, patch_output, patch_groups, id_groups):
 
     # Convert frames to a video
     release_video(frames, config.output / f'reasoning_{args.demo_id}.mp4')
+
+
+def group2patch(whole_patch, group):
+    data = np.array(whole_patch)
+    group_patch = np.zeros_like(data) + 10
+    for pos in group:
+        group_patch[pos] = data[pos]
+
+    return group_patch
