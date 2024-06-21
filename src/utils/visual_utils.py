@@ -304,3 +304,14 @@ def group2patch(whole_patch, group):
         group_patch[pos] = data[pos]
 
     return group_patch
+
+
+def align_white_imgs(list_a, list_b):
+    white_img = np.zeros_like(list_a[0]) + 255
+    if len(list_a) < len(list_b):
+        align_num = len(list_b) - len(list_a)
+        list_a += [white_img] * align_num
+    else:
+        align_num = len(list_a) - len(list_b)
+        list_b += [white_img] * align_num
+    return list_a, list_b

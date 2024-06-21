@@ -3,6 +3,7 @@
 import numpy as np
 from scipy.ndimage import label
 from tqdm import tqdm
+from collections import defaultdict
 
 from utils import tile_utils, file_utils, visual_utils
 from src import visual
@@ -92,6 +93,17 @@ def find_connected_components(matrix):
     all_components = sorted(all_components, key=lambda x: len(x), reverse=True)
     return all_components
 
+def find_color_components(matrix):
+    color_groups = defaultdict(list)
+
+    # Collect coordinates of each color
+    for x in range(matrix.shape[0]):
+        for y in range(matrix.shape[1]):
+            color = matrix[x, y]
+            color_groups[color].append((x, y))
+    color_groups = sorted(list(color_groups.values()), key=lambda x: len(x), reverse=True)
+    return color_groups
+
 
 
 def group_by_color(train_cha):
@@ -103,19 +115,31 @@ def group_by_color(train_cha):
             data_input = example["input"]
             data_output = example["output"]
             # grouping by color
-            input_groups_color = find_connected_components(np.array(data_input))
-            output_groups_color = find_connected_components(np.array(data_output))
+
+            input_groups_color = find_color_components(np.array(data_input))
+            output_groups_color = find_color_components(np.array(data_output))
             # grouping by ...
             task_train_groups.append([input_groups_color, output_groups_color])
         train_cha_groups.append(task_train_groups)
     return train_cha_groups
 
+def get_belong_relations(color_groups_cha):
+    pass
+
 
 # data file
 raw_data = file_utils.get_raw_data()
 
+# grouping by color
 color_groups_cha = group_by_color(raw_data["train_cha"])
-visual.export_groups_as_images(raw_data["train_cha"], color_groups_cha)
+
+# visualization
+# visual.export_groups_as_images(raw_data["train_cha"], color_groups_cha, "color")
+
+# find relations between input and output groups
+
+
+belong_group_pairs = get_belong_relations(color_groups_cha)
 
 # group can be further divided into groups with another algorithm
 # connected_groups_cha = group_by_connection(raw_data["train_cha"])
