@@ -2,7 +2,38 @@
 
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
-from src.utils import visual_utils
+
+import config
+
+
+def part_of_patch(input_patch, output_patch):
+    """ the small_array can be x% identical to large_array
+    return: top n identical patches in large array, its position, width, and different tiles if any
+    """
+    input_patch = np.array(input_patch)
+    output_patch = np.array(output_patch)
+    if input_patch.shape[0] == output_patch.shape[0] and input_patch.shape[1] == output_patch.shape[1]:
+        part_type = config.code_group_relation["a_eq_b"]
+        large_patch = output_patch
+        small_patch = input_patch
+    elif input_patch.shape[0] <= output_patch.shape[0] and input_patch.shape[1] <= output_patch.shape[1]:
+        part_type = config.code_group_relation["b_inc_a"]
+        large_patch = output_patch
+        small_patch = input_patch
+    elif input_patch.shape[0] >= output_patch.shape[0] and input_patch.shape[1] >= output_patch.shape[1]:
+        part_type = config.code_group_relation["a_inc_b"]
+        large_patch = input_patch
+        small_patch = output_patch
+    else:
+        part_type = config.code_group_relation["else"]
+        return part_type
+    # Get sliding windows of shape (3, 3) from the large array
+    windows = sliding_window_view(large_patch, small_patch.shape)
+    match_counts = np.sum(windows == small_patch, axis=(2, 3))
+    similarity = match_counts / small_patch.size * 100
+    if similarity.max() < 100:
+        part_type = config.code_group_relation["else"]
+    return part_type
 
 
 def check_patch_exists(space_patch, target_patch):
@@ -33,10 +64,6 @@ def check_patch_exists(space_patch, target_patch):
     results.sort(key=lambda x: x['similarity'], reverse=True)
 
     return results
-
-
-def individual_grouping(param):
-    pass
 
 
 def find_identical_groups(space_patch, target_patch, is_visual=True):
