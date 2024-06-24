@@ -272,13 +272,9 @@ def progs_check(ig2og_relations, ig, ):
     }
 
 
-def reason_color(example, og, igs):
+def get_prop_igs2og(example, og, igs):
     igs2og = []
     for ig in igs:
-        # same color then
-        # which ig decide the color of og?
-        # the ig that has same shape as og
-        # how to decide the color of og?
         ig2og = find_common_prop(example, ig, og)
         igs2og.append(ig2og)
     return igs2og
@@ -289,18 +285,14 @@ def _fun(example, og, igs):
     og_color_ig = None
 
     # find a way to map ig to og.
-    igs2og_color = reason_color(example, og, igs)
-    # scaling
-    ig2og_scale = None
-    # duplicating
-    ig2og_duplicate = True
+    igs2og = get_prop_igs2og(example, og, igs)
 
-    ops = ["xxx"]
-    return ops
+    return igs2og
 
 
 for task_i in tqdm(range(len(raw_data["train_cha"])), desc="Reasoning Task"):
     # acquire the probability of grouping type: color/shape/area/...
+    task_features = []
     for e_i in range(len(raw_data["train_cha"][task_i])):
         example = raw_data["train_cha"][task_i]["train"][e_i]
         example["input"] = np.array(example["input"]) + 1
@@ -308,23 +300,14 @@ for task_i in tqdm(range(len(raw_data["train_cha"])), desc="Reasoning Task"):
         # grouping the tiles in example
         igs, ogs = group_by_color_single(example)
         for g_i in range(len(ogs)):
-            og = ogs[g_i]
-            # group_shape = ogs[g_i]
-            # group_shape = {"input": "input_group_color_non_black",
-            #                "op_01": "scalex3",
-            #                "op_02": "duplicate at position",
-            #                "output": "positions"}
-            _fun(example, og, igs)
-            # what determine group color?
-            # what determine group shape
+            igs2og = get_prop_igs2og(example, ogs[g_i], igs)
             group_construct_data = {"color": None, "shape": None}
 
         # First determine what relations are required to be reasoned....color/shape.
         # reasoning color relations
         # for each group in output, what decide its color?
         # if r decide color, check if r applied in other examples.
-        # .
-        # ?
+
 
 # visualization
 # visual.export_belong_relation_as_images(raw_data["train_cha"], color_groups_cha, "color", belong_group_pairs)
