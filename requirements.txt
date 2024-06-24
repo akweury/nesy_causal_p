@@ -5,3 +5,4 @@ ipython
 imageio
 tqdm
 scipy
+lark

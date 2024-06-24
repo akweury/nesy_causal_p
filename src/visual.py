@@ -15,7 +15,7 @@ def export_data_as_images(raw_data, data_type):
 
 
 def export_groups_as_images(data, groups, group_type):
-    output_path = config.output / 'groups'
+    output_path = config.output / f'{group_type}_groups'
     if not os.path.exists(output_path):
         os.mkdir(output_path)
 
@@ -57,7 +57,7 @@ def export_groups_as_images(data, groups, group_type):
             img_file = output_path / f"{task_i:03d}_{example_i}_{group_type}.png"
             visual_utils.save_image(g_img, str(img_file))
 
-
+# export_groups_as_images()
 # export_data_as_images(file_utils.get_raw_data(), "train_cha")
 # export_data_as_images(file_utils.get_raw_data(), "eval_cha")
 # export_data_as_images(file_utils.get_raw_data(), "test_cha")

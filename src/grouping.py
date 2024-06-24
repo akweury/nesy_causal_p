@@ -7,7 +7,7 @@ from collections import defaultdict
 
 from utils import tile_utils, file_utils, visual_utils
 from src import visual
-
+from src.alpha import alpha
 """
     dim_in == dim_out 
         - group individual --> match
@@ -182,10 +182,12 @@ raw_data = file_utils.get_raw_data()
 
 
 # grouping by color
-# color_groups_cha = group_by_color(raw_data["train_cha"])
+color_groups_cha = group_by_color(raw_data["train_cha"])
+# color_groups_eval_cha = group_by_color(raw_data["eval_cha"])
 
 # visualization
-# visual.export_groups_as_images(raw_data["train_cha"], color_groups_cha, "color")
+# visual.export_groups_as_images(raw_data["train_cha"], color_groups_cha, "train_cha")
+# visual.export_groups_as_images(raw_data["eval_cha"], color_groups_eval_cha, "eval_cha")
 
 # find relations between input and output groups
 # belong_group_pairs = get_belong_relations(color_groups_cha)
@@ -290,19 +292,34 @@ def _fun(example, og, igs):
     return igs2og
 
 
+def rea_group_relations(task_features):
+    # example_num, output_group_num, input_group_num ------ dup_pos, color_mapping, scale_ratio
+
+    # find out relation that are true in all examples.
+
+    # output_group
+
+    rules = alpha.alpha(task_features)
+    return rules
+
+
 for task_i in tqdm(range(len(raw_data["train_cha"])), desc="Reasoning Task"):
     # acquire the probability of grouping type: color/shape/area/...
     task_features = []
-    for e_i in range(len(raw_data["train_cha"][task_i])):
+    for e_i in range(len(raw_data["train_cha"][task_i]["train"])):
+
         example = raw_data["train_cha"][task_i]["train"][e_i]
         example["input"] = np.array(example["input"]) + 1
         example["output"] = np.array(example["output"]) + 1
         # grouping the tiles in example
         igs, ogs = group_by_color_single(example)
+        igs2ogs = []
         for g_i in range(len(ogs)):
             igs2og = get_prop_igs2og(example, ogs[g_i], igs)
-            group_construct_data = {"color": None, "shape": None}
+            igs2ogs.append(igs2og)
 
+        task_features.append(igs2ogs)
+    rea_group_relations(task_features)
         # First determine what relations are required to be reasoned....color/shape.
         # reasoning color relations
         # for each group in output, what decide its color?
