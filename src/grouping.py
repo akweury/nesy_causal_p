@@ -171,7 +171,7 @@ def get_belong_relations(color_groups_cha):
 # color_groups_eval_cha = group_by_color(raw_data["eval_cha"])
 
 # visualization
-# visual.export_groups_as_images(raw_data["train_cha"], color_groups_cha, "train_cha")
+
 # visual.export_groups_as_images(raw_data["eval_cha"], color_groups_eval_cha, "eval_cha")
 
 # find relations between input and output groups
