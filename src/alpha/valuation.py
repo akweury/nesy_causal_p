@@ -18,16 +18,16 @@ class FCNNValuationModule(nn.Module):
             dataset (str): The dataset.
     """
 
-    def __init__(self, lang, device, dataset, dataset_type):
+    def __init__(self, lang, device, dataset):
         super().__init__()
         self.lang = lang
         self.device = device
-        self.layers, self.vfs = self.init_valuation_functions(device, dataset_type)
+        self.layers, self.vfs = self.init_valuation_functions(device)
         # attr_term -> vector representation dic
         self.attrs = self.init_attr_encodings(device)
         self.dataset = dataset
 
-    def init_valuation_functions(self, device, dataset_type=None):
+    def init_valuation_functions(self, device):
         """
             Args:
                 device (device): The device.
@@ -52,17 +52,17 @@ class FCNNValuationModule(nn.Module):
         vfs['in'] = v_in
         layers.append(v_in)
 
-        v_rho = FCNNRhoValuationFunction(device)
-        vfs['rho'] = v_rho
-        layers.append(v_rho)
-
-        v_phi = FCNNPhiValuationFunction(device)
-        vfs['phi'] = v_phi
-        layers.append(v_phi)
-
-        v_slope = FCNNSlopeValuationFunction(device)
-        vfs['slope'] = v_slope
-        layers.append(v_slope)
+        # v_rho = FCNNRhoValuationFunction(device)
+        # vfs['rho'] = v_rho
+        # layers.append(v_rho)
+        #
+        # v_phi = FCNNPhiValuationFunction(device)
+        # vfs['phi'] = v_phi
+        # layers.append(v_phi)
+        #
+        # v_slope = FCNNSlopeValuationFunction(device)
+        # vfs['slope'] = v_slope
+        # layers.append(v_slope)
 
         v_shape_counter = FCNNShapeCounterValuationFunction()
         vfs['shape_counter'] = v_shape_counter
@@ -87,12 +87,9 @@ class FCNNValuationModule(nn.Module):
         attrs = {}
         for dtype_name in attr_names:
             for term in self.lang.get_by_dtype_name(dtype_name):
-                term_index = self.lang.term_index(term)
-                num_classes = len(self.lang.get_by_dtype_name(dtype_name))
-                one_hot = F.one_hot(torch.tensor(
-                    term_index).to(device), num_classes=num_classes)
-                one_hot.to(device)
-                attrs[term] = one_hot
+                term_index = torch.tensor(self.lang.term_index(term)).to(device)
+                num_cls = len(self.lang.get_by_dtype_name(dtype_name))
+                attrs[term] = F.one_hot(term_index, num_classes=num_cls).to(device)
         return attrs
 
     def forward(self, zs, atom):
@@ -412,6 +409,6 @@ class FCNNSlopeValuationFunction(nn.Module):
             (z[:, config.group_tensor_index["screen_right_x"]], z[:, config.group_tensor_index["screen_right_y"]]))
 
 
-def get_valuation_module(args, lang):
-    VM = FCNNValuationModule(lang=lang, device=args.device, dataset=args.dataset, dataset_type=args.dataset_type)
+def get_valuation_module(args, lang, dataset):
+    VM = FCNNValuationModule(lang=lang, device=args.device, dataset=dataset)
     return VM

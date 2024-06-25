@@ -4,6 +4,53 @@ from abc import ABC, abstractmethod
 import torch
 
 
+class DataType(object):
+    """Data type in first-order logic.
+
+    A class of data types in first-order logic.
+
+    Args:
+        name (str): The name of the data type.
+
+    Attrs:
+        name (str): The name of the data type.
+    """
+
+    def __init__(self, name):
+        self.name = name
+
+    def __eq__(self, other):
+        if type(other) == str:
+            return self.name == other
+        else:
+            return self.name == other.name
+
+    def __str__(self):
+        return self.name
+
+    def __repr__(self):
+        return self.__str__()
+
+    def __hash__(self):
+        return hash(self.__str__())
+
+
+class ModeTerm(object):
+    """Terms for mode declarations. It has mode (+, -, #) and data types.
+    """
+
+    def __init__(self, mode, dtype):
+        self.mode = mode
+        assert mode in ['+', '-', '#'], "Invalid mode declaration."
+        self.dtype = dtype
+
+    def __str__(self):
+        return self.mode + self.dtype.name
+
+    def __repr__(self):
+        return self.__str__()
+
+
 def flatten(x): return [z for y in x for z in (
     flatten(y) if hasattr(y, '__iter__') and not isinstance(y, str) else (y,))]
 
@@ -776,3 +823,8 @@ class InventedClause(Clause):
 
         self.head = head
         self.body = sorted(body)
+
+
+p_ = Predicate('.', 1, [DataType('spec')])
+false = Atom(p_, [Const('__F__', dtype=DataType('spec'))])
+true = Atom(p_, [Const('__T__', dtype=DataType('spec'))])

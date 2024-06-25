@@ -55,7 +55,7 @@ class ExpTree(Transformer):
             return [content[0]] + content[1:]
 
     def const(self, name):
-        dtype = self.lang.get_by_dtype_name(name[0], with_inv=True)
+        dtype = self.lang.get_by_dtype_name(name[0])
         return Const(name[0], dtype)
 
     def variable(self, name):
@@ -70,15 +70,15 @@ class ExpTree(Transformer):
         for p in self.lang.preds:
             if p.name == alphas[0]:
                 pred.append(p)
-        if (len(pred) == 0):
-            for p in self.lang.invented_preds:
-                if p.name == alphas[0]:
-                    pred.append(p)
         if len(pred) == 0:
-            for p in self.lang.bk_inv_preds:
+            for p in self.lang.inv_p:
                 if p.name == alphas[0]:
                     pred.append(p)
-        if (len(pred) == 0):
+        # if len(pred) == 0:
+        #     for p in self.lang.bk_inv_preds:
+        #         if p.name == alphas[0]:
+        #             pred.append(p)
+        if len(pred) == 0:
             raise ValueError("Not found predicate.")
         pred_0 = pred[0]
         return pred_0

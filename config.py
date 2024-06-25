@@ -5,17 +5,17 @@ from pathlib import Path
 
 root = Path(__file__).parents[0]
 output = root / 'output'
+lark_file = root/ "src" / "alpha" / "exp.lark"
 
 if not os.path.exists(output):
     os.mkdir(output)
 
 code_group_relation = {
-    "a_eq_b":0,
-    "a_inc_b":1,
-    "b_inc_a":2,
-    "else":3
+    "a_eq_b": 0,
+    "a_inc_b": 1,
+    "b_inc_a": 2,
+    "else": 3
 }
-
 
 tile_pad_width = 1
 color_tiles = [

@@ -5,17 +5,8 @@ from scipy.ndimage import label
 from tqdm import tqdm
 from collections import defaultdict
 
-from utils import tile_utils, file_utils, visual_utils
-from src import visual
+from utils import tile_utils, file_utils, log_utils, args_utils
 from src.alpha import alpha
-"""
-    dim_in == dim_out 
-        - group individual --> match
-    dim_in > dim_out 
-        - find identical groups in dim_in 
-    dim_in < dim_out 
-        - find identical groups in dim_out
-"""
 
 
 # def hier_data2group_img(hier_data):
@@ -177,12 +168,6 @@ def get_belong_relations(color_groups_cha):
     return data_relations
 
 
-# data file
-raw_data = file_utils.get_raw_data()
-
-
-# grouping by color
-color_groups_cha = group_by_color(raw_data["train_cha"])
 # color_groups_eval_cha = group_by_color(raw_data["eval_cha"])
 
 # visualization
@@ -265,7 +250,7 @@ def find_common_prop(example, ig, og):
     return ig2og_relations
 
 
-def progs_check(ig2og_relations, ig, ):
+def progs_check(ig2og_relations, ig):
     io_duplicate_pos = ig2og_relations["io_duplicate_pos"]
     scale_io_ratio = ig2og_relations["scale_io_ratio"]
 
@@ -285,30 +270,17 @@ def get_prop_igs2og(example, og, igs):
 def _fun(example, og, igs):
     og_shape_ig = None
     og_color_ig = None
-
     # find a way to map ig to og.
     igs2og = get_prop_igs2og(example, og, igs)
 
     return igs2og
 
 
-def rea_group_relations(task_features):
-    # example_num, output_group_num, input_group_num ------ dup_pos, color_mapping, scale_ratio
-
-    # find out relation that are true in all examples.
-
-    # output_group
-
-    rules = alpha.alpha(task_features)
-    return rules
-
-
-for task_i in tqdm(range(len(raw_data["train_cha"])), desc="Reasoning Task"):
-    # acquire the probability of grouping type: color/shape/area/...
+def percept_task_features(args, task):
     task_features = []
-    for e_i in range(len(raw_data["train_cha"][task_i]["train"])):
-
-        example = raw_data["train_cha"][task_i]["train"][e_i]
+    g_nums = []
+    for e_i in range(len(task["train"])):
+        example = task["train"][e_i]
         example["input"] = np.array(example["input"]) + 1
         example["output"] = np.array(example["output"]) + 1
         # grouping the tiles in example
@@ -317,20 +289,11 @@ for task_i in tqdm(range(len(raw_data["train_cha"])), desc="Reasoning Task"):
         for g_i in range(len(ogs)):
             igs2og = get_prop_igs2og(example, ogs[g_i], igs)
             igs2ogs.append(igs2og)
-
         task_features.append(igs2ogs)
-    rea_group_relations(task_features)
-        # First determine what relations are required to be reasoned....color/shape.
-        # reasoning color relations
-        # for each group in output, what decide its color?
-        # if r decide color, check if r applied in other examples.
 
-
-# visualization
-# visual.export_belong_relation_as_images(raw_data["train_cha"], color_groups_cha, "color", belong_group_pairs)
-
-# group can be further divided into groups with another algorithm
-# connected_groups_cha = group_by_connection(raw_data["train_cha"])
-
-
-print("program finished")
+        g_nums.append(len(ogs))
+    g_num_unique = np.unique(g_nums)
+    if len(g_num_unique) != 1:
+        raise ValueError("Output Group Numbers are not same.")
+    args.g_num = g_num_unique[0]
+    return task_features

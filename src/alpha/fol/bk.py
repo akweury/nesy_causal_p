@@ -1,29 +1,33 @@
 # Created by shaji at 24/06/2024
-target_predicate = [
-    'tp:1:pattern',
-    'in:2:group,pattern'
-]
+predicate_target = "target:1:pattern"
+predicate_exist = "in:1:group"
+group_name = "g"
+
+variable = {
+    'example': "X",
+    "group": "G"
+}
 neural_p = {
     'shape_counter': 'shape_counter:2:group,number',
     'color_counter': 'color_counter:2:group,number',
     'color': 'color:2:group,color',
     'shape': 'shape:2:group,shape',
-    'phi': 'phi:3:group,group,phi',
-    'rho': 'rho:3:group,group,rho',
-    'slope': 'slope:2:group,slope',
+    # 'phi': 'phi:3:group,group,phi',
+    # 'rho': 'rho:3:group,group,rho',
+    # 'slope': 'slope:2:group,slope',
 }
 const_dict = {
-    'image': 'target',
     'color': 'enum',
     'shape': 'enum',
     'group': 'amount_e',
-    'phi': 'amount_phi',
-    'rho': 'amount_rho',
-    'slope': 'amount_slope',
-    'number': 'amount_e',
+    # 'phi': 'amount_phi',
+    # 'rho': 'amount_rho',
+    # 'slope': 'amount_slope',
+    'number': 'amount_num',
 }
 attr_names = ['color', 'shape', 'rho', 'phi', 'group_shape', "slope", 'number']
-color = ['pink', 'green', 'blue']
+color = ["color_1", "color_2", "color_3", "color_4", "color_5",
+         "color_6", "color_7", "color_8", "color_9", "color_10"]
 shape = ['line', 'rectangle']
 
 # pred_obj_mapping = {

@@ -15,18 +15,18 @@ class FactsConverter(nn.Module):
 
     def __init__(self, args, lang, valuation_module):
         super(FactsConverter, self).__init__()
-        self.e = args.g_num
-        self.d = args.d
+        self.g_num = args.g_num
+        # self.dim = args.d
         self.lang = lang
         self.vm = valuation_module  # valuation functions
 
         self.device = args.device
 
     def __str__(self):
-        return "FactsConverter(entities={}, dimension={})".format(self.e, self.d)
+        return "FactsConverter(entities={}, dimension={})".format(self.e, self.dim)
 
     def __repr__(self):
-        return "FactsConverter(entities={}, dimension={})".format(self.e, self.d)
+        return "FactsConverter(entities={}, dimension={})".format(self.e, self.dim)
 
     def forward(self, Z, G, B, scores=None):
         return self.convert(Z, G, B, scores)

@@ -8,42 +8,23 @@ import torch
 
 from .exp_parser import ExpTree
 from .logic import *
-from . import bk
-
-class DataType(object):
-    """Data type in first-order logic.
-
-    A class of data types in first-order logic.
-
-    Args:
-        name (str): The name of the data type.
-
-    Attrs:
-        name (str): The name of the data type.
-    """
-
-    def __init__(self, name):
-        self.name = name
-
-    def __eq__(self, other):
-        if type(other) == str:
-            return self.name == other
-        else:
-            return self.name == other.name
-
-    def __str__(self):
-        return self.name
-
-    def __repr__(self):
-        return self.__str__()
-
-    def __hash__(self):
-        return hash(self.__str__())
+from . import bk, lang_utils, mode_declaration
+import config
 
 
-p_ = Predicate('.', 1, [DataType('spec')])
-false = Atom(p_, [Const('__F__', dtype=DataType('spec'))])
-true = Atom(p_, [Const('__T__', dtype=DataType('spec'))])
+def get_unused_args(c):
+    unused_args = []
+    used_args = []
+    for body in c.body:
+        if "in" == body.pred.name:
+            unused_args.append(body.terms[0])
+    for body in c.body:
+        if not "in" in body.pred.name:
+            for term in body.terms:
+                if "O" in term.name and term not in used_args:
+                    unused_args.remove(term)
+                    used_args.append(term)
+    return unused_args, used_args
 
 
 class Language(object):
@@ -65,13 +46,13 @@ class Language(object):
     def __init__(self, args, inv_consts=None):
 
         # BK
-        self.vars = [Var(f"O{i + 1}") for i in range(args.rule_obj_num)]
-        self.var_num = args.rule_obj_num
+        self.vars = [Var(f"{bk.variable['group']}{i + 1}") for i in range(args.g_num)]
+        self.var_num = args.g_num
         self.atoms = []
         self.funcs = []
         self.consts = []
         self.preds = []
-
+        self.mode_declarations = None
         # PI
         self.inv_p = []
         self.inv_p_with_scores = []
@@ -79,8 +60,11 @@ class Language(object):
         self.pi_c = []
         self.all_pi_c = []
         self.clause_with_scores = []
-        self.invented_preds_number = args.p_inv_counter
+        # self.invented_preds_number = args.p_inv_counter
         self.invented_consts_number = 0
+
+        # Results
+        self.learned_c = []
 
         # GRAMMAR
         with open(args.lark_path, encoding="utf-8") as grammar:
@@ -88,19 +72,19 @@ class Language(object):
         with open(args.lark_path, encoding="utf-8") as grammar:
             self.lp_atom = Lark(grammar.read(), start="atom")
 
-
         if inv_consts is None:
             self.load_lang(args)
         else:
             self.consts = self.load_consts(args) + inv_consts
+
     def reset_lang(self, group_num):
-        self.all_clauses = []
-        self.invented_preds_with_scores = []
+        self.learned_c = []
         init_c = self.load_init_clauses(group_num)
         # update predicates
-        self.update_bk(neural_pred, full_bk)
+        # self.update_bk(neural_pred, full_bk)
         # update language
-        self.mode_declarations = lang_utils.get_mode_declarations(e, lang)
+        self.mode_declarations = mode_declaration.get_mode_declarations(self.preds, group_num)
+        return init_c
 
     def __str__(self):
         s = "===Predicates===\n"
@@ -121,7 +105,7 @@ class Language(object):
         return self.__str__()
 
     def generate_minimum_atoms(self, prim_args_list):
-        p_ = Predicate('.', 1, [DataType('spec')])
+        p_ = Predicate('.', 1, [mode_declaration.DataType('spec')])
         false = Atom(p_, [Const('__F__', dtype=DataType('spec'))])
         true = Atom(p_, [Const('__T__', dtype=DataType('spec'))])
 
@@ -208,11 +192,16 @@ class Language(object):
                     pi_atoms.append(Atom(pred, args))
         self.atoms = spec_atoms + sorted(atoms) + sorted(bk_pi_atoms) + sorted(pi_atoms)
 
-    def load_init_clauses(self, label, e):
+    def load_init_clauses(self, e):
         """Read lines and parse to Atom objects.
         """
-        init_clause = f"{label}(X):-."
-        tree = self.lp_clause.parse(init_clause)
+        head = lang_utils.get_c_head(bk.predicate_target, bk.variable["example"])
+        pred_exist_str = bk.predicate_exist.split(":")[0]
+        body = [f"{pred_exist_str}({bk.variable['group']}{i + 1},{bk.variable['example']})," for i in range(e)]
+        body = "".join(body)
+        init_c = head + ":-" + body[:-1] + "."
+
+        tree = self.lp_clause.parse(init_c)
         clauses = ExpTree(self).transform(tree)
         clauses = [clauses]
         return clauses
@@ -222,42 +211,39 @@ class Language(object):
         """
         head_str, arity, dtype_names_str = line.split(':')
         dtype_names = dtype_names_str.split(',')
-        dtypes = [DataType(dt) for dt in dtype_names]
+        dtypes = [mode_declaration.DataType(dt) for dt in dtype_names]
         return NeuralPredicate(head_str, int(arity), dtypes)
 
     def parse_const(self, args, const, const_type):
         """Parse string to function symbols.
         """
-        e = args.game_obj_num
-        const_data_type = DataType(const)
+        const_data_type = mode_declaration.DataType(const)
         if "amount_" in const_type:
             _, num = const_type.split('_')
             if num == 'e':
-                num = e
+                num = args.g_num
             elif num == "phi":
                 num = args.phi_num
             elif num == "rho":
                 num = args.rho_num
             elif num == "slope":
                 num = args.slope_num
-            elif num == "player":
-                num = args.player_num
+            elif num == "num":
+                num = args.number_num
             const_names = []
             for i in range(int(num)):
-                if const == "group" and i == 0:
-                    continue
+                # if const == "group" and i == 0:
+                #     continue
                 const_names.append(f"{const}{i + 1}of{num}")
         elif "enum" in const_type:
             if const == 'color':
                 const_names = bk.color
             elif const == 'shape':
-                const_names = [f"{data[0]}{d_i}" for data in args.game_info["obj_info"][1:] for d_i in range(data[1])]
-            # elif const == 'group_shape':
-            #     const_names = group_shape
+                const_names = bk.shape
             else:
                 raise ValueError
-        elif 'target' in const_type:
-            const_names = ['image']
+        # elif 'target' in const_type:
+        #     const_names = ['image']
         else:
             raise ValueError
 
@@ -291,7 +277,7 @@ class Language(object):
         head, body = line.split(':-')
         arity = len(head.split(","))
         head_dtype_names = arity * ['group']
-        dtypes = [DataType(dt) for dt in head_dtype_names]
+        dtypes = [mode_declaration.DataType(dt) for dt in head_dtype_names]
 
         # pred_with_id = pred + f"_{i}"
         pred_with_id = head.split("(")[0]
@@ -356,13 +342,19 @@ class Language(object):
         self.generate_atoms()
 
     def load_lang(self, args):
-        self.preds = [self.parse_pred(line) for line in bk.target_predicate[1:]]
-        for action_name in args.action_names:
-            pred_str = f"{action_name}:1:image"
-            pred = self.parse_pred(pred_str)
-            self.preds.append(pred)
+        # load BK predicates
+        self.preds = [
+            self.parse_pred(bk.predicate_target),
+            self.parse_pred(bk.predicate_exist),
+
+        ]
         self.consts = self.load_consts(args)
 
+        # #
+        # for action_name in args.action_names:
+        #     pred_str = f"{action_name}:1:image"
+        #     pred = self.parse_pred(pred_str)
+        #     self.preds.append(pred)
 
     def get_var_and_dtype(self, atom):
         """Get all variables in an input atom with its dtypes by enumerating variables in the input atom.
@@ -431,7 +423,7 @@ class Language(object):
                 consts.append(const)
         self.consts = consts
 
-    def get_by_dtype(self, dtype, with_inv):
+    def get_by_dtype(self, dtype):
         """Get constants that match given dtypes.
 
         Args:
@@ -446,11 +438,9 @@ class Language(object):
             if c.dtype == dtype:
                 if c.values is None:
                     consts.append(c)
-                elif with_inv:
-                    consts.append(c)
         return consts
 
-    def get_by_dtype_name(self, dtype_name, with_inv):
+    def get_by_dtype_name(self, dtype_name):
         """Get constants that match given dtype name.
 
         Args:
@@ -464,11 +454,9 @@ class Language(object):
             if c.dtype.name == dtype_name:
                 if c.values is None:
                     consts.append(c)
-                elif with_inv:
-                    consts.append(c)
         return consts
 
-    def term_index(self, term, with_inv):
+    def term_index(self, term):
         """Get the index of a term in the language.
 
         Args:
@@ -477,7 +465,7 @@ class Language(object):
         Returns:
             int: The index of the term.
         """
-        terms = self.get_by_dtype(term.dtype, with_inv)
+        terms = self.get_by_dtype(term.dtype)
         return terms.index(term)
 
     def get_const_by_name(self, const_name):
@@ -614,7 +602,6 @@ class Language(object):
             self.preds = self.append_new_predicate(self.preds, self.invented_preds)
             self.pi_clauses = self.all_pi_clauses
         else:
-
             # only consider one category by the given nerual pred
             self.preds = self.preds[:2]
             self.preds.append(neural_pred)
