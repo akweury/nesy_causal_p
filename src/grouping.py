@@ -291,8 +291,8 @@ def _fun(example, og, igs):
 def percept_task_features(args, task):
     task_features = []
     g_nums = []
-    for e_i in range(len(task["train"])):
-        example = task["train"][e_i]
+    for e_i in range(len(task)):
+        example = task[e_i]
         example["input"] = np.array(example["input"]) + 1
         example["output"] = np.array(example["output"]) + 1
         # grouping the tiles in example

@@ -1,6 +1,6 @@
 # Created by shaji at 24/06/2024
 predicate_target = "target:1:pattern"
-predicate_exist = "in:1:group"
+predicate_exist = "in:1:group,pattern"
 group_name = "g"
 
 variable = {
@@ -8,8 +8,8 @@ variable = {
     "group": "G"
 }
 neural_p = {
-    'shape_counter': 'shape_counter:2:group,number',
-    'color_counter': 'color_counter:2:group,number',
+    # 'shape_counter': 'shape_counter:2:group,number',
+    # 'color_counter': 'color_counter:2:group,number',
     'color': 'color:2:group,color',
     'shape': 'shape:2:group,shape',
     # 'phi': 'phi:3:group,group,phi',

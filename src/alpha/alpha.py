@@ -79,11 +79,11 @@ def evaluation(args, NSFR, target_preds, eval_data=None):
     return ils, dls
 
 
-def pruning(C, ils, dls):
-    clause_with_scores = sort_clauses_by_score(C, ils, dls)
-    pruned_clauses = []
-
-    return pruned_clauses
+# def pruning(C, ils, dls):
+#     clause_with_scores = sort_clauses_by_score(C, ils, dls)
+#     pruned_clauses = []
+#
+#     return pruned_clauses
 
 
 def beam_search(args, lang, C, FC):
@@ -98,7 +98,7 @@ def beam_search(args, lang, C, FC):
     bs_step = 0
     clause_with_scores = []
     clauses = C
-    for bs_step in range(args.bs_iteration):
+    for bs_step in range(args.max_bs_step):
         # clause extension
         extended_C = extension(args, lang, clauses)
         if args.is_done:
@@ -121,15 +121,10 @@ def beam_search(args, lang, C, FC):
 
 def alpha(args, data):
     log_utils.add_lines(f"================== RUN ILP ========================", args.log_file)
-    g_num = None
+
     lang = init_ilp(args)
     C = lang.reset_lang(args.g_num)
     VM = valuation.get_valuation_module(args, lang, data)
     FC = facts_converter.FactsConverter(args, lang, VM)
-    clauses = None
-    for i in range(args.max_bs_step):
-        args.bs_iteration = i
-        clauses = beam_search(args, lang, C, FC)
-        if args.is_done:
-            break
+    clauses = beam_search(args, lang, C, FC)
     return clauses

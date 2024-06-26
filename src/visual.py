@@ -21,7 +21,7 @@ def export_groups_as_images(raw_data, g_data, group_type):
     data_cha, data_sol = raw_data["cha"], raw_data["sol"]
     g_train, g_test = g_data
 
-    for task_i in tqdm(range(47, len(data_cha)), desc="Exporting group images"):
+    for task_i in tqdm(range(len(data_cha)), desc="Exporting group images"):
         train_data = data_cha[task_i]["train"]
         task_img = []
         for example_i in range(len(train_data)):

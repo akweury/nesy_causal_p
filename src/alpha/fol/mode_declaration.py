@@ -81,16 +81,16 @@ def get_pred_by_name(preds, pred_name):
         print("")
     return pred[0]
 
+
 def get_invented_pred_by_name(preds, invented_pred_name):
     invented_pred = [inv_p for inv_p in preds if inv_p.name == invented_pred_name]
     if not len(invented_pred) == 1:
         raise ValueError('Too many or less match in ' + invented_pred_name)
     return invented_pred[0]
 
+
 def get_mode_declarations_kandinsky(preds, obj_num):
-    p_image = ModeTerm('+', DataType('image'))
-    m_object = ModeTerm('-', DataType('object'))
-    p_object = ModeTerm('+', DataType('object'))
+    p_pattern = ModeTerm('+', DataType('pattern'))
 
     m_group = ModeTerm('-', DataType('group'))
     p_group = ModeTerm('+', DataType('group'))
@@ -107,7 +107,7 @@ def get_mode_declarations_kandinsky(preds, obj_num):
     considered_pred_names = [p.name for p in preds]
     if "in" in considered_pred_names:
         modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'in'),
-                                          [m_group, p_image]))
+                                          [m_group, p_pattern]))
     if "color" in considered_pred_names:
         modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'color'),
                                           [p_group, s_color]))
@@ -149,5 +149,5 @@ def get_pi_mode_declarations(preds, obj_num):
 
 def get_mode_declarations(preds, e):
     basic_mode_declarations = get_mode_declarations_kandinsky(preds, e)
-    pi_model_declarations = get_pi_mode_declarations(preds, e)
-    return basic_mode_declarations + pi_model_declarations
+    # pi_model_declarations = get_pi_mode_declarations(preds, e)
+    return basic_mode_declarations  # + pi_model_declarations

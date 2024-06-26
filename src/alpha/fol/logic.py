@@ -608,9 +608,12 @@ class Atom(object):
         """
         result = []
         for i, term in enumerate(self.terms):
-            if self.pred.dtypes[i] == dtype:
-                # print( self.pred.dtypes[i], dtype,  self.pred.dtypes[i] == dtype)
-                result.append(term)
+            try:
+                if self.pred.dtypes[i] == dtype:
+                    # print( self.pred.dtypes[i], dtype,  self.pred.dtypes[i] == dtype)
+                    result.append(term)
+            except IndexError:
+                print("")
         return result
 
 

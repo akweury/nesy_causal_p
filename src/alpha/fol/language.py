@@ -21,7 +21,7 @@ def get_unused_args(c):
     for body in c.body:
         if not "in" in body.pred.name:
             for term in body.terms:
-                if "O" in term.name and term not in used_args:
+                if bk.variable["group"] in term.name and term not in used_args:
                     unused_args.remove(term)
                     used_args.append(term)
     return unused_args, used_args
@@ -72,10 +72,14 @@ class Language(object):
         with open(args.lark_path, encoding="utf-8") as grammar:
             self.lp_atom = Lark(grammar.read(), start="atom")
 
-        if inv_consts is None:
-            self.load_lang(args)
-        else:
-            self.consts = self.load_consts(args) + inv_consts
+        # load BK predicates and constants
+        level_0_preds = [
+            self.parse_pred(bk.predicate_target),
+            self.parse_pred(bk.predicate_exist),
+        ]
+        level_1_preds = [self.parse_pred(data) for data in list(bk.neural_p.values())]
+        self.preds = level_0_preds + level_1_preds
+        self.consts = self.load_consts(args)
 
     def reset_lang(self, group_num):
         self.learned_c = []
@@ -340,21 +344,6 @@ class Language(object):
         self.invented_preds = self.all_invented_preds
         self.pi_clauses = self.all_pi_clauses
         self.generate_atoms()
-
-    def load_lang(self, args):
-        # load BK predicates
-        self.preds = [
-            self.parse_pred(bk.predicate_target),
-            self.parse_pred(bk.predicate_exist),
-
-        ]
-        self.consts = self.load_consts(args)
-
-        # #
-        # for action_name in args.action_names:
-        #     pred_str = f"{action_name}:1:image"
-        #     pred = self.parse_pred(pred_str)
-        #     self.preds.append(pred)
 
     def get_var_and_dtype(self, atom):
         """Get all variables in an input atom with its dtypes by enumerating variables in the input atom.
