@@ -22,10 +22,8 @@ def get_raw_data():
     with open(f_test_cha, 'r') as f:
         test_data_cha = list(json.load(f).values())
     data = {
-        "train_cha": train_data_cha,
-        "train_sol": train_data_sol,
-        "eval_cha": eval_data_cha,
-        "eval_sol": eval_data_sol,
-        "test_cha": test_data_cha
+        "train": {"cha": train_data_cha, "sol": train_data_sol},
+        "eval": {"cha": eval_data_cha, "sol": eval_data_sol},
+        "test": {"cha": test_data_cha}
     }
     return data

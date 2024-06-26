@@ -99,22 +99,34 @@ def group_by_color_single(example):
     return input_groups_color, output_groups_color
 
 
-def group_by_color(train_cha):
+def group_by_color(data):
+    cha_data = data["cha"]
+    sol_data = data["sol"]
     # return groups for each task
-    train_cha_groups = []
-    for task in tqdm(train_cha, "Grouping by color"):
+    train_groups = []
+    test_groups = []
+    for t_i in tqdm(range(len(cha_data)), "Grouping by color"):
         task_train_groups = []
-        for example in task["train"]:
+        for example in cha_data[t_i]["train"]:
             data_input = example["input"]
             data_output = example["output"]
             # grouping by color
-
             input_groups_color = find_color_components(np.array(data_input))
             output_groups_color = find_color_components(np.array(data_output))
             # grouping by ...
             task_train_groups.append([input_groups_color, output_groups_color])
-        train_cha_groups.append(task_train_groups)
-    return train_cha_groups
+        train_groups.append(task_train_groups)
+
+        task_test_groups = []
+        for e_i in range(len(sol_data[t_i])):
+            data_input = cha_data[t_i]["test"][e_i]["input"]
+            input_groups_color = find_color_components(np.array(data_input))
+            data_output = sol_data[t_i][e_i]
+            output_groups_color = find_color_components(np.array(data_output))
+            task_test_groups.append([input_groups_color, output_groups_color])
+        test_groups.append(task_test_groups)
+
+    return [train_groups, test_groups]
 
 
 def group2patch(group):
