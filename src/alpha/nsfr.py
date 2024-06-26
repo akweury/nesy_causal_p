@@ -202,11 +202,15 @@ class NSFReasoner(nn.Module):
 def get_nsfr_model(args, lang, FC, clauses, train=False):
     device = args.device
     atoms = lang.atoms
-    pi_clauses = lang.pi_clauses
 
-    IM = infer.build_infer_module(clauses, pi_clauses, atoms, lang, m=args.m,
-                                  infer_step=args.cim_step, device=device, train=train, gamma=args.gamma)
-    CIM = infer.build_clause_infer_module(args, clauses, pi_clauses, atoms, lang, m=len(clauses),
+    prednames = []
+    for clause in clauses:
+        if clause.head.pred.name not in prednames:
+            prednames.append(clause.head.pred.name)
+
+    IM = infer.build_infer_module(clauses, atoms, lang, m=len(prednames),
+                                  infer_step=args.im_step, device=device, train=train, gamma=args.gamma)
+    CIM = infer.build_clause_infer_module(args, clauses, atoms, lang, m=len(clauses),
                                           infer_step=args.cim_step, device=device, gamma=args.gamma)
 
     # Neuro-Symbolic Forward Reasoner

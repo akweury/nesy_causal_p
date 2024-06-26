@@ -460,34 +460,32 @@ class ClauseInferModule(nn.Module):
         return res
 
 
-def build_infer_module(clauses, pi_clauses, atoms, lang, device, m=3, infer_step=3, train=False, gamma=None):
+def build_infer_module(clauses, atoms, lang, device, m=3, infer_step=3, train=False, gamma=None):
     te = TensorEncoder(lang, atoms, clauses, device=device)
     I = te.encode()
     te_bk = None
     I_bk = None
-    if len(pi_clauses) > 0:
-        te_pi = TensorEncoder(lang, atoms, pi_clauses, device=device)
-        I_pi = te_pi.encode()
-    else:
-        te_pi = None
-        I_pi = None
+    # if len(pi_clauses) > 0:
+    #     te_pi = TensorEncoder(lang, atoms, pi_clauses, device=device)
+    #     I_pi = te_pi.encode()
+    # else:
+    te_pi = None
+    I_pi = None
     ##I_bk = None
     im = InferModule(I, m=m, infer_step=infer_step, device=device, train=train, I_bk=I_bk, I_pi=I_pi, gamma=gamma)
     return im
 
 
-def build_clause_infer_module(args, clauses, pi_clauses, atoms, lang, device, m=3, infer_step=5, train=False,
+def build_clause_infer_module(args, clauses, atoms, lang, device, m=3, infer_step=5, train=False,
                               gamma=None):
     te = TensorEncoder(lang, atoms, clauses, device=device)
     I = te.encode()
-    te_bk = None
     I_bk = None
 
-    te_pi = None
     I_pi = None
-    if len(pi_clauses) > 0:
-        te_pi = TensorEncoder(lang, atoms, pi_clauses, device=device)
-        I_pi = te_pi.encode()
+    # if len(pi_clauses) > 0:
+    #     te_pi = TensorEncoder(lang, atoms, pi_clauses, device=device)
+    #     I_pi = te_pi.encode()
 
     im = ClauseInferModule(I, m=m, infer_step=infer_step, device=device, train=train, I_bk=I_bk, I_pi=I_pi, gamma=gamma)
     return im

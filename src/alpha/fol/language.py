@@ -85,7 +85,7 @@ class Language(object):
         self.learned_c = []
         init_c = self.load_init_clauses(group_num)
         # update predicates
-        # self.update_bk(neural_pred, full_bk)
+        self.update_bk()
         # update language
         self.mode_declarations = mode_declaration.get_mode_declarations(self.preds, group_num)
         return init_c
@@ -163,38 +163,38 @@ class Language(object):
         atoms = []
         for pred in self.preds:
             dtypes = pred.dtypes
-            consts_list = [self.get_by_dtype(dtype, with_inv=True) for dtype in dtypes]
-            if pred.pi_type == "clu_pred":
-                consts_list = [[atom.terms[0]] for atom in pred.body[0]]
+            consts_list = [self.get_by_dtype(dtype) for dtype in dtypes]
+            # if pred.pi_type == "clu_pred":
+            #     consts_list = [[atom.terms[0]] for atom in pred.body[0]]
             args_list = list(set(itertools.product(*consts_list)))
             for args in args_list:
                 if len(args) == 1 or len(set(args)) == len(args):
                     atoms.append(Atom(pred, args))
-        pi_atoms = []
-        for pred in self.invented_preds:
-            consts_list = []
-            for body_pred in pred.body[0]:
-                consts_list.append([body_pred.terms[0]])
+        # pi_atoms = []
+        # for pred in self.invented_preds:
+        #     consts_list = []
+        #     for body_pred in pred.body[0]:
+        #         consts_list.append([body_pred.terms[0]])
+        #
+        #     args_list = list(set(itertools.product(*consts_list)))
+        #     for args in args_list:
+        #         new_atom = Atom(pred, args)
+        #         if new_atom not in atoms:
+        #             pi_atoms.append(new_atom)
 
-            args_list = list(set(itertools.product(*consts_list)))
-            for args in args_list:
-                new_atom = Atom(pred, args)
-                if new_atom not in atoms:
-                    pi_atoms.append(new_atom)
-
-        bk_pi_atoms = []
-        for pred in self.bk_inv_preds:
-            dtypes = pred.dtypes
-            consts_list = [self.get_by_dtype(dtype, with_inv=True) for dtype in dtypes]
-            args_list = list(set(itertools.product(*consts_list)))
-            for args in args_list:
-                # check if args and pred correspond are in the same area
-                if pred.dtypes[0].name == 'area':
-                    if pred.name[0] + pred.name[5:] != args[0].name:
-                        continue
-                if len(args) == 1 or len(set(args)) == len(args):
-                    pi_atoms.append(Atom(pred, args))
-        self.atoms = spec_atoms + sorted(atoms) + sorted(bk_pi_atoms) + sorted(pi_atoms)
+        # bk_pi_atoms = []
+        # for pred in self.bk_inv_preds:
+        #     dtypes = pred.dtypes
+        #     consts_list = [self.get_by_dtype(dtype, with_inv=True) for dtype in dtypes]
+        #     args_list = list(set(itertools.product(*consts_list)))
+        #     for args in args_list:
+        #         # check if args and pred correspond are in the same area
+        #         if pred.dtypes[0].name == 'area':
+        #             if pred.name[0] + pred.name[5:] != args[0].name:
+        #                 continue
+        #         if len(args) == 1 or len(set(args)) == len(args):
+        #             pi_atoms.append(Atom(pred, args))
+        self.atoms = spec_atoms + sorted(atoms) #+ sorted(bk_pi_atoms) + sorted(pi_atoms)
 
     def load_init_clauses(self, e):
         """Read lines and parse to Atom objects.
@@ -246,8 +246,8 @@ class Language(object):
                 const_names = bk.shape
             else:
                 raise ValueError
-        # elif 'target' in const_type:
-        #     const_names = ['image']
+        elif 'target' in const_type:
+            const_names = ['pattern']
         else:
             raise ValueError
 
@@ -581,19 +581,10 @@ class Language(object):
         prim_args_list = list(set(prim_args_list))
         self.generate_minimum_atoms(prim_args_list)
 
-    def update_bk(self, neural_pred=None, full_bk=True):
-
+    def update_bk(self):
         # put everything into the bk
-        if full_bk:
-            if neural_pred is not None:
-                self.preds = self.append_new_predicate(self.preds, neural_pred)
-            self.invented_preds = self.all_invented_preds
-            self.preds = self.append_new_predicate(self.preds, self.invented_preds)
-            self.pi_clauses = self.all_pi_clauses
-        else:
-            # only consider one category by the given nerual pred
-            self.preds = self.preds[:2]
-            self.preds.append(neural_pred)
-            self.invented_preds = []
-            self.pi_clauses = []
+        # self.preds = self.append_new_predicate(self.preds, self.preds)
+        # self.invented_preds = self.all_invented_preds
+        # self.preds = self.append_new_predicate(self.preds, self.invented_preds)
+        # self.pi_clauses = self.all_pi_clauses
         self.generate_atoms()

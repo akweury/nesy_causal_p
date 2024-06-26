@@ -30,25 +30,25 @@ def extension(args, lang, clauses):
         refs.extend(refs_i_removed)
 
     # remove semantic conflict clauses
-    refs_no_conflict = pruning.remove_conflict_clauses(refs, lang.pi_clauses, args)
-    if len(refs_no_conflict) == 0:
-        refs_no_conflict = clauses
-        args.is_done = True
+    # refs_no_conflict = pruning.remove_conflict_clauses(refs, lang.pi_clauses, args)
+    # if len(refs) == 0:
+    #     refs_no_conflict = clauses
+    #     args.is_done = True
 
     if args.show_process:
         log_utils.add_lines(f"=============== extended clauses =================", args.log_file)
-        for ref in refs_no_conflict:
+        for ref in refs:
             log_utils.add_lines(f"{ref}", args.log_file)
-    return refs_no_conflict
+    return refs
 
 
-def eval_ims(NSFR, args, pred_names, pos_group_pred=None, batch_size=None):
+def eval_ims(NSFR, args, pred_names, data, batch_size):
     """ input: clause, output: score """
     bz = args.bs_clause_eval
-    data_size = len(pos_group_pred)
+    data_size = len(data)
     V_T = torch.zeros(len(NSFR.clauses), data_size, len(NSFR.atoms)).to(args.device)
     for i in range(int(data_size / batch_size)):
-        g_tensors_pos = pos_group_pred[i * bz:(i + 1) * bz]
+        g_tensors_pos = data[i * bz:(i + 1) * bz]
         V_T[:, i * bz:(i + 1) * bz, :] = NSFR.clause_eval_quick(g_tensors_pos)
     # each score needs an explanation
     score_positive = NSFR.get_target_prediciton(V_T, pred_names, args.device)
@@ -73,7 +73,7 @@ def sort_clauses_by_score(clauses, scores_all, scores):
 
 def evaluation(args, NSFR, target_preds, eval_data=None):
     # image level scores
-    ils = eval_ims(NSFR, args, target_preds)
+    ils = eval_ims(NSFR, args, target_preds, data=???, batch_size=batch_size???)
     # dataset level scores
     dls = ils.sum(dim=1) / ils.shape[1]
     return ils, dls
@@ -108,7 +108,7 @@ def beam_search(args, lang, C, FC):
         # clause evaluation
         ils, dls = evaluation(args, NSFR, target_preds)
         # prune clauses
-        clauses = pruning(args, ils, dls)
+        # clauses = pruning(args, ils, dls)
         # save data
         # lang.all_clauses += clause_with_scores
     # if len(clauses) > 0:

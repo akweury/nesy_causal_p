@@ -17,6 +17,7 @@ neural_p = {
     # 'slope': 'slope:2:group,slope',
 }
 const_dict = {
+    'pattern': 'target',
     'color': 'enum',
     'shape': 'enum',
     'group': 'amount_e',
