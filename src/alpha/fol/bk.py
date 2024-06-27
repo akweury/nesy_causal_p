@@ -5,7 +5,7 @@ group_name = "g"
 
 variable = {
     'example': "X",
-    "group": "G"
+    "group": ["A", "B", "C", "D", "E", "F", "G"],
 }
 neural_p = {
     # 'shape_counter': 'shape_counter:2:group,number',

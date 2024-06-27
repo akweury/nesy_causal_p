@@ -55,7 +55,7 @@ def export_groups_as_images(raw_data, g_data, group_type):
             task_img.append(train_img)
         # test image
         for example_i in range(len(data_cha[task_i]["test"])):
-            test_input_data =  data_cha[task_i]["test"][example_i]["input"]
+            test_input_data = data_cha[task_i]["test"][example_i]["input"]
             img = visual_utils.patch2img(test_input_data)
             img = visual_utils.img_processing(img, lbw=50, rbw=200, tbw=50, bbw=200, text=f"test-i")
             test_input_img = [img]
@@ -65,7 +65,6 @@ def export_groups_as_images(raw_data, g_data, group_type):
                 img = visual_utils.patch2img(patch)
                 img = visual_utils.img_processing(img, lbw=50, rbw=200, tbw=50, bbw=200, text=f"test-i-g-{g_i}")
                 test_input_img.append(img)
-
 
             test_output_data = data_sol[task_i][example_i]
             img = visual_utils.patch2img(test_output_data)

@@ -197,7 +197,14 @@ class Var(Term):
     """
 
     def __init__(self, name):
-        self.name = name
+        tokes = name.split("_")
+        if len(tokes) == 1:
+            self.name = name
+            self.id = None
+        elif len(tokes) == 2:
+            self.name = name
+            self.id = int(tokes[1])
+        self.name_family = name
 
     def __repr__(self, level=0):
         # ret = "\t"*level+repr(self.name)+"\n"

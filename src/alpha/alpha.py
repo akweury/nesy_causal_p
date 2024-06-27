@@ -42,16 +42,12 @@ def extension(args, lang, clauses):
     return refs
 
 
-def eval_ims(NSFR, args, pred_names, data, batch_size):
+def eval_ims(NSFR, args, pred_names):
     """ input: clause, output: score """
-    bz = args.bs_clause_eval
-    data_size = len(data)
-    V_T = torch.zeros(len(NSFR.clauses), data_size, len(NSFR.atoms)).to(args.device)
-    for i in range(int(data_size / batch_size)):
-        g_tensors_pos = data[i * bz:(i + 1) * bz]
-        V_T[:, i * bz:(i + 1) * bz, :] = NSFR.clause_eval_quick(g_tensors_pos)
+    data = NSFR.fc.vm.dataset
+    atom_values = NSFR.clause_eval_quick(data)
     # each score needs an explanation
-    score_positive = NSFR.get_target_prediciton(V_T, pred_names, args.device)
+    score_positive = NSFR.get_target_prediciton(atom_values, pred_names, args.device)
     if score_positive.size(2) > 1:
         score_positive = score_positive.max(dim=2, keepdim=True)[0]
     ims = score_positive[:, :, 0]
@@ -71,9 +67,9 @@ def sort_clauses_by_score(clauses, scores_all, scores):
     return clause_with_scores
 
 
-def evaluation(args, NSFR, target_preds, eval_data=None):
+def evaluation(args, NSFR, target_preds):
     # image level scores
-    ils = eval_ims(NSFR, args, target_preds, data=???, batch_size=batch_size???)
+    ils = eval_ims(NSFR, args, target_preds)
     # dataset level scores
     dls = ils.sum(dim=1) / ils.shape[1]
     return ils, dls

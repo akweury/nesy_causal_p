@@ -1,4 +1,5 @@
 # Created by jing at 25.06.24
+import numpy as np
 
 import itertools
 from .logic import Atom, Clause, Var
@@ -29,16 +30,20 @@ class RefinementGenerator(object):
         # return self.recall_counter_dic[str(mode_declaration)] < mode_declaration.recall
 
     def get_max_obj_id(self, clause):
-        object_vars = clause.all_vars_by_dtype('group')
-        object_ids = [int(x.name.split('O')[-1]) for x in object_vars]
+        vars = clause.all_vars_by_dtype('group')
+        object_ids = [variable.id for variable in vars]
+        object_names = [variable.name for variable in vars]
         if len(object_ids) == 0:
             return 0
         else:
-            return max(object_ids)
+            idx = np.argmax(object_ids)
+            max_obj_id = np.max(object_ids)
+            return max_obj_id, object_names[idx]
 
     def generate_new_variable(self, clause):
-        obj_id = self.get_max_obj_id(clause)
-        return Var('O' + str(obj_id + 1))
+        obj_id, obj_name = self.get_max_obj_id(clause)
+        obj_name = str(obj_name).split("_")[0]
+        return Var(obj_name + "_" + str(obj_id + 1))
 
     def refine_from_modeb(self, clause, modeb):
         """Generate clauses by adding atoms to body using mode declaration.

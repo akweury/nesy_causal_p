@@ -110,21 +110,24 @@ class FCNNValuationModule(nn.Module):
             return torch.zeros((zs.size(0),)).to(
                 torch.float32).to(self.device)
 
-    def ground_to_tensor(self, term, zs):
+    def ground_to_tensor(self, term, data):
         """Ground terms into tensor representations.
 
             Args:
                 term (term): The term to be grounded.
-                zs (tensor): The object-centric representation.
+                data (tensor): The object-centric representation.
 
             Return:
                 The tensor representation of the input term.
         """
         term_index = self.lang.term_index(term)
         if term.dtype.name == 'group':
-            return zs[:, term_index].to(self.device)
+            # return the coding of the group
+            group_data = [example_data[0][term_index] for example_data in data]
+            return group_data
         elif term.dtype.name in bk.attr_names:
-            return self.attrs[term].unsqueeze(0).repeat(zs.shape[0], 1).to(self.device)
+            # return the standard attribute code
+            return self.attrs[term].unsqueeze(0).repeat(len(data), 1)
         elif term.dtype.name == 'image':
             return None
         else:
@@ -152,11 +155,6 @@ class FCNNColorValuationFunction(nn.Module):
         Returns:
             A batch of probabilities.
         """
-        # z_color = torch.zeros(size=z[:, 3:6].shape).to(z.device)
-        # colors = z[:, 3:6]
-        # for c in range(colors.shape[0]):
-        #     c_index = torch.argmax(colors[c])
-        #     z_color[c, c_index] = 1
         return (a * z[:, 3:6]).sum(dim=1)
 
 

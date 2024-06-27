@@ -46,7 +46,7 @@ class Language(object):
     def __init__(self, args, inv_consts=None):
 
         # BK
-        self.vars = [Var(f"{bk.variable['group']}{i + 1}") for i in range(args.g_num)]
+        self.vars = [Var(f"{v_name}_{v_i}") for v_i in range(args.g_num) for v_name in bk.variable["group"]]
         self.var_num = args.g_num
         self.atoms = []
         self.funcs = []
@@ -75,10 +75,11 @@ class Language(object):
         # load BK predicates and constants
         level_0_preds = [
             self.parse_pred(bk.predicate_target),
-            self.parse_pred(bk.predicate_exist),
+            self.parse_pred(bk.predicate_exist)
         ]
         level_1_preds = [self.parse_pred(data) for data in list(bk.neural_p.values())]
-        self.preds = level_0_preds + level_1_preds
+        level_2_preds = [self.parse_inv_pred(inv_p_i) for inv_p_i in range(args.g_num)]
+        self.preds = level_0_preds + level_1_preds + level_2_preds
         self.consts = self.load_consts(args)
 
     def reset_lang(self, group_num):
@@ -194,21 +195,24 @@ class Language(object):
         #                 continue
         #         if len(args) == 1 or len(set(args)) == len(args):
         #             pi_atoms.append(Atom(pred, args))
-        self.atoms = spec_atoms + sorted(atoms) #+ sorted(bk_pi_atoms) + sorted(pi_atoms)
+        self.atoms = spec_atoms + sorted(atoms)  # + sorted(bk_pi_atoms) + sorted(pi_atoms)
 
-    def load_init_clauses(self, e):
+    def load_init_clauses(self, g_num):
         """Read lines and parse to Atom objects.
         """
-        head = lang_utils.get_c_head(bk.predicate_target, bk.variable["example"])
-        pred_exist_str = bk.predicate_exist.split(":")[0]
-        body = [f"{pred_exist_str}({bk.variable['group']}{i + 1},{bk.variable['example']})," for i in range(e)]
-        body = "".join(body)
-        init_c = head + ":-" + body[:-1] + "."
 
-        tree = self.lp_clause.parse(init_c)
-        clauses = ExpTree(self).transform(tree)
-        clauses = [clauses]
-        return clauses
+        # final target clause
+        head = [f"inv_p{i}(X)" for i in range(g_num)]
+        group_clauses_str = [head[h_i] + f":-in({bk.variable['group'][h_i]}_0,X)." for h_i in range(len(head))]
+
+        # target(X):-in(G1,X),in(G2,X).
+        # in(G1,X):-color_map(ig1, og1, rr).
+        group_clauses = []
+        for group_clause_str in group_clauses_str:
+            tree = self.lp_clause.parse(group_clause_str)
+            group_clause = ExpTree(self).transform(tree)
+            group_clauses.append(group_clause)
+        return group_clauses
 
     def parse_pred(self, line):
         """Parse string to predicates.
@@ -217,6 +221,17 @@ class Language(object):
         dtype_names = dtype_names_str.split(',')
         dtypes = [mode_declaration.DataType(dt) for dt in dtype_names]
         return NeuralPredicate(head_str, int(arity), dtypes)
+
+    def parse_inv_pred(self, inv_p_id):
+        head = f"inv_p{inv_p_id}"
+        arity = 1
+        head_dtype_names = ['pattern']
+        dtypes = [mode_declaration.DataType(dt) for dt in head_dtype_names]
+
+        # pred_with_id = pred + f"_{i}"
+        pred_with_id = head.split("(")[0]
+        invented_pred = InventedPredicate(pred_with_id, int(arity), dtypes, args=None, pi_type=None)
+        return invented_pred
 
     def parse_const(self, args, const, const_type):
         """Parse string to function symbols.

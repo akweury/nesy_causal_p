@@ -6,7 +6,6 @@ from tqdm import tqdm
 from collections import defaultdict
 
 from utils import tile_utils, file_utils, log_utils, args_utils
-from src.alpha import alpha
 
 
 # def hier_data2group_img(hier_data):

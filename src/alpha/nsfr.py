@@ -89,7 +89,7 @@ class NSFReasoner(nn.Module):
     #     return V_T
 
     def clause_eval_quick(self, x):
-        x = torch.tensor(x)
+        # x = torch.tensor(x)
         # convert to the valuation tensor
         V_0 = self.fc(x, self.atoms, self.bk)
         # perform T-step forward-chaining reasoning

@@ -52,18 +52,15 @@ class FactsConverter(nn.Module):
             vs.append(self.convert_i(zs, G))
         return torch.stack(vs)
 
-    def convert(self, Z, G, B, scores=None):
-        batch_size = Z.size(0)
-
-        # V = self.init_valuation(len(G), Z.size(0))
-
+    def convert(self, data, atoms, B, scores=None):
+        example_num = len(data)
         # evaluate value of each atom
-        V = torch.zeros((batch_size, len(G))).to(torch.float32).to(self.device)
-        for i, atom in enumerate(G):
+        V = torch.zeros((example_num, len(atoms))).to(torch.float32).to(self.device)
+        for i, atom in enumerate(atoms):
 
             # this atom is a neural predicate
             if type(atom.pred) == NeuralPredicate and i > 1:
-                V[:, i] = self.vm(Z, atom)
+                V[:, i] = self.vm(data, atom)
 
             # this atom is an invented predicate
             # elif type(atom.pred) == InventedPredicate:
@@ -77,7 +74,7 @@ class FactsConverter(nn.Module):
             #     value = torch.ones((batch_size,)).to(torch.float32).to(self.device)
             #     V[:, i] += value
 
-        V[:, 1] = torch.ones((batch_size,)).to(torch.float32).to(self.device)
+        V[:, 1] = torch.ones((example_num,)).to(torch.float32).to(self.device)
         return V
 
 
