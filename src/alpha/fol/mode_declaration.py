@@ -92,8 +92,11 @@ def get_invented_pred_by_name(preds, invented_pred_name):
 def get_mode_declarations_kandinsky(preds, obj_num):
     p_pattern = ModeTerm('+', DataType('pattern'))
 
-    m_group = ModeTerm('-', DataType('group'))
-    p_group = ModeTerm('+', DataType('group'))
+    m_in_group = ModeTerm('-', DataType('input_group'))
+    m_out_group = ModeTerm('-', DataType('output_group'))
+
+    p_in_group = ModeTerm('+', DataType('input_group'))
+    p_out_group = ModeTerm('+', DataType('output_group'))
 
     s_color = ModeTerm('#', DataType('color'))
     s_shape = ModeTerm('#', DataType('shape'))
@@ -105,49 +108,54 @@ def get_mode_declarations_kandinsky(preds, obj_num):
 
     modeb_list = []
     considered_pred_names = [p.name for p in preds]
-    if "in" in considered_pred_names:
-        modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'in'),
-                                          [m_group, p_pattern]))
+    if "hasIG" in considered_pred_names:
+        # mode_type, recall, pred, mode_terms,
+        modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'hasIG'),
+                                          [m_in_group, p_pattern]))
+    if "hasOG" in considered_pred_names:
+        # mode_type, recall, pred, mode_terms,
+        modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'hasOG'),
+                                          [m_out_group, p_pattern]))
     if "color" in considered_pred_names:
         modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'color'),
-                                          [p_group, s_color]))
-    if "shape" in considered_pred_names:
-        modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'shape'),
-                                          [p_group, s_shape]))
-    if "rho" in considered_pred_names:
-        modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'rho'),
-                                          [p_group, p_group, s_rho], ordered=False))
-    if "phi" in considered_pred_names:
-        modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'phi'),
-                                          [p_group, p_group, s_phi], ordered=False))
-    if "slope" in considered_pred_names:
-        modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'slope'),
-                                          [p_group, s_slope], ordered=False))
-    if "group_shape" in considered_pred_names:
-        modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'group_shape'),
-                                          [p_group, s_group_shape], ordered=False))
-    if "shape_counter" in considered_pred_names:
-        modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'shape_counter'),
-                                          [p_group, s_number], ordered=False))
-    if "color_counter" in considered_pred_names:
-        modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'color_counter'),
-                                          [p_group, s_number], ordered=False))
+                                          [p_in_group, s_color]))
+    # if "shape" in considered_pred_names:
+    #     modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'shape'),
+    #                                       [p_in_group, s_shape]))
+    # if "rho" in considered_pred_names:
+    #     modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'rho'),
+    #                                       [p_in_group, p_group, s_rho], ordered=False))
+    # if "phi" in considered_pred_names:
+    #     modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'phi'),
+    #                                       [p_group, p_group, s_phi], ordered=False))
+    # if "slope" in considered_pred_names:
+    #     modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'slope'),
+    #                                       [p_group, s_slope], ordered=False))
+    # if "group_shape" in considered_pred_names:
+    #     modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'group_shape'),
+    #                                       [p_group, s_group_shape], ordered=False))
+    # if "shape_counter" in considered_pred_names:
+    #     modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'shape_counter'),
+    #                                       [p_group, s_number], ordered=False))
+    # if "color_counter" in considered_pred_names:
+    #     modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'color_counter'),
+    #                                       [p_group, s_number], ordered=False))
     return modeb_list
 
 
-def get_pi_mode_declarations(preds, obj_num):
-    p_object = ModeTerm('+', DataType('group'))
+def get_pi_mode_declarations(inv_preds, obj_num):
+    p_object = ModeTerm('+', DataType('out_group'))
     pi_mode_declarations = []
-    for pi_index, pi in enumerate(preds):
+    for pi_index, pi in enumerate(inv_preds):
         pi_str = pi.name
         objects = [p_object] * pi.arity
-        mode_declarations = ModeDeclaration('body', obj_num, get_pred_by_name(preds, pi_str), objects,
+        mode_declarations = ModeDeclaration('body', obj_num, get_pred_by_name(inv_preds, pi_str), objects,
                                             ordered=False)
         pi_mode_declarations.append(mode_declarations)
     return pi_mode_declarations
 
 
-def get_mode_declarations(preds, e):
-    basic_mode_declarations = get_mode_declarations_kandinsky(preds, e)
-    # pi_model_declarations = get_pi_mode_declarations(preds, e)
-    return basic_mode_declarations  # + pi_model_declarations
+def get_mode_declarations(predicates, inv_predicates, e):
+    basic_mode_declarations = get_mode_declarations_kandinsky(predicates, e)
+    pi_model_declarations = get_pi_mode_declarations(inv_predicates, e)
+    return basic_mode_declarations + pi_model_declarations

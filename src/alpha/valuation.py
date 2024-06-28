@@ -107,8 +107,7 @@ class FCNNValuationModule(nn.Module):
             # call valuation function
             return self.vfs[atom.pred.name](*args)
         else:
-            return torch.zeros((zs.size(0),)).to(
-                torch.float32).to(self.device)
+            return torch.zeros((zs.size(0),)).to(torch.float32).to(self.device)
 
     def ground_to_tensor(self, term, data):
         """Ground terms into tensor representations.
@@ -141,21 +140,25 @@ class FCNNColorValuationFunction(nn.Module):
     def __init__(self):
         super(FCNNColorValuationFunction, self).__init__()
 
-    def forward(self, z, a):
+    def forward(self, data, color_mask):
         """
         Args:
-            z (tensor): 2-d tensor B * d of object-centric representation.
+            data (tensor): 2-d tensor B * d of object-centric representation.
                 [x,y,z, (0:3)
                 color1, color2, color3, (3:6)
                 sphere, 6
                 cube, 7
                 ]
-            a (tensor): The one-hot tensor that is expanded to the batch size.
+            color_mask (tensor): The one-hot tensor that is expanded to the batch size.
 
         Returns:
             A batch of probabilities.
         """
-        return (a * z[:, 3:6]).sum(dim=1)
+        data_colors = []
+        for d_i in range(len(data)):
+            color = data[d_i]["io_color_mapping"]
+            data_colors.append(color)
+        return (color_mask * data[:, 3:6]).sum(dim=1)
 
 
 class FCNNShapeValuationFunction(nn.Module):

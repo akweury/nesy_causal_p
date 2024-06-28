@@ -57,7 +57,6 @@ class FactsConverter(nn.Module):
         # evaluate value of each atom
         V = torch.zeros((example_num, len(atoms))).to(torch.float32).to(self.device)
         for i, atom in enumerate(atoms):
-
             # this atom is a neural predicate
             if type(atom.pred) == NeuralPredicate and i > 1:
                 V[:, i] = self.vm(data, atom)

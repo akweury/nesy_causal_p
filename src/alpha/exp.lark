@@ -20,7 +20,7 @@ variable : /[A-Z0-9\_]+/
 
 functor : /[a-z0-9]+/
 
-predicate : /[a-z0-9\_]+/
+predicate : /[a-zA-Z0-9\_]+/
 
 var_name : /[A-Z]/
 small_chars : /[a-z0-9]+/

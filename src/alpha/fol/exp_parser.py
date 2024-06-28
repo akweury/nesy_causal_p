@@ -67,11 +67,11 @@ class ExpTree(Transformer):
 
     def predicate(self, alphas):
         pred = []
-        for p in self.lang.preds:
+        for p in self.lang.predicates:
             if p.name == alphas[0]:
                 pred.append(p)
         if len(pred) == 0:
-            for p in self.lang.inv_p:
+            for p in self.lang.inv_predicates:
                 if p.name == alphas[0]:
                     pred.append(p)
         # if len(pred) == 0:

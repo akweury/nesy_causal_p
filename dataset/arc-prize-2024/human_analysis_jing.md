@@ -66,3 +66,25 @@ choose the type with highest confidence
 ```
 
 
+---
+
+## Clauses
+
+######
+Let `G0-G9` represents the groups in output.
+Let `A0-A9` represents the groups in input.
+
+Given output groups `G0,G1`, input groups `A0,A1,A2`.
+``` 
+(C_0) target(Input,Output):-inv_p1(G0),inv_p2(G1),in(G0,Output),in(G1,Output).
+
+inv_p1(G0):-in(A0,Input),in(G0,Output).
+- extension 01: inv_p1(G0):-in(A0,Input),in(G0,Output),scale(A0,G0,3).
+
+atoms:
+in(a0,input),
+in(g0,output),
+scale(a0,g0,param)
+inv_p0(g0)
+inv_p0(g1)
+```

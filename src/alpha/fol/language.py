@@ -43,24 +43,25 @@ class Language(object):
         consts (List[Const]): A set of constants.
     """
 
-    def __init__(self, args, inv_consts=None):
+    def __init__(self, args):
 
         # BK
-        self.vars = [Var(f"{v_name}_{v_i}") for v_i in range(args.g_num) for v_name in bk.variable["group"]]
+        self.vars = [Var(f"{v_name}_{v_i}") for v_i in range(args.g_num) for v_name in
+                     bk.variable["input_group"] + [bk.variable["output_group"]]]
         self.var_num = args.g_num
         self.atoms = []
         self.funcs = []
         self.consts = []
-        self.preds = []
+        self.predicates = []
         self.mode_declarations = None
         # PI
-        self.inv_p = []
+        self.inv_predicates = []
         self.inv_p_with_scores = []
         self.all_inv_p = []
         self.pi_c = []
         self.all_pi_c = []
         self.clause_with_scores = []
-        # self.invented_preds_number = args.p_inv_counter
+        self.invented_predicates_number = 0
         self.invented_consts_number = 0
 
         # Results
@@ -73,22 +74,32 @@ class Language(object):
             self.lp_atom = Lark(grammar.read(), start="atom")
 
         # load BK predicates and constants
-        level_0_preds = [
+        level_0_predicates = [
             self.parse_pred(bk.predicate_target),
-            self.parse_pred(bk.predicate_exist)
+            self.parse_pred(bk.predicate_has_ig),
+            self.parse_pred(bk.predicate_has_og)
         ]
-        level_1_preds = [self.parse_pred(data) for data in list(bk.neural_p.values())]
-        level_2_preds = [self.parse_inv_pred(inv_p_i) for inv_p_i in range(args.g_num)]
-        self.preds = level_0_preds + level_1_preds + level_2_preds
+        level_1_predicates = [self.parse_pred(data) for data in list(bk.neural_p.values())]
+        level_2_predicates = self.inv_predicates
+        self.predicates = level_0_predicates + level_1_predicates + level_2_predicates
         self.consts = self.load_consts(args)
+
+    def init_inv_predicates(self, group_num):
+        for i in range(group_num):
+            inv_pred = self.parse_inv_predicates(i)
+            self.inv_predicates.append(inv_pred)
+            if inv_pred not in self.predicates:
+                self.predicates.append(inv_pred)
 
     def reset_lang(self, group_num):
         self.learned_c = []
+        self.init_inv_predicates(group_num)
         init_c = self.load_init_clauses(group_num)
+
         # update predicates
         self.update_bk()
         # update language
-        self.mode_declarations = mode_declaration.get_mode_declarations(self.preds, group_num)
+        self.mode_declarations = mode_declaration.get_mode_declarations(self.predicates, self.inv_predicates, group_num)
         return init_c
 
     def __str__(self):
@@ -162,7 +173,7 @@ class Language(object):
 
         spec_atoms = [false, true]
         atoms = []
-        for pred in self.preds:
+        for pred in self.predicates:
             dtypes = pred.dtypes
             consts_list = [self.get_by_dtype(dtype) for dtype in dtypes]
             # if pred.pi_type == "clu_pred":
@@ -202,8 +213,13 @@ class Language(object):
         """
 
         # final target clause
-        head = [f"inv_p{i}(X)" for i in range(g_num)]
-        group_clauses_str = [head[h_i] + f":-in({bk.variable['group'][h_i]}_0,X)." for h_i in range(len(head))]
+        var_in = bk.variable["in_pattern"]
+        var_out = bk.variable['out_pattern']
+        var_in_g = bk.variable["input_group"]
+        var_out_g = bk.variable['output_group']
+        head = [f"inv_p{i}({var_out})" for i in range(g_num)]
+        group_clauses_str = [head[h_i] + ":-" + (f"hasOG({var_out_g}_{h_i},{var_out}),"
+                                                 f"hasIG({var_in_g[h_i]}_0,{var_in}).") for h_i in range(len(head))]
 
         # target(X):-in(G1,X),in(G2,X).
         # in(G1,X):-color_map(ig1, og1, rr).
@@ -222,10 +238,10 @@ class Language(object):
         dtypes = [mode_declaration.DataType(dt) for dt in dtype_names]
         return NeuralPredicate(head_str, int(arity), dtypes)
 
-    def parse_inv_pred(self, inv_p_id):
+    def parse_inv_predicates(self, inv_p_id):
         head = f"inv_p{inv_p_id}"
         arity = 1
-        head_dtype_names = ['pattern']
+        head_dtype_names = ['out_group']
         dtypes = [mode_declaration.DataType(dt) for dt in head_dtype_names]
 
         # pred_with_id = pred + f"_{i}"
@@ -261,8 +277,8 @@ class Language(object):
                 const_names = bk.shape
             else:
                 raise ValueError
-        elif 'target' in const_type:
-            const_names = ['pattern']
+        elif 'pattern' in const_type:
+            const_names = ['input', 'output']
         else:
             raise ValueError
 
