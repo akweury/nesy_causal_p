@@ -1,8 +1,10 @@
 # Created by shaji at 24/06/2024
 predicate_target = "target:1:out_pattern"
-predicate_has_ig = "hasIG:2:in_group,in_pattern"
-predicate_has_og = "hasOG:2:out_group,out_pattern"
+predicate_has_ig = "hasIG:2:input_group,in_pattern"
+predicate_has_og = "hasOG:2:output_group,out_pattern"
 
+
+# dtype:
 variable = {
     'in_pattern': "I",
     "out_pattern": "O",
@@ -17,8 +19,8 @@ const_dict = {
     'pattern': "pattern",
     'color': 'enum',
     'shape': 'enum',
-    'in_group': 'amount_e',
-    'out_group': 'amount_e',
+    'input_group': 'amount_e',
+    'output_group': 'amount_e',
     'number': 'amount_num',
 }
 

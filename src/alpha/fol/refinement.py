@@ -30,7 +30,7 @@ class RefinementGenerator(object):
         # return self.recall_counter_dic[str(mode_declaration)] < mode_declaration.recall
 
     def get_max_obj_id(self, clause):
-        vars = clause.all_vars_by_dtype('group')
+        vars = clause.all_vars_by_dtype('input_group')
         object_ids = [variable.id for variable in vars]
         object_names = [variable.name for variable in vars]
         if len(object_ids) == 0:
@@ -80,10 +80,13 @@ class RefinementGenerator(object):
         """
 
         assignments_list = []
-        term_num = 0
+        term_input_num = 0
+        term_output_num = 0
         for mt in modeb.mode_terms:
-            if mt.dtype.name == "group":
-                term_num += 1
+            if mt.dtype.name == "input_group":
+                term_input_num += 1
+            if mt.dtype.name == "output_group":
+                term_output_num += 1
         for mt in modeb.mode_terms:
             assignments = []
             if mt.mode == '+':
@@ -109,7 +112,7 @@ class RefinementGenerator(object):
         # print(clause, modeb)
         # print(assignments_list)
         if modeb.ordered:
-            return itertools.product(*assignments_list)
+            return list(itertools.product(*assignments_list))
         else:
             arg_lists = []
             if len(assignments_list) == 5:
