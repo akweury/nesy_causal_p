@@ -3,7 +3,6 @@ predicate_target = "target:1:out_pattern"
 predicate_has_ig = "hasIG:2:input_group,in_pattern"
 predicate_has_og = "hasOG:2:output_group,out_pattern"
 
-
 # dtype:
 variable = {
     'in_pattern': "I",
@@ -12,11 +11,13 @@ variable = {
     "output_group": "G",
 }
 neural_p = {
-    'color': 'color:2:in_group,color',
-    # 'shape': 'shape:2:in_group,shape'
+    'color_input': 'color_input:2:input_group,color',
+    'color_output': 'color_output:2:output_group,color',
+    # 'shape': 'shape:2:input_group,shape'
 }
 const_dict = {
-    'pattern': "pattern",
+    'out_pattern': "out_pattern",
+    'in_pattern': "in_pattern",
     'color': 'enum',
     'shape': 'enum',
     'input_group': 'amount_e',

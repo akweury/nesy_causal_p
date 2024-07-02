@@ -62,7 +62,7 @@ class TensorEncoder(object):
                 if unify_flag:
                     clause_ = logic_ops.subs_list(clause, theta)
                     body = clause_.body
-                    theta_list = self.generate_subs(body)
+                    theta_list = self.generate_subs_multiple_dtype(body)
                     S_list.append(len(theta_list))
         return max(S_list)
 
@@ -163,7 +163,7 @@ class TensorEncoder(object):
             # the body has existentially quantified variable!!
             # e.g. body atoms: [in(img,O1),shape(O1,square)]
             # theta_list: [(O1,obj1), (O1,obj2)]
-            theta_list = self.generate_subs(body)
+            theta_list = self.generate_subs_multiple_dtype(body)
             n_substs = len(theta_list)
             assert n_substs <= self.S, 'Exceeded the maximum number of substitution patterns to ' \
                                        'existential variables: n_substs is: ' \
@@ -211,7 +211,7 @@ class TensorEncoder(object):
             # the body has existentially quantified variable!!
             # e.g. body atoms: [in(img,O1),shape(O1,square)]
             # theta_list: [(O1,obj1), (O1,obj2)]
-            theta_list = self.generate_subs(body)
+            theta_list = self.generate_subs_multiple_dtype(body)
             n_substs = len(theta_list)
             assert n_substs <= self.S, 'Exceeded the maximum number of substitution patterns to ' \
                                        'existential variables: n_substs is: ' \
@@ -244,6 +244,52 @@ class TensorEncoder(object):
             diff = self.L - x.size(0)
             x_pad = torch.ones(diff, dtype=torch.int16).to(self.device)
             return torch.cat([x, x_pad])
+
+    def get_var_list_from_body(self, body):
+        var_dtype_list = []
+        dtypes = []
+        vars = []
+        for atom in body:
+            terms = atom.terms
+            for i, term in enumerate(terms):
+                if term.is_var():
+                    v = term
+                    dtype = atom.pred.dtypes[i]
+                    var_dtype_list.append((v, dtype))
+                    dtypes.append(dtype)
+                    vars.append(v)
+        # in case there is no variables in the body
+        if len(list(set(dtypes))) == 0:
+            return []
+        return vars, dtypes
+
+    def get_consts_from_dtype(self, dtype):
+        pass
+
+    def generate_subs_multiple_dtype(self, body):
+        # Define the variables and their domains
+        variables, dtypes = self.get_var_list_from_body(body)
+        # unique var and dtype
+        var_unique = []
+        dtype_unique = []
+        for i in range(len(variables)):
+            if variables[i] not in var_unique:
+                var_unique.append(variables[i])
+            if dtypes[i] not in dtype_unique:
+                dtype_unique.append(dtypes[i])
+        # Create a list of domains
+        const_domains = [self.lang.get_by_dtype(dtype) for dtype in dtype_unique]
+        # Generate the Cartesian product of the domains
+        substitutions = list(itertools.product(*const_domains))
+
+        theta_list = []
+        # Store as tuples
+        for substitution in substitutions:
+            substitution_list = []
+            for i in range(len(substitution)):
+                substitution_list.append((var_unique[i], substitution[i]))
+            theta_list.append(substitution_list)
+        return theta_list
 
     # taking constant modes to reduce the number of substitutions
     def generate_subs(self, body):
@@ -286,7 +332,7 @@ class TensorEncoder(object):
         consts = self.lang.get_by_dtype(dtypes[0])
 
         # e.g. if the data type is shape, then subs_consts_list = [(red,), (yellow,), (blue,)]
-        subs_consts_list = itertools.permutations(consts, n_vars)
+        subs_consts_list = list(itertools.permutations(consts, n_vars))
 
         theta_list = []
         # generate substitutions by combining variables to the head of subs_consts_list

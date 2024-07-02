@@ -41,7 +41,11 @@ class FCNNValuationModule(nn.Module):
         vfs = {}  # a dictionary: pred_name -> valuation function
 
         v_color = FCNNColorValuationFunction()
-        vfs['color'] = v_color
+        vfs['color_input'] = v_color
+        layers.append(v_color)
+
+        v_color = FCNNColorValuationFunction()
+        vfs['color_output'] = v_color
         layers.append(v_color)
 
         v_shape = FCNNShapeValuationFunction()
@@ -107,7 +111,7 @@ class FCNNValuationModule(nn.Module):
             # call valuation function
             return self.vfs[atom.pred.name](*args)
         else:
-            return torch.zeros((zs.size(0),)).to(torch.float32).to(self.device)
+            return torch.zeros((len(zs),)).to(torch.float32).to(self.device)
 
     def ground_to_tensor(self, term, data):
         """Ground terms into tensor representations.
@@ -120,9 +124,12 @@ class FCNNValuationModule(nn.Module):
                 The tensor representation of the input term.
         """
         term_index = self.lang.term_index(term)
-        if term.dtype.name == 'group':
+        if term.dtype.name == 'input_group':
             # return the coding of the group
-            group_data = [example_data[0][term_index] for example_data in data]
+            group_data = [example_data["input_groups"][term_index] for example_data in data]
+            return group_data
+        elif term.dtype.name == "output_group":
+            group_data = [example_data["output_groups"][term_index] for example_data in data]
             return group_data
         elif term.dtype.name in bk.attr_names:
             # return the standard attribute code
@@ -130,7 +137,7 @@ class FCNNValuationModule(nn.Module):
         elif term.dtype.name == 'image':
             return None
         else:
-            assert 0, "Invalid datatype of the given term: " + str(term) + ':' + term.dtype.name
+            raise ValueError("Invalid datatype of the given term: " + str(term) + ':' + term.dtype.name)
 
 
 class FCNNColorValuationFunction(nn.Module):
@@ -154,11 +161,11 @@ class FCNNColorValuationFunction(nn.Module):
         Returns:
             A batch of probabilities.
         """
-        data_colors = []
+        data_colors = torch.zeros_like(color_mask).to(color_mask.device)
         for d_i in range(len(data)):
-            color = data[d_i]["io_color_mapping"]
-            data_colors.append(color)
-        return (color_mask * data[:, 3:6]).sum(dim=1)
+            color = data[d_i]["color"]
+            data_colors[d_i, color-1] = 1
+        return (color_mask * data_colors).sum(dim=1)
 
 
 class FCNNShapeValuationFunction(nn.Module):

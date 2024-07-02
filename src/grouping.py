@@ -287,6 +287,29 @@ def _fun(example, og, igs):
     return igs2og
 
 
+def get_groups_code(example, groups):
+    groups_code = []
+    for group in groups:
+        input_patch = np.array(example)
+        ig_mask = np.zeros_like(input_patch, dtype=bool)
+        for pos in group:
+            ig_mask[pos[0], pos[1]] = True
+        input_patch[~ig_mask] = 0
+        group_color = np.unique(input_patch)[1:]
+
+        # space_patch, target_patch = io2st_patch(input_patch, output_patch)
+        # duplicate_pos = find_identical_shape(space_patch, target_patch)
+        # scale_io_ratio = len(output_patch) / len(input_patch)
+        group_code = {
+            "color": group_color,
+            "tile_pos": group,
+            "width": input_patch.shape[0]
+        }
+
+        groups_code.append(group_code)
+    return groups_code
+
+
 def percept_task_features(args, task):
     task_features = []
     g_nums = []
@@ -296,12 +319,18 @@ def percept_task_features(args, task):
         example["output"] = np.array(example["output"]) + 1
         # grouping the tiles in example
         igs, ogs = group_by_color_single(example)
-        igs2ogs = []
-        for g_i in range(len(ogs)):
-            igs2og = get_prop_igs2og(example, ogs[g_i], igs)
-            igs2ogs.append(igs2og)
-        task_features.append(igs2ogs)
 
+        ig_codes = get_groups_code(example["input"], igs)
+        og_codes = get_groups_code(example["output"], ogs)
+        # for ig in igs:
+        #     g_code = get_g_prop_code(example, ig)
+        #     ig_codes.append(g_code)
+        # for og in ogs:
+        #     g_code = get_g_prop_code(example, og)
+        # for g_i in range(len(ogs)):
+        #     igs2og = get_prop_igs2og(example, ogs[g_i], igs)
+        #     igs2ogs.append(igs2og)
+        task_features.append({"input_groups": ig_codes, "output_groups": og_codes})
         g_nums.append(len(ogs))
     g_num_unique = np.unique(g_nums)
     if len(g_num_unique) != 1:

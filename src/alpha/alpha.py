@@ -48,10 +48,15 @@ def eval_ims(NSFR, args, pred_names):
     atom_values = NSFR.clause_eval_quick(data)
     # each score needs an explanation
     score_positive = NSFR.get_target_prediciton(atom_values, pred_names, args.device)
-    if score_positive.size(2) > 1:
-        score_positive = score_positive.max(dim=2, keepdim=True)[0]
-    ims = score_positive[:, :, 0]
-    return ims
+    # if score_positive.size(2) > 1:
+    #     score_positive = score_positive.max(dim=2, keepdim=True)[0]
+
+    return score_positive
+
+
+def eval_dls(ils):
+    dls = ils.sum(dim=1) / ils.shape[1]
+    return dls.squeeze()
 
 
 def sort_clauses_by_score(clauses, scores_all, scores):
@@ -71,7 +76,7 @@ def evaluation(args, NSFR, target_preds):
     # image level scores
     ils = eval_ims(NSFR, args, target_preds)
     # dataset level scores
-    dls = ils.sum(dim=1) / ils.shape[1]
+    dls = eval_dls(ils)
     return ils, dls
 
 
@@ -100,11 +105,11 @@ def beam_search(args, lang, C, FC):
         if args.is_done:
             break
         NSFR = nsfr.get_nsfr_model(args, lang, FC, extended_C)
-        target_preds = [extended_C[0].head.pred.name]
+        target_preds = list(set([c.head.pred.name for c in extended_C]))
         # clause evaluation
         ils, dls = evaluation(args, NSFR, target_preds)
         # prune clauses
-        # clauses = pruning(args, ils, dls)
+        clauses = pruning.top_k_clauses(args, ils, dls, extended_C)
         # save data
         # lang.all_clauses += clause_with_scores
     # if len(clauses) > 0:
@@ -117,7 +122,6 @@ def beam_search(args, lang, C, FC):
 
 def alpha(args, data):
     log_utils.add_lines(f"================== RUN ILP ========================", args.log_file)
-
     lang = init_ilp(args)
     C = lang.reset_lang(args.g_num)
     VM = valuation.get_valuation_module(args, lang, data)

@@ -64,3 +64,9 @@ def remove_conflict_clauses(clauses, pi_clauses, args):
             non_conflict_clauses.append(clause)
 
     return non_conflict_clauses
+
+
+def top_k_clauses(args, ils, dls, clauses):
+    ness_score, ness_rank = dls.sort(descending=True)
+    top_clauses = [clauses[i] for i in ness_rank[:args.top_k]]
+    return top_clauses

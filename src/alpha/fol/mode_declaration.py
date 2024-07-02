@@ -116,9 +116,12 @@ def get_mode_declarations_kandinsky(preds, obj_num):
         # mode_type, recall, pred, mode_terms,
         modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'hasOG'),
                                           [m_out_group, p_pattern]))
-    if "color" in considered_pred_names:
-        modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'color'),
+    if "color_input" in considered_pred_names:
+        modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'color_input'),
                                           [p_in_group, s_color]))
+    if "color_output" in considered_pred_names:
+        modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'color_output'),
+                                          [p_out_group, s_color]))
     # if "shape" in considered_pred_names:
     #     modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'shape'),
     #                                       [p_in_group, s_shape]))
@@ -144,7 +147,7 @@ def get_mode_declarations_kandinsky(preds, obj_num):
 
 
 def get_pi_mode_declarations(inv_preds, obj_num):
-    p_object = ModeTerm('+', DataType('out_group'))
+    p_object = ModeTerm('+', DataType('output_group'))
     pi_mode_declarations = []
     for pi_index, pi in enumerate(inv_preds):
         pi_str = pi.name
@@ -155,7 +158,7 @@ def get_pi_mode_declarations(inv_preds, obj_num):
     return pi_mode_declarations
 
 
-def get_mode_declarations(predicates, inv_predicates, e):
+def get_mode_declarations(predicates, e):
     basic_mode_declarations = get_mode_declarations_kandinsky(predicates, e)
-    pi_model_declarations = get_pi_mode_declarations(inv_predicates, e)
-    return basic_mode_declarations + pi_model_declarations
+    # pi_model_declarations = get_pi_mode_declarations(inv_predicates, e)
+    return basic_mode_declarations  # + pi_model_declarations

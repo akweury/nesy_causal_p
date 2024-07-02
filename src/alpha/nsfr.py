@@ -100,18 +100,23 @@ class NSFReasoner(nn.Module):
         V_0 = self.fc(x, self.atoms, self.bk)
         return V_0
 
-    def get_target_prediciton(self, v, prednames, device):
-        values = torch.zeros(v.size(0), v.size(1), 1).to(device)
-        if len(prednames) > 1:
+    def get_target_prediciton(self, atom_values, prednames, device):
+        clause_num = atom_values.shape[0]
+        example_num = atom_values.shape[1]
+        atom_num = atom_values.shape[2]
+        target_atom_num = len(prednames)
+        target_prediction = torch.zeros(clause_num, example_num, target_atom_num).to(device)
+        if target_atom_num > 1:
             target_indices = get_index_by_predname(pred_str=prednames, atoms=self.atoms)
-            values[0] = v[0, :, target_indices[0]].max(dim=-1, keepdim=True)[0]
-            values[1:] = v[1:, :, target_indices[1]].max(dim=-1, keepdim=True)[0]
-
+            for t_i in range(len(target_indices)):
+                target_prediction[:, :, t_i] = atom_values[:, :, target_indices[t_i]].max(dim=-1)[0]
+                # target_prediction[0] = atom_values[0, :, target_indices[0]].max(dim=-1, keepdim=True)[0]
+                # target_prediction[1:] = atom_values[1:, :, target_indices[1]].max(dim=-1, keepdim=True)[0]
         else:
             target_index_list = get_index_by_predname(pred_str=prednames, atoms=self.atoms)
-            values = v[:, :, target_index_list[0]]
+            target_prediction = atom_values[:, :, target_index_list[0]]
 
-        return values
+        return target_prediction
 
     def get_test_target_prediciton(self, v, preds, device):
         """Extracting a value from the valuation tensor using a given predicate.

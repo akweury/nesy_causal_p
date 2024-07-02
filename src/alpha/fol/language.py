@@ -16,12 +16,15 @@ def get_unused_args(c):
     unused_args = []
     used_args = []
     for body in c.body:
-        if "in" == body.pred.name:
+        if "has" in body.pred.name:
             unused_args.append(body.terms[0])
     for body in c.body:
-        if not "in" in body.pred.name:
+        if "has" not in body.pred.name:
             for term in body.terms:
-                if bk.variable["group"] in term.name and term not in used_args:
+                term_name = term.name.split("_")[0]
+                og_names = bk.variable["output_group"]
+                ig_names = bk.variable["input_group"]
+                if term_name in ([og_names] + ig_names) and term not in used_args:
                     unused_args.remove(term)
                     used_args.append(term)
     return unused_args, used_args
@@ -84,22 +87,22 @@ class Language(object):
         self.predicates = level_0_predicates + level_1_predicates + level_2_predicates
         self.consts = self.load_consts(args)
 
-    def init_inv_predicates(self, group_num):
-        for i in range(group_num):
-            inv_pred = self.parse_inv_predicates(i)
-            self.inv_predicates.append(inv_pred)
-            if inv_pred not in self.predicates:
-                self.predicates.append(inv_pred)
+    def init_inv_predicates(self):
+
+        inv_pred = self.parse_inv_predicates()
+        self.inv_predicates.append(inv_pred)
+        if inv_pred not in self.predicates:
+            self.predicates.append(inv_pred)
 
     def reset_lang(self, group_num):
         self.learned_c = []
-        self.init_inv_predicates(group_num)
+        self.init_inv_predicates()
         init_c = self.load_init_clauses(group_num)
 
         # update predicates
         self.update_bk()
         # update language
-        self.mode_declarations = mode_declaration.get_mode_declarations(self.predicates, self.inv_predicates, group_num)
+        self.mode_declarations = mode_declaration.get_mode_declarations(self.predicates, group_num)
         return init_c
 
     def __str__(self):
@@ -217,7 +220,7 @@ class Language(object):
         var_out = bk.variable['out_pattern']
         var_in_g = bk.variable["input_group"]
         var_out_g = bk.variable['output_group']
-        head = [f"inv_p{i}({var_out})" for i in range(g_num)]
+        head = [f"inv_p({var_out})"]
         group_clauses_str = [head[h_i] + ":-" + (f"hasOG({var_out_g}_{h_i},{var_out}),"
                                                  f"hasIG({var_in_g[h_i]}_0,{var_in}).") for h_i in range(len(head))]
 
@@ -238,10 +241,10 @@ class Language(object):
         dtypes = [mode_declaration.DataType(dt) for dt in dtype_names]
         return NeuralPredicate(head_str, int(arity), dtypes)
 
-    def parse_inv_predicates(self, inv_p_id):
-        head = f"inv_p{inv_p_id}"
+    def parse_inv_predicates(self):
+        head = f"inv_p"
         arity = 1
-        head_dtype_names = ['out_group']
+        head_dtype_names = ['out_pattern']
         dtypes = [mode_declaration.DataType(dt) for dt in head_dtype_names]
 
         # pred_with_id = pred + f"_{i}"
@@ -277,8 +280,10 @@ class Language(object):
                 const_names = bk.shape
             else:
                 raise ValueError
-        elif 'pattern' in const_type:
-            const_names = ['input', 'output']
+        elif 'in_pattern' in const_type:
+            const_names = ['input']
+        elif 'out_pattern' in const_type:
+            const_names = ['output']
         else:
             raise ValueError
 

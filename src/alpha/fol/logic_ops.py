@@ -66,20 +66,19 @@ def subs_list(exp, theta_list):
             body = [subs(bi, target_var, const) for bi in body]
         return Clause(head, body)
 
-    #elif type(exp) == FuncTerm:
+    # elif type(exp) == FuncTerm:
     #    for target_var, const in theta_list:
     #        args = [subs(arg, target_var, const) for arg in exp.args]
     #    return FuncTerm(exp.func_symbol, args)
-    #elif type(exp) == Var:
+    # elif type(exp) == Var:
     #    if exp.name == target_var.name:
     #        return const
     #    else:
     #        return exp
-    #elif type(exp) == Const:
+    # elif type(exp) == Const:
     #    return exp
     else:
         raise TypeError('Unknown type in substitution: ' + str(exp))
-
 
 
 def __subs_list(clause, theta_list):
@@ -119,14 +118,14 @@ def unify(atoms):
     if len(atoms) == 0:
         return (1, [])
     # check predicates
-    for i in range(len(atoms)-1):
-        if atoms[i].pred != atoms[i+1].pred:
+    for i in range(len(atoms) - 1):
+        if atoms[i].pred != atoms[i + 1].pred:
             return (0, [])
 
     # check all the same
     all_same_flag = True
-    for i in range(len(atoms)-1):
-        all_same_flag = all_same_flag and (atoms[i] == atoms[i+1])
+    for i in range(len(atoms) - 1):
+        all_same_flag = all_same_flag and (atoms[i] == atoms[i + 1])
     if all_same_flag:
         return (1, [])
 
@@ -134,7 +133,7 @@ def unify(atoms):
     theta_list = []
 
     atoms_ = atoms
-    while(True):
+    while (True):
         # check terms from left
         for i in range(atoms_[0].pred.arity):
             # atom_1(term_1, ..., term_i, ...), ..., atom_j(term_1, ..., term_i, ...), ...
@@ -215,8 +214,8 @@ def get_disagree_index(terms):
     n = min([len(symbols) for symbols in symbols_list])
     for i in range(n):
         ith_symbols = [symbols[i] for symbols in symbols_list]
-        for j in range(len(ith_symbols)-1):
-            if ith_symbols[j] != ith_symbols[j+1]:
+        for j in range(len(ith_symbols) - 1):
+            if ith_symbols[j] != ith_symbols[j + 1]:
                 return (True, i)
     # all the same terms
     return (False, 0)
@@ -285,8 +284,8 @@ def is_singleton(atoms):
         a_1 == a_2 == ... == a_n
     """
     result = True
-    for i in range(len(atoms)-1):
-        result = result and (atoms[i] == atoms[i+1])
+    for i in range(len(atoms) - 1):
+        result = result and (atoms[i] == atoms[i + 1])
     return result
 
 
