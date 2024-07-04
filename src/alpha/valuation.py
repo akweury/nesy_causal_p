@@ -2,6 +2,8 @@
 import torch
 from torch import nn as nn
 from torch.nn import functional as F
+import numpy as np
+from numpy.lib.stride_tricks import sliding_window_view
 
 import config
 from .fol import bk
@@ -48,13 +50,25 @@ class FCNNValuationModule(nn.Module):
         vfs['color_output'] = v_color
         layers.append(v_color)
 
+        v_duplicate = FCNNDuplicateValuationFunction()
+        vfs['duplicate'] = v_duplicate
+        layers.append(v_duplicate)
+
+        v_scale = FCNNScaleOIValuationFunction()
+        vfs['scale'] = v_scale
+        layers.append(v_scale)
+
         v_shape = FCNNShapeValuationFunction()
         vfs['shape'] = v_shape
         layers.append(v_shape)
 
-        v_in = FCNNInValuationFunction()
-        vfs['in'] = v_in
-        layers.append(v_in)
+        v_hasIG = FCNNHasIGValuationFunction()
+        vfs['hasIG'] = v_hasIG
+        layers.append(v_hasIG)
+
+        v_hasOG = FCNNHasOGValuationFunction()
+        vfs['hasOG'] = v_hasOG
+        layers.append(v_hasOG)
 
         # v_rho = FCNNRhoValuationFunction(device)
         # vfs['rho'] = v_rho
@@ -126,7 +140,10 @@ class FCNNValuationModule(nn.Module):
         term_index = self.lang.term_index(term)
         if term.dtype.name == 'input_group':
             # return the coding of the group
-            group_data = [example_data["input_groups"][term_index] for example_data in data]
+            try:
+                group_data = [example_data["input_groups"][term_index] for example_data in data]
+            except IndexError:
+                raise IndexError
             return group_data
         elif term.dtype.name == "output_group":
             group_data = [example_data["output_groups"][term_index] for example_data in data]
@@ -134,8 +151,12 @@ class FCNNValuationModule(nn.Module):
         elif term.dtype.name in bk.attr_names:
             # return the standard attribute code
             return self.attrs[term].unsqueeze(0).repeat(len(data), 1)
-        elif term.dtype.name == 'image':
-            return None
+        elif term.dtype.name == 'in_pattern':
+            group_data = [example_data['input_groups'] for example_data in data]
+            return group_data
+        elif term.dtype.name == 'out_pattern':
+            group_data = [example_data['output_groups'] for example_data in data]
+            return group_data
         else:
             raise ValueError("Invalid datatype of the given term: " + str(term) + ':' + term.dtype.name)
 
@@ -164,8 +185,76 @@ class FCNNColorValuationFunction(nn.Module):
         data_colors = torch.zeros_like(color_mask).to(color_mask.device)
         for d_i in range(len(data)):
             color = data[d_i]["color"]
-            data_colors[d_i, color-1] = 1
-        return (color_mask * data_colors).sum(dim=1)
+            data_colors[d_i, color - 1] = 1
+        is_color = (color_mask * data_colors).sum(dim=1)
+        return is_color
+
+
+class FCNNDuplicateValuationFunction(nn.Module):
+    def __init__(self):
+        super(FCNNDuplicateValuationFunction, self).__init__()
+
+    def io2st_patch(self, input_patch, output_patch):
+        if input_patch.shape == output_patch.shape:
+            # find identical patch in state B
+            space_patch = output_patch
+            target_patch = input_patch
+        elif input_patch.shape[0] >= output_patch.shape[0] and input_patch.shape[1] >= output_patch.shape[1]:
+            # input shape is bigger than output
+            space_patch = input_patch
+            target_patch = output_patch
+        else:
+            space_patch = output_patch
+            target_patch = input_patch
+        return space_patch, target_patch
+
+    def find_identical_shape(self, space_patch, target_patch):
+        """ the small_array can be x% identical to large_array
+        return: top n identical patches in large array, its position, width, and different tiles if any
+        """
+        space_patch = np.array(space_patch)
+        target_patch = np.array(target_patch)
+        # map all number to 1 (bw mode)
+        space_patch = space_patch / (space_patch + 1e-20)
+        target_patch = target_patch / (target_patch + 1e-20)
+        # Get sliding windows of shape (3, 3) from the large array
+        windows = sliding_window_view(space_patch, target_patch.shape)
+        # Calculate the similarity percentage for each window
+        match_counts = np.sum(windows == target_patch, axis=(2, 3))
+        similarity = match_counts / target_patch.size * 100
+        # Generate the positions and differences
+        positions = np.argwhere(similarity == 100)
+        return positions
+
+    def forward(self, data_input, data_output):
+        is_duplicate = torch.zeros(len(data_input))
+        for e_i in range(len(data_input)):
+            input_patch = data_input[e_i]["group_patch"]
+            output_patch = data_output[e_i]["group_patch"]
+
+            space_patch, target_patch = self.io2st_patch(input_patch, output_patch)
+            duplicate_pos = self.find_identical_shape(space_patch, target_patch)
+            if len(duplicate_pos) > 0:
+                is_duplicate[e_i] = 1
+        return is_duplicate
+
+
+class FCNNScaleOIValuationFunction(nn.Module):
+    def __init__(self):
+        super(FCNNScaleOIValuationFunction, self).__init__()
+
+    def forward(self, data_input, data_output, scale_mask):
+
+        data_scale = torch.zeros_like(scale_mask).to(scale_mask.device)
+        for e_i in range(len(data_input)):
+            input_patch = data_input[e_i]["group_patch"]
+            output_patch = data_output[e_i]["group_patch"]
+            if len(output_patch) % len(input_patch) == 0:
+                data_scale[e_i, len(output_patch) // len(input_patch) - 1] = 1
+            elif len(input_patch) % len(output_patch) == 0:
+                data_scale[e_i, len(input_patch) // len(output_patch) - 1] = 1
+        is_scale = (scale_mask * data_scale).sum(dim=1)
+        return is_scale
 
 
 class FCNNShapeValuationFunction(nn.Module):
@@ -221,14 +310,14 @@ class FCNNColorCounterValuationFunction(nn.Module):
         return (a * z_color_counter).sum(dim=1)
 
 
-class FCNNInValuationFunction(nn.Module):
+class FCNNHasIGValuationFunction(nn.Module):
     """The function v_in.
     """
 
     def __init__(self):
-        super(FCNNInValuationFunction, self).__init__()
+        super(FCNNHasIGValuationFunction, self).__init__()
 
-    def forward(self, z, x):
+    def forward(self, ig, domain):
         """
         Args:
             z (tensor): 2-d tensor (B * D), the object-centric representation.
@@ -239,8 +328,35 @@ class FCNNInValuationFunction(nn.Module):
         Returns:
             A batch of probabilities.
         """
+        prob = torch.zeros(len(ig))
+        for e_i in range(len(ig)):
+            if ig[e_i] in domain[e_i]:
+                prob[e_i] = 1
+        return prob
 
-        prob, _ = z[:, 6:14].max(dim=-1)
+
+class FCNNHasOGValuationFunction(nn.Module):
+    """The function v_in.
+    """
+
+    def __init__(self):
+        super(FCNNHasOGValuationFunction, self).__init__()
+
+    def forward(self, og, domain):
+        """
+        Args:
+            z (tensor): 2-d tensor (B * D), the object-centric representation.
+                [x1, y1, x2, y2, color1, color2, color3,
+                    shape1, shape2, shape3, objectness]
+            x (none): A dummy argment to represent the input constant.
+
+        Returns:
+            A batch of probabilities.
+        """
+        prob = torch.zeros(len(og))
+        for e_i in range(len(og)):
+            if og[e_i] in domain[e_i]:
+                prob[e_i] = 1
         return prob
 
 

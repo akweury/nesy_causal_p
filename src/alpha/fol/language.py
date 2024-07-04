@@ -278,6 +278,8 @@ class Language(object):
                 const_names = bk.color
             elif const == 'shape':
                 const_names = bk.shape
+            elif const == 'scale':
+                const_names = bk.scale
             else:
                 raise ValueError
         elif 'in_pattern' in const_type:

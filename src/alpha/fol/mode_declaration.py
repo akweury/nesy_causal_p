@@ -103,6 +103,7 @@ def get_mode_declarations_kandinsky(preds, obj_num):
     s_rho = ModeTerm('#', DataType('rho'))
     s_phi = ModeTerm('#', DataType('phi'))
     s_slope = ModeTerm('#', DataType('slope'))
+    s_scale = ModeTerm('#', DataType('scale'))
     s_group_shape = ModeTerm('#', DataType('group_shape'))
     s_number = ModeTerm('#', DataType('number'))
 
@@ -122,6 +123,12 @@ def get_mode_declarations_kandinsky(preds, obj_num):
     if "color_output" in considered_pred_names:
         modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'color_output'),
                                           [p_out_group, s_color]))
+    if "duplicate" in considered_pred_names:
+        modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'duplicate'),
+                                          [p_in_group, p_out_group]))
+    if "scale" in considered_pred_names:
+        modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'scale'),
+                                          [p_in_group, p_out_group,s_scale]))
     # if "shape" in considered_pred_names:
     #     modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'shape'),
     #                                       [p_in_group, s_shape]))

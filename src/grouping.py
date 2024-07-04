@@ -290,12 +290,12 @@ def _fun(example, og, igs):
 def get_groups_code(example, groups):
     groups_code = []
     for group in groups:
-        input_patch = np.array(example)
-        ig_mask = np.zeros_like(input_patch, dtype=bool)
+        group_patch = np.array(example)
+        ig_mask = np.zeros_like(group_patch, dtype=bool)
         for pos in group:
             ig_mask[pos[0], pos[1]] = True
-        input_patch[~ig_mask] = 0
-        group_color = np.unique(input_patch)[1:]
+        group_patch[~ig_mask] = 0
+        group_color = np.unique(group_patch)[1:]
 
         # space_patch, target_patch = io2st_patch(input_patch, output_patch)
         # duplicate_pos = find_identical_shape(space_patch, target_patch)
@@ -303,7 +303,8 @@ def get_groups_code(example, groups):
         group_code = {
             "color": group_color,
             "tile_pos": group,
-            "width": input_patch.shape[0]
+            "width": group_patch.shape[0],
+            'group_patch': group_patch,
         }
 
         groups_code.append(group_code)

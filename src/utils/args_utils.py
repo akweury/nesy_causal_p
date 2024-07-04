@@ -28,7 +28,7 @@ def get_args():
     parser.add_argument('--gamma', default=0.001, type=float,
                         help='Smooth parameter in the softor function')
     parser.add_argument("--bs_clause_eval", type=int, default=5)
-    parser.add_argument("--top_k", type=int, default=3)
+    parser.add_argument("--top_k", type=int, default=10)
     args = parser.parse_args()
 
     if args.device != "cpu":

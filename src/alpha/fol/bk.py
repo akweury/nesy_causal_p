@@ -13,6 +13,8 @@ variable = {
 neural_p = {
     'color_input': 'color_input:2:input_group,color',
     'color_output': 'color_output:2:output_group,color',
+    'duplicate': 'duplicate:2:input_group,output_group',
+    'scale': 'scale:3:input_group,output_group,scale',
     # 'shape': 'shape:2:input_group,shape'
 }
 const_dict = {
@@ -20,13 +22,15 @@ const_dict = {
     'in_pattern': "in_pattern",
     'color': 'enum',
     'shape': 'enum',
+    'scale': 'enum',
     'input_group': 'amount_e',
     'output_group': 'amount_e',
     'number': 'amount_num',
+
 }
 
-color = ["color_1", "color_2", "color_3", "color_4", "color_5",
-         "color_6", "color_7", "color_8", "color_9", "color_10"]
+color = [f'color_{i}' for i in range(1, 11)]
+scale = [f'scale_{i}' for i in range(1, 11)]
 shape = ['line', 'rectangle']
 
-attr_names = ['color', 'shape', 'rho', 'phi', 'group_shape', "slope", 'number']
+attr_names = ['color', 'shape', 'scale', 'rho', 'phi', 'group_shape', "slope", 'number']

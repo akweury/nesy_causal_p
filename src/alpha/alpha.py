@@ -55,7 +55,8 @@ def eval_ims(NSFR, args, pred_names):
 
 
 def eval_dls(ils):
-    dls = ils.sum(dim=1) / ils.shape[1]
+    # dls = ils.sum(dim=1) / ils.shape[1]
+    dls = ils.max(dim=1)[0]
     return dls.squeeze()
 
 
@@ -88,16 +89,6 @@ def evaluation(args, NSFR, target_preds):
 
 
 def beam_search(args, lang, C, FC):
-    """
-        given one or multiple neural predicates, searching for high scoring clauses, which includes following steps
-        1. extend given initial clauses
-        2. evaluate each clause
-        3. prune clauses
-
-    """
-    # eval_pred = ['kp']
-    bs_step = 0
-    clause_with_scores = []
     clauses = C
     for bs_step in range(args.max_bs_step):
         # clause extension
@@ -109,13 +100,12 @@ def beam_search(args, lang, C, FC):
         # clause evaluation
         ils, dls = evaluation(args, NSFR, target_preds)
         # prune clauses
-        clauses = pruning.top_k_clauses(args, ils, dls, extended_C)
+        pruned_c = pruning.top_k_clauses(args, ils, dls, extended_C)
         # save data
-        # lang.all_clauses += clause_with_scores
-    # if len(clauses) > 0:
-    #     lang.clause_with_scores = clause_with_scores
-    # lang.clauses = args.last_refs
-    # check_result(args, clause_with_scores)
+        if len(pruned_c) == 0:
+            break
+        else:
+            clauses = pruned_c
 
     return clauses
 
