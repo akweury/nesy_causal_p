@@ -18,6 +18,18 @@
 - 14,17,19,21,33,38,43,53,68,75,76,88,96
 
 
+#### inter-ig relations
+
+###### ig1 split ig2
+Rule: if ig1 split ig2 to n sections, return these sections in a list
+GroupList():-split(g)
+
+target: group
+rule feature: one group split the matrix into several sections 
+action: split  
+input: matrix
+output: groups
+
 ## Actions
 
 ##### mask
@@ -88,3 +100,24 @@ scale(a0,g0,param)
 inv_p0(g0)
 inv_p0(g1)
 ```
+
+
+#### ChatGPT Prompt
+
+#### Grouping by sections
+python code: given a matrix which items are only integers in range of 0-9. 
+Slice the matrix to multiple blocks considering both its item value (if they are same) and the positions (if they are connected),
+return the sliced matrices in a list.
+
+
+#### Checking for rule features:
+python code: given a matrix, 
+identify if there is a path that split the matrix to multiple disconnected rectangular regions
+
+
+#### Pipeline
+
+Ask LLM to identify
+- rectangular regions
+- same color regions
+- connected regions

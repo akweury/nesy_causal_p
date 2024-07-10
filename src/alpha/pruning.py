@@ -7,8 +7,8 @@ def remove_duplicate_clauses(refs_i, unused_args, used_args, args):
     for clause in refs_i:
         is_duplicate = False
         for body in clause.body:
-            if "in" != body.pred.name:
-                if len(body.terms) == 2 and "O" not in body.terms[1].name:
+            if "has" != body.pred.name:
+                if len(body.terms) == 2 and "" not in body.terms[1].name:
                     # predicate with 1 object arg
                     if len(unused_args) > 0:
                         if not (body.terms[0] == unused_args[0] or body.terms[0] in used_args):

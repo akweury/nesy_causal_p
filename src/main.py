@@ -15,11 +15,20 @@ def main():
     # g_train = grouping.group_by_color(raw_data["train"])
     # g_eval = grouping.group_by_color(raw_data["eval"])
     # visual.export_groups_as_images(raw_data["train"], g_train, "train")
-    for task_i in tqdm(range(len(raw_data["train"]["cha"])), desc="Reasoning Training Dataset"):
+    for task_i in tqdm(range(85, len(raw_data["train"]["cha"])), desc="Reasoning Training Dataset"):
         task = raw_data["train"]["cha"][task_i]["train"]
-        # acquire the probability of grouping type: color/shape/area/...
-        task_features = grouping.percept_task_features(args, task)
-        task_relations = alpha.alpha(args, task_features)
+        task_features = []
+        task_relations = []
+        for e_i in range(len(task)):
+            example = task[e_i]
+            # acquire the probability of grouping type: color/shape/area/...
+            example_features = grouping.percept_task_features(args, example)
+            # example_features = grouping.percept_task_features(args, example)
+            example_relations = alpha.alpha(args, example_features, config.alpha_mode['inter_input_group'])
+            task_features.append(example_features)
+            task_relations.append(example_relations)
+
+        print("task i")
         # hlps = llm.generate_hlps(task_relations)
 
     print("program finished")

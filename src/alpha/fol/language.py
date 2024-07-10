@@ -6,10 +6,10 @@ import re
 import torch.nn.functional as F
 import torch
 
+import config
 from .exp_parser import ExpTree
 from .logic import *
 from . import bk, lang_utils, mode_declaration
-import config
 
 
 def get_unused_args(c):
@@ -46,12 +46,16 @@ class Language(object):
         consts (List[Const]): A set of constants.
     """
 
-    def __init__(self, args):
+    def __init__(self, args, relation_obj_type):
 
         # BK
-        self.vars = [Var(f"{v_name}_{v_i}") for v_i in range(args.g_num) for v_name in
-                     bk.variable["input_group"] + [bk.variable["output_group"]]]
-        self.var_num = args.g_num
+        self.ig_vars = [Var(f"{v_name}_{v_i}") for v_i in range(args.ig_num) for v_name in
+                        bk.variable["input_group"]]
+        self.og_vars = [Var(f"{v_name}_{v_i}") for v_i in range(args.og_num) for v_name in
+                        [bk.variable["output_group"]]]
+        self.vars = self.ig_vars + self.og_vars
+        self.ig_num = args.ig_num
+        self.og_num = args.og_num
         self.atoms = []
         self.funcs = []
         self.consts = []
@@ -77,32 +81,61 @@ class Language(object):
             self.lp_atom = Lark(grammar.read(), start="atom")
 
         # load BK predicates and constants
-        level_0_predicates = [
-            self.parse_pred(bk.predicate_target),
-            self.parse_pred(bk.predicate_has_ig),
-            self.parse_pred(bk.predicate_has_og)
-        ]
-        level_1_predicates = [self.parse_pred(data) for data in list(bk.neural_p.values())]
-        level_2_predicates = self.inv_predicates
-        self.predicates = level_0_predicates + level_1_predicates + level_2_predicates
+        self.predicates = self.load_preds(relation_obj_type)
         self.consts = self.load_consts(args)
 
-    def init_inv_predicates(self):
+    def load_preds(self, relation_obj_type):
+        predicates = []
 
-        inv_pred = self.parse_inv_predicates()
-        self.inv_predicates.append(inv_pred)
-        if inv_pred not in self.predicates:
-            self.predicates.append(inv_pred)
+        if relation_obj_type == config.alpha_mode['inter_input_group']:
+            predicates.append(self.parse_pred(bk.predicate_has_ig))
+            for data in list(bk.neural_p.values()):
+                in_data = data.replace('group', 'input_group')
+                predicate = self.parse_pred(in_data)
+                predicates.append(predicate)
 
-    def reset_lang(self, group_num):
+        elif relation_obj_type == config.alpha_mode['inter_output_group']:
+            predicates.append(self.parse_pred(bk.predicate_has_og))
+            for data in list(bk.neural_p.values()):
+                out_data = data.replace('group', 'output_group')
+                predicate = self.parse_pred(out_data)
+                predicates.append(predicate)
+
+        else:
+            raise NotImplementedError
+
+        return predicates
+
+    def init_inv_predicates(self, relation_obj_type):
+        if relation_obj_type == config.alpha_mode['inter_input_group']:
+            for i in range(self.ig_num):
+                inv_pred = self.parse_inv_predicates(i, "ig")
+                self.inv_predicates.append(inv_pred)
+                if inv_pred not in self.predicates:
+                    self.predicates.append(inv_pred)
+        if relation_obj_type == config.alpha_mode['inter_output_group']:
+            for i in range(self.og_num):
+                inv_pred = self.parse_inv_predicates(i, "og")
+                self.inv_predicates.append(inv_pred)
+                if inv_pred not in self.predicates:
+                    self.predicates.append(inv_pred)
+        if relation_obj_type == config.alpha_mode['inter_io_group']:
+            for i in range(self.og_num):
+                inv_pred = self.parse_inv_predicates(i, "io")
+                self.inv_predicates.append(inv_pred)
+                if inv_pred not in self.predicates:
+                    self.predicates.append(inv_pred)
+
+    def reset_lang(self, ig_num, og_num, relation_obj_type):
         self.learned_c = []
-        self.init_inv_predicates()
-        init_c = self.load_init_clauses(group_num)
+        self.init_inv_predicates(relation_obj_type)
+        init_c = self.load_init_clauses(ig_num, og_num, relation_obj_type)
 
         # update predicates
         self.update_bk()
         # update language
-        self.mode_declarations = mode_declaration.get_mode_declarations(self.predicates, group_num)
+        self.mode_declarations = mode_declaration.get_mode_declarations(self.predicates, ig_num, og_num,
+                                                                        relation_obj_type)
         return init_c
 
     def __str__(self):
@@ -170,9 +203,9 @@ class Language(object):
         self.atoms = spec_atoms + sorted(atoms) + sorted(bk_pi_atoms) + sorted(pi_atoms)
 
     def generate_atoms(self):
-        p_ = Predicate('.', 1, [DataType('spec')])
-        false = Atom(p_, [Const('__F__', dtype=DataType('spec'))])
-        true = Atom(p_, [Const('__T__', dtype=DataType('spec'))])
+        p_ = Predicate('.', 1, [DataType('spec,?')])
+        false = Atom(p_, [Const('__F__', dtype=DataType('spec,?'))])
+        true = Atom(p_, [Const('__T__', dtype=DataType('spec,?'))])
 
         spec_atoms = [false, true]
         atoms = []
@@ -211,7 +244,7 @@ class Language(object):
         #             pi_atoms.append(Atom(pred, args))
         self.atoms = spec_atoms + sorted(atoms)  # + sorted(bk_pi_atoms) + sorted(pi_atoms)
 
-    def load_init_clauses(self, g_num):
+    def load_init_clauses(self, ig_num, og_num, relation_obj_type):
         """Read lines and parse to Atom objects.
         """
 
@@ -220,12 +253,36 @@ class Language(object):
         var_out = bk.variable['out_pattern']
         var_in_g = bk.variable["input_group"]
         var_out_g = bk.variable['output_group']
-        head = [f"inv_p({var_out})"]
-        group_clauses_str = [head[h_i] + ":-" + (f"hasOG({var_out_g}_{h_i},{var_out}),"
-                                                 f"hasIG({var_in_g[h_i]}_0,{var_in}).") for h_i in range(len(head))]
+        group_clauses_str = []
+        if relation_obj_type == config.alpha_mode['inter_input_group']:
+            i_c_strs = []
+            for i in range(ig_num):
+                head = f"{bk.inv_p_head['input']}_{i}({var_in}):-"
+                body = ""
+                for j in range(i + 1):
+                    body += f"hasIG({var_in_g}_{j},{var_in}),"
+                i_c_strs.append(head + body[:-1] + ".")
+            group_clauses_str += i_c_strs
+        if relation_obj_type == config.alpha_mode['inter_output_group']:
+            o_c_strs = []
+            for i in range(og_num):
+                head = f"{bk.inv_p_head['output']}_{i}({var_out}):-"
+                body = ""
+                for j in range(i + 1):
+                    body += f"hasOG({var_out_g}_{j},{var_out}),"
+                o_c_strs.append(head + body[:-1] + ".")
+            group_clauses_str += o_c_strs
+        if relation_obj_type == config.alpha_mode['inter_io_group']:
+            io_c_strs = []
+            for i in range(og_num):
+                head = f"{bk.inv_p_head['input_output']}_{i}({var_in},{var_out}):-"
+                body = ""
+                for j in range(i + 1):
+                    body += f"hasIG({var_in_g}_{j},{var_in}),"
+                    body += f"hasOG({var_out_g}_{j},{var_out}),"
+                io_c_strs.append(head + body[:-1] + ".")
+            group_clauses_str += io_c_strs
 
-        # target(X):-in(G1,X),in(G2,X).
-        # in(G1,X):-color_map(ig1, og1, rr).
         group_clauses = []
         for group_clause_str in group_clauses_str:
             tree = self.lp_clause.parse(group_clause_str)
@@ -237,14 +294,24 @@ class Language(object):
         """Parse string to predicates.
         """
         head_str, arity, dtype_names_str = line.split(':')
-        dtype_names = dtype_names_str.split(',')
-        dtypes = [mode_declaration.DataType(dt) for dt in dtype_names]
+        dtype_data = dtype_names_str.split(';')
+        dtypes = [mode_declaration.DataType(dt) for dt in dtype_data]
         return NeuralPredicate(head_str, int(arity), dtypes)
 
-    def parse_inv_predicates(self):
-        head = f"inv_p"
+    def parse_inv_predicates(self, idx, p_type):
+        if p_type == "ig":
+            head = f"{bk.inv_p_head['input']}_{idx}"
+            head_dtype_names = ['in_pattern,+']
+        elif p_type == "og":
+            head = f"{bk.inv_p_head['output']}_{idx}"
+            head_dtype_names = ['out_pattern,+']
+        elif p_type == "io":
+            head = f"{bk.inv_p_head['input_output']}_{idx}"
+            head_dtype_names = ['in_pattern,+', 'out_pattern,+']
+        else:
+            raise ValueError
         arity = 1
-        head_dtype_names = ['out_pattern']
+
         dtypes = [mode_declaration.DataType(dt) for dt in head_dtype_names]
 
         # pred_with_id = pred + f"_{i}"
@@ -258,8 +325,10 @@ class Language(object):
         const_data_type = mode_declaration.DataType(const)
         if "amount_" in const_type:
             _, num = const_type.split('_')
-            if num == 'e':
-                num = args.g_num
+            if num == 'ie':
+                num = args.ig_num
+            if num == 'oe':
+                num = args.og_num
             elif num == "phi":
                 num = args.phi_num
             elif num == "rho":
@@ -272,13 +341,13 @@ class Language(object):
             for i in range(int(num)):
                 # if const == "group" and i == 0:
                 #     continue
-                const_names.append(f"{const}{i + 1}of{num}")
+                const_names.append(f"{const_data_type.name}{i + 1}of{num}")
         elif "enum" in const_type:
-            if const == 'color':
+            if const_data_type.name == 'color':
                 const_names = bk.color
-            elif const == 'shape':
+            elif const_data_type.name == 'shape':
                 const_names = bk.shape
-            elif const == 'scale':
+            elif const_data_type.name == 'scale':
                 const_names = bk.scale
             else:
                 raise ValueError
@@ -553,26 +622,26 @@ class Language(object):
             raise ValueError('Too less match in ' + invented_pred_name)
         return invented_pred[0]
 
-    def inv_pred(self, args, arity, pi_dtypes, p_args, pi_type):
-        """Get the predicate by its id.
-
-        Args:
-            pi_template (str): The name of the predicate template.
-
-        Returns:
-            InventedPredicat: The matched invented predicate with the given name.
-        """
-        prefix = "inv_pred"
-        new_predicate_id = self.invented_preds_number
-        if args is not None:
-            args.p_inv_counter += 1
-            self.invented_preds_number = args.p_inv_counter
-        pred_with_id = prefix + str(new_predicate_id)
-
-        new_predicate = InventedPredicate(pred_with_id, int(arity), pi_dtypes, p_args, pi_type=pi_type)
-        # self.invented_preds.append(new_predicate)
-
-        return new_predicate
+    # def inv_pred(self, args, arity, pi_dtypes, p_args, pi_type):
+    #     """Get the predicate by its id.
+    #
+    #     Args:
+    #         pi_template (str): The name of the predicate template.
+    #
+    #     Returns:
+    #         InventedPredicat: The matched invented predicate with the given name.
+    #     """
+    #     prefix = "inv_pred"
+    #     new_predicate_id = self.invented_preds_number
+    #     if args is not None:
+    #         args.p_inv_counter += 1
+    #         self.invented_preds_number = args.p_inv_counter
+    #     pred_with_id = prefix + str(new_predicate_id)
+    #
+    #     new_predicate = InventedPredicate(pred_with_id, int(arity), pi_dtypes, p_args, pi_type=pi_type)
+    #     # self.invented_preds.append(new_predicate)
+    #
+    #     return new_predicate
 
     def load_inv_pred(self, id, arity, pi_dtypes, p_args, pi_type):
         """Get the predicate by its id.
@@ -599,30 +668,25 @@ class Language(object):
                 old_predicates.append(new_predicate)
         return old_predicates
 
-    def load_minimum(self, neural_pred=None, full_bk=True):
-
-        if neural_pred is not None:
-            self.preds = self.append_new_predicate(self.preds, neural_pred)
-        self.invented_preds = list(set(self.all_invented_preds))
-        self.preds = self.append_new_predicate(self.preds, self.invented_preds)
-        self.pi_clauses = list(set(self.all_pi_clauses))
-
-        prim_args_list = []
-        for c in self.all_clauses:
-            for atom in c.body:
-                if atom.pred.pi_type == "clu_pred":
-                    for pi_body in atom.pred.body:
-                        for atom in pi_body:
-                            prim_args_list.append(atom.terms[:-1])
-                else:
-                    prim_args_list.append(atom.terms[:-1])
-        prim_args_list = list(set(prim_args_list))
-        self.generate_minimum_atoms(prim_args_list)
+    # def load_minimum(self, neural_pred=None, full_bk=True):
+    #
+    #     if neural_pred is not None:
+    #         self.preds = self.append_new_predicate(self.preds, neural_pred)
+    #     self.invented_preds = list(set(self.all_invented_preds))
+    #     self.preds = self.append_new_predicate(self.preds, self.invented_preds)
+    #     self.pi_clauses = list(set(self.all_pi_clauses))
+    #
+    #     prim_args_list = []
+    #     for c in self.all_clauses:
+    #         for atom in c.body:
+    #             if atom.pred.pi_type == "clu_pred":
+    #                 for pi_body in atom.pred.body:
+    #                     for atom in pi_body:
+    #                         prim_args_list.append(atom.terms[:-1])
+    #             else:
+    #                 prim_args_list.append(atom.terms[:-1])
+    #     prim_args_list = list(set(prim_args_list))
+    #     self.generate_minimum_atoms(prim_args_list)
 
     def update_bk(self):
-        # put everything into the bk
-        # self.preds = self.append_new_predicate(self.preds, self.preds)
-        # self.invented_preds = self.all_invented_preds
-        # self.preds = self.append_new_predicate(self.preds, self.invented_preds)
-        # self.pi_clauses = self.all_pi_clauses
         self.generate_atoms()

@@ -1,5 +1,5 @@
 # Created by jing at 25.06.24
-
+import config
 from .logic import *
 
 
@@ -89,67 +89,29 @@ def get_invented_pred_by_name(preds, invented_pred_name):
     return invented_pred[0]
 
 
-def get_mode_declarations_kandinsky(preds, obj_num):
-    p_pattern = ModeTerm('+', DataType('pattern'))
+def get_mode_data(dtypes, g_num):
+    mode_terms = []
+    hasIn = False
+    hasOut = False
+    for dt in dtypes:
+        term = ModeTerm(dt.sign, dt)
+        mode_terms.append(term)
+        if "input" in dt.name:
+            hasIn = True
+        elif "output" in dt.name:
+            hasOut = True
 
-    m_in_group = ModeTerm('-', DataType('input_group'))
-    m_out_group = ModeTerm('-', DataType('output_group'))
+    recall = (hasIn) * g_num + hasOut * g_num
+    return mode_terms, recall
 
-    p_in_group = ModeTerm('+', DataType('input_group'))
-    p_out_group = ModeTerm('+', DataType('output_group'))
 
-    s_color = ModeTerm('#', DataType('color'))
-    s_shape = ModeTerm('#', DataType('shape'))
-    s_rho = ModeTerm('#', DataType('rho'))
-    s_phi = ModeTerm('#', DataType('phi'))
-    s_slope = ModeTerm('#', DataType('slope'))
-    s_scale = ModeTerm('#', DataType('scale'))
-    s_group_shape = ModeTerm('#', DataType('group_shape'))
-    s_number = ModeTerm('#', DataType('number'))
-
+def get_mode_declarations_bk(preds, g_num):
     modeb_list = []
-    considered_pred_names = [p.name for p in preds]
-    if "hasIG" in considered_pred_names:
-        # mode_type, recall, pred, mode_terms,
-        modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'hasIG'),
-                                          [m_in_group, p_pattern]))
-    if "hasOG" in considered_pred_names:
-        # mode_type, recall, pred, mode_terms,
-        modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'hasOG'),
-                                          [m_out_group, p_pattern]))
-    if "color_input" in considered_pred_names:
-        modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'color_input'),
-                                          [p_in_group, s_color]))
-    if "color_output" in considered_pred_names:
-        modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'color_output'),
-                                          [p_out_group, s_color]))
-    if "duplicate" in considered_pred_names:
-        modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'duplicate'),
-                                          [p_in_group, p_out_group]))
-    if "scale" in considered_pred_names:
-        modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'scale'),
-                                          [p_in_group, p_out_group,s_scale]))
-    # if "shape" in considered_pred_names:
-    #     modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'shape'),
-    #                                       [p_in_group, s_shape]))
-    # if "rho" in considered_pred_names:
-    #     modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'rho'),
-    #                                       [p_in_group, p_group, s_rho], ordered=False))
-    # if "phi" in considered_pred_names:
-    #     modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'phi'),
-    #                                       [p_group, p_group, s_phi], ordered=False))
-    # if "slope" in considered_pred_names:
-    #     modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'slope'),
-    #                                       [p_group, s_slope], ordered=False))
-    # if "group_shape" in considered_pred_names:
-    #     modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'group_shape'),
-    #                                       [p_group, s_group_shape], ordered=False))
-    # if "shape_counter" in considered_pred_names:
-    #     modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'shape_counter'),
-    #                                       [p_group, s_number], ordered=False))
-    # if "color_counter" in considered_pred_names:
-    #     modeb_list.append(ModeDeclaration('body', obj_num, get_pred_by_name(preds, 'color_counter'),
-    #                                       [p_group, s_number], ordered=False))
+    for pred in preds:
+        pred_name = pred.name
+        dtypes = pred.dtypes
+        mode_terms, recall = get_mode_data(dtypes, g_num)
+        modeb_list.append(ModeDeclaration('body', recall, get_pred_by_name(preds, pred_name), mode_terms))
     return modeb_list
 
 
@@ -165,7 +127,16 @@ def get_pi_mode_declarations(inv_preds, obj_num):
     return pi_mode_declarations
 
 
-def get_mode_declarations(predicates, e):
-    basic_mode_declarations = get_mode_declarations_kandinsky(predicates, e)
+def get_mode_declarations(predicates, ig_num, og_num, relation_obj_type):
+    if relation_obj_type == config.alpha_mode['inter_input_group']:
+        g_num = ig_num
+    elif relation_obj_type == config.alpha_mode['inter_output_group']:
+        g_num = og_num
+    elif relation_obj_type == config.alpha_mode['inter_io_group']:
+        g_num = ig_num * og_num
+    else:
+        raise ValueError
+
+    basic_mode_declarations = get_mode_declarations_bk(predicates, g_num)
     # pi_model_declarations = get_pi_mode_declarations(inv_predicates, e)
     return basic_mode_declarations  # + pi_model_declarations

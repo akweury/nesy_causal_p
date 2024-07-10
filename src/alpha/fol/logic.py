@@ -16,8 +16,12 @@ class DataType(object):
         name (str): The name of the data type.
     """
 
-    def __init__(self, name):
-        self.name = name
+    def __init__(self, data):
+        self.data = data.split(',')
+        if len(self.data) != 2:
+            raise ValueError
+        self.name = self.data[0]
+        self.sign = self.data[1]
 
     def __eq__(self, other):
         if type(other) == str:
@@ -833,6 +837,6 @@ class InventedClause(Clause):
         self.body = sorted(body)
 
 
-p_ = Predicate('.', 1, [DataType('spec')])
-false = Atom(p_, [Const('__F__', dtype=DataType('spec'))])
-true = Atom(p_, [Const('__T__', dtype=DataType('spec'))])
+p_ = Predicate('.', 1, [DataType('spec,?')])
+false = Atom(p_, [Const('__F__', dtype=DataType('spec,?'))])
+true = Atom(p_, [Const('__T__', dtype=DataType('spec,?'))])

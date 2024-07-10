@@ -10,8 +10,8 @@ from .fol import language
 from .fol import refinement
 
 
-def init_ilp(args):
-    lang = language.Language(args)
+def init_ilp(args, relation_obj_type):
+    lang = language.Language(args, relation_obj_type)
     return lang
 
 
@@ -23,9 +23,9 @@ def extension(args, lang, clauses):
     for c in clauses:
         refs_i = refinement_generator.refinement_clause(c)
         unused_args, used_args = language.get_unused_args(c)
-        refs_i_removed = pruning.remove_duplicate_clauses(refs_i, unused_args, used_args, args)
+        # refs_i_removed = pruning.remove_duplicate_clauses(refs_i, unused_args, used_args, args)
         # remove already appeared refs
-        refs_i_removed = list(set(refs_i_removed).difference(set(B_)))
+        refs_i_removed = list(set(refs_i).difference(set(B_)))
         B_.extend(refs_i_removed)
         refs.extend(refs_i_removed)
 
@@ -110,10 +110,9 @@ def beam_search(args, lang, C, FC):
     return clauses
 
 
-def alpha(args, data):
-    log_utils.add_lines(f"================== RUN ILP ========================", args.log_file)
-    lang = init_ilp(args)
-    C = lang.reset_lang(args.g_num)
+def alpha(args, data, relation_obj_type):
+    lang = init_ilp(args, relation_obj_type)
+    C = lang.reset_lang(args.ig_num, args.og_num, relation_obj_type)
     VM = valuation.get_valuation_module(args, lang, data)
     FC = facts_converter.FactsConverter(args, lang, VM)
     clauses = beam_search(args, lang, C, FC)

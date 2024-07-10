@@ -6,75 +6,7 @@ from tqdm import tqdm
 from collections import defaultdict
 
 from utils import tile_utils, file_utils, log_utils, args_utils
-
-
-# def hier_data2group_img(hier_data):
-#     patches = []
-#     for group in hier_data['identical_groups']:
-#         # add group images
-#         patch_array = highlight_patch(hier_data['output'], hier_data['input'], group['position'])
-#         patches.append(patch_array)
-#
-#     return patches
-
-
-# def id_data2patches(input_patch, output_patch, id_groups):
-#     patches = []
-#     for group in id_groups:
-#         patch = highlight_patch(input_patch, output_patch, group['position'])
-#         patches.append(patch)
-#     return patches
-
-
-# def group_with_identical(args, input_patches, output_patches):
-#     data = []
-#     all_patches = []
-#     for input_patch, output_patch in zip(input_patches, output_patches):
-#         input_patch = np.array(input_patch)
-#         output_patch = np.array(output_patch)
-#         if input_patch.shape == output_patch.shape:
-#             # find identical patch in state B
-#             id_groups = tile_utils.find_identical_groups(space_patch=output_patch, target_patch=input_patch)
-#             id_patches = id_data2patches(input_patch, output_patch, id_groups)
-#
-#         elif input_patch.shape[0] >= output_patch.shape[0] and input_patch.shape[1] >= output_patch.shape[1]:
-#             # input shape is bigger than output
-#             id_groups = tile_utils.find_identical_groups(input_patch, output_patch)
-#             id_patches = id_data2patches(output_patch, input_patch, id_groups)
-#         else:
-#             # if output contains input?
-#             id_groups = tile_utils.find_identical_groups(output_patch, input_patch)
-#             id_patches = id_data2patches(input_patch, output_patch, id_groups)
-#         data.append(id_groups)
-#         all_patches.append(id_patches)
-#     # all_patches = np.array(all_patches)
-#     # all_patches = np.moveaxis(all_patches, 0, 1)
-#     return data, all_patches
-
-def find_connected_components(matrix):
-    # To store all components for different colors
-    all_components = []
-
-    # Iterate over each possible color (0-9)
-    for color in range(10):
-        # Create a binary mask where the current color is 1 and all others are 0
-        binary_mask = (matrix == color).astype(int)
-
-        # Label the connected components in the binary mask
-        labeled_array, num_features = label(binary_mask, structure=np.ones((3, 3)))
-
-        # Extract components for the current color
-        components = []
-        for i in range(1, num_features + 1):
-            component = list(zip(*np.where(labeled_array == i)))
-            if component:
-                components.append(component)
-
-        # Append components of the current color to the all_components list
-        if components:
-            all_components.extend(components)
-    all_components = sorted(all_components, key=lambda x: len(x), reverse=True)
-    return all_components
+import group_section
 
 
 def find_color_components(matrix):
@@ -96,6 +28,36 @@ def group_by_color_single(example):
     input_groups_color = find_color_components(np.array(data_input))
     output_groups_color = find_color_components(np.array(data_output))
     return input_groups_color, output_groups_color
+
+
+def group_by_section_single(example):
+    data_input = example["input"]
+    data_output = example["output"]
+    # grouping by section
+
+    # split by a bar
+    # split by a grid
+    # split by a bounding box
+    input_groups_section = group_section.connection_splitting(np.array(data_input))
+    input_groups_section = group_section.grid_splitting(np.array(data_input))
+    input_groups_section = group_section.bar_splitting(np.array(data_input))
+
+
+    output_groups_section = None
+
+    return input_groups_section, output_groups_section
+
+
+def group_by_connection_single(example):
+    data_input = example["input"]
+    data_output = example["output"]
+    # grouping by connection
+    raise NotImplementedError
+
+    # input_groups_connection = is_splitting(np.array(data_input))
+    # input_groups_connection = get_blocks(np.array(data_input))
+    # output_groups_connection = get_blocks(np.array(data_output))
+    # return input_groups_connection, output_groups_connection
 
 
 def group_by_color(data):
@@ -311,30 +273,41 @@ def get_groups_code(example, groups):
     return groups_code
 
 
-def percept_task_features(args, task):
-    task_features = []
-    g_nums = []
-    for e_i in range(len(task)):
-        example = task[e_i]
-        example["input"] = np.array(example["input"]) + 1
-        example["output"] = np.array(example["output"]) + 1
-        # grouping the tiles in example
-        igs, ogs = group_by_color_single(example)
+def percept_task_features(args, example):
+    example["input"] = np.array(example["input"]) + 1
+    example["output"] = np.array(example["output"]) + 1
 
-        ig_codes = get_groups_code(example["input"], igs)
-        og_codes = get_groups_code(example["output"], ogs)
-        # for ig in igs:
-        #     g_code = get_g_prop_code(example, ig)
-        #     ig_codes.append(g_code)
-        # for og in ogs:
-        #     g_code = get_g_prop_code(example, og)
-        # for g_i in range(len(ogs)):
-        #     igs2og = get_prop_igs2og(example, ogs[g_i], igs)
-        #     igs2ogs.append(igs2og)
-        task_features.append({"input_groups": ig_codes, "output_groups": og_codes})
-        g_nums.append(len(ogs))
-    g_num_unique = np.unique(g_nums)
-    if len(g_num_unique) != 1:
-        raise ValueError("Output Group Numbers are not same.")
-    args.g_num = g_num_unique[0]
-    return task_features
+    # splitting by colors
+    igs_color, ogs_color = group_by_color_single(example)
+    igs_color_data = get_groups_code(example["input"], igs_color)
+    ogs_color_data = get_groups_code(example["output"], ogs_color)
+
+    # splitting by sections
+    # igs_section, ogs_section = group_by_section_single(example)
+    # igs_section_data = get_groups_code(example["input"], igs_section)
+    # ogs_section_data = get_groups_code(example["output"], ogs_section)
+    #
+    # # splitting by connections
+    # igs_connection, ogs_connection = group_by_connection_single(example)
+    # igs_connection_data = get_groups_code(example["input"], igs_connection)
+    # ogs_connection_data = get_groups_code(example["output"], ogs_connection)
+
+    example_features = {"input_groups": igs_color_data,
+                        "output_groups": ogs_color_data}
+
+    args.ig_num = len(igs_color)
+    args.og_num = len(ogs_color)
+
+    return example_features
+
+
+def percept_task_features_sections(args, example):
+    example["input"] = np.array(example["input"]) + 1
+    example["output"] = np.array(example["output"]) + 1
+    # grouping the tiles in example
+    igs, ogs = group_by_section_single(example)
+    ig_codes = get_groups_code(example["input"], igs)
+    og_codes = get_groups_code(example["output"], ogs)
+    example_features = {"input_groups": ig_codes, "output_groups": og_codes}
+    args.ig_num = len(igs)
+    args.og_num = len(ogs)

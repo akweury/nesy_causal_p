@@ -15,7 +15,8 @@ class FactsConverter(nn.Module):
 
     def __init__(self, args, lang, valuation_module):
         super(FactsConverter, self).__init__()
-        self.g_num = args.g_num
+        self.ig_num = args.ig_num
+        self.og_num = args.og_num
         # self.dim = args.d
         self.lang = lang
         self.vm = valuation_module  # valuation functions
@@ -53,13 +54,16 @@ class FactsConverter(nn.Module):
         return torch.stack(vs)
 
     def convert(self, data, atoms, B, scores=None):
-        example_num = len(data)
+        example_num = 1
         # evaluate value of each atom
         V = torch.zeros((example_num, len(atoms))).to(torch.float32).to(self.device)
         for i, atom in enumerate(atoms):
             # this atom is a neural predicate
             if type(atom.pred) == NeuralPredicate and i > 1:
-                V[:, i] = self.vm(data, atom).to(self.device)
+                try:
+                    V[:, i] = self.vm(data, atom)
+                except RuntimeError:
+                    raise RuntimeError
 
             # this atom is an invented predicate
             # elif type(atom.pred) == InventedPredicate:

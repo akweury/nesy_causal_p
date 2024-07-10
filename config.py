@@ -5,7 +5,7 @@ from pathlib import Path
 
 root = Path(__file__).parents[0]
 output = root / 'output'
-lark_file = root/ "src" / "alpha" / "exp.lark"
+lark_file = root / "src" / "alpha" / "exp.lark"
 
 if not os.path.exists(output):
     os.mkdir(output)
@@ -37,3 +37,11 @@ data_file_train_sol = root / "dataset" / "arc-prize-2024" / "arc-agi_training_so
 data_file_test_cha = root / "dataset" / "arc-prize-2024" / "arc-agi_test_challenges.json"
 data_file_eval_cha = root / "dataset" / "arc-prize-2024" / "arc-agi_evaluation_challenges.json"
 data_file_eval_sol = root / "dataset" / "arc-prize-2024" / "arc-agi_evaluation_solutions.json"
+
+alpha_mode = {
+    'inter_input_group': 0,
+    'inter_output_group': 1,
+    'inter_io_group': 2
+}
+
+

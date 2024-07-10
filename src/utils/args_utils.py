@@ -18,7 +18,6 @@ def get_args():
     parser.add_argument("--is_visual", action="store_true")
     parser.add_argument("--is_done", action="store_true")
     parser.add_argument("--show_process", action="store_true")
-    parser.add_argument("--max_bs_step", type=int, default=10)
     parser.add_argument("--number_num", type=int, default=10)
     parser.add_argument("--phi_num", type=int, default=10)
     parser.add_argument("--rho_num", type=int, default=10)
@@ -29,6 +28,7 @@ def get_args():
                         help='Smooth parameter in the softor function')
     parser.add_argument("--bs_clause_eval", type=int, default=5)
     parser.add_argument("--top_k", type=int, default=10)
+    parser.add_argument("--max_bs_step", type=int, default=10)
     args = parser.parse_args()
 
     if args.device != "cpu":
