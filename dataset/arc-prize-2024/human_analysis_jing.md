@@ -1,5 +1,7 @@
 # Training Data Analysis
-
+A new concept depends on one or multiple original concepts.
+The fact is that the name of invented predicates do not mapping to a concept in human knowledge.
+This requires an interpreter of the machine language and human language, which also can be a future work.
 ---
 
 ## Groups

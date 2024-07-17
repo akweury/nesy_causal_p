@@ -198,11 +198,17 @@ class VFScale(nn.Module):
         return is_scale[0]
 
 class VFFulfil(nn.Module):
+    """ group_a and group_b are monotonous color groups.
+    Return true if group_b fulfills group_a """
     def __init__(self, name):
         super(VFFulfil, self).__init__()
         self.name = name
 
     def forward(self, group_a, group_b):
+        # find all the holes of group a say, gorup_c
+
+        # check if group_c and group_b has same positions
+
         data = None
         is_fulfil = False
         return is_fulfil
