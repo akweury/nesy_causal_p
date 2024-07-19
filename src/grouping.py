@@ -277,7 +277,8 @@ def percept_task_features(args, example):
     example["input"] = np.array(example["input"]) + 1
     example["output"] = np.array(example["output"]) + 1
 
-    # splitting by colors
+    # splitting by colors how to decide the group strategy?
+    # So grouping with fixed way and estimated by 
     igs_color, ogs_color = group_by_color_single(example)
     igs_color_data = get_groups_code(example["input"], igs_color)
     ogs_color_data = get_groups_code(example["output"], ogs_color)

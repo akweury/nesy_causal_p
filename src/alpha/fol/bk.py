@@ -14,6 +14,8 @@ neural_p = {
     # 'color': 'color:2:group,+;color,#',
     # 'duplicate': 'duplicate:2:group,+;group,+',
     'fulfil': 'fulfil:2:group,+;group,+',
+    'surround': 'surround:2:group,+;group,+',
+
     # 'scale': 'scale:3:group,+;group,+;scale,#',
     # 'repeat': 'repeat:2:group,+;group,+'
 }
@@ -41,3 +43,6 @@ inv_p_head = {
     "output": "inv_o_p",
     "input_output": "inv_io_p"
 }
+
+neighbor_4 = [(-1, 0), (0, -1), (0, 1), (1, 0)]
+neighbor_8 = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]

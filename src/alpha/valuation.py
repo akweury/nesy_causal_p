@@ -197,21 +197,82 @@ class VFScale(nn.Module):
         is_scale = (scale_mask * data_scale).sum(dim=1)
         return is_scale[0]
 
+
 class VFFulfil(nn.Module):
     """ group_a and group_b are monotonous color groups.
     Return true if group_b fulfills group_a """
+
     def __init__(self, name):
         super(VFFulfil, self).__init__()
         self.name = name
 
+    def flood_fill(self, matrix, start):
+        n = len(matrix)
+        m = len(matrix[0])
+        if n == 0 or m == 0:
+            return []
+
+        x, y = start
+        target_value = matrix[x][y]
+        visited = [[False for _ in range(m)] for _ in range(n)]
+        connected_items = []
+
+        def dfs(x, y):
+            if x < 0 or x >= n or y < 0 or y >= m:
+                return
+            if visited[x][y] or matrix[x][y] != target_value:
+                return
+            visited[x][y] = True
+            connected_items.append((x, y))
+            # Explore 4-connected neighbors
+            for dx, dy in [(-1, 0), (0, -1), (0, 1), (1, 0)]:
+                dfs(x + dx, y + dy)
+
+        dfs(x, y)
+        return connected_items
+
     def forward(self, group_a, group_b):
         # find all the holes of group a say, gorup_c
+        flood_tiles = []
+        group_b_positions = group_b["tile_pos"]
+        for pos in group_b_positions:
+            if pos not in flood_tiles:
+                flood = self.flood_fill(group_a["group_patch"], pos)
+                flood_tiles += flood
+        if flood_tiles == group_b_positions:
+            return True
+        else:
+            return False
 
-        # check if group_c and group_b has same positions
 
-        data = None
-        is_fulfil = False
-        return is_fulfil
+class VFSurround(nn.Module):
+    def __init__(self, name):
+        super(VFSurround, self).__init__()
+        self.name = name
+
+    def find_boundaries(self, matrix, group_b):
+        boundaries = []
+        n,m = matrix.shape
+        def is_boundary(pos, group_b):
+            x,y = pos
+            for dx, dy in bk.neighbor_4:
+                nx, ny = x + dx, y + dy
+                if nx < 0 or nx >= n or ny < 0 or ny >= m or (nx, ny) not in group_b:
+                    return True
+            return False
+
+        for pos in matrix:
+            if is_boundary(pos, group_b):
+                boundaries.append(pos)
+        return boundaries
+
+    def forward(self, group_a, group_b):
+        # if group_a is the boundary of group_b
+        boundary_b = self.find_boundaries(group_b["group_patch"].shape, group_b["tile_pos"])
+        if boundary_b == group_a:
+            return True
+        else:
+            return False
 
 
 class FCNNShapeValuationFunction(nn.Module):
@@ -221,6 +282,7 @@ class FCNNShapeValuationFunction(nn.Module):
     def __init__(self, name):
         super(FCNNShapeValuationFunction, self).__init__()
         self.name = name
+
     def forward(self, z, a):
         """
         Args:
@@ -356,6 +418,7 @@ def get_valuation_module(args, lang, dataset):
         VFFulfil('fulfil'),
         VFDuplicate('duplicate'),
         VFRepeat('repeat'),
+        VFSurround('surround'),
     ]
     VM = FCNNValuationModule(pred_funs, lang=lang, device=args.device, dataset=dataset)
     return VM
