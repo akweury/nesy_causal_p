@@ -250,26 +250,30 @@ class VFSurround(nn.Module):
         super(VFSurround, self).__init__()
         self.name = name
 
-    def find_boundaries(self, matrix, group_b):
+    def find_boundaries(self, matrix, group):
         boundaries = []
-        n,m = matrix.shape
-        def is_boundary(pos, group_b):
-            x,y = pos
+        n, m = matrix.shape
+
+        def find_tile_boundary(pos, group):
+            x, y = pos
+            boundary = []
             for dx, dy in bk.neighbor_4:
                 nx, ny = x + dx, y + dy
-                if nx < 0 or nx >= n or ny < 0 or ny >= m or (nx, ny) not in group_b:
-                    return True
-            return False
+                if 0 <= nx < n and 0 <= ny < m and (nx, ny) not in group:
+                    boundary.append((nx, ny))
+            return boundary
 
-        for pos in matrix:
-            if is_boundary(pos, group_b):
-                boundaries.append(pos)
+        for pos in group:
+            tile_boundary = find_tile_boundary(pos, group)
+            boundaries += [b for b in tile_boundary if b not in boundaries]
         return boundaries
 
     def forward(self, group_a, group_b):
         # if group_a is the boundary of group_b
-        boundary_b = self.find_boundaries(group_b["group_patch"].shape, group_b["tile_pos"])
-        if boundary_b == group_a:
+        boundary_b = self.find_boundaries(group_b["group_patch"], group_b["tile_pos"])
+
+        if boundary_b == group_a["tile_pos"]:
+
             return True
         else:
             return False
