@@ -13,12 +13,16 @@ variable = {
 neural_p = {
     # 'color': 'color:2:group,+;color,#',
     # 'duplicate': 'duplicate:2:group,+;group,+',
-    'fulfil': 'fulfil:2:group,+;group,+',
-    'surround': 'surround:2:group,+;group,+',
-
+    # 'fulfil': 'fulfil:2',
+    # 'surround': 'surround:2',
+    'drawline': 'drawline:2',
     # 'scale': 'scale:3:group,+;group,+;scale,#',
     # 'repeat': 'repeat:2:group,+;group,+'
 }
+
+ig_dtype = "input_group,+"
+og_dtype = "output_group,+"
+
 const_dict = {
     'out_pattern,+': "out_pattern",
     'in_pattern,+': "in_pattern",

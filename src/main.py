@@ -13,7 +13,7 @@ def main():
     # data file
     raw_data = file_utils.get_raw_data()
 
-    for task_i in tqdm(range(85, len(raw_data["train"]["cha"])), desc="Reasoning Training Dataset"):
+    for task_i in tqdm(range(93, len(raw_data["train"]["cha"])), desc="Reasoning Training Dataset"):
         task = raw_data["train"]["cha"][task_i]["train"]
         task_features = []
         task_relations = []
@@ -22,7 +22,7 @@ def main():
             # acquire the probability of grouping type: color/shape/area/...
             example_features = grouping.percept_task_features(args, example)
             # example_features = grouping.percept_task_features(args, example)
-            example_relations = alpha.alpha(args, example_features, config.alpha_mode['inter_input_group'])
+            example_relations = alpha.alpha(args, example_features, config.alpha_mode['inter_io_group'])
             task_features.append(example_features)
             task_relations.append(example_relations)
 

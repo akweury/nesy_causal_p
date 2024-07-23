@@ -81,18 +81,19 @@ class Language(object):
             self.lp_atom = Lark(grammar.read(), start="atom")
 
         # load BK predicates and constants
-        self.predicates = self.load_preds(relation_obj_type)
+        self.predicates,self.ext_predicates = self.load_preds(relation_obj_type)
         self.consts = self.load_consts(args)
 
     def load_preds(self, relation_obj_type):
         predicates = []
-
+        ext_predicates = []
         if relation_obj_type == config.alpha_mode['inter_input_group']:
             predicates.append(self.parse_pred(bk.predicate_has_ig))
             for data in list(bk.neural_p.values()):
                 in_data = data.replace('group', 'input_group')
                 predicate = self.parse_pred(in_data)
                 predicates.append(predicate)
+                ext_predicates.append(predicate)
 
         elif relation_obj_type == config.alpha_mode['inter_output_group']:
             predicates.append(self.parse_pred(bk.predicate_has_og))
@@ -100,11 +101,20 @@ class Language(object):
                 out_data = data.replace('group', 'output_group')
                 predicate = self.parse_pred(out_data)
                 predicates.append(predicate)
+                ext_predicates.append(predicate)
 
+        elif relation_obj_type == config.alpha_mode['inter_io_group']:
+            predicates.append(self.parse_pred(bk.predicate_has_ig))
+            predicates.append(self.parse_pred(bk.predicate_has_og))
+            for data in list(bk.neural_p.values()):
+                p_data = data + ":" + bk.ig_dtype + ";" + bk.og_dtype
+                predicate = self.parse_pred(p_data)
+                predicates.append(predicate)
+                ext_predicates.append(predicate)
         else:
             raise NotImplementedError
 
-        return predicates
+        return predicates, ext_predicates
 
     def init_inv_predicates(self, relation_obj_type):
         if relation_obj_type == config.alpha_mode['inter_input_group']:
@@ -123,7 +133,7 @@ class Language(object):
             for i in range(self.og_num):
                 inv_pred = self.parse_inv_predicates(i, "io")
                 self.inv_predicates.append(inv_pred)
-                if inv_pred not in self.predicates:
+                if inv_pred is not None and inv_pred not in self.predicates:
                     self.predicates.append(inv_pred)
 
     def reset_lang(self, ig_num, og_num, relation_obj_type):
@@ -134,7 +144,8 @@ class Language(object):
         # update predicates
         self.update_bk()
         # update language
-        self.mode_declarations = mode_declaration.get_mode_declarations(self.predicates, ig_num, og_num,
+
+        self.mode_declarations = mode_declaration.get_mode_declarations(self.ext_predicates, ig_num, og_num,
                                                                         relation_obj_type)
         return init_c
 
@@ -302,15 +313,18 @@ class Language(object):
         if p_type == "ig":
             head = f"{bk.inv_p_head['input']}_{idx}"
             head_dtype_names = ['in_pattern,+']
+            arity = 1
         elif p_type == "og":
             head = f"{bk.inv_p_head['output']}_{idx}"
             head_dtype_names = ['out_pattern,+']
+            arity = 1
         elif p_type == "io":
             head = f"{bk.inv_p_head['input_output']}_{idx}"
             head_dtype_names = ['in_pattern,+', 'out_pattern,+']
+            arity = 2
         else:
             raise ValueError
-        arity = 1
+
 
         dtypes = [mode_declaration.DataType(dt) for dt in head_dtype_names]
 

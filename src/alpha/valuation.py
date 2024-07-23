@@ -278,6 +278,17 @@ class VFSurround(nn.Module):
         else:
             return False
 
+class VFDrawLine(nn.Module):
+    def __init__(self, name):
+        super(VFDrawLine, self).__init__()
+        self.name = name
+
+    def forward(self, group_a, group_b):
+
+        raise NotImplementedError
+
+        return None
+
 
 class FCNNShapeValuationFunction(nn.Module):
     """The function v_shape.
@@ -423,6 +434,7 @@ def get_valuation_module(args, lang, dataset):
         VFDuplicate('duplicate'),
         VFRepeat('repeat'),
         VFSurround('surround'),
+        VFDrawLine("drawline")
     ]
     VM = FCNNValuationModule(pred_funs, lang=lang, device=args.device, dataset=dataset)
     return VM
