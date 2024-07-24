@@ -4,6 +4,7 @@ from torch import nn as nn
 from torch.nn import functional as F
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
+from collections import defaultdict
 
 import config
 from .fol import bk
@@ -279,15 +280,32 @@ class VFSurround(nn.Module):
             return False
 
 class VFDrawLine(nn.Module):
+    # check if og consists of lines and related to ig
     def __init__(self, name):
         super(VFDrawLine, self).__init__()
         self.name = name
 
-    def forward(self, group_a, group_b):
+    def find_lines(self, og):
+        line_rows = []
+        line_cols = []
+        # same color conf
+        # neighbor rows/cols has different color conf
+        rows, cols = og.shape
+        percentages = {}
+        for col in range(cols):
+            connections = defaultdict(list)
+            for value in np.unique(og[:,col]):
+                positions = np.argwhere(og[:,col] == value)
+                connections[value].extend(positions.tolist())
 
-        raise NotImplementedError
+        return line_rows, line_cols
+    def forward(self, ig, og):
+        # check lines
+        og_lines = self.find_lines(og["group_patch"])
+        # check relation between ig and lines
+        relations = self.find_relations(og_lines, ig["group_patch"])
 
-        return None
+        return False
 
 
 class FCNNShapeValuationFunction(nn.Module):
