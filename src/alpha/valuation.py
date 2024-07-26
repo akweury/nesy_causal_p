@@ -5,9 +5,12 @@ from torch.nn import functional as F
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 from collections import defaultdict
+from skimage.transform import hough_line, hough_line_peaks
 
 import config
 from .fol import bk
+from src.percept.perception import FCN
+from src.utils import data_utils
 
 
 class FCNNValuationModule(nn.Module):
@@ -279,33 +282,37 @@ class VFSurround(nn.Module):
         else:
             return False
 
-class VFDrawLine(nn.Module):
+
+class VFLine(nn.Module):
     # check if og consists of lines and related to ig
-    def __init__(self, name):
-        super(VFDrawLine, self).__init__()
+    def __init__(self, name, device):
+        super(VFLine, self).__init__()
         self.name = name
+        self.device = device
+        self.model = FCN().to(device)
+        self.model.load_state_dict(torch.load(config.output / f'train_cha_line_groups' / 'line_detector_model.pth'))
+        self.model.eval()  # Set the model to evaluation mode
 
-    def find_lines(self, og):
-        line_rows = []
-        line_cols = []
-        # same color conf
-        # neighbor rows/cols has different color conf
-        rows, cols = og.shape
-        percentages = {}
-        for col in range(cols):
-            connections = defaultdict(list)
-            for value in np.unique(og[:,col]):
-                positions = np.argwhere(og[:,col] == value)
-                connections[value].extend(positions.tolist())
+    def find_lines(self, matrix):
+        # Perform Hough Transform
+        h, theta, d = hough_line(matrix.numpy())
 
-        return line_rows, line_cols
-    def forward(self, ig, og):
+        # Extract the angle and distance for the most prominent line
+        accum, angles, dists = hough_line_peaks(h, theta, d)
+        lines = [(angle, dist) for angle, dist in zip(angles, dists)]
+        return lines
+
+    def forward(self, group):
         # check lines
-        og_lines = self.find_lines(og["group_patch"])
-        # check relation between ig and lines
-        relations = self.find_relations(og_lines, ig["group_patch"])
-
-        return False
+        g_patch = data_utils.group2patch(group["group_patch"], group["tile_pos"])
+        g_tensor = data_utils.patch2tensor(g_patch)
+        has_line = False
+        line_conf = self.model(g_tensor.to(self.device).unsqueeze(0))
+        if config.obj_true[line_conf.argmax()] == 1:
+            has_line = True
+            # find lines inside the patch
+            lines = self.find_lines(g_tensor)
+        return has_line
 
 
 class FCNNShapeValuationFunction(nn.Module):
@@ -448,11 +455,7 @@ def get_valuation_module(args, lang, dataset):
         VFHasOG('hasOG'),
         VFScale('scale'),
         VFColor('color'),
-        VFFulfil('fulfil'),
-        VFDuplicate('duplicate'),
-        VFRepeat('repeat'),
-        VFSurround('surround'),
-        VFDrawLine("drawline")
+        VFLine("line", args.device)
     ]
     VM = FCNNValuationModule(pred_funs, lang=lang, device=args.device, dataset=dataset)
     return VM

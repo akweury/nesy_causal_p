@@ -1,6 +1,7 @@
 # Created by jing at 16.06.24
 
 import json
+import os
 import config
 
 
@@ -26,4 +27,27 @@ def get_raw_data():
         "eval": {"cha": eval_data_cha, "sol": eval_data_sol},
         "test": {"cha": test_data_cha}
     }
+    return data
+
+
+def save_json(json_data, path):
+    with open(path, 'w') as f:
+        json.dump(json_data, f)
+
+
+def get_all_files(path, file_extension, name_only=False):
+    all_files = []
+    for root, dirs, files in os.walk(path):
+        for file in files:
+            if file.lower().endswith(file_extension):
+                if name_only:
+                    all_files.append(file)
+                else:
+                    all_files.append(os.path.join(root, file))
+    return all_files
+
+
+def load_json(path):
+    with open(path, 'r') as f:
+        data = json.load(f)
     return data

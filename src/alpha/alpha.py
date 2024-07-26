@@ -81,13 +81,6 @@ def evaluation(args, NSFR, target_preds):
     return ils, dls
 
 
-# def pruning(C, ils, dls):
-#     clause_with_scores = sort_clauses_by_score(C, ils, dls)
-#     pruned_clauses = []
-#
-#     return pruned_clauses
-
-
 def beam_search(args, lang, C, FC):
     clauses = C
     for bs_step in range(args.max_bs_step):

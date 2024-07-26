@@ -128,9 +128,9 @@ def get_pi_mode_declarations(inv_preds, obj_num):
 
 
 def get_mode_declarations(predicates, ig_num, og_num, relation_obj_type):
-    if relation_obj_type == config.alpha_mode['inter_input_group']:
+    if relation_obj_type in [config.alpha_mode['inter_input_group'], config.alpha_mode['ig']]:
         g_num = ig_num
-    elif relation_obj_type == config.alpha_mode['inter_output_group']:
+    elif relation_obj_type in [config.alpha_mode['inter_output_group'], config.alpha_mode['og']]:
         g_num = og_num
     elif relation_obj_type == config.alpha_mode['inter_io_group']:
         g_num = ig_num * og_num

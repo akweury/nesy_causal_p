@@ -42,7 +42,6 @@ def group_by_section_single(example):
     input_groups_section = group_section.grid_splitting(np.array(data_input))
     input_groups_section = group_section.bar_splitting(np.array(data_input))
 
-
     output_groups_section = None
 
     return input_groups_section, output_groups_section
@@ -75,16 +74,19 @@ def group_by_color(data):
             input_groups_color = find_color_components(np.array(data_input))
             output_groups_color = find_color_components(np.array(data_output))
             # grouping by ...
-            task_train_groups.append([input_groups_color, output_groups_color])
+            task_train_groups.append({"input": input_groups_color,
+                                      "output": output_groups_color})
         train_groups.append(task_train_groups)
 
         task_test_groups = []
         for e_i in range(len(sol_data[t_i])):
             data_input = cha_data[t_i]["test"][e_i]["input"]
-            input_groups_color = find_color_components(np.array(data_input))
             data_output = sol_data[t_i][e_i]
+
+            input_groups_color = find_color_components(np.array(data_input))
             output_groups_color = find_color_components(np.array(data_output))
-            task_test_groups.append([input_groups_color, output_groups_color])
+            task_test_groups.append({"input": input_groups_color,
+                                     "output": output_groups_color})
         test_groups.append(task_test_groups)
 
     return [train_groups, test_groups]

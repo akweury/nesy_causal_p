@@ -81,7 +81,7 @@ class Language(object):
             self.lp_atom = Lark(grammar.read(), start="atom")
 
         # load BK predicates and constants
-        self.predicates,self.ext_predicates = self.load_preds(relation_obj_type)
+        self.predicates, self.ext_predicates = self.load_preds(relation_obj_type)
         self.consts = self.load_consts(args)
 
     def load_preds(self, relation_obj_type):
@@ -111,19 +111,33 @@ class Language(object):
                 predicate = self.parse_pred(p_data)
                 predicates.append(predicate)
                 ext_predicates.append(predicate)
+        elif relation_obj_type == config.alpha_mode['ig']:
+            predicates.append(self.parse_pred(bk.predicate_has_ig))
+            for data in list(bk.neural_p.values()):
+                p_data = data + ":" + bk.ig_dtype
+                predicate = self.parse_pred(p_data)
+                predicates.append(predicate)
+                ext_predicates.append(predicate)
+        elif relation_obj_type == config.alpha_mode['og']:
+            predicates.append(self.parse_pred(bk.predicate_has_og))
+            for data in list(bk.neural_p.values()):
+                p_data = data + ":" + bk.og_dtype
+                predicate = self.parse_pred(p_data)
+                predicates.append(predicate)
+                ext_predicates.append(predicate)
         else:
             raise NotImplementedError
 
         return predicates, ext_predicates
 
     def init_inv_predicates(self, relation_obj_type):
-        if relation_obj_type == config.alpha_mode['inter_input_group']:
+        if relation_obj_type in [config.alpha_mode['inter_input_group'], config.alpha_mode['ig']]:
             for i in range(self.ig_num):
                 inv_pred = self.parse_inv_predicates(i, "ig")
                 self.inv_predicates.append(inv_pred)
                 if inv_pred not in self.predicates:
                     self.predicates.append(inv_pred)
-        if relation_obj_type == config.alpha_mode['inter_output_group']:
+        if relation_obj_type in [config.alpha_mode['inter_output_group'], config.alpha_mode['og']]:
             for i in range(self.og_num):
                 inv_pred = self.parse_inv_predicates(i, "og")
                 self.inv_predicates.append(inv_pred)
@@ -265,7 +279,7 @@ class Language(object):
         var_in_g = bk.variable["input_group"]
         var_out_g = bk.variable['output_group']
         group_clauses_str = []
-        if relation_obj_type == config.alpha_mode['inter_input_group']:
+        if relation_obj_type in [config.alpha_mode['inter_input_group'], config.alpha_mode['ig']]:
             i_c_strs = []
             for i in range(ig_num):
                 head = f"{bk.inv_p_head['input']}_{i}({var_in}):-"
@@ -274,7 +288,7 @@ class Language(object):
                     body += f"hasIG({var_in_g}_{j},{var_in}),"
                 i_c_strs.append(head + body[:-1] + ".")
             group_clauses_str += i_c_strs
-        if relation_obj_type == config.alpha_mode['inter_output_group']:
+        if relation_obj_type in [config.alpha_mode['inter_output_group'], config.alpha_mode['og']]:
             o_c_strs = []
             for i in range(og_num):
                 head = f"{bk.inv_p_head['output']}_{i}({var_out}):-"
@@ -324,7 +338,6 @@ class Language(object):
             arity = 2
         else:
             raise ValueError
-
 
         dtypes = [mode_declaration.DataType(dt) for dt in head_dtype_names]
 

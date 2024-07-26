@@ -178,6 +178,38 @@ def addText(img, text, pos, font_size=2, color=(255, 255, 255), thickness=2):
                thickness=thickness, lineType=cv.LINE_AA)
 
 
+def add_border_index(img, rows, cols):
+    font = config.index_font
+    font_scale = config.index_font_scale
+    color = config.index_font_color
+    thickness = config.index_font_thickness
+    index_y_pos = config.index_y_pos
+    index_x_pos = config.index_x_pos
+
+    row_index_imgs = []
+    for i in range(rows):
+        img_width = img.shape[0] // rows
+        row_index_img = np.zeros((img_width, img_width, 3), dtype=np.uint8) + 255
+        cv.putText(row_index_img, str(i), (int(img_width // index_x_pos), int(img_width // index_y_pos)), font,
+                   img_width / font_scale, color, thickness)
+        row_index_imgs.append(row_index_img)
+    row_img = vconcat_resize(row_index_imgs)
+
+    col_index_imgs = [np.zeros((img.shape[1] // cols, img.shape[0] // rows, 3), dtype=np.uint8) + 255]
+    for i in range(cols):
+        img_width = img.shape[1] // cols
+        col_index_img = np.zeros((img_width, img_width, 3), dtype=np.uint8) + 255
+        cv.putText(col_index_img, str(i), (int(img_width // index_x_pos), int(img_width // index_y_pos)), font,
+                   img_width / font_scale, color, thickness)
+        col_index_imgs.append(col_index_img)
+    col_img = hconcat_resize(col_index_imgs)
+
+    img = hconcat_resize([row_img, img])
+    img = vconcat_resize([col_img, img])
+
+    return img
+
+
 def patch2img(big_patch):
     patch_img = visual_patch(big_patch)
 
@@ -185,7 +217,10 @@ def patch2img(big_patch):
     zoom_factor = 512 // max(patch_img.shape[:2])
     zoom_img = tile_zoom_in(patch_img, zoom_factor)
 
-    return zoom_img
+    # add border index
+    bordered_indexed_img = add_border_index(zoom_img, len(big_patch), len(big_patch[0]))
+
+    return bordered_indexed_img
 
 
 def padding_img(img, tbw=0, bbw=0, lbw=0, rbw=0):
@@ -225,7 +260,7 @@ def visual_identical_groups(examples):
 def img_processing(img, lbw=0, rbw=0, tbw=0, bbw=0, text=None):
     img = padding_img(img, lbw=lbw, rbw=rbw, tbw=tbw, bbw=bbw)
     if text is not None:
-        addText(img, text, color=(255, 0, 0), pos=(100, 700))
+        addText(img, text, color=(255, 0, 0), pos=(100, 900))
     return img
 
 
@@ -295,15 +330,6 @@ def visual_reasoning(args, patch_input, patch_output, patch_groups, id_groups):
 
     # Convert frames to a video
     release_video(frames, config.output / f'reasoning_{args.demo_id}.mp4')
-
-
-def group2patch(whole_patch, group):
-    data = np.array(whole_patch)
-    group_patch = np.zeros_like(data) + 10
-    for pos in group:
-        group_patch[pos] = data[pos]
-
-    return group_patch
 
 
 def align_white_imgs(list_a, list_b):

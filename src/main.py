@@ -1,12 +1,25 @@
 # Created by jing at 17.06.24
 from tqdm import tqdm
 
-import config
-import grouping, visual
-from alpha import alpha
+import grouping
+from percept import perception
 from utils import visual_utils, file_utils, args_utils
+from reasoning import reasoning
 
 
+def percept_objs(args, task):
+    task_objs = []
+    for e_i in range(len(task)):
+        example = task[e_i]
+        # acquire the probability of grouping type: color/shape/area/...
+        example_features = grouping.percept_task_features(args, example)
+        objs = perception.percept_objs(args, example_features)
+        task_objs.append(objs)
+    return task_objs
+def reasoning_obj_relations(objs):
+
+    relations = None
+    return relations
 
 def main():
     args = args_utils.get_args()
@@ -15,19 +28,11 @@ def main():
 
     for task_i in tqdm(range(93, len(raw_data["train"]["cha"])), desc="Reasoning Training Dataset"):
         task = raw_data["train"]["cha"][task_i]["train"]
-        task_features = []
-        task_relations = []
-        for e_i in range(len(task)):
-            example = task[e_i]
-            # acquire the probability of grouping type: color/shape/area/...
-            example_features = grouping.percept_task_features(args, example)
-            # example_features = grouping.percept_task_features(args, example)
-            example_relations = alpha.alpha(args, example_features, config.alpha_mode['inter_io_group'])
-            task_features.append(example_features)
-            task_relations.append(example_relations)
 
-        print("task i")
-        # hlps = llm.generate_hlps(task_relations)
+        # percept objs in a task
+        objs = percept_objs(args, task)
+        relations = reasoning_obj_relations(objs)
+        print(f"task {task_i}")
 
     print("program finished")
 

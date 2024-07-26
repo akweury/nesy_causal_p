@@ -13,7 +13,6 @@ from . import log_utils
 
 def get_args():
     parser = argparse.ArgumentParser()
-
     parser.add_argument("--device", help="cpu or cuda", default="cpu", type=str)
     parser.add_argument("--is_visual", action="store_true")
     parser.add_argument("--is_done", action="store_true")
