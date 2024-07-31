@@ -73,6 +73,30 @@ def prepare_kp_data(label_name, top_data):
     return dataset
 
 
+def prepare_kp_sy_data(label_name, top_data):
+    data_path = config.kp_dataset / label_name
+    dataset = []
+
+    for file_type in ["true", "false"]:
+        if file_type == "true":
+            label = torch.tensor(config.obj_true)
+        else:
+            label = torch.tensor(config.obj_false)
+        files = file_utils.get_all_files(data_path / file_type, "png", True)
+        indices = np.random.choice(len(files), size=top_data, replace=False)
+
+        for f_i in range(len(files)):
+            if f_i not in indices:
+                continue
+            file_name, file_extension = files[f_i].split(".")
+            data = file_utils.load_json(data_path / file_type / f"{file_name}.json")
+            if len(data) > 16:
+                patch = data_utils.oco2patch(data).unsqueeze(0)
+                dataset.append((patch, label))
+
+    return dataset
+
+
 def draw_training_history(train_losses, val_losses, val_accuracies, path):
     # Plotting the training and validation loss
     plt.figure(figsize=(10, 5))
@@ -98,8 +122,10 @@ def main(dataset_name, label_name):
     args = args_utils.get_args()
 
     # prepare the dataset
-    if dataset_name == "kp":
+    if dataset_name == "kp-ne":
         dataset = prepare_kp_data(label_name, args.top_data)
+    elif dataset_name == "kp_sy":
+        dataset = prepare_kp_sy_data(label_name, args.top_data)
     elif dataset_name == "arc":
         dataset = prepare_data(label_name, args.top_data)
     else:
@@ -175,7 +201,7 @@ def main(dataset_name, label_name):
 
 
 if __name__ == "__main__":
-    dataset_name = "kp"
+    dataset_name = "kp_sy"
     label_name = "line"
 
     main(dataset_name, label_name)

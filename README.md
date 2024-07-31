@@ -31,5 +31,5 @@ docker run --gpus all -it -v /home/ml-jsha/storage/arc:/ARC/nesy_causal_p/storag
 
 ##### Train KP Perception Model
 ``` 
-python -m src.train_perception --device 2
+python -m src.train_perception --device 2 --num_epochs 100 --top_data 500 --batch_size 1
 ```
