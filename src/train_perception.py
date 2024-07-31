@@ -3,20 +3,16 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import torchvision
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm
-import torch.nn.functional as F  # Import F for functional operations
 import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
 
 import config
-import grouping, visual
-from alpha import alpha
-from percept.perception import FCN
-from utils import file_utils, args_utils, data_utils
+from src.percept.perception import FCN
+from src.utils import file_utils, args_utils, data_utils
 
 
 # Define the neural network model

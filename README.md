@@ -22,7 +22,7 @@ docker build -t ml-sha/arc_docker .
 ```
 run the docker
 ``` 
-docker run --gpus all -it -v /home/ml-jsha/storage:/ARC/nesy_causal_p/storage --rm ml-sha/arc_docker
+docker run --gpus all -it -v /home/ml-jsha/storage/arc:/ARC/nesy_causal_p/storage --rm ml-sha/arc_docker
 
 ```
 
@@ -31,5 +31,5 @@ docker run --gpus all -it -v /home/ml-jsha/storage:/ARC/nesy_causal_p/storage --
 
 ##### Train KP Perception Model
 ``` 
-python -m src.train_perception --device 4
+python -m src.train_perception --device 2
 ```
