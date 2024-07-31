@@ -1,7 +1,7 @@
 # Created by shaji at 24/06/2024
 import os
 import datetime
-
+import wandb
 
 def create_log_file(log_path):
     if not os.path.exists(log_path):
@@ -18,3 +18,14 @@ def add_lines(line_str, log_file):
     print(line_str)
     with open(log_file, "a") as f:
         f.write(str(line_str) + "\n")
+
+
+def init_wandb(pj_name, archi):
+    wandb.init(
+        # set the wandb project where this run will be logged
+        project=pj_name,
+        # track hyperparameters and run metadata
+        config={
+            "architecture": archi,
+        }
+    )

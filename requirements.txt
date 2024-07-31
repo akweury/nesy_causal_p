@@ -9,3 +9,4 @@ lark
 openai
 matplotlib
 scikit-image
+wandb

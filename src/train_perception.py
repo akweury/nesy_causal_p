@@ -9,10 +9,13 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
+import wandb
+from rtpt import RTPT
+import os
 
 import config
 from src.percept.perception import FCN
-from src.utils import file_utils, args_utils, data_utils
+from src.utils import file_utils, args_utils, data_utils, log_utils
 
 
 # Define the neural network model
@@ -101,6 +104,9 @@ def main(dataset_name, label_name, top_data):
     else:
         raise ValueError
 
+    ####### init monitor board ########
+    wandb = log_utils.init_wandb(pj_name=f"percp-{dataset_name}-{label_name}", archi="FCN")
+
     # Split the dataset into training and validation sets
     train_size = int(0.8 * len(dataset))
     val_size = len(dataset) - train_size
@@ -156,6 +162,7 @@ def main(dataset_name, label_name, top_data):
         val_accuracies.append(accuracy)
 
     # Save the model
+    os.makedirs(config.output / f'train_cha_{label_name}_groups', exist_ok=True)
     torch.save(model.state_dict(),
                config.output / f'train_cha_{label_name}_groups' / f'{label_name}_detector_model.pth')
     draw_training_history(train_losses, val_losses, val_accuracies,
