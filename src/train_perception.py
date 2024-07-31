@@ -202,6 +202,5 @@ def main(dataset_name, label_name):
 
 if __name__ == "__main__":
     dataset_name = "kp_sy"
-    label_name = "line"
-
+    label_name = "circle"
     main(dataset_name, label_name)
