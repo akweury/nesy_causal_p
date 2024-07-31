@@ -118,9 +118,9 @@ def draw_training_history(train_losses, val_losses, val_accuracies, path):
     plt.savefig(path / 'accuracy_history.png')  # Save the figure
 
 
-def main(dataset_name, label_name):
+def main(dataset_name):
     args = args_utils.get_args()
-
+    label_name = args.percept_obj
     # prepare the dataset
     if dataset_name == "kp-ne":
         dataset = prepare_kp_data(label_name, args.top_data)
@@ -202,5 +202,4 @@ def main(dataset_name, label_name):
 
 if __name__ == "__main__":
     dataset_name = "kp_sy"
-    label_name = "circle"
-    main(dataset_name, label_name)
+    main(dataset_name)
