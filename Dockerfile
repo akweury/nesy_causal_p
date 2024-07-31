@@ -14,4 +14,5 @@ RUN git clone git@github.com:akweury/nesy_causal_p.git
 # Install Python requirements
 #COPY ../ARC/requirements.txt ./requirements.txt
 RUN pip install --upgrade pip
+WORKDIR  /ARC/nesy_causal_p/
 RUN pip install -r requirements.txt
