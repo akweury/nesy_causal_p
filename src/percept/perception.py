@@ -30,7 +30,7 @@ class FCN(nn.Module):
         x = F.relu(self.conv3(x))
         x = self.global_pool(x)
         x = torch.sigmoid(self.fc(x))
-        return x.view(1, -1)
+        return x.view(-1, 2)
 
 
 class PerceptLine(nn.Module):
