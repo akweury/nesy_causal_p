@@ -106,7 +106,7 @@ def main(dataset_name, label_name):
         raise ValueError
 
     ####### init monitor board ########
-    wandb = log_utils.init_wandb(pj_name=f"percp-{dataset_name}-{label_name}", archi="FCN")
+    log_utils.init_wandb(pj_name=f"percp-{dataset_name}-{label_name}", archi="FCN")
 
     # Split the dataset into training and validation sets
     train_size = int(0.8 * len(dataset))
@@ -161,6 +161,11 @@ def main(dataset_name, label_name):
         accuracy = 100 * correct / total
         val_accuracies.append(accuracy)
 
+        wandb.log({'train_loss': avg_train_loss})
+        wandb.log({'val_loss': avg_val_loss})
+        wandb.log({'val_accuracy': accuracy})
+
+    wandb.finish()
     # Save the model
     os.makedirs(config.output / f'train_cha_{label_name}_groups', exist_ok=True)
     torch.save(model.state_dict(),
