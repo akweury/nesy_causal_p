@@ -93,14 +93,14 @@ def draw_training_history(train_losses, val_losses, val_accuracies, path):
     plt.savefig(path / 'accuracy_history.png')  # Save the figure
 
 
-def main(dataset_name, label_name, top_data):
+def main(dataset_name, label_name):
     args = args_utils.get_args()
 
     # prepare the dataset
     if dataset_name == "kp":
-        dataset = prepare_kp_data(label_name, top_data)
+        dataset = prepare_kp_data(label_name, args.top_data)
     elif dataset_name == "arc":
-        dataset = prepare_data(label_name, top_data)
+        dataset = prepare_data(label_name, args.top_data)
     else:
         raise ValueError
 
@@ -124,9 +124,8 @@ def main(dataset_name, label_name, top_data):
     val_losses = []
     val_accuracies = []
     # Training loop
-    num_epochs = 200
 
-    for epoch in tqdm(range(num_epochs)):
+    for epoch in tqdm(range(args.num_epochs)):
         model.train()
         running_loss = 0.0
         for inputs, labels in train_loader:
@@ -172,5 +171,5 @@ def main(dataset_name, label_name, top_data):
 if __name__ == "__main__":
     dataset_name = "kp"
     label_name = "line"
-    top_data = 500
-    main(dataset_name, label_name, top_data)
+
+    main(dataset_name, label_name)
