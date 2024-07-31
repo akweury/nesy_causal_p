@@ -2,7 +2,7 @@
 The perception model based on neuro-symbolic and causal approaches
 
 
-# Setup Locally
+### Setup Locally
 
 1. install pytorch
 ```
@@ -13,9 +13,7 @@ conda install pytorch torchvision torchaudio pytorch-cuda=11.8 -c pytorch -c nvi
 pip install -r requirements.txt
 ```
 
-# Setup Remotely
-
-## Docker
+### Setup Remotely
 
 build a docker
 
@@ -24,6 +22,14 @@ docker build -t ml-sha/arc_docker .
 ```
 run the docker
 ``` 
-docker run --gpus all -it -v /home/ml-jsha/storage:/ARC/nesy_causal_p/output --rm ml-sha/arc_docker
+docker run --gpus all -it -v /home/ml-jsha/storage:/ARC/nesy_causal_p/storage --rm ml-sha/arc_docker
 
+```
+
+----
+### Train
+
+##### Train KP Perception Model
+``` 
+python -m src.train_perception --device 4
 ```

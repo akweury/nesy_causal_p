@@ -5,9 +5,11 @@ import cv2 as cv
 from pathlib import Path
 
 root = Path(__file__).parents[0]
-output = root / 'output'
+storage = root / 'storage'
+output = storage / 'output'
 lark_file = root / "src" / "alpha" / "exp.lark"
-
+if not os.path.exists(storage):
+    os.mkdir(storage)
 if not os.path.exists(output):
     os.mkdir(output)
 
@@ -44,14 +46,14 @@ color_tiles = [
     (211, 73, 160),  # 9
     (255, 255, 255),  # 10
 ]
-kp_dataset = root / "dataset" / "kandinsky-pattern-2019"
+kp_dataset = storage / "dataset" / "kandinsky-pattern-2019"
 
 
-data_file_train_cha = root / "dataset" / "arc-prize-2024" / "arc-agi_training_challenges.json"
-data_file_train_sol = root / "dataset" / "arc-prize-2024" / "arc-agi_training_solutions.json"
-data_file_test_cha = root / "dataset" / "arc-prize-2024" / "arc-agi_test_challenges.json"
-data_file_eval_cha = root / "dataset" / "arc-prize-2024" / "arc-agi_evaluation_challenges.json"
-data_file_eval_sol = root / "dataset" / "arc-prize-2024" / "arc-agi_evaluation_solutions.json"
+data_file_train_cha = storage / "dataset" / "arc-prize-2024" / "arc-agi_training_challenges.json"
+data_file_train_sol = storage / "dataset" / "arc-prize-2024" / "arc-agi_training_solutions.json"
+data_file_test_cha = storage / "dataset" / "arc-prize-2024" / "arc-agi_test_challenges.json"
+data_file_eval_cha = storage / "dataset" / "arc-prize-2024" / "arc-agi_evaluation_challenges.json"
+data_file_eval_sol = storage / "dataset" / "arc-prize-2024" / "arc-agi_evaluation_solutions.json"
 
 alpha_mode = {
     'inter_input_group': 0,
