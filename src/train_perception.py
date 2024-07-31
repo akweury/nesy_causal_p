@@ -47,6 +47,32 @@ def prepare_data(label_name, top_data):
     return dataset
 
 
+def prepare_kp_data(label_name, top_data):
+    data_path = config.kp_dataset / label_name
+    dataset = []
+    transform = transforms.ToTensor()
+    for file_type in ["true", "false"]:
+        if file_type == "true":
+            label = torch.tensor(config.obj_true)
+        else:
+            label = torch.tensor(config.obj_false)
+        files = file_utils.get_all_files(data_path / file_type, "png", True)
+        indices = np.random.choice(len(files), size=top_data, replace=False)
+
+        for f_i in range(len(files)):
+            if f_i not in indices:
+                continue
+            file_name, file_extension = files[f_i].split(".")
+            # data = file_utils.load_json(data_path / file_type / f"{file_name}.json")
+            img = Image.open(data_path / file_type / f"{file_name}.{file_extension}")
+
+            # Apply the transformation
+            image_tensor = transform(img)
+            dataset.append((image_tensor, label))
+
+    return dataset
+
+
 def draw_training_history(train_losses, val_losses, val_accuracies, path):
     # Plotting the training and validation loss
     plt.figure(figsize=(10, 5))
@@ -68,11 +94,16 @@ def draw_training_history(train_losses, val_losses, val_accuracies, path):
     plt.savefig(path / 'accuracy_history.png')  # Save the figure
 
 
-def main(label_name, top_data):
+def main(dataset_name, label_name, top_data):
     args = args_utils.get_args()
 
     # prepare the dataset
-    dataset = prepare_data(label_name, top_data)
+    if dataset_name == "kp":
+        dataset = prepare_kp_data(label_name, top_data)
+    elif dataset_name == "arc":
+        dataset = prepare_data(label_name, top_data)
+    else:
+        raise ValueError
 
     # Split the dataset into training and validation sets
     train_size = int(0.8 * len(dataset))
@@ -83,7 +114,7 @@ def main(label_name, top_data):
     val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False)
 
     # Initialize the model, loss function, and optimizer
-    model = FCN().to(args.device)
+    model = FCN(in_channels=dataset[0][0].shape[0]).to(args.device)
     criterion = nn.BCELoss()  # Binary Cross Entropy Loss
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
@@ -136,9 +167,7 @@ def main(label_name, top_data):
 
 
 if __name__ == "__main__":
-    # label_name = "line"
-    # top_data = 580
-
-    label_name = "rect"
-    top_data = 190
-    main(label_name, top_data)
+    dataset_name = "kp"
+    label_name = "line"
+    top_data = 500
+    main(dataset_name, label_name, top_data)

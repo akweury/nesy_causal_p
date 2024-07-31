@@ -44,6 +44,8 @@ color_tiles = [
     (211, 73, 160),  # 9
     (255, 255, 255),  # 10
 ]
+kp_dataset = root / "dataset" / "kandinsky-pattern-2019"
+
 
 data_file_train_cha = root / "dataset" / "arc-prize-2024" / "arc-agi_training_challenges.json"
 data_file_train_sol = root / "dataset" / "arc-prize-2024" / "arc-agi_training_solutions.json"

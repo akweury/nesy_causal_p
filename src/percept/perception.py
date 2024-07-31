@@ -13,9 +13,9 @@ from src.utils import data_utils
 
 
 class FCN(nn.Module):
-    def __init__(self):
+    def __init__(self, in_channels):
         super(FCN, self).__init__()
-        self.conv1 = nn.Conv2d(1, 64, kernel_size=3, padding=1)
+        self.conv1 = nn.Conv2d(in_channels, 64, kernel_size=3, padding=1)
         self.conv2 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
         self.conv3 = nn.Conv2d(128, 256, kernel_size=3, padding=1)
         self.pool = nn.MaxPool2d(2, 2)
@@ -34,11 +34,11 @@ class FCN(nn.Module):
 
 
 class PerceptLine(nn.Module):
-    def __init__(self, device):
+    def __init__(self, path, device):
         super(PerceptLine, self).__init__()
         self.model = FCN().to(device)
         self.device = device
-        self.model.load_state_dict(torch.load(config.output / f'train_cha_line_groups' / 'line_detector_model.pth'))
+        self.model.load_state_dict(torch.load(path))
         self.model.eval()  # Set the model to evaluation mode
 
     def find_lines(self, matrix):
@@ -65,11 +65,11 @@ class PerceptLine(nn.Module):
 
 
 class PerceptBB(nn.Module):
-    def __init__(self, device):
+    def __init__(self, path, device):
         super(PerceptBB, self).__init__()
         self.model = FCN().to(device)
         self.device = device
-        self.model.load_state_dict(torch.load(config.output / f'train_cha_rect_groups' / 'rect_detector_model.pth'))
+        self.model.load_state_dict(torch.load(path))
         self.model.eval()  # Set the model to evaluation mode
 
     def generate_anchor_boxes(self, matrix):
@@ -123,7 +123,7 @@ class PerceptBB(nn.Module):
         has_rect = False
         rect_conf = self.model(g_tensor.to(self.device).unsqueeze(0))
         rects = []
-        if rect_conf[0, np.argmax(config.obj_true)]>0.8:
+        if rect_conf[0, np.argmax(config.obj_true)] > 0.8:
             has_rect = True
             # Generate anchor boxes
             anchor_boxes = self.generate_anchor_boxes(g_tensor.shape)
@@ -132,8 +132,8 @@ class PerceptBB(nn.Module):
 
 
 def percept_objs(args, example_features):
-    perceptor_line = PerceptLine(args.device)
-    perceptor_bb = PerceptBB(args.device)
+    perceptor_line = PerceptLine(config.output / f'train_cha_line_groups' / 'line_detector_model.pth', args.device)
+    perceptor_bb = PerceptBB(config.output / f'train_cha_rect_groups' / 'rect_detector_model.pth', args.device)
     objs = {"input_groups": [], "output_groups": []}
     for group_type in ["input_groups", "output_groups"]:
         for group in example_features[group_type]:
