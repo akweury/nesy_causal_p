@@ -48,7 +48,6 @@ color_tiles = [
 ]
 kp_dataset = storage / "dataset" / "kandinsky-pattern-2019"
 
-
 data_file_train_cha = storage / "dataset" / "arc-prize-2024" / "arc-agi_training_challenges.json"
 data_file_train_sol = storage / "dataset" / "arc-prize-2024" / "arc-agi_training_solutions.json"
 data_file_test_cha = storage / "dataset" / "arc-prize-2024" / "arc-agi_test_challenges.json"
@@ -62,3 +61,8 @@ alpha_mode = {
     'ig': 3,
     'og': 4
 }
+
+##############
+model_group_kp_line = storage / "output" / "train_cha_line_groups" / "line_detector_model.pth"
+model_group_kp_square = storage / "output" / "train_cha_square_groups" / "square_detector_model.pth"
+model_group_kp_circle = storage / "output" / "train_cha_circle_groups" / "circle_detector_model.pth"

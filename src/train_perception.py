@@ -120,7 +120,7 @@ def draw_training_history(train_losses, val_losses, val_accuracies, path):
 
 def main(dataset_name):
     args = args_utils.get_args()
-    label_name = args.percept_obj
+    label_name = args.exp_name
     # prepare the dataset
     if dataset_name == "kp-ne":
         dataset = prepare_kp_data(label_name, args.top_data)
@@ -187,17 +187,17 @@ def main(dataset_name):
         accuracy = 100 * correct / total
         val_accuracies.append(accuracy)
 
-        wandb.log({'train_loss': avg_train_loss})
-        wandb.log({'val_loss': avg_val_loss})
-        wandb.log({'val_accuracy': accuracy})
+        wandb.log({'train_loss': avg_train_loss,
+                   'val_loss': avg_val_loss,
+                   'val_accuracy': accuracy})
 
     wandb.finish()
     # Save the model
-    os.makedirs(config.output / f'train_cha_{label_name}_groups', exist_ok=True)
-    torch.save(model.state_dict(),
-               config.output / f'train_cha_{label_name}_groups' / f'{label_name}_detector_model.pth')
-    draw_training_history(train_losses, val_losses, val_accuracies,
-                          config.output / f'train_cha_{label_name}_groups')
+    folder_name = f'{dataset_name}_{label_name}'
+    model_name = f'{label_name}_detector_model.pth'
+    os.makedirs(config.output / folder_name, exist_ok=True)
+    torch.save(model.state_dict(), config.output / folder_name / model_name)
+    draw_training_history(train_losses, val_losses, val_accuracies, config.output / folder_name)
 
 
 if __name__ == "__main__":

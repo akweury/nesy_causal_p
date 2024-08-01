@@ -132,8 +132,8 @@ class PerceptBB(nn.Module):
 
 
 def percept_objs(args, example_features):
-    perceptor_line = PerceptLine(config.output / f'train_cha_line_groups' / 'line_detector_model.pth', args.device)
-    perceptor_bb = PerceptBB(config.output / f'train_cha_rect_groups' / 'rect_detector_model.pth', args.device)
+    perceptor_square = PerceptLine(config.model_group_kp_square, args.device)
+    perceptor_circle = PerceptLine(config.model_group_kp_circle, args.device)
     objs = {"input_groups": [], "output_groups": []}
     for group_type in ["input_groups", "output_groups"]:
         for group in example_features[group_type]:

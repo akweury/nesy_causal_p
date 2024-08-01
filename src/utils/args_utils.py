@@ -14,7 +14,7 @@ from . import log_utils
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--device", help="cpu or cuda", default="cpu", type=str)
-    parser.add_argument("--percept_obj", type=str, default=None)
+    parser.add_argument("--exp_name", type=str, default=None)
     parser.add_argument("--num_epochs", type=int, default=100)
     parser.add_argument("--top_data", type=int, default=100)
     parser.add_argument("--batch_size", type=int, default=16)
