@@ -133,7 +133,7 @@ def visual_patch(patch, zoom_factor=1):
 
 def save_image(final_image, image_output_path):
     cv.imwrite(image_output_path, final_image)
-
+    print("Image saved at {}".format(image_output_path))
 
 def export_task_img(data, output_path):
     """ reasoning process visualization as a gif image.
@@ -211,6 +211,9 @@ def add_border_index(img, rows, cols):
 
 
 def patch2img(big_patch):
+    """
+    patch has to be a 2D integer array
+    """
     patch_img = visual_patch(big_patch)
 
     # zoom the image

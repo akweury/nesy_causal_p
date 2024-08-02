@@ -74,7 +74,7 @@ def prepare_kp_data(label_name, top_data):
 
 
 def prepare_kp_sy_data(label_name, top_data):
-    data_path = config.kp_dataset / label_name
+    data_path = config.kp_dataset / f"percept_{label_name}"
     dataset = []
 
     for file_type in ["true", "false"]:

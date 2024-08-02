@@ -63,6 +63,9 @@ alpha_mode = {
 }
 
 ##############
-model_group_kp_line = storage / "output" / "train_cha_line_groups" / "line_detector_model.pth"
-model_group_kp_square = storage / "output" / "train_cha_square_groups" / "square_detector_model.pth"
-model_group_kp_circle = storage / "output" / "train_cha_circle_groups" / "circle_detector_model.pth"
+model_group_kp_line = storage / "output" / "kp_sy_line" / "line_detector_model.pth"
+model_group_kp_square = storage / "output" / "kp_sy_square" / "square_detector_model.pth"
+model_group_kp_circle = storage / "output" / "kp_sy_circle" / "circle_detector_model.pth"
+model_group_kp_triangle = storage / "output" / "kp_sy_triangle" / "triangle_detector_model.pth"
+
+model_group_kp_triangle_only = storage / "output" / "kp_sy_triangle_only" / "triangle_only_detector_model.pth"

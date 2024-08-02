@@ -2,6 +2,7 @@
 from tqdm import tqdm
 import torch
 import numpy as np
+import os
 
 import config
 import grouping
@@ -29,7 +30,7 @@ def prepare_kp_sy_data(args):
     data_path = config.kp_dataset / args.exp_name
     dataset = []
 
-    files = file_utils.get_all_files(data_path / "train" / "true", "png", True)
+    files = file_utils.get_all_files(data_path / "true", "png", True)
     indices = np.random.choice(len(files), size=args.top_data, replace=False)
 
 
@@ -39,7 +40,7 @@ def prepare_kp_sy_data(args):
         if f_i not in indices:
             continue
         file_name, file_extension = files[f_i].split(".")
-        data = file_utils.load_json(data_path / "train" / "true" / f"{file_name}.json")
+        data = file_utils.load_json(data_path / "true" / f"{file_name}.json")
         if len(data) > 16:
             patch = data_utils.oco2patch(data).unsqueeze(0)
             dataset.append((patch, label))
@@ -51,6 +52,7 @@ def main():
     args = args_utils.get_args()
     # data file
     dataset = prepare_kp_sy_data(args)
+    os.makedirs(config.output / f"kp_sy_{args.exp_name}", exist_ok=True)
 
     for task_i in tqdm(range(len(dataset)), desc="Reasoning Training Dataset"):
         # percept objs in a task
