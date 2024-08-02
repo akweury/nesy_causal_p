@@ -217,7 +217,7 @@ def patch2img(big_patch):
     patch_img = visual_patch(big_patch)
 
     # zoom the image
-    zoom_factor = 512 // max(patch_img.shape[:2])
+    zoom_factor = 1024 // max(patch_img.shape[:2])
     zoom_img = tile_zoom_in(patch_img, zoom_factor)
 
     # add border index

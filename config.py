@@ -31,7 +31,7 @@ index_x_pos = 2.3
 index_y_pos = 1.7
 index_font = cv.FONT_HERSHEY_SIMPLEX
 index_font_color = (0, 0, 255)
-index_font_thickness = 2
+index_font_thickness = 1
 
 color_tiles = [
     (255, 67, 199),  # 0

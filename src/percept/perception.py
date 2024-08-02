@@ -169,9 +169,9 @@ class PerceptTriangle(nn.Module):
         # Use Canny edge detection
         edges = np.uint8(matrix > 0) * 255  # Edge detection based on non-zero elements
         # Hough Transform parameters
-        rho_resolution = 1  # distance resolution in pixels of the Hough grid
-        theta_resolution = np.pi / 120  # angle resolution in radians of the Hough grid
-        threshold = 7  # minimum number of votes (intersections in Hough grid cell)
+        rho_resolution = 0.5  # distance resolution in pixels of the Hough grid
+        theta_resolution = np.pi / 180  # angle resolution in radians of the Hough grid
+        threshold = 5  # minimum number of votes (intersections in Hough grid cell)
         # Detect lines using the Hough Transform
         lines = cv.HoughLines(edges, rho_resolution, theta_resolution, threshold)
         # List to store removable metrics for each line
@@ -216,18 +216,18 @@ class PerceptTriangle(nn.Module):
     def extract_triangle(self, matrix):
         tri_only_confs = []
         tri_only_conf = self.model_only(matrix.to(self.device))
-        tri_only_conf = tri_only_conf[0, np.argmax(config.obj_true)].tolist()
+        tri_only_conf = tri_only_conf[0, np.argmax(config.obj_false)].tolist()
         tri_only_confs.append(tri_only_conf)
 
         # while conf above threshold or no lines can be removed
         new_matrix = matrix.clone()
 
         try_count = 0
-        while tri_only_conf > self.args.th_group:
+        while tri_only_conf < self.args.th_group:
             sub_matrices = self.remove_point_from_matrix(new_matrix)
             tri_conf = self.model_only(sub_matrices.to(self.device))
-            tri_best_conf = tri_conf[:, np.argmax(config.obj_true)].max()
-            best_idx = tri_conf[:, np.argmax(config.obj_true)].argmax()
+            tri_best_conf = tri_conf[:, np.argmax(config.obj_false)].min()
+            best_idx = tri_conf[:, np.argmax(config.obj_false)].argmin()
             new_matrix = sub_matrices[best_idx]
             tri_only_conf = tri_best_conf.tolist()
             tri_only_confs.append(tri_only_conf)
@@ -246,7 +246,7 @@ class PerceptTriangle(nn.Module):
         # triangle = None
         # if triangle_conf[0, np.argmax(config.obj_true)] > 0.8:
         #     has_triangle = True
-            # lines = self.find_lines(x.squeeze())
+        lines = self.find_lines(x.squeeze())
         triangle = self.extract_triangle(x)
 
         return triangle

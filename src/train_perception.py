@@ -92,7 +92,8 @@ def prepare_kp_sy_data(label_name, top_data):
             data = file_utils.load_json(data_path / file_type / f"{file_name}.json")
             if len(data) > 16:
                 patch = data_utils.oco2patch(data).unsqueeze(0)
-                dataset.append((patch, label))
+                info_patch = data_utils.patch2info_patch(patch)
+                dataset.append((info_patch, label))
 
     return dataset
 

@@ -99,10 +99,48 @@ def oco2patch(data):
 
     while max_counts > 1:
         patch = torch.zeros((scale, scale))
-        grid_position = torch.ceil(positions * (scale-1)).to(dtype=torch.int)
+        grid_position = torch.ceil(positions * (scale - 1)).to(dtype=torch.int)
         unique_pos, pos_counts = torch.unique(grid_position, dim=0, return_counts=True)
         max_counts = torch.max(pos_counts)
         scale += 1
     for p_i in range(len(grid_position)):
         patch[grid_position[p_i, 0], grid_position[p_i, 1]] = 1
     return patch
+
+
+def patch2info_patch(matrix):
+    matrix = matrix.squeeze().numpy()
+    n = len(matrix)
+    m = 3 * n
+    expanded_matrix = np.zeros((m, m))
+
+    for i in range(n):
+        for j in range(n):
+            patch = np.zeros((3, 3))
+            value = matrix[i, j]
+
+            # Center of the patch is the value itself
+            patch[1, 1] = value
+
+            # Fill in neighbor information
+            if i > 0:
+                patch[0, 1] = matrix[:i - 1, j].sum()  # Top neighbor
+            if i < n - 1:
+                patch[2, 1] = matrix[i + 1:, j].sum()  # Bottom neighbor
+            if j > 0:
+                patch[1, 0] = matrix[i, :j - 1].sum()  # Left neighbor
+            if j < n - 1:
+                patch[1, 2] = matrix[i, j + 1:].sum()  # Right neighbor
+            if i > 0 and j > 0:
+                patch[0, 0] = matrix[:i - 1, :j - 1].sum()  # Top-left neighbor
+            if i > 0 and j < n - 1:
+                patch[0, 2] = matrix[:i - 1, j + 1:].sum()  # Top-right neighbor
+            if i < n - 1 and j > 0:
+                patch[2, 0] = matrix[i + 1:, :j - 1].sum()  # Bottom-left neighbor
+            if i < n - 1 and j < n - 1:
+                patch[2, 2] = matrix[i + 1:, j + 1:].sum()  # Bottom-right neighbor
+
+            # Place the patch into the expanded matrix
+            expanded_matrix[3 * i:3 * i + 3, 3 * j:3 * j + 3] = patch
+
+    return torch.from_numpy(expanded_matrix).unsqueeze(0)
