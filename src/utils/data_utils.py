@@ -94,15 +94,15 @@ def oco2patch(data):
     positions = torch.cat([torch.tensor([[d["x"], d["y"]]]) for d in data], dim=0)
     patch = None
     max_counts = 100
-    scale = 50
+    scale = 20
     grid_position = torch.ceil(positions * scale).to(dtype=torch.int)
 
-    while max_counts > 1:
-        patch = torch.zeros((scale, scale))
-        grid_position = torch.ceil(positions * (scale - 1)).to(dtype=torch.int)
-        unique_pos, pos_counts = torch.unique(grid_position, dim=0, return_counts=True)
-        max_counts = torch.max(pos_counts)
-        scale += 1
+    # while max_counts > 1:
+    patch = torch.zeros((scale, scale))
+    grid_position = torch.ceil(positions * (scale - 1)).to(dtype=torch.int)
+    unique_pos, pos_counts = torch.unique(grid_position, dim=0, return_counts=True)
+    max_counts = torch.max(pos_counts)
+    scale += 1
     for p_i in range(len(grid_position)):
         patch[grid_position[p_i, 0], grid_position[p_i, 1]] = 1
     return patch

@@ -215,7 +215,8 @@ class PerceptTriangle(nn.Module):
 
     def extract_triangle(self, matrix):
         tri_only_confs = []
-        tri_only_conf = self.model_only(matrix.to(self.device))
+        info_patch = data_utils.patch2info_patch(matrix)
+        tri_only_conf = self.model_only(info_patch.to(self.device))
         tri_only_conf = tri_only_conf[0, np.argmax(config.obj_false)].tolist()
         tri_only_confs.append(tri_only_conf)
 
@@ -225,7 +226,12 @@ class PerceptTriangle(nn.Module):
         try_count = 0
         while tri_only_conf < self.args.th_group:
             sub_matrices = self.remove_point_from_matrix(new_matrix)
-            tri_conf = self.model_only(sub_matrices.to(self.device))
+            info_sub_matrices = []
+            for i in range(len(sub_matrices)):
+                info_sub_matrices.append(data_utils.patch2info_patch(sub_matrices[i]).unsqueeze(0))
+            info_sub_matrices = torch.cat(info_sub_matrices, dim=0)
+
+            tri_conf = self.model_only(info_sub_matrices.to(self.device))
             tri_best_conf = tri_conf[:, np.argmax(config.obj_false)].min()
             best_idx = tri_conf[:, np.argmax(config.obj_false)].argmin()
             new_matrix = sub_matrices[best_idx]
