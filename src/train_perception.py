@@ -144,7 +144,7 @@ def main(dataset_name):
     # Initialize the model, loss function, and optimizer
     model = FCN(in_channels=dataset[0][0].shape[0]).to(args.device)
     criterion = nn.BCELoss()  # Binary Cross Entropy Loss
-    optimizer = optim.Adam(model.parameters(), lr=0.0001)
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
 
     train_losses = []
     val_losses = []
