@@ -176,9 +176,8 @@ def main(dataset_name):
             for inputs, labels in val_loader:
                 outputs = model(inputs.to(args.device))
                 labels = labels.float().to(args.device)
-                predicted = (outputs > 0.5).float()
                 total += labels.size(0)
-                pred_labels = predicted.argmax(dim=1)
+                pred_labels = outputs.argmax(dim=1)
                 gt_labels = labels.argmax(dim=1)
                 correct += (pred_labels == gt_labels).sum().item()
 

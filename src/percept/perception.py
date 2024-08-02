@@ -137,12 +137,12 @@ class PerceptTriangle(nn.Module):
         super(PerceptTriangle, self).__init__()
         self.device = device
         self.args = args
-        self.model = FCN(1).to(device)
-        self.model.load_state_dict(torch.load(config.model_group_kp_triangle))
-        self.model.eval()  # Set the model to evaluation mode
+        # self.model = FCN(1).to(device)
+        # self.model.load_state_dict(torch.load(config.model_group_kp_triangle, map_location=device))
+        # self.model.eval()  # Set the model to evaluation mode
 
         self.model_only = FCN(1).to(device)
-        self.model_only.load_state_dict(torch.load(config.model_group_kp_triangle_only))
+        self.model_only.load_state_dict(torch.load(config.model_group_kp_triangle_only, map_location=device))
         self.model_only.eval()
 
     def merge_overlapping_lines(self, lines):
@@ -241,15 +241,15 @@ class PerceptTriangle(nn.Module):
 
     def forward(self, x):
         # check triangle
-        triangle_conf = self.model(x.to(self.device))
-        has_triangle = False
-        triangle = None
-        if triangle_conf[0, np.argmax(config.obj_true)] > 0.8:
-            has_triangle = True
+        # triangle_conf = self.model(x.to(self.device))
+        # has_triangle = False
+        # triangle = None
+        # if triangle_conf[0, np.argmax(config.obj_true)] > 0.8:
+        #     has_triangle = True
             # lines = self.find_lines(x.squeeze())
-            triangle = self.extract_triangle(x)
+        triangle = self.extract_triangle(x)
 
-        return has_triangle, triangle
+        return triangle
 
 
 def percept_objs(args, example_features):
