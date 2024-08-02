@@ -143,4 +143,4 @@ def patch2info_patch(matrix):
             # Place the patch into the expanded matrix
             expanded_matrix[3 * i:3 * i + 3, 3 * j:3 * j + 3] = patch
 
-    return torch.from_numpy(expanded_matrix).unsqueeze(0)
+    return torch.from_numpy(expanded_matrix).unsqueeze(0).to(dtype=torch.float)

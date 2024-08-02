@@ -132,8 +132,6 @@ def main(dataset_name):
     else:
         raise ValueError
 
-    ####### init monitor board ########
-    log_utils.init_wandb(pj_name=f"percp-{dataset_name}-{label_name}", archi="FCN")
 
     # Split the dataset into training and validation sets
     train_size = int(0.8 * len(dataset))
@@ -152,6 +150,8 @@ def main(dataset_name):
     val_losses = []
     val_accuracies = []
     # Training loop
+    ####### init monitor board ########
+    log_utils.init_wandb(pj_name=f"percp-{dataset_name}-{label_name}", archi="FCN")
 
     for epoch in tqdm(range(args.num_epochs)):
         model.train()
