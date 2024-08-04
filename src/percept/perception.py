@@ -1,6 +1,6 @@
 # Created by shaji at 25/07/2024
 
-
+import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F  # Import F for functional operations
@@ -8,9 +8,18 @@ import numpy as np
 import matplotlib.pyplot as plt
 from skimage.transform import hough_line, hough_line_peaks
 import cv2 as cv
+import torch.optim as optim
+from sklearn.cluster import KMeans
+from torch.utils.data import Dataset, DataLoader
+from tqdm import tqdm
+import wandb
+import torchvision.transforms as transforms
+from einops import rearrange, repeat
+from einops.layers.torch import Rearrange
+from torch import nn, einsum
 
 import config
-from src.utils import data_utils, visual_utils
+from src.utils import data_utils, visual_utils, file_utils
 
 
 class FCN(nn.Module):
@@ -34,237 +43,306 @@ class FCN(nn.Module):
         return x.view(-1, 2)
 
 
-class PerceptLine(nn.Module):
-    def __init__(self, path, device):
-        super(PerceptLine, self).__init__()
-        self.model = FCN(in_channels=1).to(device)
-        self.device = device
-        self.model.load_state_dict(torch.load(path))
-        self.model.eval()  # Set the model to evaluation mode
+class SimpleCNN(nn.Module):
+    def __init__(self):
+        super(SimpleCNN, self).__init__()
+        self.conv1 = nn.Conv2d(1, 32, kernel_size=3)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3)
+        self.conv3 = nn.Conv2d(64, 128, kernel_size=3)
+        self.fc1 = nn.Linear(128 * 6 * 6, 128)
+        self.fc2 = nn.Linear(128, 3)  # Assuming 3 classes
 
-    def find_lines(self, matrix):
-        # Perform Hough Transform
-        h, theta, d = hough_line(matrix.numpy())
+    def forward(self, x, mask=None):
+        x = F.relu(self.conv1(x))
+        x = F.max_pool2d(x, 2, 2)
+        x = F.relu(self.conv2(x))
+        x = F.max_pool2d(x, 2, 2)
+        x = F.relu(self.conv3(x))
+        x = F.max_pool2d(x, 2, 2)
+        x = x.view(-1, 128 * 6 * 6)
+        x = F.relu(self.fc1(x))
 
-        # Extract the angle and distance for the most prominent line
-        accum, angles, dists = hough_line_peaks(h, theta, d)
-        lines = [(angle, dist) for angle, dist in zip(angles, dists)]
-        return lines
+        if mask is not None:
+            x = x * mask  # Apply the mask to the input of the FC layer
 
-    def forward(self, x):
-        # check lines
-        g_patch = data_utils.group2patch(x["group_patch"], x["tile_pos"])
-        g_tensor = data_utils.patch2tensor(g_patch)
-        has_line = False
-        line_conf = self.model(g_tensor.to(self.device).unsqueeze(0))
-        lines = []
-        if config.obj_true[line_conf.argmax()] == 1:
-            has_line = True
-            # find lines inside the patch
-            lines = self.find_lines(g_tensor)
-        return has_line, lines
+        x = self.fc2(x)
+        return x
 
 
-class PerceptBB(nn.Module):
-    def __init__(self, path, device):
-        super(PerceptBB, self).__init__()
-        self.model = FCN().to(device)
-        self.device = device
-        self.model.load_state_dict(torch.load(path))
-        self.model.eval()  # Set the model to evaluation mode
+class ShapeDataset(Dataset):
+    def __init__(self, args, transform=None):
+        self.transform = transform
 
-    def generate_anchor_boxes(self, matrix):
-        """
-        Generate anchor boxes for a feature map.
+        self.image_paths = []
+        self.labels = []
+        for data_type in args.data_types:
+            folder = config.kp_dataset / data_type / "train" / "true"
+            imgs = file_utils.get_all_files(folder, "png", False)
+            labels = [self.get_label(data_type) for img in imgs]
+            self.image_paths += imgs
+            self.labels += labels
 
-        :param matrix: Tuple of (height, width) of the feature map
-        :param base_size: The base size of the anchor boxes
-        :param scales: List of scales to use for the anchor boxes
-        :param aspect_ratios: List of aspect ratios (width/height) for the anchor boxes
-        :return: List of anchor boxes, each represented by (center_x, center_y, width, height)
-        """
-        anchors = []
-        for row in range(matrix[0] - 2):
-            for col in range(matrix[1] - 2):
-                # Center of the current feature map cell
-                for w in range(3, matrix[1] - col + 1):
-                    for h in range(3, matrix[0] - row + 1):
-                        bb = (row, col, w, h)
-                        if bb not in anchors and 2 < bb[2] <= matrix[1] and 2 < bb[3] <= matrix[0]:
-                            anchors.append(bb)
-        return anchors
+    def get_label(self, img_name):
+        if 'trianglesquare' in img_name:
+            return torch.tensor([0, 0, 1], dtype=torch.float)
+        elif 'trianglecircle' in img_name:
+            return torch.tensor([0, 1, 0], dtype=torch.float)
+        elif 'triangle' in img_name:
+            return torch.tensor([1, 0, 0], dtype=torch.float)
 
-    def find_rects(self, matrix, anchor_boxes):
-        rect_confs = []
-        for box in anchor_boxes:
-            row, col, w, h = box
-            top = matrix[row, col:col + w]
-            left = matrix[row + 1:row + h, col]
-            bottom = matrix[row + h - 1, col + 1:col + w]
-            try:
-                right = matrix[row + 1:row + h - 1, col + w - 1]
-            except IndexError:
-                raise IndexError
-            bb_tiles = np.concatenate((top, left, bottom, right))
-            non_zero_tiles = bb_tiles[bb_tiles != 0]
-            if len(non_zero_tiles) == 0:
-                bb_conf = 0
-            else:
-                _, counts = np.unique(non_zero_tiles, return_counts=True)
-                bb_conf = counts[0] / len(bb_tiles)
-            rect_confs.append(bb_conf)
-        indices = [i for i, v in enumerate(rect_confs) if v > 0.99]
-        rects = [anchor_boxes[i] for i in indices]
-        return rects
+    def __len__(self):
+        return len(self.image_paths)
+
+    def __getitem__(self, idx):
+        file_name, file_extension = self.image_paths[idx].split(".")
+        data = file_utils.load_json(f"{file_name}.json")
+        patch = data_utils.oco2patch(data).unsqueeze(0)
+        label = self.labels[idx]
+        return patch, label
+
+
+class MaskOptimizer:
+    def __init__(self, input_dim, target_label, lr=0.01):
+        self.target_label = target_label
+        self.mask = nn.Parameter(torch.randn(input_dim))  # Initialize the mask
+        self.optimizer = optim.Adam([self.mask], lr=lr)
+
+    def get_mask(self):
+        return torch.sigmoid(self.mask)  # Use sigmoid to constrain mask values between 0 and 1
+
+
+class PatchEmbedding(nn.Module):
+    def __init__(self, img_size, patch_size, in_channels, embed_dim):
+        super(PatchEmbedding, self).__init__()
+        self.img_size = img_size
+        self.patch_size = patch_size
+        self.n_patches = (img_size // patch_size) ** 2
+        self.proj = nn.Conv2d(in_channels, embed_dim, kernel_size=patch_size, stride=patch_size)
 
     def forward(self, x):
-        # check lines
-        g_patch = data_utils.group2patch(x["group_patch"], x["tile_pos"])
-        g_tensor = data_utils.patch2tensor(g_patch)
-        has_rect = False
-        rect_conf = self.model(g_tensor.to(self.device).unsqueeze(0))
-        rects = []
-        if rect_conf[0, np.argmax(config.obj_true)] > 0.8:
-            has_rect = True
-            # Generate anchor boxes
-            anchor_boxes = self.generate_anchor_boxes(g_tensor.shape)
-            rects = self.find_rects(g_tensor, anchor_boxes)
-        return has_rect, rects
+        x = self.proj(x)  # (B, embed_dim, n_patches**0.5, n_patches**0.5)
+        x = x.flatten(2)  # (B, embed_dim, n_patches)
+        x = x.transpose(1, 2)  # (B, n_patches, embed_dim)
+        return x
 
 
-class PerceptTriangle(nn.Module):
-    def __init__(self, args, device):
-        super(PerceptTriangle, self).__init__()
-        self.device = device
-        self.args = args
-        # self.model = FCN(1).to(device)
-        # self.model.load_state_dict(torch.load(config.model_group_kp_triangle, map_location=device))
-        # self.model.eval()  # Set the model to evaluation mode
-
-        self.model_only = FCN(1).to(device)
-        self.model_only.load_state_dict(torch.load(config.model_group_kp_triangle_only, map_location=device))
-        self.model_only.eval()
-
-    def merge_overlapping_lines(self, lines):
-        merged_lines = []
-
-        # Function to check if two lines overlap
-        def lines_overlap(line1, line2):
-            return any(point in line1 for point in line2)
-
-        while lines:
-            current_line = lines.pop(0)
-            overlap_found = False
-            for i, merged_line in enumerate(merged_lines):
-                if lines_overlap(current_line, merged_line):
-                    merged_lines[i] = merged_lines[i] | set(current_line)
-                    overlap_found = True
-                    break
-            if not overlap_found:
-                merged_lines.append(set(current_line))
-
-        return [list(merged_line) for merged_line in merged_lines]
-
-    def find_lines(self, matrix):
-        # Use Canny edge detection
-        edges = np.uint8(matrix > 0) * 255  # Edge detection based on non-zero elements
-        # Hough Transform parameters
-        rho_resolution = 0.5  # distance resolution in pixels of the Hough grid
-        theta_resolution = np.pi / 180  # angle resolution in radians of the Hough grid
-        threshold = 5  # minimum number of votes (intersections in Hough grid cell)
-        # Detect lines using the Hough Transform
-        lines = cv.HoughLines(edges, rho_resolution, theta_resolution, threshold)
-        # List to store removable metrics for each line
-        lines_with_removable_metrics = []
-        rows, cols = matrix.shape
-        if lines is not None:
-            for rho_theta in lines:
-                rho, theta = rho_theta[0]
-                a = np.cos(theta)
-                b = np.sin(theta)
-                x0 = a * rho
-                y0 = b * rho
-                line_metrics = []
-
-                for i in range(-max(rows, cols), max(rows, cols)):
-                    x = int(x0 + i * (-b))
-                    y = int(y0 + i * (a))
-                    if 0 <= x < cols and 0 <= y < rows:
-                        if matrix[y, x] > 0:
-                            line_metrics.append((y, x))
-
-                # Append the line and its corresponding points
-                if line_metrics:
-                    lines_with_removable_metrics.append(line_metrics)
-        return lines_with_removable_metrics
-
-    def remove_point_from_matrix(self, matrix):
-        sub_matrics = []
-        # Iterate over all elements in the matrix
-        for i in range(matrix.shape[1]):
-            for j in range(matrix.shape[2]):
-                # Check if the current element is non-zero
-                if matrix[0, i, j] != 0:
-                    # Create a copy of the original matrix
-                    new_matrix = matrix.clone()
-                    # Set the specific element to zero
-                    new_matrix[0, i, j] = 0
-                    # Append the modified matrix to the list
-                    sub_matrics.append(new_matrix.unsqueeze(0))
-        return torch.cat(sub_matrics, dim=0)
-
-    def extract_triangle(self, matrix):
-        tri_only_confs = []
-        info_patch = data_utils.patch2info_patch(matrix)
-        tri_only_conf = self.model_only(info_patch.to(self.device))
-        tri_only_conf = tri_only_conf[0, np.argmax(config.obj_false)].tolist()
-        tri_only_confs.append(tri_only_conf)
-
-        # while conf above threshold or no lines can be removed
-        new_matrix = matrix.clone()
-
-        try_count = 0
-        while tri_only_conf < self.args.th_group:
-            sub_matrices = self.remove_point_from_matrix(new_matrix)
-            info_sub_matrices = []
-            for i in range(len(sub_matrices)):
-                info_sub_matrices.append(data_utils.patch2info_patch(sub_matrices[i]).unsqueeze(0))
-            info_sub_matrices = torch.cat(info_sub_matrices, dim=0)
-
-            tri_conf = self.model_only(info_sub_matrices.to(self.device))
-            tri_best_conf = tri_conf[:, np.argmax(config.obj_false)].min()
-            best_idx = tri_conf[:, np.argmax(config.obj_false)].argmin()
-            new_matrix = sub_matrices[best_idx]
-            tri_only_conf = tri_best_conf.tolist()
-            tri_only_confs.append(tri_only_conf)
-
-            img = visual_utils.patch2img(new_matrix.squeeze().to(torch.int).tolist())
-            img_file = config.output / f"kp_sy_{self.args.exp_name}" / f"extracted_patch_{try_count}.png"
-            visual_utils.save_image(img, str(img_file))
-            try_count += 1
-        triangle = None
-        return triangle
+class PositionalEncoding(nn.Module):
+    def __init__(self, n_patches, embed_dim):
+        super(PositionalEncoding, self).__init__()
+        self.pos_embed = nn.Parameter(torch.zeros(1, n_patches + 1, embed_dim))
 
     def forward(self, x):
-        # check triangle
-        # triangle_conf = self.model(x.to(self.device))
-        # has_triangle = False
-        # triangle = None
-        # if triangle_conf[0, np.argmax(config.obj_true)] > 0.8:
-        #     has_triangle = True
-        lines = self.find_lines(x.squeeze())
-        triangle = self.extract_triangle(x)
-
-        return triangle
+        return x + self.pos_embed
 
 
-def percept_objs(args, example_features):
-    # visualize patch
-    img = visual_utils.patch2img(example_features.squeeze().to(torch.int).tolist())
-    img_file = config.output / f"kp_sy_{args.exp_name}" / f"patch.png"
-    visual_utils.save_image(img, str(img_file))
-    # extract objects
-    perceptor_triangle = PerceptTriangle(args, args.device)
-    triangles = perceptor_triangle(example_features)
-    objs = {"triangle": triangles}
-    return objs
+
+def pair(t):
+    return t if isinstance(t, tuple) else (t, t)
+
+class PreNorm(nn.Module):
+    def __init__(self, dim, fn):
+        super().__init__()
+        self.norm = nn.LayerNorm(dim)
+        self.fn = fn
+    def forward(self, x, **kwargs):
+        return self.fn(self.norm(x), **kwargs)
+
+class FeedForward(nn.Module):
+    def __init__(self, dim, hidden_dim, dropout = 0.):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(dim, hidden_dim),
+            nn.ReLU(), #nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim, dim),
+            nn.Dropout(dropout)
+        )
+    def forward(self, x):
+        return self.net(x)
+
+class Attention(nn.Module):
+    def __init__(self, dim, heads = 4, dim_head = 64, dropout = 0.):
+        super().__init__()
+        inner_dim = dim_head *  heads
+        project_out = not (heads == 1 and dim_head == dim)
+
+        self.heads = heads
+        self.scale = dim_head ** -0.5
+
+        self.attend = nn.Softmax(dim = -1)
+        self.to_qkv = nn.Linear(dim, inner_dim * 3, bias = False)
+
+        self.to_out = nn.Sequential(
+            nn.Linear(inner_dim, dim),
+            nn.Dropout(dropout)
+        ) if project_out else nn.Identity()
+
+    def forward(self, x):
+        b, n, _, h = *x.shape, self.heads
+        qkv = self.to_qkv(x).chunk(3, dim = -1)
+        q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h = h), qkv)
+
+        dots = einsum('b h i d, b h j d -> b h i j', q, k) * self.scale
+
+        attn = self.attend(dots)
+
+        out = einsum('b h i j, b h j d -> b h i d', attn, v)
+        out = rearrange(out, 'b h n d -> b n (h d)')
+        return self.to_out(out)
+
+
+class Transformer(nn.Module):
+    def __init__(self, dim, depth, heads, dim_head, mlp_dim, dropout = 0.):
+        super().__init__()
+        self.layers = nn.ModuleList([])
+        for _ in range(depth):
+            self.layers.append(nn.ModuleList([
+                PreNorm(dim, Attention(dim, heads = heads, dim_head = dim_head, dropout = dropout)),
+                PreNorm(dim, FeedForward(dim, mlp_dim, dropout = dropout))
+            ]))
+    def forward(self, x):
+        for attn, ff in self.layers:
+            x = attn(x) + x
+            x = ff(x) + x
+        return x
+
+class VisionTransformer(nn.Module):
+    def __init__(self, img_size=28, patch_size=7, in_channels=1, embed_dim=128, num_heads=4, num_layers=6,
+                 num_classes=10):
+        super(VisionTransformer, self).__init__()
+        self.patch_embed = PatchEmbedding(img_size, patch_size, in_channels, embed_dim)
+        self.pos_encoding = PositionalEncoding(self.patch_embed.n_patches, embed_dim)
+
+        encoder_layers = nn.TransformerEncoderLayer(d_model=embed_dim, nhead=num_heads)
+        self.transformer_encoder = Transformer(16, num_layers, num_heads, 64, embed_dim, 0)
+
+        self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
+        self.mlp_head = nn.Sequential(
+            nn.LayerNorm(embed_dim),
+            nn.Linear(embed_dim, num_classes)
+        )
+
+    def forward(self, x):
+        x = self.patch_embed(x)
+        B, N, _ = x.shape
+
+        cls_tokens = self.cls_token.expand(B, -1, -1)
+        x = torch.cat((cls_tokens, x), dim=1)
+        x = self.pos_encoding(x)
+
+        x = x.transpose(0, 1)  # (N+1, B, embed_dim)
+        x = self.transformer_encoder(x)
+        x = x.transpose(0, 1)  # (B, N+1, embed_dim)
+
+        cls_token_final = x[:, 0]
+        logits = self.mlp_head(cls_token_final)
+
+        return logits
+
+
+def train_percept(args, model, train_loader, val_loader):
+    num_epochs = 100
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    for epoch in tqdm(range(num_epochs)):
+        model.train()
+        criterion = nn.CrossEntropyLoss()
+
+        running_loss = 0.0
+        for images, labels in train_loader:
+            optimizer.zero_grad()
+            outputs = model(images.to(args.device))
+            # label_zero = torch.zeros_like(outputs).to(args.device)
+            # for l_i, label in enumerate(labels):
+            #     label_zero[l_i, label] = 1.0
+            loss = criterion(outputs, labels.to(args.device))
+            loss.backward()
+            optimizer.step()
+
+            running_loss += loss.item()
+
+        # # Validation loop
+        # model.eval()
+        # val_loss = 0.0
+        # correct = 0
+        # total = 0
+        # with torch.no_grad():
+        #     for inputs, labels in val_loader:
+        #         outputs = model(inputs.to(args.device))
+        #         labels = labels.float().to(args.device)
+        #         total += labels.size(0)
+        #         pred_labels = outputs.argmax(dim=1)
+        #         # gt_labels = labels.argmax(dim=1)
+        #         correct += (pred_labels == labels).sum().item()
+        #
+        # avg_val_loss = val_loss / len(val_loader)
+        # accuracy = 100 * correct / total
+
+        wandb.log({'train_loss': running_loss / train_loader.dataset.__len__()})
+
+
+def optimize_mask(model, train_loader, val_loader, mask_optimizer, target_label, num_steps=10):
+    model.eval()
+
+    for step in tqdm(range(num_steps)):
+        train_loss = 0.0
+        for images, _ in train_loader:
+            mask_optimizer.optimizer.zero_grad()
+            mask = mask_optimizer.get_mask()
+            outputs = model(images, mask=mask)
+
+            # We want to maximize the logit corresponding to the target label
+            target_logit = outputs[:, target_label].mean()
+            loss = -target_logit  # Negate because we want to maximize
+
+            loss.backward()
+            mask_optimizer.optimizer.step()
+
+            train_loss += loss.item()
+
+        # Validation loop
+        total = 0
+        correct = 0
+        with torch.no_grad():
+            for inputs, labels in val_loader:
+                mask = mask_optimizer.get_mask()
+                outputs = model(inputs, mask=mask)
+                _, predicted = torch.max(outputs.data, 1)
+                total += labels.size(0)
+                correct += (predicted == target_label).sum().item()
+
+        acc = 100 * correct / total
+        avg_val_loss = train_loss / len(train_loader)
+
+        wandb.log({'mask_loss': avg_val_loss,
+                   "val_acc": acc})
+
+
+def kmeans_common_features(args, model, train_loader, val_loader):
+    model.eval()
+
+    class_features = {0: [], 1: [], 2: []}
+    with torch.no_grad():
+        for images, labels in tqdm(train_loader, desc="extracting features"):
+            x = F.relu(model.conv1(images.to(args.device)))
+            x = F.max_pool2d(x, 2, 2)
+            x = F.relu(model.conv2(x))
+            x = F.max_pool2d(x, 2, 2)
+            x = F.relu(model.conv3(x))
+            x = F.max_pool2d(x, 2, 2)
+            x = x.view(-1, 128 * 6 * 6)
+            features = F.relu(model.fc1(x))
+            for feature, label in zip(features, labels):
+                class_features[int(label.argmax().item())].append(feature.numpy())
+
+    # Convert lists to numpy arrays
+    for cls in class_features:
+        class_features[cls] = np.array(class_features[cls])
+
+    # Find the mean feature vector for each class
+    mean_features = {cls: np.mean(class_features[cls], axis=0) for cls in class_features}
+
+    # Find common features by calculating the intersection
+    common_features = np.mean([mean_features[cls] for cls in mean_features], axis=0)
+
+    # return the indices of common features
+    return common_features

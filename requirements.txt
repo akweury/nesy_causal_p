@@ -11,3 +11,7 @@ matplotlib
 scikit-image
 wandb
 rtpt
+tensorflow[and-cuda]
+scikit-learn
+grad-cam
+einops

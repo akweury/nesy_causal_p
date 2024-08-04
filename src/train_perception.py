@@ -15,87 +15,42 @@ from rtpt import RTPT
 import os
 
 import config
-from src.percept.perception import FCN
+from src.percept import perception
 from src.utils import file_utils, args_utils, data_utils, log_utils
 
 
-# Define the neural network model
-def prepare_data(label_name, top_data):
-    data_path = config.output / f'train_cha_{label_name}_groups'
-    data = file_utils.load_json(data_path / "data.json")
-    dataset = []
+def prepare_kp_sy_data(args):
+    transform = transforms.Compose([
+        transforms.Resize((64, 64)),
+        transforms.ToTensor(),
+    ])
+    dataset = perception.ShapeDataset(args, transform=transform)
+    train_size = int(0.8 * len(dataset))
+    val_size = len(dataset) - train_size
+    train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
 
-    for file_type in ["true", "false"]:
-        if file_type == "true":
-            label = torch.tensor(config.obj_true)
-        else:
-            label = torch.tensor(config.obj_false)
-        files = file_utils.get_all_files(data_path / file_type, "png", True)
-        indices = np.random.choice(len(files), size=top_data, replace=False)
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True)
 
-        for f_i in range(len(files)):
-            if f_i not in indices:
-                continue
-            task_id, example_id, group_type, group_id, data_type = files[f_i].split("_")
-            data_type = data_type.split(".")[0]
-            matrix = data[task_id][data_type][int(example_id)][group_type][int(group_id)]
-            matrix = data_utils.patch2tensor(matrix)
-            rows, cols = matrix.shape
-            if rows > 4 and cols > 4:
-                dataset.append((matrix, label))
-
-    return dataset
+    return train_loader, val_loader
 
 
-def prepare_kp_data(label_name, top_data):
-    data_path = config.kp_dataset / label_name
-    dataset = []
-    transform = transforms.ToTensor()
-    for file_type in ["true", "false"]:
-        if file_type == "true":
-            label = torch.tensor(config.obj_true)
-        else:
-            label = torch.tensor(config.obj_false)
-        files = file_utils.get_all_files(data_path / file_type, "png", True)
-        indices = np.random.choice(len(files), size=top_data, replace=False)
+def prepare_mnist_data(args):
+    import torchvision.datasets as datasets
+    # Load the MNIST dataset
+    transform = transforms.Compose([
+        transforms.Resize((28, 28)),
+        transforms.ToTensor(),
+        transforms.Normalize((0.5,), (0.5,))
+    ])
 
-        for f_i in range(len(files)):
-            if f_i not in indices:
-                continue
-            file_name, file_extension = files[f_i].split(".")
-            # data = file_utils.load_json(data_path / file_type / f"{file_name}.json")
-            img = Image.open(data_path / file_type / f"{file_name}.{file_extension}")
-
-            # Apply the transformation
-            image_tensor = transform(img)
-            dataset.append((image_tensor, label))
-
-    return dataset
-
-
-def prepare_kp_sy_data(label_name, top_data):
-    data_path = config.kp_dataset / f"percept_{label_name}"
-    dataset = []
-
-    for file_type in ["true", "false"]:
-        if file_type == "true":
-            label = torch.tensor(config.obj_true)
-        else:
-            label = torch.tensor(config.obj_false)
-        files = file_utils.get_all_files(data_path / file_type, "png", True)
-        indices = np.random.choice(len(files), size=top_data, replace=False)
-
-        for f_i in range(len(files)):
-            if f_i not in indices:
-                continue
-            file_name, file_extension = files[f_i].split(".")
-            data = file_utils.load_json(data_path / file_type / f"{file_name}.json")
-            if len(data) > 16:
-                patch = data_utils.oco2patch(data).unsqueeze(0)
-                info_patch = data_utils.patch2info_patch(patch)
-                dataset.append((info_patch, label))
-
-    return dataset
+    minst_dataset = datasets.MNIST(root='./data', train=True, transform=transform, download=True)
+    train_size = int(0.8 * len(minst_dataset))
+    val_size = len(minst_dataset) - train_size
+    train_dataset, val_dataset = random_split(minst_dataset, [train_size, val_size])
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True)
+    return train_loader, val_loader
 
 
 def draw_training_history(train_losses, val_losses, val_accuracies, path):
@@ -121,85 +76,25 @@ def draw_training_history(train_losses, val_losses, val_accuracies, path):
 
 def main(dataset_name):
     args = args_utils.get_args()
-    label_name = args.exp_name
-    # prepare the dataset
-    if dataset_name == "kp-ne":
-        dataset = prepare_kp_data(label_name, args.top_data)
-    elif dataset_name == "kp_sy":
-        dataset = prepare_kp_sy_data(label_name, args.top_data)
-    elif dataset_name == "arc":
-        dataset = prepare_data(label_name, args.top_data)
-    else:
-        raise ValueError
+    # data file
+    args.data_types = ["data_trianglesquare", "data_trianglecircle", "data_triangle"]
+    # train_loader, val_loader = prepare_kp_sy_data(args)
+    train_loader, val_loader = prepare_mnist_data(args)
+    os.makedirs(config.output / f"kp_sy_{args.exp_name}", exist_ok=True)
+    log_utils.init_wandb(pj_name=f"FM-{dataset_name}-{args.exp_name}", archi="FCN")
 
+    # Instantiate the model, loss function, and optimizer
 
-    # Split the dataset into training and validation sets
-    train_size = int(0.8 * len(dataset))
-    val_size = len(dataset) - train_size
-    train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
-
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False)
-
-    # Initialize the model, loss function, and optimizer
-    model = FCN(in_channels=dataset[0][0].shape[0]).to(args.device)
-    criterion = nn.BCELoss()  # Binary Cross Entropy Loss
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
-
-    train_losses = []
-    val_losses = []
-    val_accuracies = []
-    # Training loop
-    ####### init monitor board ########
-    log_utils.init_wandb(pj_name=f"percp-{dataset_name}-{label_name}", archi="FCN")
-
-    for epoch in tqdm(range(args.num_epochs)):
-        model.train()
-        running_loss = 0.0
-        for inputs, labels in train_loader:
-            optimizer.zero_grad()
-            outputs = model(inputs.to(args.device))
-            labels = labels.float().to(args.device)  # Make sure labels are the same shape as outputs
-            loss = criterion(outputs, labels)
-            loss.backward()
-            optimizer.step()
-            running_loss += loss.item()
-        avg_train_loss = running_loss / len(train_loader)
-        train_losses.append(avg_train_loss)
-        # print(f'Epoch {epoch + 1}, Train Loss: {avg_train_loss}')
-
-        # Validation loop
-        model.eval()
-        val_loss = 0.0
-        correct = 0
-        total = 0
-        with torch.no_grad():
-            for inputs, labels in val_loader:
-                outputs = model(inputs.to(args.device))
-                labels = labels.float().to(args.device)
-                total += labels.size(0)
-                pred_labels = outputs.argmax(dim=1)
-                gt_labels = labels.argmax(dim=1)
-                correct += (pred_labels == gt_labels).sum().item()
-
-        avg_val_loss = val_loss / len(val_loader)
-        val_losses.append(avg_val_loss)
-        accuracy = 100 * correct / total
-        val_accuracies.append(accuracy)
-
-        wandb.log({'train_loss': avg_train_loss,
-                   'val_loss': avg_val_loss,
-                   'val_accuracy': accuracy})
+    model = perception.VisionTransformer(img_size=28, patch_size=7, in_channels=1,
+                                         embed_dim=128, num_heads=4, num_layers=6, num_classes=10).to(args.device)
+    # Train the model
+    perception.train_percept(args, model, train_loader, val_loader)
 
     wandb.finish()
     # Save the model
-    folder_name = f'{dataset_name}_{label_name}'
-    model_name = f'{label_name}_detector_model.pth'
-    os.makedirs(config.output / folder_name, exist_ok=True)
-    torch.save(model.state_dict(), config.output / folder_name / model_name)
-    draw_training_history(train_losses, val_losses, val_accuracies, config.output / folder_name)
+    file_utils.save_model(model, dataset_name, f'detector_model.pth')
 
 
 if __name__ == "__main__":
-    dataset_name = "kp_sy"
+    dataset_name = "mnist_vit"
     main(dataset_name)

@@ -247,7 +247,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
     def cir_only(self, n=1):
         print("MAKE CIRCLE")
         kfs = []
-        for i in range(n):
+        for i in tqdm(range(n), desc="generating objects"):
             # print(i)
             kf = self._only(True, "circle")
             kfs.append(kf)
@@ -256,7 +256,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
     def tri_only(self, n=1):
         print("MAKE TRIANGLE")
         kfs = []
-        for i in range(n):
+        for i in tqdm(range(n), desc="generating objects"):
             # print(i)
             kf = self._only(True, "triangle")
             kfs.append(kf)
@@ -265,7 +265,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
     def square_only(self, n=1):
         print("MAKE SQUARE")
         kfs = []
-        for i in range(n):
+        for i in tqdm(range(n), desc="generating objects"):
             # print(i)
             kf = self._only(True, "square")
             kfs.append(kf)
@@ -274,7 +274,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
     def triangle_circle(self, n=1):
         print("MAKE TRIANGLE AND CIRCLE")
         kfs = []
-        for i in range(n):
+        for i in tqdm(range(n), desc="generating objects"):
             # print(i)
             kf = self._only(True, "trianglecircle")
             kfs.append(kf)
@@ -283,7 +283,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
     def square_circle(self, n=1):
         print("MAKE SQUARE AND CIRCLE")
         kfs = []
-        for i in range(n):
+        for i in tqdm(range(n), desc="generating objects"):
             # print(i)
             kf = self._only(True, "squarecircle")
             kfs.append(kf)
@@ -292,7 +292,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
     def triangle_square(self, n=1):
         print("MAKE TRIANGLE AND SQUARE")
         kfs = []
-        for i in range(n):
+        for i in tqdm(range(n), desc="generating objects"):
             # print(i)
             kf = self._only(True, "trianglesquare")
             kfs.append(kf)
@@ -301,7 +301,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
     def triangle_square_circle(self, n=1):
         print("MAKE TRIANGLE AND SQUARE AND CIRCLE")
         kfs = []
-        for i in range(n):
+        for i in tqdm(range(n), desc="generating objects"):
             # print(i)
             kf = self._only(True, "trianglesquarecircle")
             kfs.append(kf)
@@ -328,7 +328,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
     def true_kf(self, n=1):
         print("MAKE TRUE")
         kfs = []
-        for i in range(n):
+        for i in tqdm(range(n), desc="generating objects"):
             # print(i)
             kf = self._shapesOnShapes(True)
             kfs.append(kf)
@@ -337,7 +337,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
     def almost_true_kf(self, n=1):
         kfs = []
         print("MAKE CONTRAFACTUALS")
-        for i in range(n):
+        for i in tqdm(range(n), desc="generating objects"):
             # print(i)
             kf = self._shapesOnShapes(False)
             kfs.append(kf)

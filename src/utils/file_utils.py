@@ -3,7 +3,7 @@
 import json
 import os
 import config
-
+import torch
 
 def get_raw_data():
     f_train_cha = config.data_file_train_cha
@@ -51,3 +51,8 @@ def load_json(path):
     with open(path, 'r') as f:
         data = json.load(f)
     return data
+
+
+def save_model(model, folder_name, model_name):
+    os.makedirs(config.output / folder_name, exist_ok=True)
+    torch.save(model.state_dict(), config.output / folder_name / model_name)

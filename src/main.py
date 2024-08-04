@@ -27,24 +27,22 @@ def reasoning_obj_relations(objs):
 
 
 def prepare_kp_sy_data(args):
-    data_path = config.kp_dataset / args.exp_name
     dataset = []
 
-    files = file_utils.get_all_files(data_path / "true", "png", True)
-    indices = np.random.choice(len(files), size=args.top_data, replace=False)
-
-
     label = torch.tensor(config.obj_true)
+    for data_type in args.data_types:
+        folder = config.kp_dataset / data_type / "train" / "true"
+        files = file_utils.get_all_files(folder, "png", True)
+        for f_i in range(len(files)):
+            file_name, file_extension = files[f_i].split(".")
+            data = file_utils.load_json(folder / f"{file_name}.json")
+            if len(data) > 16:
+                patch = data_utils.oco2patch(data).unsqueeze(0)
+                dataset.append((patch, label))
 
-    for f_i in range(len(files)):
-        if f_i not in indices:
-            continue
-        file_name, file_extension = files[f_i].split(".")
-        data = file_utils.load_json(data_path / "true" / f"{file_name}.json")
-        if len(data) > 16:
-            patch = data_utils.oco2patch(data).unsqueeze(0)
-            dataset.append((patch, label))
-
+    # random select top_data
+    indices = np.random.choice(len(dataset), size=args.top_data, replace=False)
+    dataset = dataset[indices]
     return dataset
 
 
@@ -54,6 +52,8 @@ def main():
     dataset = prepare_kp_sy_data(args)
     os.makedirs(config.output / f"kp_sy_{args.exp_name}", exist_ok=True)
 
+
+    # common_features = percept_objs()
     for task_i in tqdm(range(len(dataset)), desc="Reasoning Training Dataset"):
         # percept objs in a task
         objs = percept_objs(args, dataset[task_i])

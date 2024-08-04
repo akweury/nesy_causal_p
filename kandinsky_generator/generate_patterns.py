@@ -238,8 +238,9 @@ def genShapeOnShape(shape, n):
 
 if __name__ == '__main__':
     # task = "kp_cha_01"
-    task = "trianglepartsquare"
-    genShapeOnShape(task, 5000)
+    tasks = ["triangle", "trianglecircle", "trianglesquare"]
+    for task in tasks:
+        genShapeOnShape(task, 5000)
     # min_obj_num = 10
     # max_obj_num = 30
     # color_dict = kandinsky_colors

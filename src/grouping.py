@@ -295,8 +295,8 @@ def percept_task_features(args, example):
     # igs_connection_data = get_groups_code(example["input"], igs_connection)
     # ogs_connection_data = get_groups_code(example["output"], ogs_connection)
 
-    example_features = {"input_groups": igs_color_data,
-                        "output_groups": ogs_color_data}
+    example_features = {"ig": igs_color_data,
+                        "og": ogs_color_data}
 
     args.ig_num = len(igs_color)
     args.og_num = len(ogs_color)
