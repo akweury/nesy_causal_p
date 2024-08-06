@@ -281,7 +281,6 @@ class Language(object):
     def load_consts(self, fm_num, phi_num, rho_num):
         consts_str = []
         for const_name, const_type in bk.const_dict.items():
-
             consts_str.extend(self.parse_const( fm_num, phi_num, rho_num, const_name, const_type))
         return consts_str
 
@@ -451,8 +450,7 @@ class Language(object):
         for c in self.consts:
 
             if c.dtype == dtype:
-                if c.values is None:
-                    consts.append(c)
+                consts.append(c)
         return consts
 
     def get_by_dtype_name(self, dtype_name):

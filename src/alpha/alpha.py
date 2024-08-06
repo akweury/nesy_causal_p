@@ -105,8 +105,9 @@ def beam_search(args, lang, C, FC):
 
 
 def alpha(args, fms, images):
+    clauses = []
     for obj_num in range(1, args.max_obj_num):
-        args.fm_num = len(fms)
+        args.fm_num = 5
         lang = init_ilp(args, obj_num)
         C = lang.reset_lang()
         VM = valuation.get_valuation_module(args, lang)

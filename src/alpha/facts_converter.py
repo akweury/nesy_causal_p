@@ -15,8 +15,6 @@ class FactsConverter(nn.Module):
 
     def __init__(self, args, lang, valuation_module):
         super(FactsConverter, self).__init__()
-        self.ig_num = args.ig_num
-        self.og_num = args.og_num
         # self.dim = args.d
         self.lang = lang
         self.vm = valuation_module  # valuation functions
