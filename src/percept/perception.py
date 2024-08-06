@@ -17,6 +17,7 @@ import torchvision.transforms as transforms
 from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
 from torch import nn, einsum
+import cv2
 
 import config
 from src.utils import data_utils, visual_utils, file_utils
@@ -135,42 +136,46 @@ class PositionalEncoding(nn.Module):
         return x + self.pos_embed
 
 
-
 def pair(t):
     return t if isinstance(t, tuple) else (t, t)
+
 
 class PreNorm(nn.Module):
     def __init__(self, dim, fn):
         super().__init__()
         self.norm = nn.LayerNorm(dim)
         self.fn = fn
+
     def forward(self, x, **kwargs):
         return self.fn(self.norm(x), **kwargs)
 
+
 class FeedForward(nn.Module):
-    def __init__(self, dim, hidden_dim, dropout = 0.):
+    def __init__(self, dim, hidden_dim, dropout=0.):
         super().__init__()
         self.net = nn.Sequential(
             nn.Linear(dim, hidden_dim),
-            nn.ReLU(), #nn.GELU(),
+            nn.ReLU(),  # nn.GELU(),
             nn.Dropout(dropout),
             nn.Linear(hidden_dim, dim),
             nn.Dropout(dropout)
         )
+
     def forward(self, x):
         return self.net(x)
 
+
 class Attention(nn.Module):
-    def __init__(self, dim, heads = 4, dim_head = 64, dropout = 0.):
+    def __init__(self, dim, heads=4, dim_head=64, dropout=0.):
         super().__init__()
-        inner_dim = dim_head *  heads
+        inner_dim = dim_head * heads
         project_out = not (heads == 1 and dim_head == dim)
 
         self.heads = heads
         self.scale = dim_head ** -0.5
 
-        self.attend = nn.Softmax(dim = -1)
-        self.to_qkv = nn.Linear(dim, inner_dim * 3, bias = False)
+        self.attend = nn.Softmax(dim=-1)
+        self.to_qkv = nn.Linear(dim, inner_dim * 3, bias=False)
 
         self.to_out = nn.Sequential(
             nn.Linear(inner_dim, dim),
@@ -179,8 +184,8 @@ class Attention(nn.Module):
 
     def forward(self, x):
         b, n, _, h = *x.shape, self.heads
-        qkv = self.to_qkv(x).chunk(3, dim = -1)
-        q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h = h), qkv)
+        qkv = self.to_qkv(x).chunk(3, dim=-1)
+        q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h=h), qkv)
 
         dots = einsum('b h i d, b h j d -> b h i j', q, k) * self.scale
 
@@ -192,19 +197,21 @@ class Attention(nn.Module):
 
 
 class Transformer(nn.Module):
-    def __init__(self, dim, depth, heads, dim_head, mlp_dim, dropout = 0.):
+    def __init__(self, dim, depth, heads, dim_head, mlp_dim, dropout=0.):
         super().__init__()
         self.layers = nn.ModuleList([])
         for _ in range(depth):
             self.layers.append(nn.ModuleList([
-                PreNorm(dim, Attention(dim, heads = heads, dim_head = dim_head, dropout = dropout)),
-                PreNorm(dim, FeedForward(dim, mlp_dim, dropout = dropout))
+                PreNorm(dim, Attention(dim, heads=heads, dim_head=dim_head, dropout=dropout)),
+                PreNorm(dim, FeedForward(dim, mlp_dim, dropout=dropout))
             ]))
+
     def forward(self, x):
         for attn, ff in self.layers:
             x = attn(x) + x
             x = ff(x) + x
         return x
+
 
 class VisionTransformer(nn.Module):
     def __init__(self, img_size=28, patch_size=7, in_channels=1, embed_dim=128, num_heads=4, num_layers=6,
@@ -346,3 +353,33 @@ def kmeans_common_features(args, model, train_loader, val_loader):
 
     # return the indices of common features
     return common_features
+
+
+def extract_fm(data, window_size=3, stride=1):
+    patches = []
+    positions = []
+    # Get the dimensions of the image
+    _, img_height, img_width = data[0].shape
+    for img_i, image in enumerate(data):
+        # Use unfold to create patches
+        patches_tensor = image.unfold(1, window_size, 1).unfold(2, window_size, 1)
+        # Reshape to get the patches in the desired format
+        patches_tensor = patches_tensor.contiguous().view(-1, window_size, window_size).unique(dim=0)
+        patches.append(patches_tensor)
+
+    patches = torch.cat(patches, dim=0).unique(dim=0)
+    return patches
+
+
+def learn_fm(args, train_loader, val_loader):
+    num_epochs = 100
+
+    for images, labels in train_loader:
+
+        # for i in range(len(images)):
+        #     img = visual_utils.patch2img(images[i].squeeze().to(torch.uint8).tolist())
+        #     file_name = str(config.output / f"kp_sy_{args.exp_name}" / f"input_{i}.png")
+        #     cv2.imwrite(file_name, img)
+
+        fms = extract_fm(images.to(args.device))
+

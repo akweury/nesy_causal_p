@@ -46,16 +46,11 @@ class Language(object):
         consts (List[Const]): A set of constants.
     """
 
-    def __init__(self, args, relation_obj_type):
+    def __init__(self, variable_symbol, variable_num, lark_path, fm_num, phi_num, rho_num):
 
         # BK
-        self.ig_vars = [Var(f"{v_name}_{v_i}") for v_i in range(args.ig_num) for v_name in
-                        bk.variable["input_group"]]
-        self.og_vars = [Var(f"{v_name}_{v_i}") for v_i in range(args.og_num) for v_name in
-                        [bk.variable["output_group"]]]
-        self.vars = self.ig_vars + self.og_vars
-        self.ig_num = args.ig_num
-        self.og_num = args.og_num
+        self.vars = [Var(f"{variable_symbol}_{v_i}") for v_i in range(variable_num)]
+        self.variable_num = variable_num
         self.atoms = []
         self.funcs = []
         self.consts = []
@@ -75,60 +70,21 @@ class Language(object):
         self.learned_c = []
 
         # GRAMMAR
-        with open(args.lark_path, encoding="utf-8") as grammar:
+        with open(lark_path, encoding="utf-8") as grammar:
             self.lp_clause = Lark(grammar.read(), start="clause")
-        with open(args.lark_path, encoding="utf-8") as grammar:
+        with open(lark_path, encoding="utf-8") as grammar:
             self.lp_atom = Lark(grammar.read(), start="atom")
 
         # load BK predicates and constants
-        self.predicates, self.ext_predicates = self.load_preds(relation_obj_type)
-        self.consts = self.load_consts(args)
+        self.load_preds()
+        self.consts = self.load_consts(fm_num, phi_num, rho_num)
 
-    def load_preds(self, relation_obj_type):
-        predicates = []
-        ext_predicates = []
-        if relation_obj_type == config.alpha_mode['inter_input_group']:
-            predicates.append(self.parse_pred(bk.predicate_has_ig))
-            for data in list(bk.neural_p.values()):
-                in_data = data.replace('group', 'input_group')
-                predicate = self.parse_pred(in_data)
-                predicates.append(predicate)
-                ext_predicates.append(predicate)
-
-        elif relation_obj_type == config.alpha_mode['inter_output_group']:
-            predicates.append(self.parse_pred(bk.predicate_has_og))
-            for data in list(bk.neural_p.values()):
-                out_data = data.replace('group', 'output_group')
-                predicate = self.parse_pred(out_data)
-                predicates.append(predicate)
-                ext_predicates.append(predicate)
-
-        elif relation_obj_type == config.alpha_mode['inter_io_group']:
-            predicates.append(self.parse_pred(bk.predicate_has_ig))
-            predicates.append(self.parse_pred(bk.predicate_has_og))
-            for data in list(bk.neural_p.values()):
-                p_data = data + ":" + bk.ig_dtype + ";" + bk.og_dtype
-                predicate = self.parse_pred(p_data)
-                predicates.append(predicate)
-                ext_predicates.append(predicate)
-        elif relation_obj_type == config.alpha_mode['ig']:
-            predicates.append(self.parse_pred(bk.predicate_has_ig))
-            for data in list(bk.neural_p.values()):
-                p_data = data + ":" + bk.ig_dtype
-                predicate = self.parse_pred(p_data)
-                predicates.append(predicate)
-                ext_predicates.append(predicate)
-        elif relation_obj_type == config.alpha_mode['og']:
-            predicates.append(self.parse_pred(bk.predicate_has_og))
-            for data in list(bk.neural_p.values()):
-                p_data = data + ":" + bk.og_dtype
-                predicate = self.parse_pred(p_data)
-                predicates.append(predicate)
-                ext_predicates.append(predicate)
-        else:
-            raise NotImplementedError
-
-        return predicates, ext_predicates
+    def load_preds(self):
+        # target predicate
+        self.predicates.append(self.parse_pred(bk.predicate_target))
+        self.predicates.append(self.parse_pred(bk.predicate_has_fm))
+        self.predicates.append(self.parse_pred(bk.predicate_phi))
+        self.predicates.append(self.parse_pred(bk.predicate_rho))
 
     def init_inv_predicates(self, relation_obj_type):
         if relation_obj_type in [config.alpha_mode['inter_input_group'], config.alpha_mode['ig']]:
@@ -150,17 +106,16 @@ class Language(object):
                 if inv_pred is not None and inv_pred not in self.predicates:
                     self.predicates.append(inv_pred)
 
-    def reset_lang(self, ig_num, og_num, relation_obj_type):
+    def reset_lang(self):
         self.learned_c = []
-        self.init_inv_predicates(relation_obj_type)
-        init_c = self.load_init_clauses(ig_num, og_num, relation_obj_type)
 
+
+        init_c = self.load_init_clauses()
         # update predicates
-        self.update_bk()
+        self.generate_atoms()
         # update language
 
-        self.mode_declarations = mode_declaration.get_mode_declarations(self.ext_predicates, ig_num, og_num,
-                                                                        relation_obj_type)
+        self.mode_declarations = mode_declaration.get_mode_declarations(self.predicates, self.variable_num)
         return init_c
 
     def __str__(self):
@@ -243,71 +198,26 @@ class Language(object):
             for args in args_list:
                 if len(args) == 1 or len(set(args)) == len(args):
                     atoms.append(Atom(pred, args))
-        # pi_atoms = []
-        # for pred in self.invented_preds:
-        #     consts_list = []
-        #     for body_pred in pred.body[0]:
-        #         consts_list.append([body_pred.terms[0]])
-        #
-        #     args_list = list(set(itertools.product(*consts_list)))
-        #     for args in args_list:
-        #         new_atom = Atom(pred, args)
-        #         if new_atom not in atoms:
-        #             pi_atoms.append(new_atom)
 
-        # bk_pi_atoms = []
-        # for pred in self.bk_inv_preds:
-        #     dtypes = pred.dtypes
-        #     consts_list = [self.get_by_dtype(dtype, with_inv=True) for dtype in dtypes]
-        #     args_list = list(set(itertools.product(*consts_list)))
-        #     for args in args_list:
-        #         # check if args and pred correspond are in the same area
-        #         if pred.dtypes[0].name == 'area':
-        #             if pred.name[0] + pred.name[5:] != args[0].name:
-        #                 continue
-        #         if len(args) == 1 or len(set(args)) == len(args):
-        #             pi_atoms.append(Atom(pred, args))
         self.atoms = spec_atoms + sorted(atoms)  # + sorted(bk_pi_atoms) + sorted(pi_atoms)
 
-    def load_init_clauses(self, ig_num, og_num, relation_obj_type):
+    def load_init_clauses(self):
         """Read lines and parse to Atom objects.
         """
-
-        # final target clause
-        var_in = bk.variable["in_pattern"]
-        var_out = bk.variable['out_pattern']
-        var_in_g = bk.variable["input_group"]
-        var_out_g = bk.variable['output_group']
         group_clauses_str = []
-        if relation_obj_type in [config.alpha_mode['inter_input_group'], config.alpha_mode['ig']]:
-            i_c_strs = []
-            for i in range(ig_num):
-                head = f"{bk.inv_p_head['input']}_{i}({var_in}):-"
-                body = ""
-                for j in range(i + 1):
-                    body += f"hasIG({var_in_g}_{j},{var_in}),"
-                i_c_strs.append(head + body[:-1] + ".")
-            group_clauses_str += i_c_strs
-        if relation_obj_type in [config.alpha_mode['inter_output_group'], config.alpha_mode['og']]:
-            o_c_strs = []
-            for i in range(og_num):
-                head = f"{bk.inv_p_head['output']}_{i}({var_out}):-"
-                body = ""
-                for j in range(i + 1):
-                    body += f"hasOG({var_out_g}_{j},{var_out}),"
-                o_c_strs.append(head + body[:-1] + ".")
-            group_clauses_str += o_c_strs
-        if relation_obj_type == config.alpha_mode['inter_io_group']:
-            io_c_strs = []
-            for i in range(og_num):
-                head = f"{bk.inv_p_head['input_output']}_{i}({var_in},{var_out}):-"
-                body = ""
-                for j in range(i + 1):
-                    body += f"hasIG({var_in_g}_{j},{var_in}),"
-                    body += f"hasOG({var_out_g}_{j},{var_out}),"
-                io_c_strs.append(head + body[:-1] + ".")
-            group_clauses_str += io_c_strs
 
+
+        var_pattern = bk.variable['pattern']
+        pred_target =bk.predicate_target.split(':')[0]
+        pred_hasFM = bk.predicate_has_fm.split(':')[0]
+
+        head = f"{pred_target}({var_pattern}):-"
+
+        body = ""
+        for j in range(self.variable_num):
+            body += f"{pred_hasFM}({self.vars[j]},{var_pattern}),"
+
+        group_clauses_str.append(head + body[:-1] + ".")
         group_clauses = []
         for group_clause_str in group_clauses_str:
             tree = self.lp_clause.parse(group_clause_str)
@@ -346,51 +256,33 @@ class Language(object):
         invented_pred = InventedPredicate(pred_with_id, int(arity), dtypes, args=None, pi_type=None)
         return invented_pred
 
-    def parse_const(self, args, const, const_type):
+    def parse_const(self,  fm_num, phi_num, rho_num, const, const_type):
         """Parse string to function symbols.
         """
         const_data_type = mode_declaration.DataType(const)
         if "amount_" in const_type:
             _, num = const_type.split('_')
-            if num == 'ie':
-                num = args.ig_num
-            if num == 'oe':
-                num = args.og_num
+            if num == 'fm':
+                num = fm_num
             elif num == "phi":
-                num = args.phi_num
+                num = phi_num
             elif num == "rho":
-                num = args.rho_num
-            elif num == "slope":
-                num = args.slope_num
-            elif num == "num":
-                num = args.number_num
+                num = rho_num
             const_names = []
             for i in range(int(num)):
-                # if const == "group" and i == 0:
-                #     continue
                 const_names.append(f"{const_data_type.name}{i + 1}of{num}")
-        elif "enum" in const_type:
-            if const_data_type.name == 'color':
-                const_names = bk.color
-            elif const_data_type.name == 'shape':
-                const_names = bk.shape
-            elif const_data_type.name == 'scale':
-                const_names = bk.scale
-            else:
-                raise ValueError
-        elif 'in_pattern' in const_type:
-            const_names = ['input']
-        elif 'out_pattern' in const_type:
-            const_names = ['output']
+        elif 'pattern' in const_type:
+            const_names = ['data']
         else:
             raise ValueError
 
         return [Const(const_name, const_data_type) for const_name in const_names]
 
-    def load_consts(self, args):
+    def load_consts(self, fm_num, phi_num, rho_num):
         consts_str = []
         for const_name, const_type in bk.const_dict.items():
-            consts_str.extend(self.parse_const(args, const_name, const_type))
+
+            consts_str.extend(self.parse_const( fm_num, phi_num, rho_num, const_name, const_type))
         return consts_str
 
     def rename_bk_preds_in_clause(self, bk_prefix, line):

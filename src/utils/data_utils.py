@@ -104,7 +104,7 @@ def oco2patch(data):
     max_counts = torch.max(pos_counts)
     scale += 1
     for p_i in range(len(grid_position)):
-        patch[grid_position[p_i, 0], grid_position[p_i, 1]] = 1
+        patch[grid_position[p_i, 1], grid_position[p_i, 0]] = 1
     return patch
 
 

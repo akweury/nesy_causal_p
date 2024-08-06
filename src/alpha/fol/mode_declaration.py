@@ -127,16 +127,8 @@ def get_pi_mode_declarations(inv_preds, obj_num):
     return pi_mode_declarations
 
 
-def get_mode_declarations(predicates, ig_num, og_num, relation_obj_type):
-    if relation_obj_type in [config.alpha_mode['inter_input_group'], config.alpha_mode['ig']]:
-        g_num = ig_num
-    elif relation_obj_type in [config.alpha_mode['inter_output_group'], config.alpha_mode['og']]:
-        g_num = og_num
-    elif relation_obj_type == config.alpha_mode['inter_io_group']:
-        g_num = ig_num * og_num
-    else:
-        raise ValueError
+def get_mode_declarations(predicates, obj_num):
 
-    basic_mode_declarations = get_mode_declarations_bk(predicates, g_num)
+    basic_mode_declarations = get_mode_declarations_bk(predicates, obj_num)
     # pi_model_declarations = get_pi_mode_declarations(inv_predicates, e)
     return basic_mode_declarations  # + pi_model_declarations

@@ -10,8 +10,9 @@ from .fol import language
 from .fol import refinement
 
 
-def init_ilp(args, relation_obj_type):
-    lang = language.Language(args, relation_obj_type)
+def init_ilp(args, variable_num):
+    lang = language.Language(args.variable_symbol, variable_num, args.lark_path,
+                             args.fm_num, args.phi_num, args.rho_num)
     return lang
 
 
@@ -103,10 +104,12 @@ def beam_search(args, lang, C, FC):
     return clauses
 
 
-def alpha(args, data, relation_obj_type):
-    lang = init_ilp(args, relation_obj_type)
-    C = lang.reset_lang(args.ig_num, args.og_num, relation_obj_type)
-    VM = valuation.get_valuation_module(args, lang, data)
-    FC = facts_converter.FactsConverter(args, lang, VM)
-    clauses = beam_search(args, lang, C, FC)
+def alpha(args, fms, images):
+    for obj_num in range(1, args.max_obj_num):
+        args.fm_num = len(fms)
+        lang = init_ilp(args, obj_num)
+        C = lang.reset_lang()
+        VM = valuation.get_valuation_module(args, lang)
+        FC = facts_converter.FactsConverter(args, lang, VM)
+        clauses = beam_search(args, lang, C, FC)
     return clauses

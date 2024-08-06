@@ -1,7 +1,10 @@
 # Created by shaji at 24/06/2024
-predicate_target = "target:1:out_pattern,+"
-predicate_has_ig = "hasIG:2:input_group,-;in_pattern,+"
-predicate_has_og = "hasOG:2:output_group,-;out_pattern,+"
+predicate_target = "target:1:pattern,+"
+predicate_has_fm = "hasFM:2:feature_map,-;pattern,+"
+predicate_phi = "phi:1:pattern,+"
+predicate_rho = "rho:1:pattern,+"
+# predicate_has_ig = "hasIG:2:input_group,-;in_pattern,+"
+# predicate_has_og = "hasOG:2:output_group,-;out_pattern,+"
 
 # dtype:
 variable = {
@@ -9,6 +12,7 @@ variable = {
     "out_pattern": "O",
     "input_group": "A",
     "output_group": "B",
+    'pattern': "I"
 }
 neural_p = {
     # 'color': 'color:2:group,+;color,#',
@@ -24,13 +28,10 @@ ig_dtype = "input_group,+"
 og_dtype = "output_group,+"
 
 const_dict = {
-    'out_pattern,+': "out_pattern",
-    'in_pattern,+': "in_pattern",
-    'color,#': 'enum',
-    'scale,#': 'enum',
-    'input_group,+': 'amount_ie',
-    'output_group,+': 'amount_oe',
-    'number,#': 'amount_num',
+    'pattern,+': "pattern",
+    'feature_map,+': 'amount_fm',
+    'phi,+': 'amount_phi',
+    'rho,+': 'amount_rho',
 
 }
 

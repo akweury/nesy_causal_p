@@ -3,63 +3,42 @@ from tqdm import tqdm
 import torch
 import numpy as np
 import os
+import torch.optim as optim
+import torchvision.transforms as transforms
+from torch.utils.data import DataLoader, random_split
 
 import config
 import grouping
 from percept import perception
 from utils import visual_utils, file_utils, args_utils, data_utils
-from reasoning import reasoning
-
-
-def percept_objs(args, task):
-    task_objs = []
-    for e_i in range(len(task)):
-        example = task[e_i]
-        # acquire the probability of grouping type: color/shape/area/...
-        objs = perception.percept_objs(args, example)
-        task_objs.append(objs)
-    return task_objs
-
-
-def reasoning_obj_relations(objs):
-    relations = None
-    return relations
+from src.alpha import alpha
 
 
 def prepare_kp_sy_data(args):
-    dataset = []
+    transform = transforms.Compose([
+        transforms.Resize((64, 64)),
+        transforms.ToTensor(),
+    ])
+    dataset = perception.ShapeDataset(args, transform=transform)
+    train_size = int(0.8 * len(dataset))
+    val_size = len(dataset) - train_size
+    train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=False)
+    val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True)
 
-    label = torch.tensor(config.obj_true)
-    for data_type in args.data_types:
-        folder = config.kp_dataset / data_type / "train" / "true"
-        files = file_utils.get_all_files(folder, "png", True)
-        for f_i in range(len(files)):
-            file_name, file_extension = files[f_i].split(".")
-            data = file_utils.load_json(folder / f"{file_name}.json")
-            if len(data) > 16:
-                patch = data_utils.oco2patch(data).unsqueeze(0)
-                dataset.append((patch, label))
-
-    # random select top_data
-    indices = np.random.choice(len(dataset), size=args.top_data, replace=False)
-    dataset = dataset[indices]
-    return dataset
+    return train_loader, val_loader
 
 
 def main():
     args = args_utils.get_args()
     # data file
-    dataset = prepare_kp_sy_data(args)
+    args.data_types = ["data_triangle"]
+    train_loader, val_loader = prepare_kp_sy_data(args)
     os.makedirs(config.output / f"kp_sy_{args.exp_name}", exist_ok=True)
 
-
-    # common_features = percept_objs()
-    for task_i in tqdm(range(len(dataset)), desc="Reasoning Training Dataset"):
-        # percept objs in a task
-        objs = percept_objs(args, dataset[task_i])
-        relations = reasoning_obj_relations(objs)
-        print(f"task {task_i}")
-
+    for images, labels in train_loader:
+        fms = perception.extract_fm(images.to(args.device))
+        relations = alpha.alpha(args, fms, images)
     print("program finished")
 
 

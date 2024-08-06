@@ -29,7 +29,7 @@ def prepare_kp_sy_data(args):
     val_size = len(dataset) - train_size
     train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
 
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=False)
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True)
 
     return train_loader, val_loader
@@ -77,24 +77,21 @@ def draw_training_history(train_losses, val_losses, val_accuracies, path):
 def main(dataset_name):
     args = args_utils.get_args()
     # data file
-    args.data_types = ["data_trianglesquare", "data_trianglecircle", "data_triangle"]
-    # train_loader, val_loader = prepare_kp_sy_data(args)
-    train_loader, val_loader = prepare_mnist_data(args)
+    args.data_types = ["data_triangle"]
+    train_loader, val_loader = prepare_kp_sy_data(args)
+    # train_loader, val_loader = prepare_mnist_data(args)
     os.makedirs(config.output / f"kp_sy_{args.exp_name}", exist_ok=True)
+
+    perception.learn_fm(args, train_loader, val_loader)
+
+
     log_utils.init_wandb(pj_name=f"FM-{dataset_name}-{args.exp_name}", archi="FCN")
 
-    # Instantiate the model, loss function, and optimizer
-
-    model = perception.VisionTransformer(img_size=28, patch_size=7, in_channels=1,
-                                         embed_dim=128, num_heads=4, num_layers=6, num_classes=10).to(args.device)
-    # Train the model
     perception.train_percept(args, model, train_loader, val_loader)
 
-    wandb.finish()
-    # Save the model
     file_utils.save_model(model, dataset_name, f'detector_model.pth')
 
 
 if __name__ == "__main__":
-    dataset_name = "mnist_vit"
+    dataset_name = "triangle"
     main(dataset_name)

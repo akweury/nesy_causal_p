@@ -24,7 +24,7 @@ class FCNNValuationModule(nn.Module):
             dataset (str): The dataset.
     """
 
-    def __init__(self, pred_funs, lang, device, dataset):
+    def __init__(self, pred_funs, lang, device):
         super().__init__()
         self.pred_funs = pred_funs
         self.lang = lang
@@ -32,7 +32,7 @@ class FCNNValuationModule(nn.Module):
         self.layers, self.vfs = self.init_valuation_functions(device)
         # attr_term -> vector representation dic
         self.attrs = self.init_attr_encodings(device)
-        self.dataset = dataset
+
 
     def init_valuation_functions(self, device):
         """
@@ -368,15 +368,15 @@ class VFHasIG(nn.Module):
         return prob
 
 
-class VFHasOG(nn.Module):
+class VFHasFM(nn.Module):
     """The function v_in.
     """
 
     def __init__(self, name):
-        super(VFHasOG, self).__init__()
+        super(VFHasFM, self).__init__()
         self.name = name
 
-    def forward(self, og, domain):
+    def forward(self, fm, domain):
         """
         Args:
             z (tensor): 2-d tensor (B * D), the object-centric representation.
@@ -387,10 +387,104 @@ class VFHasOG(nn.Module):
         Returns:
             A batch of probabilities.
         """
-        prob = 0
-        if og in domain:
-            prob = 1
+        prob = 1
         return prob
+
+
+class VFRho(nn.Module):
+    """The function v_area.
+    """
+
+    def __init__(self, name):
+        super(VFRho, self).__init__()
+
+        self.name = name
+
+    def forward(self, z_1, z_2, dist_grade):
+        """
+        Args:
+            z_1 (tensor): 2-d tensor (B * D), the object-centric representation.
+                [x1, y1, x2, y2, color1, color2, color3,
+                    shape1, shape2, shape3, objectness]
+            z_2 (tensor): 2-d tensor (B * D), the object-centric representation.
+                [x1, y1, x2, y2, color1, color2, color3,
+                    shape1, shape2, shape3, objectness]
+
+        Returns:
+            A batch of probabilities.
+        """
+        c_1 = self.to_center(z_1)
+        c_2 = self.to_center(z_2)
+
+        dir_vec = c_2 - c_1
+        dir_vec[1] = -dir_vec[1]
+        rho, phi = self.cart2pol(dir_vec[0], dir_vec[1])
+        dist_id = torch.zeros(rho.shape)
+
+        dist_grade_num = dist_grade.shape[1]
+        grade_weight = 1 / dist_grade_num
+        for i in range(1, dist_grade_num):
+            threshold = grade_weight * i
+            dist_id[rho >= threshold] = i
+
+        dist_pred = torch.zeros(dist_grade.shape).to(dist_grade.device)
+        for i in range(dist_pred.shape[0]):
+            dist_pred[i, int(dist_id[i])] = 1
+
+        return (dist_grade * dist_pred).sum(dim=1)
+
+    def cart2pol(self, x, y):
+        rho = torch.sqrt(x ** 2 + y ** 2)
+        phi = torch.atan2(y, x)
+        phi = torch.rad2deg(phi)
+        return (rho, phi)
+
+    def to_center(self, z):
+        return torch.stack((z[:, 0], z[:, 2]))
+
+
+
+class VFPhi(nn.Module):
+    """The function v_area.
+    """
+
+    def __init__(self, name):
+        super(VFPhi, self).__init__()
+        self.name = name
+
+    def forward(self, z_1, z_2, dir):
+
+        c_1 = self.to_center(z_1)
+        c_2 = self.to_center(z_2)
+
+        round_divide = dir.shape[1]
+        area_angle = int(360 / round_divide)
+        area_angle_half = area_angle * 0.5
+        # area_angle_half = 0
+        dir_vec = c_2 - c_1
+        dir_vec[1] = -dir_vec[1]
+        rho, phi = self.cart2pol(dir_vec[0], dir_vec[1])
+        phi_clock_shift = (90 - phi.long()) % 360
+        zone_id = (phi_clock_shift + area_angle_half) // area_angle % round_divide
+
+        # This is a threshold, but it can be decided automatically.
+        # zone_id[rho >= 0.12] = zone_id[rho >= 0.12] + round_divide
+
+        dir_pred = torch.zeros(dir.shape).to(dir.device)
+        for i in range(dir_pred.shape[0]):
+            dir_pred[i, int(zone_id[i])] = 1
+
+        return (dir * dir_pred).sum(dim=1)
+
+    def cart2pol(self, x, y):
+        rho = torch.sqrt(x ** 2 + y ** 2)
+        phi = torch.atan2(y, x)
+        phi = torch.rad2deg(phi)
+        return (rho, phi)
+
+    def to_center(self, z):
+        return torch.stack((z[:, 0], z[:, 2]))
+
 
 
 class VFRepeat(nn.Module):
@@ -449,13 +543,11 @@ class VFRepeat(nn.Module):
         return is_repeat
 
 
-def get_valuation_module(args, lang, dataset):
+def get_valuation_module(args, lang):
     pred_funs = [
-        VFHasIG('hasIG'),
-        VFHasOG('hasOG'),
-        VFScale('scale'),
-        VFColor('color'),
-        VFLine("line", args.device)
+        VFHasFM('hasFM'),
+        VFRho('rho'),
+        VFPhi('phi')
     ]
-    VM = FCNNValuationModule(pred_funs, lang=lang, device=args.device, dataset=dataset)
+    VM = FCNNValuationModule(pred_funs, lang=lang, device=args.device)
     return VM
