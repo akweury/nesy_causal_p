@@ -1,8 +1,8 @@
 # Created by shaji at 24/06/2024
 predicate_target = "target:1:pattern,+"
-predicate_has_fm = "hasFM:2:feature_map,-;pattern,+"
-predicate_phi = "phi:1:feature_map,+;feature_map,+;phi,#"
-predicate_rho = "rho:1:feature_map,+;feature_map,+;rho,#"
+predicate_has_fm = "has:2:feature_map,-;pattern,+"
+predicate_phi = "phi:3:feature_map,+;feature_map,+;phi,#"
+predicate_rho = "rho:3:feature_map,+;feature_map,+;rho,#"
 
 # dtype:
 variable = {

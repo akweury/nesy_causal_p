@@ -43,10 +43,10 @@ def extension(args, lang, clauses):
     return refs
 
 
-def eval_ims(NSFR, args, pred_names):
+def eval_ims(NSFR, args, pred_names, objs, raw_data):
     """ input: clause, output: score """
-    data = NSFR.fc.vm.dataset
-    atom_values = NSFR.clause_eval_quick(data)
+
+    atom_values = NSFR.clause_eval_quick(objs, raw_data)
     # each score needs an explanation
     score_positive = NSFR.get_target_prediciton(atom_values, pred_names, args.device)
     # if score_positive.size(2) > 1:
@@ -74,15 +74,15 @@ def sort_clauses_by_score(clauses, scores_all, scores):
     return clause_with_scores
 
 
-def evaluation(args, NSFR, target_preds):
+def evaluation(args, NSFR, target_preds, objs, data):
     # image level scores
-    ils = eval_ims(NSFR, args, target_preds)
+    ils = eval_ims(NSFR, args, target_preds, objs, data)
     # dataset level scores
     dls = eval_dls(ils)
     return ils, dls
 
 
-def beam_search(args, lang, C, FC):
+def beam_search(args, lang, C, FC, objs, raw_data):
     clauses = C
     for bs_step in range(args.max_bs_step):
         # clause extension
@@ -92,7 +92,7 @@ def beam_search(args, lang, C, FC):
         NSFR = nsfr.get_nsfr_model(args, lang, FC, extended_C)
         target_preds = list(set([c.head.pred.name for c in extended_C]))
         # clause evaluation
-        ils, dls = evaluation(args, NSFR, target_preds)
+        ils, dls = evaluation(args, NSFR, target_preds, objs, raw_data)
         # prune clauses
         pruned_c = pruning.top_k_clauses(args, ils, dls, extended_C)
         # save data
@@ -106,11 +106,11 @@ def beam_search(args, lang, C, FC):
 
 def alpha(args, fms, images):
     clauses = []
-    for obj_num in range(1, args.max_obj_num):
+    for obj_num in range(2, args.max_obj_num):
         args.fm_num = 5
         lang = init_ilp(args, obj_num)
         C = lang.reset_lang()
         VM = valuation.get_valuation_module(args, lang)
         FC = facts_converter.FactsConverter(args, lang, VM)
-        clauses = beam_search(args, lang, C, FC)
+        clauses = beam_search(args, lang, C, FC, fms, images)
     return clauses

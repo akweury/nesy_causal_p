@@ -80,13 +80,10 @@ class RefinementGenerator(object):
         """
 
         assignments_list = []
-        term_input_num = 0
-        term_output_num = 0
+        term_num = 0
         for mt in modeb.mode_terms:
-            if mt.dtype.name == "input_group":
-                term_input_num += 1
-            if mt.dtype.name == "output_group":
-                term_output_num += 1
+            if mt.dtype.name == "feature_map":
+                term_num += 1
         for mt in modeb.mode_terms:
             assignments = []
             if mt.mode == '+':

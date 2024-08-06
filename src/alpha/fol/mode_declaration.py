@@ -91,18 +91,10 @@ def get_invented_pred_by_name(preds, invented_pred_name):
 
 def get_mode_data(dtypes, g_num):
     mode_terms = []
-    hasIn = False
-    hasOut = False
     for dt in dtypes:
         term = ModeTerm(dt.sign, dt)
         mode_terms.append(term)
-        if "input" in dt.name:
-            hasIn = True
-        elif "output" in dt.name:
-            hasOut = True
-
-    recall = (hasIn) * g_num + hasOut * g_num
-    return mode_terms, recall
+    return mode_terms, g_num
 
 
 def get_mode_declarations_bk(preds, g_num):
