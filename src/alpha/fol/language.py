@@ -22,9 +22,7 @@ def get_unused_args(c):
         if "has" not in body.pred.name:
             for term in body.terms:
                 term_name = term.name.split("_")[0]
-                og_names = bk.variable["output_group"]
-                ig_names = bk.variable["input_group"]
-                if term_name in ([og_names] + ig_names) and term not in used_args:
+                if term_name == bk.variable["feature_map"] and term not in used_args:
                     unused_args.remove(term)
                     used_args.append(term)
     return unused_args, used_args
@@ -46,7 +44,7 @@ class Language(object):
         consts (List[Const]): A set of constants.
     """
 
-    def __init__(self, variable_symbol, variable_num, lark_path, fm_num, phi_num, rho_num):
+    def __init__(self, fms, variable_symbol, variable_num, lark_path, fm_num, phi_num, rho_num):
 
         # BK
         self.vars = [Var(f"{variable_symbol}_{v_i}") for v_i in range(variable_num)]
@@ -77,7 +75,7 @@ class Language(object):
 
         # load BK predicates and constants
         self.load_preds()
-        self.consts = self.load_consts(fm_num, phi_num, rho_num)
+        self.consts = self.load_consts(fms, fm_num, phi_num, rho_num)
 
     def load_preds(self):
         # target predicate
@@ -108,7 +106,6 @@ class Language(object):
 
     def reset_lang(self):
         self.learned_c = []
-
 
         init_c = self.load_init_clauses()
         # update predicates
@@ -206,9 +203,8 @@ class Language(object):
         """
         group_clauses_str = []
 
-
         var_pattern = bk.variable['pattern']
-        pred_target =bk.predicate_target.split(':')[0]
+        pred_target = bk.predicate_target.split(':')[0]
         pred_hasFM = bk.predicate_has_fm.split(':')[0]
 
         head = f"{pred_target}({var_pattern}):-"
@@ -256,7 +252,7 @@ class Language(object):
         invented_pred = InventedPredicate(pred_with_id, int(arity), dtypes, args=None, pi_type=None)
         return invented_pred
 
-    def parse_const(self,  fm_num, phi_num, rho_num, const, const_type):
+    def parse_const(self, fms, fm_num, phi_num, rho_num, const, const_type):
         """Parse string to function symbols.
         """
         const_data_type = mode_declaration.DataType(const)
@@ -275,14 +271,20 @@ class Language(object):
             const_names = ['data']
         else:
             raise ValueError
+        consts = []
+        for c_i, name in enumerate(const_names):
+            if "feature_map" in name:
+                const = Const(name, const_data_type, values=fms[c_i])
+            else:
+                const = Const(name, const_data_type)
+            consts.append(const)
+        return consts
 
-        return [Const(const_name, const_data_type) for const_name in const_names]
-
-    def load_consts(self, fm_num, phi_num, rho_num):
-        consts_str = []
+    def load_consts(self, fms, fm_num, phi_num, rho_num):
+        consts = []
         for const_name, const_type in bk.const_dict.items():
-            consts_str.extend(self.parse_const( fm_num, phi_num, rho_num, const_name, const_type))
-        return consts_str
+            consts.extend(self.parse_const(fms, fm_num, phi_num, rho_num, const_name, const_type))
+        return consts
 
     def rename_bk_preds_in_clause(self, bk_prefix, line):
         """Parse string to invented predicates.
@@ -465,8 +467,7 @@ class Language(object):
         consts = []
         for c in self.consts:
             if c.dtype.name == dtype_name:
-                if c.values is None:
-                    consts.append(c)
+                consts.append(c)
         return consts
 
     def term_index(self, term):

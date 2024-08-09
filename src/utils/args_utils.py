@@ -16,6 +16,7 @@ def get_args():
     parser.add_argument("--device", help="cpu or cuda", default="cpu", type=str)
     parser.add_argument("--exp_name", type=str, default=None)
     parser.add_argument("--th_group", type=float, default=0.01)
+    parser.add_argument("--th_inv_nc", type=float, default=0.01)
 
     parser.add_argument("--num_epochs", type=int, default=100)
     parser.add_argument("--top_data", type=int, default=100)
@@ -24,8 +25,8 @@ def get_args():
     parser.add_argument("--is_done", action="store_true")
     parser.add_argument("--show_process", action="store_true")
     parser.add_argument("--number_num", type=int, default=10)
-    parser.add_argument("--phi_num", type=int, default=10)
-    parser.add_argument("--rho_num", type=int, default=10)
+    parser.add_argument("--phi_num", type=int, default=2)
+    parser.add_argument("--rho_num", type=int, default=2)
     parser.add_argument("--variable_symbol", type=str, default="FM")
     parser.add_argument("--im_step", type=int, default=5)
     parser.add_argument("--cim_step", type=int, default=5)
@@ -33,7 +34,7 @@ def get_args():
                         help='Smooth parameter in the softor function')
     parser.add_argument("--bs_clause_eval", type=int, default=5)
     parser.add_argument("--top_k", type=int, default=10)
-    parser.add_argument("--max_bs_step", type=int, default=10)
+    parser.add_argument("--max_bs_step", type=int, default=3)
     parser.add_argument("--max_obj_num", type=int, default=5)
 
     args = parser.parse_args()

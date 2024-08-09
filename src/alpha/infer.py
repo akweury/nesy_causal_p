@@ -344,7 +344,7 @@ class ClauseInferModule(nn.Module):
         well as arbitrary operators on Tensors.
         """
         B = x.size(0)
-        # C * B * G
+        # C (clause number) * B (batch_size) * G (atoms)
         R = x.unsqueeze(dim=0).expand(self.C, B, self.G)
 
         for t in range(self.infer_step):
@@ -373,12 +373,17 @@ class ClauseInferModule(nn.Module):
 
     def r(self, x):
         # x: C * B * G
-        B = x.size(1)  # batch size
+        batch_size = x.size(1)  # batch size
+        substitution_num = self.I.size(0)
         # apply each clause c_i and stack to a tensor C
         # C * B * G
         # infer from i-th valuation tensor using i-th clause
-        C = torch.stack([self.cs[i](x[i]) for i in range(self.I.size(0))], 0)
-        return C
+        Cs = []
+        for i in range(substitution_num):
+            c = self.cs[i](x[i])
+            Cs.append(c)
+        Cs = torch.stack(Cs, 0)
+        return Cs
 
     def r_bk(self, x):
         x = x[0]
@@ -481,11 +486,9 @@ def build_clause_infer_module(args, clauses, atoms, lang, device, m=3, infer_ste
     te = TensorEncoder(lang, atoms, clauses, device=device)
     I = te.encode()
     I_bk = None
-
     I_pi = None
     # if len(pi_clauses) > 0:
     #     te_pi = TensorEncoder(lang, atoms, pi_clauses, device=device)
     #     I_pi = te_pi.encode()
-
     im = ClauseInferModule(I, m=m, infer_step=infer_step, device=device, train=train, I_bk=I_bk, I_pi=I_pi, gamma=gamma)
     return im

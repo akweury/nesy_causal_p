@@ -271,14 +271,13 @@ class TensorEncoder(object):
         variables, dtypes = self.get_var_list_from_body(body)
         # unique var and dtype
         var_unique = []
-        dtype_unique = []
+        var_unique_dtypes = []
         for i in range(len(variables)):
             if variables[i] not in var_unique:
                 var_unique.append(variables[i])
-            if dtypes[i] not in dtype_unique:
-                dtype_unique.append(dtypes[i])
+                var_unique_dtypes.append(dtypes[i])
         # Create a list of domains
-        const_domains = [self.lang.get_by_dtype(dtype) for dtype in dtype_unique]
+        const_domains = [self.lang.get_by_dtype(dtype) for dtype in var_unique_dtypes]
         # Generate the Cartesian product of the domains
         substitutions = list(itertools.product(*const_domains))
 
@@ -288,7 +287,8 @@ class TensorEncoder(object):
             substitution_list = []
             for i in range(len(substitution)):
                 substitution_list.append((var_unique[i], substitution[i]))
-            theta_list.append(substitution_list)
+            if substitution_list not in theta_list:
+                theta_list.append(substitution_list)
         return theta_list
 
     # taking constant modes to reduce the number of substitutions

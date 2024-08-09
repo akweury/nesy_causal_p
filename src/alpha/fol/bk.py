@@ -1,15 +1,12 @@
 # Created by shaji at 24/06/2024
 predicate_target = "target:1:pattern,+"
 predicate_has_fm = "has:2:feature_map,-;pattern,+"
-predicate_phi = "phi:3:feature_map,+;feature_map,+;phi,#"
-predicate_rho = "rho:3:feature_map,+;feature_map,+;rho,#"
+predicate_phi = "phi:4:feature_map,+;feature_map,+;phi,#;pattern,+"
+predicate_rho = "rho:4:feature_map,+;feature_map,+;rho,#;pattern,+"
 
 # dtype:
 variable = {
-    'in_pattern': "I",
-    "out_pattern": "O",
-    "input_group": "A",
-    "output_group": "B",
+    "feature_map": "FM",
     'pattern': "I"
 }
 neural_p = {
@@ -22,8 +19,8 @@ neural_p = {
     # 'repeat': 'repeat:2:group,+;group,+'
 }
 
-ig_dtype = "input_group,+"
-og_dtype = "output_group,+"
+# ig_dtype = "input_group,+"
+# og_dtype = "output_group,+"
 
 const_dict = {
     'pattern,+': "pattern",
@@ -33,18 +30,19 @@ const_dict = {
 
 }
 
-color = [f'color_{i}' for i in range(1, 11)]
-scale = [f'scale_{i}' for i in range(1, 11)]
+# color = [f'color_{i}' for i in range(1, 11)]
+# scale = [f'scale_{i}' for i in range(1, 11)]
 # shape = ['line', 'rectangle']
 
-attr_names = ['color', 'shape', 'scale', 'rho', 'phi',
-              'group_shape', "slope", 'number']
+attr_names = ['rho', 'phi']
 
-inv_p_head = {
-    "input": "inv_i_p",
-    "output": "inv_o_p",
-    "input_output": "inv_io_p"
-}
+# inv_p_head = {
+#     "input": "inv_i_p",
+#     "output": "inv_o_p",
+#     "input_output": "inv_io_p"
+# }
 
 neighbor_4 = [(-1, 0), (0, -1), (0, 1), (1, 0)]
 neighbor_8 = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
+
+mode_excluded_preds = ["target"]

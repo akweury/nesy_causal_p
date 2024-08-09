@@ -365,6 +365,7 @@ def extract_fm(data, window_size=3, stride=1):
         patches_tensor = image.unfold(1, window_size, 1).unfold(2, window_size, 1)
         # Reshape to get the patches in the desired format
         patches_tensor = patches_tensor.contiguous().view(-1, window_size, window_size).unique(dim=0)
+        patches_tensor = patches_tensor[patches_tensor.sum(-1).sum(-1) != 0]
         patches.append(patches_tensor)
 
     patches = torch.cat(patches, dim=0).unique(dim=0)
@@ -375,11 +376,9 @@ def learn_fm(args, train_loader, val_loader):
     num_epochs = 100
 
     for images, labels in train_loader:
-
         # for i in range(len(images)):
         #     img = visual_utils.patch2img(images[i].squeeze().to(torch.uint8).tolist())
         #     file_name = str(config.output / f"kp_sy_{args.exp_name}" / f"input_{i}.png")
         #     cv2.imwrite(file_name, img)
 
         fms = extract_fm(images.to(args.device))
-

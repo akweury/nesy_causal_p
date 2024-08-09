@@ -10,8 +10,8 @@ from .fol import language
 from .fol import refinement
 
 
-def init_ilp(args, variable_num):
-    lang = language.Language(args.variable_symbol, variable_num, args.lark_path,
+def init_ilp(args, fms, variable_num):
+    lang = language.Language(fms, args.variable_symbol, variable_num, args.lark_path,
                              args.fm_num, args.phi_num, args.rho_num)
     return lang
 
@@ -100,17 +100,42 @@ def beam_search(args, lang, C, FC, objs, raw_data):
             break
         else:
             clauses = pruned_c
-
+    print(f"Target Clauses Num : {len(clauses)}")
     return clauses
+
+
+def remove_trivial_atoms(args, lang, FC, clauses, objs, data):
+    lang.trivial_atom_terms = []
+    # clause extension
+    clauses = extension(args, lang, clauses)
+    NSFR = nsfr.get_nsfr_model(args, lang, FC, clauses)
+    target_preds = list(set([c.head.pred.name for c in clauses]))
+    # clause evaluation
+    img_scores, clause_scores = evaluation(args, NSFR, target_preds, objs, data)
+    trivial_c = [clauses[i] for i in range(len(clause_scores)) if clause_scores[i] < args.th_inv_nc]
+    trivial_atom_terms = []
+    for c in trivial_c:
+        trivial_atom_terms.append(c.body[0].terms[:-1])
+    lang.trivial_atom_terms = trivial_atom_terms
+
+    non_trivial_atoms = []
+    for atom in lang.atoms:
+        if len(atom.terms) <= 1:
+            non_trivial_atoms.append(atom)
+        elif atom.terms[:-1] not in trivial_atom_terms:
+            non_trivial_atoms.append(atom)
+
+    return non_trivial_atoms
 
 
 def alpha(args, fms, images):
     clauses = []
     for obj_num in range(2, args.max_obj_num):
-        args.fm_num = 5
-        lang = init_ilp(args, obj_num)
+        args.fm_num = len(fms)
+        lang = init_ilp(args, fms, obj_num)
         C = lang.reset_lang()
         VM = valuation.get_valuation_module(args, lang)
         FC = facts_converter.FactsConverter(args, lang, VM)
+        lang.atoms = remove_trivial_atoms(args, lang, FC, C, fms, images)
         clauses = beam_search(args, lang, C, FC, fms, images)
     return clauses

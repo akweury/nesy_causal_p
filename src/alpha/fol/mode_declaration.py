@@ -1,7 +1,7 @@
 # Created by jing at 25.06.24
 import config
 from .logic import *
-
+from . import bk
 
 class ModeDeclaration(object):
     """from https://www.cs.ox.ac.uk/activities/programinduction/Aleph/aleph.html
@@ -100,6 +100,8 @@ def get_mode_data(dtypes, g_num):
 def get_mode_declarations_bk(preds, g_num):
     modeb_list = []
     for pred in preds:
+        if pred.name in bk.mode_excluded_preds:
+            continue
         pred_name = pred.name
         dtypes = pred.dtypes
         mode_terms, recall = get_mode_data(dtypes, g_num)

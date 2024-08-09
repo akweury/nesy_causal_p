@@ -6,6 +6,7 @@ import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 from collections import defaultdict
 from skimage.transform import hough_line, hough_line_peaks
+import math
 
 import config
 from .fol import bk
@@ -32,7 +33,6 @@ class FCNNValuationModule(nn.Module):
         self.layers, self.vfs = self.init_valuation_functions(device)
         # attr_term -> vector representation dic
         self.attrs = self.init_attr_encodings(device)
-
 
     def init_valuation_functions(self, device):
         """
@@ -66,10 +66,11 @@ class FCNNValuationModule(nn.Module):
             for term in self.lang.get_by_dtype_name(dtype_name):
                 term_index = torch.tensor(self.lang.term_index(term)).to(device)
                 num_cls = len(self.lang.get_by_dtype_name(dtype_name))
-                attrs[term] = F.one_hot(term_index, num_classes=num_cls).to(device)
+                # attrs[term] = F.one_hot(term_index, num_classes=num_cls).to(device)
+                attrs[term] = [term_index, num_cls]
         return attrs
 
-    def forward(self, zs, atom):
+    def forward(self, zs, raw_data, atom):
         """Convert the object-centric representation to a valuation tensor.
 
             Args:
@@ -80,13 +81,13 @@ class FCNNValuationModule(nn.Module):
                 A batch of the probabilities of the target atom.
         """
         if atom.pred.name in self.vfs:
-            args = [self.ground_to_tensor(term, zs) for term in atom.terms]
+            args = [self.ground_to_tensor(term, zs, raw_data) for term in atom.terms]
             # call valuation function
             return self.vfs[atom.pred.name](*args)
         else:
             return torch.zeros((1,)).to(torch.float32).to(self.device)
 
-    def ground_to_tensor(self, term, data):
+    def ground_to_tensor(self, term, data, raw_data):
         """Ground terms into tensor representations.
 
             Args:
@@ -97,21 +98,17 @@ class FCNNValuationModule(nn.Module):
                 The tensor representation of the input term.
         """
         term_index = self.lang.term_index(term)
-        if term.dtype.name == 'input_group':
+        if term.dtype.name == 'feature_map':
             # return the coding of the group
-            group_data = data["input_groups"][term_index]
-            return group_data
-        elif term.dtype.name == "output_group":
-            group_data = data["output_groups"][term_index]
+            group_data = data[term_index]
             return group_data
         elif term.dtype.name in bk.attr_names:
             # return the standard attribute code
-            return self.attrs[term].unsqueeze(0)
-        elif term.dtype.name == 'in_pattern':
-            group_data = data['input_groups']
-            return group_data
-        elif term.dtype.name == 'out_pattern':
-            group_data = data['output_groups']
+
+            return self.attrs[term]
+        elif term.dtype.name == 'pattern':
+            # return the image
+            group_data = raw_data
             return group_data
         else:
             raise ValueError("Invalid datatype of the given term: " + str(term) + ':' + term.dtype.name)
@@ -376,7 +373,7 @@ class VFHasFM(nn.Module):
         super(VFHasFM, self).__init__()
         self.name = name
 
-    def forward(self, fm, domain):
+    def forward(self, fm, images):
         """
         Args:
             z (tensor): 2-d tensor (B * D), the object-centric representation.
@@ -387,8 +384,18 @@ class VFHasFM(nn.Module):
         Returns:
             A batch of probabilities.
         """
-        prob = 1
-        return prob
+        fm_existence = torch.zeros(images.shape[0])
+        window_size = fm.shape[0]
+        for img_i, image in enumerate(images):
+            # Use unfold to create patches
+            patches_tensor = image.unfold(1, window_size, 1).unfold(2, window_size, 1)
+            # Reshape to get the patches in the desired format
+            patches_tensor = patches_tensor.contiguous().view(-1, window_size, window_size).unique(dim=0)
+            comparison = patches_tensor == fm
+            all_equal = comparison.all(dim=(1, 2))
+            fm_existence[img_i] = all_equal.sum()
+
+        return fm_existence
 
 
 class VFRho(nn.Module):
@@ -400,48 +407,95 @@ class VFRho(nn.Module):
 
         self.name = name
 
-    def forward(self, z_1, z_2, dist_grade):
-        """
-        Args:
-            z_1 (tensor): 2-d tensor (B * D), the object-centric representation.
-                [x1, y1, x2, y2, color1, color2, color3,
-                    shape1, shape2, shape3, objectness]
-            z_2 (tensor): 2-d tensor (B * D), the object-centric representation.
-                [x1, y1, x2, y2, color1, color2, color3,
-                    shape1, shape2, shape3, objectness]
+    def find_submatrix(self, matrix, submatrix):
 
-        Returns:
-            A batch of probabilities.
-        """
-        c_1 = self.to_center(z_1)
-        c_2 = self.to_center(z_2)
+        # The 3x3 submatrix will act as the convolution kernel
+        kernel = submatrix.unsqueeze(0).unsqueeze(0)  # Shape (1, 1, 3, 3)
 
-        dir_vec = c_2 - c_1
-        dir_vec[1] = -dir_vec[1]
-        rho, phi = self.cart2pol(dir_vec[0], dir_vec[1])
-        dist_id = torch.zeros(rho.shape)
+        # Perform 2D convolution to find matches
+        # Use F.conv2d with stride=1 and no padding
+        conv_output = F.conv2d(matrix.unsqueeze(0).unsqueeze(0), kernel)
 
-        dist_grade_num = dist_grade.shape[1]
-        grade_weight = 1 / dist_grade_num
-        for i in range(1, dist_grade_num):
-            threshold = grade_weight * i
-            dist_id[rho >= threshold] = i
+        # Sum of all elements in the 3x3 submatrix
+        target_value = submatrix.sum()
 
-        dist_pred = torch.zeros(dist_grade.shape).to(dist_grade.device)
-        for i in range(dist_pred.shape[0]):
-            dist_pred[i, int(dist_id[i])] = 1
+        # Find positions where the convolution output equals the target value
+        match_positions = torch.nonzero(conv_output == target_value, as_tuple=False)
+        # Adjust positions to reflect the top-left corner in the original 64x64 matrix
+        match_positions = match_positions[:, 2:]  # Drop the batch and channel dimensions
+        return match_positions  # Return None if not found
 
-        return (dist_grade * dist_pred).sum(dim=1)
+    def relative_distance(self, pos1, pos2):
+        # Calculate the vector from pos1 to pos2
 
-    def cart2pol(self, x, y):
-        rho = torch.sqrt(x ** 2 + y ** 2)
-        phi = torch.atan2(y, x)
-        phi = torch.rad2deg(phi)
-        return (rho, phi)
+        points1 = pos1.unsqueeze(1)  # Shape (n1, 1, 2)
+        points2 = pos2.unsqueeze(0)  # Shape (1, n2, 2)
 
-    def to_center(self, z):
-        return torch.stack((z[:, 0], z[:, 2]))
+        # Compute the pairwise differences using broadcasting
+        differences = points2 - points1  # Shape (n1, n2, 2)
+        distance = (differences[:, :, 0] ** 2 + differences[:, :, 1] ** 2) ** 0.5
+        return distance
 
+    def forward(self, fm1, fm2, index, images):
+
+        # Find positions of the 3x3 matrices
+        width = images.shape[-1]
+        error_tolerance = int(width / index[1])
+        target_distance = int(index[0] / index[1] * width)
+        pred = torch.zeros(len(images))
+        cover_tiles = torch.zeros(images.shape)
+        for img_i, image in enumerate(images):
+            pos1 = self.find_submatrix(images[img_i].squeeze(), fm1)
+            pos2 = self.find_submatrix(images[img_i].squeeze(), fm2)
+            if len(pos1) > 0 and len(pos2) > 0:
+                # pos1 = torch.tensor(pos1)
+                # pos2 = torch.tensor(pos2)
+                actual_distance = self.relative_distance(pos1, pos2)
+                in_range = torch.abs(target_distance - actual_distance) < error_tolerance
+                pred[img_i] = in_range.sum() > 0
+        return pred, cover_tiles
+    #
+    # def forward(self, z_1, z_2, dist_grade, images):
+    #     """
+    #     Args:
+    #         z_1 (tensor): 2-d tensor (B * D), the object-centric representation.
+    #             [x1, y1, x2, y2, color1, color2, color3,
+    #                 shape1, shape2, shape3, objectness]
+    #         z_2 (tensor): 2-d tensor (B * D), the object-centric representation.
+    #             [x1, y1, x2, y2, color1, color2, color3,
+    #                 shape1, shape2, shape3, objectness]
+    #
+    #     Returns:
+    #         A batch of probabilities.
+    #     """
+    #     c_1 = self.to_center(z_1)
+    #     c_2 = self.to_center(z_2)
+    #
+    #     dir_vec = c_2 - c_1
+    #     dir_vec[1] = -dir_vec[1]
+    #     rho, phi = self.cart2pol(dir_vec[0], dir_vec[1])
+    #     dist_id = torch.zeros(rho.shape)
+    #
+    #     dist_grade_num = dist_grade.shape[1]
+    #     grade_weight = 1 / dist_grade_num
+    #     for i in range(1, dist_grade_num):
+    #         threshold = grade_weight * i
+    #         dist_id[rho >= threshold] = i
+    #
+    #     dist_pred = torch.zeros(dist_grade.shape).to(dist_grade.device)
+    #     for i in range(dist_pred.shape[0]):
+    #         dist_pred[i, int(dist_id[i])] = 1
+    #
+    #     return (dist_grade * dist_pred).sum(dim=1)
+    #
+    # def cart2pol(self, x, y):
+    #     rho = torch.sqrt(x ** 2 + y ** 2)
+    #     phi = torch.atan2(y, x)
+    #     phi = torch.rad2deg(phi)
+    #     return (rho, phi)
+    #
+    # def to_center(self, z):
+    #     return torch.stack((z[:, 0], z[:, 2]))
 
 
 class VFPhi(nn.Module):
@@ -452,29 +506,85 @@ class VFPhi(nn.Module):
         super(VFPhi, self).__init__()
         self.name = name
 
-    def forward(self, z_1, z_2, dir):
+    def find_submatrix(self, matrix, submatrix):
 
-        c_1 = self.to_center(z_1)
-        c_2 = self.to_center(z_2)
+        # n, m = matrix.shape
+        # p, q = submatrix.shape
+        # positions = []
 
-        round_divide = dir.shape[1]
-        area_angle = int(360 / round_divide)
-        area_angle_half = area_angle * 0.5
-        # area_angle_half = 0
-        dir_vec = c_2 - c_1
-        dir_vec[1] = -dir_vec[1]
-        rho, phi = self.cart2pol(dir_vec[0], dir_vec[1])
-        phi_clock_shift = (90 - phi.long()) % 360
-        zone_id = (phi_clock_shift + area_angle_half) // area_angle % round_divide
+        # The 3x3 submatrix will act as the convolution kernel
+        kernel = submatrix.unsqueeze(0).unsqueeze(0)  # Shape (1, 1, 3, 3)
 
-        # This is a threshold, but it can be decided automatically.
-        # zone_id[rho >= 0.12] = zone_id[rho >= 0.12] + round_divide
+        # Perform 2D convolution to find matches
+        # Use F.conv2d with stride=1 and no padding
+        conv_output = F.conv2d(matrix.unsqueeze(0).unsqueeze(0), kernel)
 
-        dir_pred = torch.zeros(dir.shape).to(dir.device)
-        for i in range(dir_pred.shape[0]):
-            dir_pred[i, int(zone_id[i])] = 1
+        # Sum of all elements in the 3x3 submatrix
+        target_value = submatrix.sum()
 
-        return (dir * dir_pred).sum(dim=1)
+        # Find positions where the convolution output equals the target value
+        match_positions = torch.nonzero(conv_output == target_value, as_tuple=False)
+        # Adjust positions to reflect the top-left corner in the original 64x64 matrix
+        match_positions = match_positions[:, 2:]  # Drop the batch and channel dimensions
+
+        return match_positions  # Return None if not found
+
+    def relative_direction_in_degrees(self, pos1, pos2):
+        # Calculate the vector from pos1 to pos2
+
+        points1 = pos1.unsqueeze(1)  # Shape (n1, 1, 2)
+        points2 = pos2.unsqueeze(0)  # Shape (1, n2, 2)
+
+        # Compute the pairwise differences using broadcasting
+        differences = points2 - points1  # Shape (n1, n2, 2)
+
+        # vector = torch.cat((pos2[:, 0:1] - pos1[:, 0:1], pos2[:, 1:] - pos1[:, 1:]), dim=1)
+        # Calculate the angle in radians with respect to the positive x-axis
+        angle_radians = torch.atan2(differences[:, :, 0], differences[:, :, 1])
+        # Convert radians to degrees
+
+        angle_degrees = torch.rad2deg(angle_radians)
+        # Normalize the angle to [0, 360) degrees
+        angle_degrees[angle_degrees < 0] = angle_degrees[angle_degrees < 0] + 360
+        return angle_degrees
+
+    def forward(self, fm1, fm2, index, images):
+
+        # Find positions of the 3x3 matrices
+        error_tolerance = int(360 / index[1])
+        dir = int(index[0] / index[1] * 360)
+        pred = torch.zeros(len(images))
+        for img_i, image in enumerate(images):
+            pos1 = self.find_submatrix(images[img_i].squeeze(), fm1)
+            pos2 = self.find_submatrix(images[img_i].squeeze(), fm2)
+            if len(pos1) > 0 and len(pos2) > 0:
+                # pos1 = torch.tensor(pos1)
+                # pos2 = torch.tensor(pos2)
+                angle = self.relative_direction_in_degrees(pos1, pos2)
+                in_range = torch.abs(angle - dir) < error_tolerance
+                pred[img_i] = in_range.sum() > 0
+        return pred
+        # c_1 = self.to_center(fm1)
+        # c_2 = self.to_center(fm2)
+        #
+        # round_divide = dir.shape[1]
+        # area_angle = int(360 / round_divide)
+        # area_angle_half = area_angle * 0.5
+        # # area_angle_half = 0
+        # dir_vec = c_2 - c_1
+        # dir_vec[1] = -dir_vec[1]
+        # rho, phi = self.cart2pol(dir_vec[0], dir_vec[1])
+        # phi_clock_shift = (90 - phi.long()) % 360
+        # zone_id = (phi_clock_shift + area_angle_half) // area_angle % round_divide
+        #
+        # # This is a threshold, but it can be decided automatically.
+        # # zone_id[rho >= 0.12] = zone_id[rho >= 0.12] + round_divide
+        #
+        # dir_pred = torch.zeros(dir.shape).to(dir.device)
+        # for i in range(dir_pred.shape[0]):
+        #     dir_pred[i, int(zone_id[i])] = 1
+        #
+        # return (dir * dir_pred).sum(dim=1)
 
     def cart2pol(self, x, y):
         rho = torch.sqrt(x ** 2 + y ** 2)
@@ -484,7 +594,6 @@ class VFPhi(nn.Module):
 
     def to_center(self, z):
         return torch.stack((z[:, 0], z[:, 2]))
-
 
 
 class VFRepeat(nn.Module):
@@ -545,7 +654,7 @@ class VFRepeat(nn.Module):
 
 def get_valuation_module(args, lang):
     pred_funs = [
-        VFHasFM('hasFM'),
+        VFHasFM('has'),
         VFRho('rho'),
         VFPhi('phi')
     ]
