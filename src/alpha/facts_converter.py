@@ -55,6 +55,9 @@ class FactsConverter(nn.Module):
         example_num = raw_data.shape[0]
         # evaluate value of each atom
         V = torch.zeros((example_num, len(atoms))).to(torch.float32).to(self.device)
+        # A is the covered area of each atom
+        A = torch.zeros((example_num, len(atoms))).to(self.device)
+
         for i, atom in tqdm(enumerate(atoms), desc="Evaluating atoms..."):
             # this atom is a neural predicate
             if type(atom.pred) == NeuralPredicate and i > 1:
@@ -76,7 +79,7 @@ class FactsConverter(nn.Module):
             #     V[:, i] += value
 
         V[:, 1] = torch.ones((example_num,)).to(torch.float32).to(self.device)
-        return V
+        return V, A
 
 
 def convert_i(self, zs, G):

@@ -76,6 +76,7 @@ class ShapeDataset(Dataset):
 
         self.image_paths = []
         self.labels = []
+        self.device = args.device
         for data_type in args.data_types:
             folder = config.kp_dataset / data_type / "train" / "true"
             imgs = file_utils.get_all_files(folder, "png", False)
@@ -97,8 +98,8 @@ class ShapeDataset(Dataset):
     def __getitem__(self, idx):
         file_name, file_extension = self.image_paths[idx].split(".")
         data = file_utils.load_json(f"{file_name}.json")
-        patch = data_utils.oco2patch(data).unsqueeze(0)
-        label = self.labels[idx]
+        patch = data_utils.oco2patch(data).unsqueeze(0).to(self.device)
+        label = self.labels[idx].to(self.device)
         return patch, label
 
 

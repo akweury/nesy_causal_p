@@ -28,6 +28,12 @@ def get_unused_args(c):
     return unused_args, used_args
 
 
+def sub_lists(lst):
+    # Generate all non-empty sublists
+    sublists = [lst[i:j] for i in range(len(lst)) for j in range(i + 1, len(lst) + 1)]
+    return sublists
+
+
 class Language(object):
     """Language of first-order logic.
 
@@ -191,10 +197,18 @@ class Language(object):
             consts_list = [self.get_by_dtype(dtype) for dtype in dtypes]
             # if pred.pi_type == "clu_pred":
             #     consts_list = [[atom.terms[0]] for atom in pred.body[0]]
-            args_list = list(set(itertools.product(*consts_list)))
+            if pred.name == bk.predicate_has_fm.split(":")[0]:
+                consts_has = consts_list[0]
+                subsets = []
+                for r in range(1, len(consts_has) + 1):
+                    subset = itertools.combinations(consts_has, r)
+                    subsets.extend(subset)
+                args_list = [(subset, consts_list[1][0]) for subset in subsets]
+            else:
+                args_list = list(set(itertools.product(*consts_list)))
+
             for args in args_list:
-                if len(args) == 1 or len(set(args)) == len(args):
-                    atoms.append(Atom(pred, args))
+                atoms.append(Atom(pred, args))
 
         self.atoms = spec_atoms + sorted(atoms)  # + sorted(bk_pi_atoms) + sorted(pi_atoms)
 

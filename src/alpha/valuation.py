@@ -64,7 +64,7 @@ class FCNNValuationModule(nn.Module):
         attrs = {}
         for dtype_name in attr_names:
             for term in self.lang.get_by_dtype_name(dtype_name):
-                term_index = torch.tensor(self.lang.term_index(term)).to(device)
+                term_index = torch.tensor(self.lang.term_index(term)).tolist()
                 num_cls = len(self.lang.get_by_dtype_name(dtype_name))
                 # attrs[term] = F.one_hot(term_index, num_classes=num_cls).to(device)
                 attrs[term] = [term_index, num_cls]
@@ -85,7 +85,7 @@ class FCNNValuationModule(nn.Module):
             # call valuation function
             return self.vfs[atom.pred.name](*args)
         else:
-            return torch.zeros((1,)).to(torch.float32).to(self.device)
+            return torch.zeros(1).to(self.device)
 
     def ground_to_tensor(self, term, data, raw_data):
         """Ground terms into tensor representations.
@@ -97,8 +97,17 @@ class FCNNValuationModule(nn.Module):
             Return:
                 The tensor representation of the input term.
         """
-        term_index = self.lang.term_index(term)
-        if term.dtype.name == 'feature_map':
+        if isinstance(term, tuple):
+            group_data = []
+            for t in term:
+                if t.dtype.name != 'feature_map':
+                    raise ValueError
+                term_index = self.lang.term_index(t)
+                # return the coding of the group
+                group_data.append(data[term_index].unsqueeze(0))
+            return torch.cat(group_data, dim=0)
+        elif term.dtype.name == 'feature_map':
+            term_index = self.lang.term_index(term)
             # return the coding of the group
             group_data = data[term_index]
             return group_data
@@ -373,7 +382,7 @@ class VFHasFM(nn.Module):
         super(VFHasFM, self).__init__()
         self.name = name
 
-    def forward(self, fm, images):
+    def forward(self, fms, images):
         """
         Args:
             z (tensor): 2-d tensor (B * D), the object-centric representation.
@@ -384,16 +393,21 @@ class VFHasFM(nn.Module):
         Returns:
             A batch of probabilities.
         """
+        img_width = images[0].squeeze().shape[0]
         fm_existence = torch.zeros(images.shape[0])
-        window_size = fm.shape[0]
         for img_i, image in enumerate(images):
-            # Use unfold to create patches
-            patches_tensor = image.unfold(1, window_size, 1).unfold(2, window_size, 1)
-            # Reshape to get the patches in the desired format
-            patches_tensor = patches_tensor.contiguous().view(-1, window_size, window_size).unique(dim=0)
-            comparison = patches_tensor == fm
-            all_equal = comparison.all(dim=(1, 2))
-            fm_existence[img_i] = all_equal.sum()
+            covered_area_or = torch.zeros((img_width - 2, img_width - 2), dtype=torch.bool).to(image.device)
+            for fm in fms:
+                covered_area = data_utils.find_submatrix(images[img_i].squeeze(), fm)
+                covered_area_or = torch.logical_or(covered_area, covered_area_or)
+
+            image_convolved = F.conv2d(images[img_i].unsqueeze(0),
+                                       data_utils.create_identity_kernel(len(fm)), padding=0)
+
+            non_zero_mask = data_utils.find_submatrix(images[img_i].squeeze(), torch.ones_like(fm).to(fm.device))
+
+            if torch.all(covered_area_or == non_zero_mask):
+                fm_existence[img_i] = 1
 
         return fm_existence
 
@@ -407,24 +421,6 @@ class VFRho(nn.Module):
 
         self.name = name
 
-    def find_submatrix(self, matrix, submatrix):
-
-        # The 3x3 submatrix will act as the convolution kernel
-        kernel = submatrix.unsqueeze(0).unsqueeze(0)  # Shape (1, 1, 3, 3)
-
-        # Perform 2D convolution to find matches
-        # Use F.conv2d with stride=1 and no padding
-        conv_output = F.conv2d(matrix.unsqueeze(0).unsqueeze(0), kernel)
-
-        # Sum of all elements in the 3x3 submatrix
-        target_value = submatrix.sum()
-
-        # Find positions where the convolution output equals the target value
-        match_positions = torch.nonzero(conv_output == target_value, as_tuple=False)
-        # Adjust positions to reflect the top-left corner in the original 64x64 matrix
-        match_positions = match_positions[:, 2:]  # Drop the batch and channel dimensions
-        return match_positions  # Return None if not found
-
     def relative_distance(self, pos1, pos2):
         # Calculate the vector from pos1 to pos2
 
@@ -436,23 +432,30 @@ class VFRho(nn.Module):
         distance = (differences[:, :, 0] ** 2 + differences[:, :, 1] ** 2) ** 0.5
         return distance
 
-    def forward(self, fm1, fm2, index, images):
-
+    def forward(self, fm1, fm2, valid_attr, images):
         # Find positions of the 3x3 matrices
-        width = images.shape[-1]
-        error_tolerance = int(width / index[1])
-        target_distance = int(index[0] / index[1] * width)
+        # width = images.shape[-1]
+        # error_tolerance = int(width / index[1])
+        # target_distance = int(index[0] / index[1] * width)
         pred = torch.zeros(len(images))
-        cover_tiles = torch.zeros(images.shape)
+        cover_tiles = torch.zeros(images.shape).squeeze()
+        valid_min = valid_attr[0] / valid_attr[1]
+        valid_max = (valid_attr[0] + 1) / valid_attr[1]
         for img_i, image in enumerate(images):
-            pos1 = self.find_submatrix(images[img_i].squeeze(), fm1)
-            pos2 = self.find_submatrix(images[img_i].squeeze(), fm2)
-            if len(pos1) > 0 and len(pos2) > 0:
-                # pos1 = torch.tensor(pos1)
-                # pos2 = torch.tensor(pos2)
-                actual_distance = self.relative_distance(pos1, pos2)
-                in_range = torch.abs(target_distance - actual_distance) < error_tolerance
-                pred[img_i] = in_range.sum() > 0
+            mask_1 = data_utils.find_submatrix(images[img_i].squeeze(), fm1)
+            mask_2 = data_utils.find_submatrix(images[img_i].squeeze(), fm2)
+            # Apply the mappings
+
+            value = data_utils.cosine_similarity_mapping(mask_1, mask_2).item()
+            pred[img_i] = valid_min <= value < valid_max
+            cover_tiles[img_i] = torch.logical_or(mask_1, mask_2)
+            # if matches_1.sum() > 0 and matches_2.sum() > 0:
+            # pos1 = torch.tensor(pos1)
+            # pos2 = torch.tensor(pos2)
+            # actual_distance = self.relative_distance(pos1, pos2)
+            # in_range = torch.abs(target_distance - actual_distance) < error_tolerance
+            # pred[img_i] = in_range.sum() > 0
+
         return pred, cover_tiles
     #
     # def forward(self, z_1, z_2, dist_grade, images):
@@ -506,29 +509,6 @@ class VFPhi(nn.Module):
         super(VFPhi, self).__init__()
         self.name = name
 
-    def find_submatrix(self, matrix, submatrix):
-
-        # n, m = matrix.shape
-        # p, q = submatrix.shape
-        # positions = []
-
-        # The 3x3 submatrix will act as the convolution kernel
-        kernel = submatrix.unsqueeze(0).unsqueeze(0)  # Shape (1, 1, 3, 3)
-
-        # Perform 2D convolution to find matches
-        # Use F.conv2d with stride=1 and no padding
-        conv_output = F.conv2d(matrix.unsqueeze(0).unsqueeze(0), kernel)
-
-        # Sum of all elements in the 3x3 submatrix
-        target_value = submatrix.sum()
-
-        # Find positions where the convolution output equals the target value
-        match_positions = torch.nonzero(conv_output == target_value, as_tuple=False)
-        # Adjust positions to reflect the top-left corner in the original 64x64 matrix
-        match_positions = match_positions[:, 2:]  # Drop the batch and channel dimensions
-
-        return match_positions  # Return None if not found
-
     def relative_direction_in_degrees(self, pos1, pos2):
         # Calculate the vector from pos1 to pos2
 
@@ -548,43 +528,31 @@ class VFPhi(nn.Module):
         angle_degrees[angle_degrees < 0] = angle_degrees[angle_degrees < 0] + 360
         return angle_degrees
 
-    def forward(self, fm1, fm2, index, images):
-
+    def forward(self, fm1, fm2, valid_attr, images):
         # Find positions of the 3x3 matrices
-        error_tolerance = int(360 / index[1])
-        dir = int(index[0] / index[1] * 360)
-        pred = torch.zeros(len(images))
+        # error_tolerance = int(360 / index[1])
+        # dir = int(index[0] / index[1] * 360)
+        pred = torch.zeros(len(images)).to(fm1.device)
+        # cover_tiles = torch.zeros(images.shape).squeeze()
+        valid_min = valid_attr[0] / valid_attr[1]
+        valid_max = (valid_attr[0] + 1) / valid_attr[1]
+        mask_values = torch.zeros(len(images)).to(fm1.device)
         for img_i, image in enumerate(images):
-            pos1 = self.find_submatrix(images[img_i].squeeze(), fm1)
-            pos2 = self.find_submatrix(images[img_i].squeeze(), fm2)
-            if len(pos1) > 0 and len(pos2) > 0:
-                # pos1 = torch.tensor(pos1)
-                # pos2 = torch.tensor(pos2)
-                angle = self.relative_direction_in_degrees(pos1, pos2)
-                in_range = torch.abs(angle - dir) < error_tolerance
-                pred[img_i] = in_range.sum() > 0
-        return pred
-        # c_1 = self.to_center(fm1)
-        # c_2 = self.to_center(fm2)
-        #
-        # round_divide = dir.shape[1]
-        # area_angle = int(360 / round_divide)
-        # area_angle_half = area_angle * 0.5
-        # # area_angle_half = 0
-        # dir_vec = c_2 - c_1
-        # dir_vec[1] = -dir_vec[1]
-        # rho, phi = self.cart2pol(dir_vec[0], dir_vec[1])
-        # phi_clock_shift = (90 - phi.long()) % 360
-        # zone_id = (phi_clock_shift + area_angle_half) // area_angle % round_divide
-        #
-        # # This is a threshold, but it can be decided automatically.
-        # # zone_id[rho >= 0.12] = zone_id[rho >= 0.12] + round_divide
-        #
-        # dir_pred = torch.zeros(dir.shape).to(dir.device)
-        # for i in range(dir_pred.shape[0]):
-        #     dir_pred[i, int(zone_id[i])] = 1
-        #
-        # return (dir * dir_pred).sum(dim=1)
+            mask_1 = data_utils.find_submatrix(images[img_i].squeeze(), fm1)
+            mask_2 = data_utils.find_submatrix(images[img_i].squeeze(), fm2)
+
+            value = data_utils.dot_product_sigmoid_mapping(mask_1, mask_2).item()
+            pred[img_i] = valid_min <= value < valid_max
+            mask_values[img_i] = data_utils.matrix_to_value(torch.logical_or(mask_1, mask_2))
+            # if len(pos1) > 0 and len(pos2) > 0:
+            # pos1 = torch.tensor(pos1)
+            # pos2 = torch.tensor(pos2)
+            # angle = self.relative_direction_in_degrees(pos1, pos2)
+            # in_range = torch.abs(angle - dir) < error_tolerance
+            # pred[img_i] = in_range.sum() > 0
+            # cover_tiles[img_i] = (covered_area_1 + mask_2) / ((covered_area_1 + mask_2) + 1e-20)
+
+        return pred, mask_values
 
     def cart2pol(self, x, y):
         rho = torch.sqrt(x ** 2 + y ** 2)

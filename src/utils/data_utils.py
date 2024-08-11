@@ -1,7 +1,10 @@
 # Created by shaji at 21/06/2024
 
 import numpy as np
+
 import torch
+import torch.nn as nn
+from torch.nn import functional as F
 
 
 def data2patch(data):
@@ -144,3 +147,103 @@ def patch2info_patch(matrix):
             expanded_matrix[3 * i:3 * i + 3, 3 * j:3 * j + 3] = patch
 
     return torch.from_numpy(expanded_matrix).unsqueeze(0).to(dtype=torch.float)
+
+
+def create_identity_kernel(n):
+    # Create an nxn kernel with all zeros
+    identity_kernel = torch.zeros((1, 1, n, n), dtype=torch.float32)
+
+    # Set the center value to 1
+    identity_kernel[0, 0, n // 2, n // 2] = 1
+
+    return identity_kernel
+
+
+def find_submatrix(matrix_64x64, matrix_3x3):
+    # Expand the 3x3 matrix to have the same dimensions as the 64x64 matrix for convolution
+    kernel = matrix_3x3.unsqueeze(0).unsqueeze(0)  # Shape: (1, 1, 3, 3)
+
+    # Perform a convolution over the 64x64 matrix with the 3x3 matrix as the kernel
+    # Use F.conv2d with padding=0 to slide the kernel over the matrix without padding
+    matrix_64x64 = matrix_64x64.unsqueeze(0).unsqueeze(0)
+    convolved = F.conv2d(matrix_64x64, kernel, padding=0)
+
+    # Create a comparison mask by comparing the convolution result with the sum of elements in the 3x3 matrix
+    target_sum = torch.sum(matrix_3x3)
+    match_mask = (convolved == target_sum).squeeze(0).squeeze(0)  # Shape: (62, 62)
+
+    return match_mask
+
+# Method 1: Cosine Similarity
+def cosine_similarity_mapping(A, B):
+    A_flat = A.view(-1)
+    B_flat = B.view(-1)
+    cosine_sim = F.cosine_similarity(A_flat, B_flat, dim=0)
+    # Scale cosine similarity from [-1, 1] to [0, 1]
+    return (cosine_sim + 1) / 2
+
+
+# Method 2: Element-wise Dot Product followed by Sigmoid
+def dot_product_sigmoid_mapping(A, B):
+    dot_product = torch.sum(A * B)
+    sigmoid_value = torch.sigmoid(dot_product)
+    return sigmoid_value
+
+
+# Method 3: Neural Network with Sigmoid Output
+class SimpleNN(nn.Module):
+    def __init__(self):
+        super(SimpleNN, self).__init__()
+        self.fc1 = nn.Linear(64 * 64 * 2, 1)
+
+    def forward(self, A, B):
+        x = torch.cat((A.view(-1), B.view(-1)), dim=0)
+        x = self.fc1(x)
+        x = torch.sigmoid(x)
+        return x
+
+
+def neural_network_mapping(A, B, model):
+    with torch.no_grad():
+        return model(A, B)
+
+
+# Method to map the matrix to a unique value
+def matrix_to_value(A):
+    width, height = A.shape[-2], A.shape[-1]
+    # Flatten the matrix and convert to a binary string
+    A_flat = A.view(-1)
+    binary_str = ''.join(A_flat.int().cpu().numpy().astype(str))
+
+    # Convert the binary string to an integer
+    value_int = int(binary_str, 2)
+
+    # Calculate the maximum possible value for a 64x64 binary matrix
+    max_value = 2 ** (width * height) - 1
+
+    # Normalize the integer to a value in the range [0, 1]
+    normalized_value = value_int / max_value
+
+    # Flatten the matrices to 1D
+
+    # Get the indices of 1s for each matrix in the batch
+    compressed = [torch.nonzero(A_flat).squeeze(1)]
+
+    return normalized_value
+
+
+# Method to recover the matrix from the unique value
+def value_to_matrix(value):
+    # Calculate the maximum possible value for a 64x64 binary matrix
+    max_value = 2 ** (64 * 64) - 1
+
+    # Convert the floating-point value back to the corresponding integer
+    value_int = int(value * max_value)
+
+    # Convert the integer back to a binary string
+    binary_str = bin(value_int)[2:].zfill(64 * 64)
+
+    # Convert the binary string to a 1D tensor and reshape it into a 64x64 matrix
+    matrix = torch.tensor([int(b) for b in binary_str], dtype=torch.float32).view(64, 64)
+
+    return matrix

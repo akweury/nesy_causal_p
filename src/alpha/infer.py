@@ -139,6 +139,41 @@ class ClauseFunction(nn.Module):
         return C
 
 
+class AreaFunction(nn.Module):
+    """
+    A class of the clause function.
+    """
+
+    def __init__(self, I_i, gamma=0.001):
+        super(AreaFunction, self).__init__()
+        # self.i = i  # clause index
+        self.I_i = I_i  # index tensor C * S * G, S is the number of possible substituions
+        self.L = I_i.size(-1)  # number of body atoms
+        self.S = I_i.size(-2)  # max number of possible substitutions
+        self.gamma = gamma
+
+    def forward(self, x):
+        batch_size = x.size(0)  # batch size
+        # B * G
+        V = x
+        # G * S * b
+        # I_i = self.I[self.i, :, :, :]
+
+        # B * G -> B * G * S * L
+        V_tild = V.unsqueeze(-1).unsqueeze(-1).repeat(1, 1, 1, 1, self.S, self.L)
+        # G * S * L -> B * G * S * L
+        width, height = x.shape[-2], x.shape[-1]
+        I_i_tild = self.I_i.repeat(batch_size, 1, 1, 1, width, height)
+
+        # B * G
+        gather_res = torch.gather(V_tild, 1, I_i_tild.to(torch.int64))
+        # prod_res = torch.prod(gather_res, 3)
+
+        prod_res = softand(gather_res, dim=3, gamma=self.gamma)
+        C = softor(prod_res, dim=2, gamma=self.gamma)
+        return C
+
+
 class InferModule(nn.Module):
     def __init__(self, I, infer_step, gamma=0.001, device=None, train=False, m=1, I_bk=None, I_pi=None):
         """
@@ -165,8 +200,9 @@ class InferModule(nn.Module):
                 # np.random.normal(size=(m, I.size(0))), requires_grad=True, dtype=torch.float32).to(device))
                 np.random.rand(m, I.size(0)), requires_grad=True, dtype=torch.float32).to(device))
         # clause functions
-        self.cs = [ClauseFunction(I[i], gamma=gamma)
-                   for i in range(self.I.size(0))]
+        self.cs = [ClauseFunction(I[i], gamma=gamma) for i in range(self.I.size(0))]
+        # area functions
+        self.area_funcs = [AreaFunction(I[i], gamma=gamma) for i in range(self.I.size(0))]
 
         if not I_bk is None:
             self.cs_bk = [ClauseFunction(I_bk[i], gamma=gamma) for i in range(self.I_bk.size(0))]
@@ -321,8 +357,9 @@ class ClauseInferModule(nn.Module):
             self.W = nn.Parameter(torch.Tensor(
                 np.random.normal(size=(m, I.size(0)))).to(device))
         # clause functions
-        self.cs = [ClauseFunction(I[i], gamma=gamma)
-                   for i in range(self.I.size(0))]
+        self.cs = [ClauseFunction(I[i], gamma=gamma) for i in range(self.I.size(0))]
+        # area functions
+        self.area_funs = [AreaFunction(I[i], gamma=gamma) for i in range(self.I.size(0))]
 
         if not self.I_bk is None:
             self.cs_bk = [ClauseFunction(I_bk[i], gamma=gamma)
@@ -337,7 +374,7 @@ class ClauseInferModule(nn.Module):
         assert m == self.C, "Invalid m and C: " + \
                             str(m) + ' and ' + str(self.C)
 
-    def forward(self, x, atoms):
+    def forward(self, x, area, atoms):
         """
         In the forward function we accept a Tensor of input data and we must return
         a Tensor of output data. We can use Modules defined in the constructor as
@@ -346,7 +383,7 @@ class ClauseInferModule(nn.Module):
         B = x.size(0)
         # C (clause number) * B (batch_size) * G (atoms)
         R = x.unsqueeze(dim=0).expand(self.C, B, self.G)
-
+        A = torch.repeat_interleave(area.unsqueeze(dim=0), self.C, dim=0)
         for t in range(self.infer_step):
             # infer by background knowledge
             # r_bk = self.r_bk(R[0])
@@ -356,7 +393,7 @@ class ClauseInferModule(nn.Module):
             # print("r(R): ", self.r(R).shape)
             # print("r_bk(R): ", self.r_bk(R).shape)
             # shape? dim?
-            r_R = self.r(R)
+            r_R = self.r(R, A)
             # A_A = r_R.detach().to("cpu").numpy().reshape(-1, 1)  # DEBUG
             # r_bk = self.r_bk(R).unsqueeze(dim=0).expand(self.C, B, self.G)
             # A_B = r_bk.detach().to("cpu").numpy().reshape(-1, 1)  # DEBUG
@@ -371,19 +408,20 @@ class ClauseInferModule(nn.Module):
                 R = softor([R, r_R], dim=2, gamma=self.gamma)
         return R
 
-    def r(self, x):
+    def r(self, x, area):
         # x: C * B * G
         batch_size = x.size(1)  # batch size
         substitution_num = self.I.size(0)
+        atom_num = x.shape[-1]
         # apply each clause c_i and stack to a tensor C
         # C * B * G
         # infer from i-th valuation tensor using i-th clause
-        Cs = []
+        all_substitution_batch_images_atom_score = torch.zeros_like(x).to(self.device)
+        all_substitution_batch_images_covered_areas = torch.zeros_like(area).to(self.device)
         for i in range(substitution_num):
-            c = self.cs[i](x[i])
-            Cs.append(c)
-        Cs = torch.stack(Cs, 0)
-        return Cs
+            all_substitution_batch_images_atom_score[i] = self.cs[i](x[i])
+            all_substitution_batch_images_covered_areas[i] = self.area_funs[i](area[i])
+        return all_substitution_batch_images_atom_score
 
     def r_bk(self, x):
         x = x[0]
