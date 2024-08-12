@@ -159,20 +159,24 @@ def create_identity_kernel(n):
     return identity_kernel
 
 
-def find_submatrix(matrix_64x64, matrix_3x3):
-    # Expand the 3x3 matrix to have the same dimensions as the 64x64 matrix for convolution
-    kernel = matrix_3x3.unsqueeze(0).unsqueeze(0)  # Shape: (1, 1, 3, 3)
+def find_submatrix(matrix_64x64):
+    # Unfold the 64x64 matrix into non-overlapping 3x3 patches
+    patches = F.unfold(matrix_64x64.unsqueeze(0).unsqueeze(0), kernel_size=(3, 3), stride=3)
 
-    # Perform a convolution over the 64x64 matrix with the 3x3 matrix as the kernel
-    # Use F.conv2d with padding=0 to slide the kernel over the matrix without padding
-    matrix_64x64 = matrix_64x64.unsqueeze(0).unsqueeze(0)
-    convolved = F.conv2d(matrix_64x64, kernel, padding=0)
+    # Reshape the patches to (number_of_patches, 3, 3)
+    patches = patches.transpose(1, 2).reshape(-1, 3, 3)
 
-    # Create a comparison mask by comparing the convolution result with the sum of elements in the 3x3 matrix
-    target_sum = torch.sum(matrix_3x3)
-    match_mask = (convolved == target_sum).squeeze(0).squeeze(0)  # Shape: (62, 62)
+    # Calculate positions of patches
+    num_patches_x = matrix_64x64.size(0) // 3
+    num_patches_y = matrix_64x64.size(1) // 3
+    positions = torch.stack(torch.meshgrid(torch.arange(num_patches_x), torch.arange(num_patches_y)), dim=-1).reshape(-1, 2)
 
-    return match_mask
+    # Filter out zero patches
+    non_zero_mask = patches.sum(dim=(1, 2)) != 0
+    non_zero_patches = patches[non_zero_mask]
+    non_zero_positions = positions[non_zero_mask]
+
+    return non_zero_patches, non_zero_positions
 
 # Method 1: Cosine Similarity
 def cosine_similarity_mapping(A, B):

@@ -393,22 +393,19 @@ class VFHasFM(nn.Module):
         Returns:
             A batch of probabilities.
         """
-        img_width = images[0].squeeze().shape[0]
         fm_existence = torch.zeros(images.shape[0])
         for img_i, image in enumerate(images):
-            covered_area_or = torch.zeros((img_width - 2, img_width - 2), dtype=torch.bool).to(image.device)
-            for fm in fms:
-                covered_area = data_utils.find_submatrix(images[img_i].squeeze(), fm)
-                covered_area_or = torch.logical_or(covered_area, covered_area_or)
 
-            image_convolved = F.conv2d(images[img_i].unsqueeze(0),
-                                       data_utils.create_identity_kernel(len(fm)), padding=0)
-
-            non_zero_mask = data_utils.find_submatrix(images[img_i].squeeze(), torch.ones_like(fm).to(fm.device))
-
-            if torch.all(covered_area_or == non_zero_mask):
+            non_zero_patches, non_zero_positions = data_utils.find_submatrix(images[img_i].squeeze())
+            unique_patches = non_zero_patches.unique(dim=0).view(-1, fms[0].shape[-1] ** 2)
+            fms_flat = fms.view(-1, fms[0].shape[-1] ** 2)
+            # Create a boolean tensor to store the existence of each patch
+            existence_tensor = torch.zeros(unique_patches.size(0), dtype=torch.bool)
+            # Check for the existence of each patch in the patch_list
+            for i in range(unique_patches.size(0)):
+                existence_tensor[i] = torch.any(torch.all(fms_flat == unique_patches[i], dim=1))
+            if existence_tensor.prod() == 1:
                 fm_existence[img_i] = 1
-
         return fm_existence
 
 
@@ -442,8 +439,8 @@ class VFRho(nn.Module):
         valid_min = valid_attr[0] / valid_attr[1]
         valid_max = (valid_attr[0] + 1) / valid_attr[1]
         for img_i, image in enumerate(images):
-            mask_1 = data_utils.find_submatrix(images[img_i].squeeze(), fm1)
-            mask_2 = data_utils.find_submatrix(images[img_i].squeeze(), fm2)
+            non_zero_patches, non_zero_positions = data_utils.find_submatrix(images[img_i].squeeze())
+            non_zero_patches, non_zero_positions = data_utils.find_submatrix(images[img_i].squeeze())
             # Apply the mappings
 
             value = data_utils.cosine_similarity_mapping(mask_1, mask_2).item()
@@ -456,7 +453,7 @@ class VFRho(nn.Module):
             # in_range = torch.abs(target_distance - actual_distance) < error_tolerance
             # pred[img_i] = in_range.sum() > 0
 
-        return pred, cover_tiles
+        return pred
     #
     # def forward(self, z_1, z_2, dist_grade, images):
     #     """
@@ -538,21 +535,13 @@ class VFPhi(nn.Module):
         valid_max = (valid_attr[0] + 1) / valid_attr[1]
         mask_values = torch.zeros(len(images)).to(fm1.device)
         for img_i, image in enumerate(images):
-            mask_1 = data_utils.find_submatrix(images[img_i].squeeze(), fm1)
-            mask_2 = data_utils.find_submatrix(images[img_i].squeeze(), fm2)
+            non_zero_patches, non_zero_positions = data_utils.find_submatrix(images[img_i].squeeze())
+
 
             value = data_utils.dot_product_sigmoid_mapping(mask_1, mask_2).item()
             pred[img_i] = valid_min <= value < valid_max
             mask_values[img_i] = data_utils.matrix_to_value(torch.logical_or(mask_1, mask_2))
-            # if len(pos1) > 0 and len(pos2) > 0:
-            # pos1 = torch.tensor(pos1)
-            # pos2 = torch.tensor(pos2)
-            # angle = self.relative_direction_in_degrees(pos1, pos2)
-            # in_range = torch.abs(angle - dir) < error_tolerance
-            # pred[img_i] = in_range.sum() > 0
-            # cover_tiles[img_i] = (covered_area_1 + mask_2) / ((covered_area_1 + mask_2) + 1e-20)
-
-        return pred, mask_values
+        return pred
 
     def cart2pol(self, x, y):
         rho = torch.sqrt(x ** 2 + y ** 2)

@@ -3,7 +3,7 @@ import torch
 import datetime
 
 import config
-from src.utils import log_utils
+from src.utils import log_utils, data_utils
 
 from . import valuation, facts_converter, nsfr, pruning
 from .fol import language
@@ -130,6 +130,7 @@ def remove_trivial_atoms(args, lang, FC, clauses, objs, data):
 
 def alpha(args, fms, images):
     clauses = []
+
     for obj_num in range(2, args.max_obj_num):
         args.fm_num = len(fms)
         lang = init_ilp(args, fms, obj_num)

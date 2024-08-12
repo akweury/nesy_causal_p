@@ -29,16 +29,37 @@ def prepare_kp_sy_data(args):
     return train_loader, val_loader
 
 
+def prepare_fms(args):
+    fms = torch.load(config.output / f"kp_sy_{args.exp_name}" / f"fms.pt").to(args.device)
+    return fms
+
+
 def main():
     args = args_utils.get_args()
+    os.makedirs(config.output / f"kp_sy_{args.exp_name}", exist_ok=True)
     # data file
     args.data_types = ["data_triangle"]
     train_loader, val_loader = prepare_kp_sy_data(args)
-    os.makedirs(config.output / f"kp_sy_{args.exp_name}", exist_ok=True)
+    fms = prepare_fms(args)
+    image_tensors_all = []
+    for data, labels in tqdm(train_loader):
+        image_tensors = []
+        for img_i, image in enumerate(data):
+            non_zero_patches, non_zero_positions = data_utils.find_submatrix(image.squeeze())
+            non_zero_positions[:, 0] -= non_zero_positions[0, 0].item()
+            non_zero_positions[:, 1] -= non_zero_positions[0, 1].item()
+            image_tensor = torch.zeros((25, 3))
+            for p_i, p in enumerate(non_zero_patches):
+                for f_i, fm in enumerate(fms):
+                    if torch.equal(fm, p):
+                        image_tensor[p_i, 0] = f_i
+                image_tensor[p_i, 1:] = non_zero_positions[p_i]
 
-    for images, labels in train_loader:
-        fms = perception.extract_fm(images.to(args.device))
-        relations = alpha.alpha(args, fms, images)
+            image_tensors.append(image_tensor.unsqueeze(0))
+        image_tensors = torch.cat(image_tensors, dim=0)
+        image_tensors_all.append(image_tensors)
+    torch.save(torch.cat(image_tensors_all,dim=0), config.output / f"kp_sy_{args.exp_name}" / f"img_tensors.pt")
+
     print("program finished")
 
 

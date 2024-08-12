@@ -360,7 +360,8 @@ def extract_fm(data, window_size=3, stride=1):
     patches = []
     positions = []
     # Get the dimensions of the image
-    _, img_height, img_width = data[0].shape
+    # _, img_height, img_width = data[0].shape
+
     for img_i, image in enumerate(data):
         # Use unfold to create patches
         patches_tensor = image.unfold(1, window_size, 1).unfold(2, window_size, 1)

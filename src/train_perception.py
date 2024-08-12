@@ -79,17 +79,14 @@ def main(dataset_name):
     # data file
     args.data_types = ["data_triangle"]
     train_loader, val_loader = prepare_kp_sy_data(args)
-    # train_loader, val_loader = prepare_mnist_data(args)
     os.makedirs(config.output / f"kp_sy_{args.exp_name}", exist_ok=True)
-
-    perception.learn_fm(args, train_loader, val_loader)
-
-
-    log_utils.init_wandb(pj_name=f"FM-{dataset_name}-{args.exp_name}", archi="FCN")
-
-    perception.train_percept(args, model, train_loader, val_loader)
-
-    file_utils.save_model(model, dataset_name, f'detector_model.pth')
+    all_fms = []
+    for data, labels in tqdm(train_loader):
+        fms = perception.extract_fm(data)
+        all_fms.append(fms)
+    # save all the fms
+    all_fms = torch.cat(all_fms, dim=0).unique(dim=0)
+    torch.save(all_fms, config.output / f"kp_sy_{args.exp_name}" / f"fms.pt")
 
 
 if __name__ == "__main__":
