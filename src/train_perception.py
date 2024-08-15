@@ -74,7 +74,7 @@ def draw_training_history(train_losses, val_losses, val_accuracies, path):
     plt.savefig(path / 'accuracy_history.png')  # Save the figure
 
 
-def main(dataset_name):
+def main():
     args = args_utils.get_args()
     # data file
     args.data_types = ["data_triangle"]
@@ -82,7 +82,7 @@ def main(dataset_name):
     os.makedirs(config.output / f"kp_sy_{args.exp_name}", exist_ok=True)
     all_fms = []
     for data, labels in tqdm(train_loader):
-        fms = perception.extract_fm(data)
+        fms = perception.extract_fm(data, args.kernel)
         all_fms.append(fms)
     # save all the fms
     all_fms = torch.cat(all_fms, dim=0).unique(dim=0)
@@ -91,4 +91,4 @@ def main(dataset_name):
 
 if __name__ == "__main__":
     dataset_name = "triangle"
-    main(dataset_name)
+    main()

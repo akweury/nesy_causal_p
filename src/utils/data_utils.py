@@ -159,16 +159,16 @@ def create_identity_kernel(n):
     return identity_kernel
 
 
-def find_submatrix(matrix_64x64):
+def find_submatrix(matrix_64x64, kernel_size):
     # Unfold the 64x64 matrix into non-overlapping 3x3 patches
-    patches = F.unfold(matrix_64x64.unsqueeze(0).unsqueeze(0), kernel_size=(3, 3), stride=3)
+    patches = F.unfold(matrix_64x64.unsqueeze(0).unsqueeze(0), kernel_size=(kernel_size, kernel_size), stride=3)
 
     # Reshape the patches to (number_of_patches, 3, 3)
-    patches = patches.transpose(1, 2).reshape(-1, 3, 3)
+    patches = patches.transpose(1, 2).reshape(-1, kernel_size, kernel_size)
 
     # Calculate positions of patches
-    num_patches_x = matrix_64x64.size(0) // 3
-    num_patches_y = matrix_64x64.size(1) // 3
+    num_patches_x = matrix_64x64.size(0) // kernel_size
+    num_patches_y = matrix_64x64.size(1) // kernel_size
     positions = torch.stack(torch.meshgrid(torch.arange(num_patches_x), torch.arange(num_patches_y)), dim=-1).reshape(-1, 2)
 
     # Filter out zero patches

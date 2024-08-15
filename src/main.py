@@ -45,7 +45,7 @@ def main():
     for data, labels in tqdm(train_loader):
         image_tensors = []
         for img_i, image in enumerate(data):
-            non_zero_patches, non_zero_positions = data_utils.find_submatrix(image.squeeze())
+            non_zero_patches, non_zero_positions = data_utils.find_submatrix(image.squeeze(), args.kernel)
             non_zero_positions[:, 0] -= non_zero_positions[0, 0].item()
             non_zero_positions[:, 1] -= non_zero_positions[0, 1].item()
             image_tensor = torch.zeros((25, 3))

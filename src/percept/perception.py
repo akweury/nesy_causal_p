@@ -356,7 +356,7 @@ def kmeans_common_features(args, model, train_loader, val_loader):
     return common_features
 
 
-def extract_fm(data, window_size=3, stride=1):
+def extract_fm(data, window_size):
     patches = []
     positions = []
     # Get the dimensions of the image
