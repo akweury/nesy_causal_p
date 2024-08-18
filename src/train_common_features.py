@@ -47,7 +47,7 @@ def main():
     args.batch_size = 1
 
     # load learned triangle fms
-    tri_fms = torch.load(config.output / f"kp_sy_triangle_only" / f"fms.pt").to(args.device)
+    tri_fms = torch.load(config.output / f"kp_sy_{args.exp_name}" / f"fms.pt").to(args.device)
     # tri_nesy_img = torch.load(config.output / f"kp_sy_triangle_only" / f"img_tensors.pt").to(args.device)
     # tri_nesy_img = tri_nesy_img.unique(dim=0)
 
