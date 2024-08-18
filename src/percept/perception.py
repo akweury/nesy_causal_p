@@ -77,12 +77,11 @@ class ShapeDataset(Dataset):
         self.image_paths = []
         self.labels = []
         self.device = args.device
-        for data_type in args.data_types:
-            folder = config.kp_dataset / data_type / "train" / "true"
-            imgs = file_utils.get_all_files(folder, "png", False)
-            labels = [self.get_label(data_type) for img in imgs]
-            self.image_paths += imgs
-            self.labels += labels
+        folder = config.kp_dataset / args.exp_name
+        imgs = file_utils.get_all_files(folder, "png", False)
+        labels = [self.get_label(args.exp_name) for img in imgs]
+        self.image_paths += imgs
+        self.labels += labels
 
     def get_label(self, img_name):
         if 'trianglesquare' in img_name:
@@ -356,19 +355,22 @@ def kmeans_common_features(args, model, train_loader, val_loader):
     return common_features
 
 
-def extract_fm(data, window_size):
+def extract_fm(data, window_size_max):
     patches = []
-    positions = []
+    img_width = data.shape[2]
     # Get the dimensions of the image
-    # _, img_height, img_width = data[0].shape
-
     for img_i, image in enumerate(data):
-        # Use unfold to create patches
-        patches_tensor = image.unfold(1, window_size, 1).unfold(2, window_size, 1)
-        # Reshape to get the patches in the desired format
-        patches_tensor = patches_tensor.contiguous().view(-1, window_size, window_size).unique(dim=0)
-        patches_tensor = patches_tensor[patches_tensor.sum(-1).sum(-1) != 0]
-        patches.append(patches_tensor)
+        window_patches = []
+        min_kernal_grids = img_width - window_size_max + 2
+        for window_size in reversed(range(3, window_size_max)):
+            # Use unfold to create patches
+            patches_tensor = image.unfold(1, window_size, 1).unfold(2, window_size, 1)
+            patches_tensor = patches_tensor[:, :min_kernal_grids, :min_kernal_grids]
+            # Reshape to get the patches in the desired format
+            # patches_tensor = patches_tensor.contiguous().view(-1, window_size, window_size)
+            # patches_tensor = patches_tensor[patches_tensor.sum(-1).sum(-1) != 0]
+            window_patches.append(patches_tensor)
+        patches.append(window_patches)
 
     patches = torch.cat(patches, dim=0).unique(dim=0)
     return patches
@@ -376,7 +378,6 @@ def extract_fm(data, window_size):
 
 def learn_fm(args, train_loader, val_loader):
     num_epochs = 100
-
     for images, labels in train_loader:
         # for i in range(len(images)):
         #     img = visual_utils.patch2img(images[i].squeeze().to(torch.uint8).tolist())

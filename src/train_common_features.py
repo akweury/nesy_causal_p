@@ -1,21 +1,14 @@
 # Created by shaji at 03/08/2024
 
 import torch
-import torch.nn as nn
-import torch.optim as optim
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm
-import matplotlib.pyplot as plt
-import numpy as np
-from PIL import Image
-import wandb
-from rtpt import RTPT
 
 import os
 import config
 from src.percept import perception
-from src.utils import file_utils, args_utils, data_utils, log_utils
+from src.utils import args_utils, data_utils
 
 
 def prepare_kp_sy_data(args):
@@ -34,25 +27,54 @@ def prepare_kp_sy_data(args):
     return train_loader, val_loader
 
 
-def main(exp_name):
+def img2nesy_tensor(args, data, fms):
+    _, nzs_patches, nz_positions = data_utils.find_submatrix(data.squeeze(), args.kernel)
+    nz_positions[:, 0] -= nz_positions[0, 0].item()
+    nz_positions[:, 1] -= nz_positions[0, 1].item()
+    image_tensor = torch.zeros((50, 3)) + len(fms)
+
+    for p_i, p in enumerate(nzs_patches):
+        for f_i, fm in enumerate(fms):
+            if torch.equal(fm, p):
+                image_tensor[p_i, 0] = f_i
+        if image_tensor[p_i, 0] == len(fms):
+            image_tensor[p_i, 0] = -1 # unknown fm
+        image_tensor[p_i, 1:] = nz_positions[p_i]
+    return image_tensor
+
+def main():
     args = args_utils.get_args()
-    # data file
-    args.data_types = ["data_trianglesquare", "data_trianglecircle", "data_triangle"]
+    args.batch_size = 1
+
+    # load learned triangle fms
+    tri_fms = torch.load(config.output / f"kp_sy_triangle_only" / f"fms.pt").to(args.device)
+    # tri_nesy_img = torch.load(config.output / f"kp_sy_triangle_only" / f"img_tensors.pt").to(args.device)
+    # tri_nesy_img = tri_nesy_img.unique(dim=0)
+
+    # load test dataset
+    args.data_types = args.exp_name
     train_loader, val_loader = prepare_kp_sy_data(args)
-    model = perception.SimpleCNN().to(args.device)
-    model_dict_path = config.output / exp_name / "detector_model.pth"
-    model.load_state_dict(torch.load(model_dict_path))
+    os.makedirs(config.output / f"kp_sy_{args.exp_name}", exist_ok=True)
+    for data, labels in tqdm(train_loader):
+        nesy_tensor = img2nesy_tensor(args, data, tri_fms)
 
-    # Assume val_loader is the DataLoader for the validation set
-    input_dim = 128  # This should match the dimensionality of the FC layer input
-    target_label = 0  # We want to maximize the logit for label 0
 
-    log_utils.init_wandb(pj_name=f"FM-{dataset_name}-mask", archi="FCN")
+        print("image done.")
+        # _, nzs_patches, nz_positions = data_utils.find_submatrix(data.squeeze(), args.kernel)
+        # nz_positions[:, 0] -= nz_positions[0, 0].item()
+        # nz_positions[:, 1] -= nz_positions[0, 1].item()
+        # image_tensor = torch.zeros((25, 3)) + len(tri_fms)
+        #
+        # for p_i, p in enumerate(nzs_patches):
+        #     for f_i, fm in enumerate(tri_fms):
+        #         if torch.equal(fm, p):
+        #             image_tensor[p_i, 0] = f_i
+        #     if image_tensor[p_i, 0] == len(tri_fms):
+        #         raise ValueError("fm not found in patches")
+        #     image_tensor[p_i, 1:] = nz_positions[p_i]
 
-    mask_optimizer = perception.MaskOptimizer(input_dim, target_label)
-    perception.optimize_mask(model, train_loader,val_loader, mask_optimizer, target_label)
-    torch.save(mask_optimizer.mask, config.output / exp_name / "mask.pth")
+    print("program is finished.")
+
 
 if __name__ == "__main__":
-    dataset_name = "kp_sy"
-    main(dataset_name)
+    main()

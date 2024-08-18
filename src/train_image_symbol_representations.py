@@ -45,20 +45,22 @@ def main():
     for data, labels in tqdm(train_loader):
         image_tensors = []
         for img_i, image in enumerate(data):
-            non_zero_patches, non_zero_positions = data_utils.find_submatrix(image.squeeze(), args.kernel)
+            non_zero_patches, non_zero_shifted_patches, non_zero_positions = data_utils.find_submatrix(image.squeeze(),
+                                                                                                       args.kernel)
             non_zero_positions[:, 0] -= non_zero_positions[0, 0].item()
             non_zero_positions[:, 1] -= non_zero_positions[0, 1].item()
-            image_tensor = torch.zeros((25, 3))
-            for p_i, p in enumerate(non_zero_patches):
+            image_tensor = torch.zeros((25, 3)) + len(fms)
+            for p_i, p in enumerate(non_zero_shifted_patches):
                 for f_i, fm in enumerate(fms):
                     if torch.equal(fm, p):
                         image_tensor[p_i, 0] = f_i
+                if image_tensor[p_i, 0] == len(fms):
+                    raise ValueError("fm not found in patches")
                 image_tensor[p_i, 1:] = non_zero_positions[p_i]
-
             image_tensors.append(image_tensor.unsqueeze(0))
         image_tensors = torch.cat(image_tensors, dim=0)
         image_tensors_all.append(image_tensors)
-    torch.save(torch.cat(image_tensors_all,dim=0), config.output / f"kp_sy_{args.exp_name}" / f"img_tensors.pt")
+    torch.save(torch.cat(image_tensors_all, dim=0), config.output / f"kp_sy_{args.exp_name}" / f"img_tensors.pt")
 
     print("program finished")
 

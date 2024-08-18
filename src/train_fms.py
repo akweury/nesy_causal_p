@@ -77,18 +77,19 @@ def draw_training_history(train_losses, val_losses, val_accuracies, path):
 def main():
     args = args_utils.get_args()
     # data file
-    args.data_types = ["data_triangle"]
+    args.data_types = args.exp_name
     train_loader, val_loader = prepare_kp_sy_data(args)
     os.makedirs(config.output / f"kp_sy_{args.exp_name}", exist_ok=True)
     all_fms = []
     for data, labels in tqdm(train_loader):
-        fms = perception.extract_fm(data, args.kernel)
-        all_fms.append(fms)
+        all_fms.append(data.squeeze(0))
+        # fms = perception.extract_fm(data, args.kernel)
+        # all_fms.append(fms)
     # save all the fms
     all_fms = torch.cat(all_fms, dim=0).unique(dim=0)
+    all_fms = data_utils.shift_content_to_top_left(all_fms).unique(dim=0)
     torch.save(all_fms, config.output / f"kp_sy_{args.exp_name}" / f"fms.pt")
 
 
 if __name__ == "__main__":
-    dataset_name = "triangle"
     main()

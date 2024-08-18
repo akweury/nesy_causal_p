@@ -21,7 +21,7 @@ def get_args():
     parser.add_argument("--num_epochs", type=int, default=100)
     parser.add_argument("--top_data", type=int, default=100)
     parser.add_argument("--batch_size", type=int, default=16)
-    parser.add_argument("--kernel", type=int, default=5)
+    parser.add_argument("--kernel", type=int, default=10)
     parser.add_argument("--is_visual", action="store_true")
     parser.add_argument("--is_done", action="store_true")
     parser.add_argument("--show_process", action="store_true")

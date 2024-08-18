@@ -161,7 +161,8 @@ def create_identity_kernel(n):
 
 def find_submatrix(matrix_64x64, kernel_size):
     # Unfold the 64x64 matrix into non-overlapping 3x3 patches
-    patches = F.unfold(matrix_64x64.unsqueeze(0).unsqueeze(0), kernel_size=(kernel_size, kernel_size), stride=3)
+    patches = F.unfold(matrix_64x64.unsqueeze(0).unsqueeze(0), kernel_size=(kernel_size, kernel_size),
+                       stride=kernel_size)
 
     # Reshape the patches to (number_of_patches, 3, 3)
     patches = patches.transpose(1, 2).reshape(-1, kernel_size, kernel_size)
@@ -169,14 +170,15 @@ def find_submatrix(matrix_64x64, kernel_size):
     # Calculate positions of patches
     num_patches_x = matrix_64x64.size(0) // kernel_size
     num_patches_y = matrix_64x64.size(1) // kernel_size
-    positions = torch.stack(torch.meshgrid(torch.arange(num_patches_x), torch.arange(num_patches_y)), dim=-1).reshape(-1, 2)
-
+    positions = torch.stack(torch.meshgrid(torch.arange(num_patches_x),
+                                           torch.arange(num_patches_y)), dim=-1).reshape(-1, 2)
     # Filter out zero patches
     non_zero_mask = patches.sum(dim=(1, 2)) != 0
     non_zero_patches = patches[non_zero_mask]
     non_zero_positions = positions[non_zero_mask]
+    non_zero_patches_shifted = shift_content_to_top_left(non_zero_patches)
+    return non_zero_patches, non_zero_patches_shifted, non_zero_positions
 
-    return non_zero_patches, non_zero_positions
 
 # Method 1: Cosine Similarity
 def cosine_similarity_mapping(A, B):
@@ -251,3 +253,28 @@ def value_to_matrix(value):
     matrix = torch.tensor([int(b) for b in binary_str], dtype=torch.float32).view(64, 64)
 
     return matrix
+
+
+def shift_content_to_top_left(batch_matrices):
+    # Function to shift the matrix up if the top row is all zeros
+    def shift_up(matrix):
+        while torch.all(matrix[0] == 0):  # Check if the top row is full of zeros
+            matrix = torch.roll(matrix, shifts=-1, dims=0)  # Shift all rows up
+            matrix[-1] = 0  # Fill the last row with zeros after the shift
+        return matrix
+
+    # Function to shift the matrix left if the leftmost column is all zeros
+    def shift_left(matrix):
+        while torch.all(matrix[:, 0] == 0):  # Check if the leftmost column is full of zeros
+            matrix = torch.roll(matrix, shifts=-1, dims=1)  # Shift all columns to the left
+            matrix[:, -1] = 0  # Fill the last column with zeros after the shift
+        return matrix
+
+    shifted_matrices = []
+    for i in range(batch_matrices.shape[0]):
+        matrix = batch_matrices[i]
+        matrix = shift_up(matrix)  # Apply upward shift
+        matrix = shift_left(matrix)  # Apply leftward shift
+        shifted_matrices.append(matrix.unsqueeze(0))
+    shifted_matrices = torch.cat(shifted_matrices, dim=0)
+    return shifted_matrices
