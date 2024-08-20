@@ -4,11 +4,15 @@ import torch
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm
+import matplotlib.pyplot as plt
+from PIL import Image
+import numpy as np
+import cv2
 
 import os
 import config
 from src.percept import perception
-from src.utils import args_utils, data_utils
+from src.utils import args_utils, data_utils, chart_utils
 
 
 def prepare_kp_sy_data(args):
@@ -38,26 +42,65 @@ def img2nesy_tensor(args, data, fms):
             if torch.equal(fm, p):
                 image_tensor[p_i, 0] = f_i
         if image_tensor[p_i, 0] == len(fms):
-            image_tensor[p_i, 0] = -1 # unknown fm
+            image_tensor[p_i, 0] = -1  # unknown fm
         image_tensor[p_i, 1:] = nz_positions[p_i]
     return image_tensor
+
+
+def get_cover_percent(mask, img):
+    fm_points = mask.sum()
+    img_points = img.sum()
+    cover_points = (img[mask] > 0).sum()
+    cover_percent = cover_points / fm_points
+    return cover_percent
+
+
+def check_fm_in_img(args, fm_mask, img):
+    cover_percents = torch.zeros_like(img)
+    cover_percent = get_cover_percent(fm_mask, img)
+    cover_percents[-1, -1] = cover_percent
+
+    for i in reversed(range(img.shape[0])):
+        up_shifted_img = torch.roll(img, shifts=-i, dims=0)  # Shift all rows up
+        for j in reversed(range(img.shape[1])):
+            left_shifted_img = torch.roll(up_shifted_img, shifts=-j, dims=1)  # Shift all columns to the left
+            percent = get_cover_percent(fm_mask, left_shifted_img)
+            cover_percents[i, j] = percent
+            if percent > 0.05:
+                # Generate a 64x64      matrix (example)
+                hm_cover_percents = chart_utils.zoom_matrix_to_image_cv(cover_percents.numpy())
+                input_img = chart_utils.zoom_img((left_shifted_img * 255).to(torch.uint8).numpy())
+                fm_mask_img = chart_utils.zoom_img((fm_mask * 255).to(torch.uint8).numpy())
+                # Vertically concatenate the two images
+                concatenated_image = np.vstack((input_img, fm_mask_img, hm_cover_percents))
+                image_array = concatenated_image.astype(np.uint8)
+                # Save the array as an image using OpenCV
+                cv2.imwrite(
+                    str(config.output / f"{args.exp_name}" / f'saved_image_{64 - i}_{64 - j}_{percent:.2f}.png'),
+                    image_array)
+                print(f"saved an image :  f'saved_image_{64 - i}_{64 - j}_{percent:.2f}.png'")
+    return cover_percents
+
 
 def main():
     args = args_utils.get_args()
     args.batch_size = 1
 
     # load learned triangle fms
-    tri_fms = torch.load(config.output / f"kp_sy_{args.exp_name}" / f"fms.pt").to(args.device)
+    tri_fms = torch.load(config.output / f"data_triangle" / f"fms.pt").to(args.device)
     # tri_nesy_img = torch.load(config.output / f"kp_sy_triangle_only" / f"img_tensors.pt").to(args.device)
     # tri_nesy_img = tri_nesy_img.unique(dim=0)
 
     # load test dataset
     args.data_types = args.exp_name
     train_loader, val_loader = prepare_kp_sy_data(args)
-    os.makedirs(config.output / f"kp_sy_{args.exp_name}", exist_ok=True)
-    for data, labels in tqdm(train_loader):
-        nesy_tensor = img2nesy_tensor(args, data, tri_fms)
+    os.makedirs(config.output / f"{args.exp_name}", exist_ok=True)
 
+    for data, labels in tqdm(train_loader):
+        img = data.squeeze()
+        for f_i, fm in enumerate(tri_fms):
+            fm_mask = fm > 0
+            check_fm_in_img(args, fm_mask, img)
 
         print("image done.")
         # _, nzs_patches, nz_positions = data_utils.find_submatrix(data.squeeze(), args.kernel)
