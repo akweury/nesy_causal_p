@@ -6,6 +6,7 @@ import torch
 import matplotlib.pyplot as plt
 import cv2
 from PIL import Image, ImageDraw
+import torch.nn.functional as F
 
 import config
 from utils import chart_utils, args_utils
@@ -40,7 +41,7 @@ def draw_angle():
     for d_i in range(len(directions) - 1):
         for d_j in range(d_i + 1, len(directions)):
             # Create a 64x64 tensor with zeros
-            tensor = torch.zeros((64, 64), dtype=torch.uint8)
+            tensor = torch.zeros((5, 5), dtype=torch.uint8)
             # Convert tensor to PIL image
             image = Image.fromarray(tensor.numpy())
 
@@ -108,27 +109,21 @@ def draw_rect(r=1.0):
     return np.array(image)
 
 
-def correlation(img_fix, fm, name):
-    cover_percents = np.zeros((64, 64))
-    cover_percent = get_cover_percent(img_fix, fm)
-    cover_percents[0, 0] = cover_percent
-
-    for i in range(64):
-        up_shifted_img = torch.roll(fm, shifts=i, dims=0)  # Shift all rows up
-        for j in range(64):
-            left_shifted_img = torch.roll(up_shifted_img, shifts=j, dims=1)  # Shift all columns to the left
-            percent = get_cover_percent(img_fix, left_shifted_img)
-            cover_percents[i, j] = percent
-    # Generate a 64x64      matrix (example)
-    hm_cover_percents = chart_utils.zoom_matrix_to_image_cv(cover_percents)
-    input_img = chart_utils.zoom_img((fm * 255).to(torch.uint8).numpy())
-    fm_mask_img = chart_utils.zoom_img((img_fix * 255).to(torch.uint8).numpy())
-    # Vertically concatenate the two images
-    concatenated_image = np.vstack((input_img, fm_mask_img, hm_cover_percents))
-    image_array = concatenated_image.astype(np.uint8)
-    # Save the array as an image using OpenCV
-    cv2.imwrite(name, image_array)
-    print("finish")
+def correlation(img_fix, fm):
+    # cover_percents = np.zeros((64, 64))
+    # cover_percent = get_cover_percent(img_fix, fm)
+    # cover_percents[0, 0] = cover_percent
+    correlation = F.conv2d(img_fix, fm, padding=2)
+    convolution = F.conv2d(img_fix, fm.flip([2, 3]), padding=2)
+    correlation[:, :, :5, :5] = fm
+    convolution[:, :, :5, :5] = fm
+    return correlation, convolution
+    # for i in range(64):
+    #     up_shifted_img = torch.roll(fm, shifts=i, dims=0)  # Shift all rows up
+    #     for j in range(64):
+    #         left_shifted_img = torch.roll(up_shifted_img, shifts=j, dims=1)  # Shift all columns to the left
+    #         percent = get_cover_percent(img_fix, left_shifted_img)
+    #         cover_percents[i, j] = percent
 
 
 def main():
@@ -151,11 +146,31 @@ def main():
     features = fm_angles
     idx = 50
     for fp in pred_patterns:
-        for mp in features:
-            idx += 1
-            pattern = (fp[0] + fp[1]).to(torch.bool).to(torch.uint8)
-            name = str(config.output / f"{args.exp_name}" / f'{str(idx)}.png')
-            correlation(pattern, mp, name)
+        pattern = (fp[0] + fp[1]).to(torch.bool).to(torch.uint8).unsqueeze(0).unsqueeze(0)
+        cors = torch.zeros((len(features), 64, 64))
+        cons = torch.zeros((len(features), 64, 64))
+        for f_i, mp in enumerate(features):
+            kernel = mp.unsqueeze(0).unsqueeze(0)
+            cor, con = correlation(pattern, kernel)
+            cors[f_i] = cor
+            cons[f_i] = con
+
+        # visual
+        # Generate a 64x64      matrix (example)
+
+        cor_imgs = chart_utils.zoom_matrix_to_image_cv(cors)
+        con_imgs = chart_utils.zoom_matrix_to_image_cv(cons)
+        # input_img = chart_utils.zoom_img((fm * 255).to(torch.uint8).numpy())
+        fm_mask_img = chart_utils.zoom_img((pattern.squeeze() * 255).to(torch.uint8).numpy())
+        # Vertically concatenate the two images
+        cor_imgs = np.vstack((fm_mask_img, cor_imgs)).astype(np.uint8)
+        # Save the array as an image using OpenCV
+        cv2.imwrite(str(config.output / f"{args.exp_name}" / f'cor.png'), cor_imgs)
+
+        con_imgs = np.vstack((fm_mask_img, con_imgs)).astype(np.uint8)
+        cv2.imwrite(str(config.output / f"{args.exp_name}" / f'con.png'), con_imgs)
+
+        print("finish")
 
 
 if __name__ == "__main__":

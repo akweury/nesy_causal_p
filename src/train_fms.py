@@ -1,22 +1,18 @@
 # Created by shaji at 24/07/2024
 
 import torch
-import torch.nn as nn
-import torch.optim as optim
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import numpy as np
-from PIL import Image
-import wandb
-from rtpt import RTPT
+from PIL import Image, ImageDraw
 
 import os
 
 import config
 from src.percept import perception
-from src.utils import file_utils, args_utils, data_utils, log_utils
+from src.utils import args_utils, data_utils
 
 
 def prepare_kp_sy_data(args):
@@ -74,21 +70,63 @@ def draw_training_history(train_losses, val_losses, val_accuracies, path):
     plt.savefig(path / 'accuracy_history.png')  # Save the figure
 
 
+def draw_angle():
+    ls_up = [(2, 2), (2, 0)]
+    ls_upright = [(2, 2), (4, 0)]
+    ls_right = [(2, 2), (4, 2)]
+    ls_downright = [(2, 2), (4, 4)]
+    ls_down = [(2, 2), (2, 4)]
+    ls_downleft = [(2, 2), (0, 4)]
+    ls_left = [(2, 2), (0, 2)]
+    ls_topleft = [(2, 2), (0, 0)]
+
+    directions = [ls_up, ls_upright, ls_right, ls_downright, ls_down, ls_downleft, ls_left, ls_topleft]
+
+    angle_imgs = []
+    for d_i in range(len(directions) - 1):
+        for d_j in range(d_i + 1, len(directions)):
+            # Create a 64x64 tensor with zeros
+            tensor = torch.zeros((5, 5), dtype=torch.uint8)
+            # Convert tensor to PIL image
+            image = Image.fromarray(tensor.numpy())
+
+            draw = ImageDraw.Draw(image)
+            draw.line((directions[d_i][0], directions[d_i][1]), fill="white", width=1)
+            draw.line((directions[d_j][0], directions[d_j][1]), fill="white", width=1)
+            # Convert PIL image back to tensor
+            img = torch.from_numpy(np.array(image))
+            img = img.to(torch.bool).to(torch.uint8)
+            angle_imgs.append(img.unsqueeze(0))
+
+    return torch.cat((angle_imgs), dim=0)
+
+
 def main():
     args = args_utils.get_args()
     # data file
     args.data_types = args.exp_name
     train_loader, val_loader = prepare_kp_sy_data(args)
     os.makedirs(config.output / f"{args.exp_name}", exist_ok=True)
-    all_fms = []
+    kernels = []
+
+
+    patch_size = 5
     for data, labels in tqdm(train_loader):
-        all_fms.append(data.squeeze(0))
-        # fms = perception.extract_fm(data, args.kernel)
-        # all_fms.append(fms)
+        patches = data.unfold(2, patch_size, 1).unfold(3, patch_size, 1)
+        patches = patches.reshape(-1, patch_size, patch_size).unique(dim=0)
+        patches = patches[~torch.all(patches == 0, dim=(1, 2))]
+        kernels.append(patches)
+    kernels = torch.cat(kernels, dim=0).unique(dim=0)
+
+
+    fm_all = []
+    for data, labels in tqdm(train_loader):
+        fms = perception.extract_fm(data, kernels)
+        fm_all.append(fms)
+    fm_all = torch.cat(fm_all, dim=0)
     # save all the fms
-    all_fms = torch.cat(all_fms, dim=0).unique(dim=0)
-    all_fms = data_utils.shift_content_to_top_left(all_fms).unique(dim=0)
-    torch.save(all_fms, config.output / f"{args.exp_name}" / f"fms.pt")
+    # all_fms = data_utils.shift_content_to_top_left(fm_all).unique(dim=0)
+    torch.save(fm_all, config.output / f"{args.exp_name}" / f"fms.pt")
 
 
 if __name__ == "__main__":

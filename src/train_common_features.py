@@ -1,5 +1,6 @@
 # Created by shaji at 03/08/2024
 
+import os
 import torch
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader, random_split
@@ -8,8 +9,8 @@ import matplotlib.pyplot as plt
 from PIL import Image
 import numpy as np
 import cv2
+from PIL import Image, ImageDraw
 
-import os
 import config
 from src.percept import perception
 from src.utils import args_utils, data_utils, chart_utils
@@ -82,39 +83,66 @@ def check_fm_in_img(args, fm_mask, img):
     return cover_percents
 
 
+def draw_angle():
+    ls_up = [(2, 2), (2, 0)]
+    ls_upright = [(2, 2), (4, 0)]
+    ls_right = [(2, 2), (4, 2)]
+    ls_downright = [(2, 2), (4, 4)]
+    ls_down = [(2, 2), (2, 4)]
+    ls_downleft = [(2, 2), (0, 4)]
+    ls_left = [(2, 2), (0, 2)]
+    ls_topleft = [(2, 2), (0, 0)]
+
+    directions = [ls_up, ls_upright, ls_right, ls_downright, ls_down, ls_downleft, ls_left, ls_topleft]
+
+    angle_imgs = []
+    for d_i in range(len(directions) - 1):
+        for d_j in range(d_i + 1, len(directions)):
+            # Create a 64x64 tensor with zeros
+            tensor = torch.zeros((5, 5), dtype=torch.uint8)
+            # Convert tensor to PIL image
+            image = Image.fromarray(tensor.numpy())
+
+            draw = ImageDraw.Draw(image)
+            draw.line((directions[d_i][0], directions[d_i][1]), fill="white", width=1)
+            draw.line((directions[d_j][0], directions[d_j][1]), fill="white", width=1)
+            # Convert PIL image back to tensor
+            img = torch.from_numpy(np.array(image))
+            img = img.to(torch.bool).to(torch.uint8)
+            angle_imgs.append(img.unsqueeze(0))
+
+    return torch.cat((angle_imgs), dim=0)
+
+
+def similarity(img, fm_repo):
+    mask = fm_repo > 0
+    img_repeated = torch.repeat_interleave(img, len(fm_repo), dim=0)
+    img_repeated = img_repeated * mask
+    same = img_repeated == fm_repo
+
+    fm_vp_count = mask.sum(dim=-1).sum(dim=-1).sum(dim=-1)
+    img_vp_count = same.sum(dim=-1).sum(dim=-1).sum(dim=-1)
+    preds = img_vp_count / (fm_vp_count + 1e-20)
+    return preds
+
+
 def main():
     args = args_utils.get_args()
     args.batch_size = 1
 
     # load learned triangle fms
-    tri_fms = torch.load(config.output / f"data_triangle" / f"fms.pt").to(args.device)
-    # tri_nesy_img = torch.load(config.output / f"kp_sy_triangle_only" / f"img_tensors.pt").to(args.device)
-    # tri_nesy_img = tri_nesy_img.unique(dim=0)
-
+    fm_repo = torch.load(config.output / f"data_triangle" / f"fms.pt").to(args.device)
     # load test dataset
     args.data_types = args.exp_name
     train_loader, val_loader = prepare_kp_sy_data(args)
     os.makedirs(config.output / f"{args.exp_name}", exist_ok=True)
-
+    kernels = draw_angle()
     for data, labels in tqdm(train_loader):
-        img = data.squeeze()
-        for f_i, fm in enumerate(tri_fms):
-            fm_mask = fm > 0
-            check_fm_in_img(args, fm_mask.squeeze(), img)
+        img_fm = perception.extract_fm(data, kernels)
+        img_fm_shifted = data_utils.shift_content_to_top_left(img_fm)
+        pred = similarity(img_fm_shifted, fm_repo)
 
-        print("image done.")
-        # _, nzs_patches, nz_positions = data_utils.find_submatrix(data.squeeze(), args.kernel)
-        # nz_positions[:, 0] -= nz_positions[0, 0].item()
-        # nz_positions[:, 1] -= nz_positions[0, 1].item()
-        # image_tensor = torch.zeros((25, 3)) + len(tri_fms)
-        #
-        # for p_i, p in enumerate(nzs_patches):
-        #     for f_i, fm in enumerate(tri_fms):
-        #         if torch.equal(fm, p):
-        #             image_tensor[p_i, 0] = f_i
-        #     if image_tensor[p_i, 0] == len(tri_fms):
-        #         raise ValueError("fm not found in patches")
-        #     image_tensor[p_i, 1:] = nz_positions[p_i]
+        print("image done")
 
     print("program is finished.")
 

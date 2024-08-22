@@ -355,25 +355,12 @@ def kmeans_common_features(args, model, train_loader, val_loader):
     return common_features
 
 
-def extract_fm(data, window_size_max):
-    patches = []
-    img_width = data.shape[2]
-    # Get the dimensions of the image
-    for img_i, image in enumerate(data):
-        window_patches = []
-        min_kernal_grids = img_width - window_size_max + 2
-        for window_size in reversed(range(3, window_size_max)):
-            # Use unfold to create patches
-            patches_tensor = image.unfold(1, window_size, 1).unfold(2, window_size, 1)
-            patches_tensor = patches_tensor[:, :min_kernal_grids, :min_kernal_grids]
-            # Reshape to get the patches in the desired format
-            # patches_tensor = patches_tensor.contiguous().view(-1, window_size, window_size)
-            # patches_tensor = patches_tensor[patches_tensor.sum(-1).sum(-1) != 0]
-            window_patches.append(patches_tensor)
-        patches.append(window_patches)
-
-    patches = torch.cat(patches, dim=0).unique(dim=0)
-    return patches
+def extract_fm(data, kernels):
+    # Define a Conv2d layer with 28 output channels and 3x3 kernel
+    # conv_layer = nn.Conv2d(in_channels=1, out_channels=len(kernels),
+    #                        kernel_size=kernels.shape[1], stride=1, padding=2)
+    output = F.conv2d(data, kernels.unsqueeze(1).to(torch.float32), stride=1, padding=2)
+    return output
 
 
 def learn_fm(args, train_loader, val_loader):

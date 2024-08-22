@@ -22,23 +22,23 @@ def zoom_matrix_to_image_cv(matrix, zoom_factor=8, colormap='plasma', padding=Tr
     # Ensure matrix is in the correct range for a colormap
 
     # Apply the colormap using Matplotlib's colormap functions
-    colormap_func = cm.get_cmap(colormap)
-    colored_matrix = colormap_func(matrix)
+    zoomed_image = np.zeros((1, 64, 64))
 
-    # Convert the RGBA colormap output to BGR for OpenCV (ignore alpha channel)
-    colored_matrix_bgr = (colored_matrix[:, :, :3] * 255).astype(np.uint8)
-    colored_matrix_bgr = cv2.cvtColor(colored_matrix_bgr, cv2.COLOR_RGB2BGR)
+    # Convert to numpy for applying the colormap
+    input_matrix_np = matrix.numpy() / 5
+    assert matrix.max() <= 5
 
-    # Resize (zoom) using OpenCV with nearest neighbor interpolation
-    zoomed_image = cv2.resize(colored_matrix_bgr,
-                              (matrix.shape[1] * zoom_factor, matrix.shape[0] * zoom_factor),
-                              interpolation=cv2.INTER_NEAREST)
+    # Choose a colormap, e.g., 'viridis'
+    cmap = plt.get_cmap('viridis')
 
-    pad_width = 2
-    zoomed_image = np.pad(zoomed_image, pad_width=((pad_width, pad_width), (pad_width, pad_width), (0, 0)),
-                          constant_values=255)
-
-    return zoomed_image
+    for i in range(len(matrix)):
+        # zoomed_image[i] = cv2.resize(cmap(input_matrix_np[i])[:, :, :3], (512, 512), interpolation=cv2.INTER_NEAREST)
+        only_matching_region = input_matrix_np[i]
+        only_matching_region[only_matching_region != 1] = 0
+        zoomed_image[-1] += only_matching_region
+    zoomed_image /= zoomed_image.max()
+    zoomed_image = cv2.resize(cmap(zoomed_image[-1])[:, :, :3], (512, 512), interpolation=cv2.INTER_NEAREST)
+    return ((zoomed_image) * 255).astype(np.uint8)
 
 
 def zoom_img(matrix, zoom_factor=8, add_border=True):
@@ -53,7 +53,7 @@ def zoom_img(matrix, zoom_factor=8, add_border=True):
     - zoomed_matrix: 2D NumPy array of the zoomed matrix (512x512 for zoom_factor=8).
     """
     # Check the input matrix dimensions
-
+    zoom_factor = 512 // len(matrix)
     pad_width = 2
     if matrix.shape != (64, 64):
         raise ValueError("Input matrix must be of size 64x64.")
@@ -63,6 +63,6 @@ def zoom_img(matrix, zoom_factor=8, add_border=True):
                                interpolation=cv2.INTER_NEAREST)
     rgb_image = np.stack((zoomed_matrix,) * 3, axis=-1)
 
-    rgb_image = np.pad(rgb_image, pad_width=((pad_width, pad_width), (pad_width, pad_width), (0, 0)),
-                       constant_values=255)
+    # rgb_image = np.pad(rgb_image, pad_width=((pad_width, pad_width), (pad_width, pad_width), (0, 0)),
+    #                    constant_values=255)
     return rgb_image
