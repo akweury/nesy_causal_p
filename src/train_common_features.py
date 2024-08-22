@@ -57,7 +57,7 @@ def get_cover_percent(mask, img):
 
 def check_fm_in_img(args, fm_mask, img):
     cover_percents = torch.zeros_like(img)
-    cover_percent = get_cover_percent(fm_mask, img)
+    cover_percent = get_cover_percent(fm_mask.squeeze(), img)
     cover_percents[-1, -1] = cover_percent
 
     for i in reversed(range(img.shape[0])):
@@ -100,7 +100,7 @@ def main():
         img = data.squeeze()
         for f_i, fm in enumerate(tri_fms):
             fm_mask = fm > 0
-            check_fm_in_img(args, fm_mask, img)
+            check_fm_in_img(args, fm_mask.squeeze(), img)
 
         print("image done.")
         # _, nzs_patches, nz_positions = data_utils.find_submatrix(data.squeeze(), args.kernel)

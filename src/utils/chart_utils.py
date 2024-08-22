@@ -20,11 +20,10 @@ def zoom_matrix_to_image_cv(matrix, zoom_factor=8, colormap='plasma', padding=Tr
     - zoomed_image_matrix: 2D NumPy array representing the zoomed image with colormap applied.
     """
     # Ensure matrix is in the correct range for a colormap
-    normed_matrix = (matrix - np.min(matrix)) / (np.max(matrix) - np.min(matrix))  # Normalize to 0-1
 
     # Apply the colormap using Matplotlib's colormap functions
     colormap_func = cm.get_cmap(colormap)
-    colored_matrix = colormap_func(normed_matrix)
+    colored_matrix = colormap_func(matrix)
 
     # Convert the RGBA colormap output to BGR for OpenCV (ignore alpha channel)
     colored_matrix_bgr = (colored_matrix[:, :, :3] * 255).astype(np.uint8)
