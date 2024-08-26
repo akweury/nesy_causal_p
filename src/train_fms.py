@@ -109,15 +109,14 @@ def main():
     os.makedirs(config.output / f"{args.exp_name}", exist_ok=True)
     kernels = []
 
-
     patch_size = 5
     for data, labels in tqdm(train_loader):
         patches = data.unfold(2, patch_size, 1).unfold(3, patch_size, 1)
         patches = patches.reshape(-1, patch_size, patch_size).unique(dim=0)
         patches = patches[~torch.all(patches == 0, dim=(1, 2))]
         kernels.append(patches)
-    kernels = torch.cat(kernels, dim=0).unique(dim=0)
-
+    kernels = torch.cat(kernels, dim=0).unique(dim=0).unsqueeze(1)
+    torch.save(kernels, config.output / f"{args.exp_name}" / f"kernels.pt")
 
     fm_all = []
     for data, labels in tqdm(train_loader):
@@ -125,7 +124,7 @@ def main():
         fm_all.append(fms)
     fm_all = torch.cat(fm_all, dim=0)
     # save all the fms
-    # all_fms = data_utils.shift_content_to_top_left(fm_all).unique(dim=0)
+    fm_all = data_utils.shift_content_to_top_left(fm_all).unique(dim=0)
     torch.save(fm_all, config.output / f"{args.exp_name}" / f"fms.pt")
 
 

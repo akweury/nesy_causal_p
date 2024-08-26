@@ -7,6 +7,7 @@ import torch.nn as nn
 from torch.nn import functional as F
 from tqdm import tqdm
 
+
 def data2patch(data):
     input_patches = []
     output_patches = []
@@ -256,28 +257,34 @@ def value_to_matrix(value):
 
 
 def shift_up(matrix):
+    shift_count = 0
     while torch.all(matrix[:, 0] == 0):  # Check if the top row is full of zeros
         matrix = torch.roll(matrix, shifts=-1, dims=1)  # Shift all rows up
         matrix[:, -1] = 0  # Fill the last row with zeros after the shift
-    return matrix
+        shift_count += 1
+    return matrix, shift_count
 
 
 # Function to shift the matrix left if the leftmost column is all zeros
 def shift_left(matrix):
+    shift_count = 0
     while torch.all(matrix[:, :, 0] == 0):  # Check if the leftmost column is full of zeros
         matrix = torch.roll(matrix, shifts=-1, dims=2)  # Shift all columns to the left
         matrix[:, :, -1] = 0  # Fill the last column with zeros after the shift
-    return matrix
+        shift_count += 1
+    return matrix, shift_count
 
 
 def shift_content_to_top_left(batch_matrices):
     # Function to shift the matrix up if the top row is all zeros
 
     shifted_matrices = []
+    shift_row = 0
+    shift_col = 0
     for i in tqdm(range(batch_matrices.shape[0]), desc="shift to top left"):
         matrix = batch_matrices[i]
-        matrix = shift_up(matrix)  # Apply upward shift
-        matrix = shift_left(matrix)  # Apply leftward shift
+        matrix, shift_row = shift_up(matrix)  # Apply upward shift
+        matrix, shift_col = shift_left(matrix)  # Apply leftward shift
         shifted_matrices.append(matrix.unsqueeze(0))
     shifted_matrices = torch.cat(shifted_matrices, dim=0)
-    return shifted_matrices
+    return shifted_matrices, shift_row, shift_col

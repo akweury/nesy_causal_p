@@ -359,8 +359,16 @@ def extract_fm(data, kernels):
     # Define a Conv2d layer with 28 output channels and 3x3 kernel
     # conv_layer = nn.Conv2d(in_channels=1, out_channels=len(kernels),
     #                        kernel_size=kernels.shape[1], stride=1, padding=2)
-    output = F.conv2d(data, kernels.unsqueeze(1).to(torch.float32), stride=1, padding=2)
-    return output
+    output = F.conv2d(data, kernels, stride=1, padding=2)
+    max_value = kernels.sum(dim=[1, 2, 3])
+
+    max_value = max_value.unsqueeze(1).unsqueeze(2).unsqueeze(0)
+    max_value = torch.repeat_interleave(max_value, output.shape[2], dim=-2)
+    max_value = torch.repeat_interleave(max_value, output.shape[3], dim=-1)
+
+    mask = (max_value == output).to(torch.float32)
+
+    return mask
 
 
 def learn_fm(args, train_loader, val_loader):

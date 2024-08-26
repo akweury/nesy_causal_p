@@ -114,16 +114,38 @@ def draw_angle():
     return torch.cat((angle_imgs), dim=0)
 
 
-def similarity(img, fm_repo):
-    mask = fm_repo > 0
-    img_repeated = torch.repeat_interleave(img, len(fm_repo), dim=0)
-    img_repeated = img_repeated * mask
-    same = img_repeated == fm_repo
+def similarity(img_fm, fm_repo):
+    non_zero_mask = fm_repo != 0
+    total_non_zero_comparisons = torch.sum(non_zero_mask, dim=[1, 2, 3]).float()
+    best_indices = torch.zeros((img_fm.shape[-2], img_fm.shape[-1]), dtype=torch.uint8)
+    best_values = torch.zeros((img_fm.shape[-2], img_fm.shape[-1]), dtype=torch.uint8)
+    for shift_i in tqdm(range(img_fm.shape[-2] - 50), desc="shift row"):
+        for shift_j in range(img_fm.shape[-1] - 50):
+            shifted_img = torch.roll(img_fm, shifts=(-shift_i, -shift_j), dims=(-2, -1))  # Shift all rows up
+            if shifted_img[:, :, shift_i, :].sum() == 0 or shifted_img[:, :, :, shift_j].sum() == 0:
+                continue
+            equal_items = (shifted_img == fm_repo) * non_zero_mask
+            num_equal_non_zero = torch.sum(equal_items, dim=[1, 2, 3]).float()
+            percentage_equal_non_zero = (num_equal_non_zero / (total_non_zero_comparisons + 1e-20))
+            best_indices[shift_i, shift_j] = torch.argmax(percentage_equal_non_zero)
+            best_values[shift_i, shift_j] = int(torch.max(percentage_equal_non_zero) * 100)
+    max_idx = torch.argmax(best_values)
+    shift_idx = torch.unravel_index(max_idx, best_values.shape)
+    best_value = best_values[shift_idx].item()
+    best_shift_img_fm = torch.roll(img_fm, shifts=(-torch.stack(shift_idx)).tolist(),
+                                   dims=(-2, -1))  # Shift all rows up
+    match_percent = f"{best_value}%"
+    fm_best_idx = best_indices[shift_idx].item()
+    fm_best = fm_repo[fm_best_idx]
+    fm_mask = non_zero_mask[fm_best_idx]
+    fm_best_diff = ((fm_best != best_shift_img_fm.squeeze()) * fm_mask).sum(dim=0).to(torch.float32)
+    fm_best_same = ((fm_best == best_shift_img_fm.squeeze()) * fm_mask).sum(dim=0).to(torch.float32)
 
-    fm_vp_count = mask.sum(dim=-1).sum(dim=-1).sum(dim=-1)
-    img_vp_count = same.sum(dim=-1).sum(dim=-1).sum(dim=-1)
-    preds = img_vp_count / (fm_vp_count + 1e-20)
-    return preds
+    exact_matching_matrix = (fm_best == best_shift_img_fm.squeeze()).sum(dim=0).to(torch.float32)
+    exact_matching_matrix = (exact_matching_matrix == fm_best.shape[0]).to(torch.float32)
+    exact_matching_matrix = torch.roll(exact_matching_matrix, shifts=torch.stack(shift_idx).tolist(),
+                                       dims=(-2, -1))  # Shift all rows up
+    return fm_best, fm_best_diff, fm_best_same, match_percent, exact_matching_matrix
 
 
 def main():
@@ -136,12 +158,36 @@ def main():
     args.data_types = args.exp_name
     train_loader, val_loader = prepare_kp_sy_data(args)
     os.makedirs(config.output / f"{args.exp_name}", exist_ok=True)
-    kernels = draw_angle()
+    kernels = torch.load(config.output / f"data_triangle" / f"kernels.pt").to(args.device)
+
     for data, labels in tqdm(train_loader):
         img_fm = perception.extract_fm(data, kernels)
-        img_fm_shifted = data_utils.shift_content_to_top_left(img_fm)
-        pred = similarity(img_fm_shifted, fm_repo)
+        data_fm_shifted, shift_row, shift_col = data_utils.shift_content_to_top_left(img_fm)
+        fm_best, fm_best_diff, fm_best_same, match_percent, exact_matrix = similarity(data_fm_shifted, fm_repo)
 
+        exact_matrix = torch.roll(exact_matrix, shifts=(shift_row, shift_col), dims=(-2, -1))  # Shift all rows up
+        data_mask = data.squeeze() != 0
+        data_onside = exact_matrix * data_mask
+        data_offside = (1 - exact_matrix) * data_mask
+        # visual fm and the input image
+        data_img = chart_utils.color_mapping(data.squeeze(), 1, "IN")
+
+        data_fm_shifted = data_fm_shifted.sum(dim=1).squeeze()
+        fm_best = fm_best.sum(dim=0).squeeze()
+        norm_factor = max(data_fm_shifted.max(), fm_best.max(), fm_best_diff.max())
+        data_onside_img = chart_utils.color_mapping(data_onside, norm_factor, "Onside")
+        data_offside_img = chart_utils.color_mapping(data_offside, norm_factor, "Offside")
+
+        data_fm_img = chart_utils.color_mapping(data_fm_shifted, norm_factor, "IN_FM")
+        repo_fm_img = chart_utils.color_mapping(fm_best, norm_factor, "Match_FM")
+        repo_fm_best_same = chart_utils.color_mapping(fm_best_same, norm_factor, f"SAME {match_percent}")
+        repo_fm_best_diff = chart_utils.color_mapping(fm_best_diff, norm_factor, "DIFF")
+
+        compare_img = chart_utils.concat_imgs(
+            [data_img, data_fm_img, repo_fm_img, repo_fm_best_same, repo_fm_best_diff, data_onside_img,
+             data_offside_img])
+
+        cv2.imwrite(str(config.output / f"{args.exp_name}" / f'compare.png'), compare_img)
         print("image done")
 
     print("program is finished.")
