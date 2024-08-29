@@ -275,16 +275,24 @@ def shift_left(matrix):
     return matrix, shift_count
 
 
-def shift_content_to_top_left(batch_matrices):
+def shift_content_to_top_left(batch_matrices, given_rs=None, given_cs=None):
     # Function to shift the matrix up if the top row is all zeros
-
+    rs = torch.zeros(batch_matrices.shape[0])
+    cs = torch.zeros(batch_matrices.shape[0])
     shifted_matrices = []
-    shift_row = 0
-    shift_col = 0
     for i in tqdm(range(batch_matrices.shape[0]), desc="shift to top left"):
         matrix = batch_matrices[i]
-        matrix, shift_row = shift_up(matrix)  # Apply upward shift
-        matrix, shift_col = shift_left(matrix)  # Apply leftward shift
+        if given_rs is not None:
+            matrix = torch.roll(matrix, shifts=-given_rs[i].item(), dims=1)  # Shift all rows up
+        else:
+            matrix, shift_row = shift_up(matrix)  # Apply upward shift
+            rs[i] = shift_row
+
+        if given_cs is not None:
+            matrix = torch.roll(matrix, shifts=-given_cs[i].item(), dims=2)  # Shift all rows up
+        else:
+            matrix, shift_col = shift_left(matrix)  # Apply leftward shift
+            cs[i] = shift_col
         shifted_matrices.append(matrix.unsqueeze(0))
     shifted_matrices = torch.cat(shifted_matrices, dim=0)
-    return shifted_matrices, shift_row, shift_col
+    return shifted_matrices, rs, cs

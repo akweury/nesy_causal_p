@@ -9,7 +9,6 @@ import torchvision.transforms.functional as F
 import numpy as np
 import cv2
 from PIL import Image, ImageDraw
-import faiss
 
 import config
 from src.percept import perception
@@ -118,9 +117,7 @@ def get_shifted_versions(img):
     # Create grid of all (x_shift, y_shift) pairs
     shifts = [(-x, -y) for x in range(img.shape[-2]) for y in range(img.shape[-1])]
     # Generate the shifted images as a batch
-    shifted_images = torch.cat(
-        [F.affine(img, angle=0, translate=[col, row], scale=1.0, shear=[0, 0]) for col, row in shifts], dim=0)
-
+    shifted_images = torch.cat([torch.roll(img, shifts=(row, col), dims=(-2, -1)) for row, col in shifts])
     return shifted_images
 
 
@@ -249,13 +246,17 @@ def get_match_detail(target_fm, shift_in_fm, max_value):
                                 target_fm.flatten().unsqueeze(0).t()) / target_fm.sum().unsqueeze(0)  # Shape: (N1, N2)
     if torch.abs(similarity_value - max_value) > 1e-2:
         raise ValueError
-    diff_fm = ((target_fm != shift_in_fm) * fm_mask).sum(dim=0).to(torch.float32)
+    # diff_fm = ((target_fm != shift_in_fm) * fm_mask).sum(dim=0).to(torch.float32)
     same_fm = ((target_fm == shift_in_fm) * fm_mask).sum(dim=0).to(torch.float32)
+    mask_full_match = torch.all(target_fm == shift_in_fm, dim=0) * torch.any(fm_mask, dim=0)
+    mask_any_mismatch = torch.any(target_fm == shift_in_fm, dim=0) * torch.any(fm_mask, dim=0) * ~mask_full_match
+    all_same_fm = same_fm * mask_full_match
+    any_diff_fm = same_fm * mask_any_mismatch
+    same_percent = mask_full_match.sum() / target_fm.sum(dim=0).bool().sum()
+    return all_same_fm, any_diff_fm, same_percent
 
-    return same_fm, diff_fm
 
-
-def get_siding(data, match_same):
+def get_siding(data, match_same, match_diff):
     # exact_matching_matrix = (max_fm == max_img_fm_shift.squeeze()).sum(dim=0).to(torch.float32)
     # exact_matching_matrix = (exact_matching_matrix == max_fm.shape[0]).to(torch.float32)
     # exact_matrix = F.affine(match_same.unsqueeze(0), angle=0,
@@ -289,54 +290,12 @@ def main():
         in_fm = perception.extract_fm(data, kernels)
         match_fm_shift, match_fm_idx, match_fm_value = get_pair(in_fm, fm_repo)
         match_fm = fm_repo[match_fm_idx]
-        # shift_in_fm = F.affine(in_fm, angle=0, translate=match_fm_shift, scale=1.0, shear=[0, 0]).squeeze()
-        shift_mfm = F.affine(match_fm, angle=0, translate=match_fm_shift, scale=1.0, shear=[0, 0]).squeeze()
-        match_same, match_diff = get_match_detail(shift_mfm, in_fm.squeeze(), match_fm_value)
-        img_onside, img_offside = get_siding(data, match_same)
-        visual_all(args, data, in_fm, shift_mfm, match_fm_value, match_same, match_diff, img_onside,
+        shift_mfm = torch.roll(match_fm, shifts=tuple(match_fm_shift), dims=(-2, -1))
+        match_same, match_diff, same_percent = get_match_detail(shift_mfm, in_fm.squeeze(), match_fm_value)
+        img_onside, img_offside = get_siding(data, match_same, match_diff)
+        visual_all(args, data, in_fm, shift_mfm, same_percent, match_same, match_diff, img_onside,
                    img_offside)
 
-        # data_fm_shifted, shift_row, shift_col = data_utils.shift_content_to_top_left(img_fm)
-        # fm_best, fm_best_diff, fm_best_same, match_percent, exact_matrix = similarity_fast(img_fm, fm_repo)
-        # max_shift_idx, max_fm_idx, max_value = get_pair(in_fm, fm_repo)
-
-        # max_img_fm_shift = F.affine(in_fm, angle=0, translate=max_shift_idx, scale=1.0, shear=[0, 0])
-        # max_fm = fm_repo[max_fm_idx]
-
-        # fm_mask = non_zero_mask[max_fm_idx]
-        # fm_best_diff = ((max_fm != max_img_fm_shift.squeeze()) * fm_mask).sum(dim=0).to(torch.float32)
-        # fm_best_same = ((max_fm == max_img_fm_shift.squeeze()) * fm_mask).sum(dim=0).to(torch.float32)
-
-        # exact_matching_matrix = (max_fm == max_img_fm_shift.squeeze()).sum(dim=0).to(torch.float32)
-        # exact_matching_matrix = (exact_matching_matrix == max_fm.shape[0]).to(torch.float32)
-        # exact_matrix = F.affine(exact_matching_matrix.unsqueeze(0), angle=0,
-        #                         translate=(-torch.tensor(max_shift_idx)).tolist(), scale=1.0, shear=[0, 0]).squeeze()
-
-        # exact_matrix = torch.roll(exact_matrix, shifts=(shift_row, shift_col), dims=(-2, -1))  # Shift all rows up
-        # data_mask = data.squeeze() != 0
-        # data_onside = exact_matrix * data_mask
-        # data_offside = (1 - exact_matrix) * data_mask
-        # visual fm and the input image
-        # data_img = chart_utils.color_mapping(data.squeeze(), 1, "IN")
-
-        # data_fm_shifted = in_fm.sum(dim=1).squeeze()
-        # fm_best = max_fm.sum(dim=0).squeeze()
-        # norm_factor = max([data_fm_shifted.max(), fm_best.max(), fm_best_diff.max()])
-        # max_similarity = int(max_value.item() * 100)
-        # match_percent = f"{max_similarity}%"
-        #
-        # data_onside_img = chart_utils.color_mapping(data_onside, norm_factor, "Onside")
-        # data_offside_img = chart_utils.color_mapping(data_offside, norm_factor, "Offside")
-        # data_fm_img = chart_utils.color_mapping(data_fm_shifted, norm_factor, "IN_FM")
-        # repo_fm_img = chart_utils.color_mapping(fm_best, norm_factor, "Match_FM")
-        # repo_fm_best_same = chart_utils.color_mapping(fm_best_same, norm_factor, f"SAME {match_percent}")
-        # repo_fm_best_diff = chart_utils.color_mapping(fm_best_diff, norm_factor, "DIFF")
-        #
-        # compare_img = chart_utils.concat_imgs(
-        #     [data_img, data_fm_img, repo_fm_img, repo_fm_best_same, repo_fm_best_diff, data_onside_img,
-        #      data_offside_img])
-        #
-        # cv2.imwrite(str(config.output / f"{args.exp_name}" / f'compare.png'), compare_img)
         print("image done")
 
     print("program is finished.")
