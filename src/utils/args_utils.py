@@ -34,6 +34,7 @@ def get_args():
     parser.add_argument('--gamma', default=0.001, type=float,
                         help='Smooth parameter in the softor function')
     parser.add_argument("--bs_clause_eval", type=int, default=5)
+    parser.add_argument("--top_fm_k", type=int, default=5)
     parser.add_argument("--top_k", type=int, default=10)
     parser.add_argument("--max_bs_step", type=int, default=3)
     parser.add_argument("--max_obj_num", type=int, default=5)

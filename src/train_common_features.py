@@ -12,7 +12,7 @@ from PIL import Image, ImageDraw
 
 import config
 from src.percept import perception
-from src.utils import args_utils, data_utils, chart_utils
+from src.utils import args_utils, data_utils, chart_utils, file_utils
 
 
 def prepare_kp_sy_data(args):
@@ -201,62 +201,60 @@ def get_pair(img_fm, fm_repo):
     g2_flat = fm_repo.view(fm_repo.size(0), -1)  # Shape: (N2, 192 * 64 * 64)
     # Compute cosine similarity between all pairs (N1 x N2 matrix)
     similarity_matrix = torch.mm(g1_flat, g2_flat.t()) / g2_flat.sum(dim=1).unsqueeze(0)  # Shape: (N1, N2)
-    max_idx = torch.argmax(similarity_matrix)
-    max_value = torch.max(similarity_matrix)
-    max_idx_2d = torch.unravel_index(max_idx, similarity_matrix.shape)
-    max_idx_shift = torch.unravel_index(max_idx_2d[0], img_fm.shape[-2:])
-    max_idx_fm = max_idx_2d[1]
-    max_idx_shift = (torch.stack(max_idx_shift)).tolist()
-    return max_idx_shift, max_idx_fm, max_value
+
+    top_values, top_indices = torch.topk(similarity_matrix.flatten(), 5)
+    top_indices_2d = torch.stack(torch.unravel_index(top_indices, similarity_matrix.shape)).t()
+
+    max_idx_shift = torch.stack(torch.unravel_index(top_indices_2d[:, 0], img_fm.shape[-2:])).t()
+    max_idx_fm = top_indices_2d[:, 1]
+
+    return max_idx_shift, max_idx_fm, top_values
 
 
-# def get_match_fm(in_fm, fm_repo):
-#     """ return the most similar image features"""
-# max_shift_idx, max_fm_idx, max_value = get_pair(in_fm, fm_repo)
-# max_img_fm_shift = F.affine(in_fm, angle=0, translate=max_shift_idx, scale=1.0, shear=[0, 0])
-# return max_fm_idx, max_value, max_shift_idx
-
-
-def visual_all(args, data, data_fm_shifted, fm_best, max_value, fm_best_same, fm_best_diff, data_onside, data_offside):
+def visual_all(args, data, data_fm_shifted, fm_best, max_value, fm_best_same, fm_best_diff, data_onside, data_offside,
+               img_onside_uncertain):
     in_fm_img = data_fm_shifted.squeeze().sum(dim=0)
-    best_fm_img = fm_best.sum(dim=0)
-    norm_factor = max([in_fm_img.max(), best_fm_img.max()])
+    compare_imgs = []
+    for i in range(len(fm_best)):
+        best_fm_img = fm_best[i].sum(dim=0)
+        norm_factor = max([in_fm_img.max(), best_fm_img.max()])
 
-    match_percent = f"{int(max_value.item() * 100)}%"
+        match_percent = f"{int(max_value[i].item() * 100)}%"
 
-    data_img = chart_utils.color_mapping(data.squeeze(), 1, "IN")
-    data_fm_img = chart_utils.color_mapping(in_fm_img, norm_factor, "IN_FM_SHIFT")
-    repo_fm_img = chart_utils.color_mapping(best_fm_img, norm_factor, "Match_FM")
-    repo_fm_best_same = chart_utils.color_mapping(fm_best_same, norm_factor, f"SAME {match_percent}")
-    repo_fm_best_diff = chart_utils.color_mapping(fm_best_diff, norm_factor, "DIFF")
-    data_onside_img = chart_utils.color_mapping(data_onside, norm_factor, "Onside")
-    data_offside_img = chart_utils.color_mapping(data_offside, norm_factor, "Offside")
+        data_img = chart_utils.color_mapping(data.squeeze(), 1, "IN")
+        data_fm_img = chart_utils.color_mapping(in_fm_img, norm_factor, "IN_FM_SHIFT")
+        repo_fm_img = chart_utils.color_mapping(best_fm_img, norm_factor, "Match_FM")
+        repo_fm_best_same = chart_utils.color_mapping(fm_best_same[i], norm_factor, f"SAME {match_percent}")
+        repo_fm_best_diff = chart_utils.color_mapping(fm_best_diff[i], norm_factor, "DIFF")
+        data_onside_img = chart_utils.color_mapping(data_onside[i], norm_factor, "Onside")
+        data_onside_uncertain_img = chart_utils.color_mapping(img_onside_uncertain[i], norm_factor, "Onside_Uncertain")
+        data_offside_img = chart_utils.color_mapping(data_offside[i], norm_factor, "Offside")
 
-    compare_img = chart_utils.concat_imgs(
-        [data_img, data_fm_img, repo_fm_img, repo_fm_best_same, repo_fm_best_diff, data_onside_img,
-         data_offside_img])
-    compare_img = cv2.cvtColor(compare_img, cv2.COLOR_BGR2RGB)
-    cv2.imwrite(str(config.output / f"{args.exp_name}" / f'compare.png'), compare_img)
+        compare_imgs.append(chart_utils.concat_imgs(
+            [data_img, data_fm_img, repo_fm_img, repo_fm_best_same, repo_fm_best_diff, data_onside_img,
+             data_onside_uncertain_img, data_offside_img]))
+    compare_imgs = chart_utils.vconcat_imgs(compare_imgs)
+    compare_imgs = cv2.cvtColor(compare_imgs, cv2.COLOR_BGR2RGB)
+    cv2.imwrite(str(config.output / f"{args.exp_name}" / f'compare.png'), compare_imgs)
 
 
 def get_match_detail(target_fm, shift_in_fm, max_value):
     fm_mask = target_fm != 0
 
-    similarity_value = torch.mm(shift_in_fm.flatten().unsqueeze(0),
-                                target_fm.flatten().unsqueeze(0).t()) / target_fm.sum().unsqueeze(0)  # Shape: (N1, N2)
-    if torch.abs(similarity_value - max_value) > 1e-2:
-        raise ValueError
-    # diff_fm = ((target_fm != shift_in_fm) * fm_mask).sum(dim=0).to(torch.float32)
-    same_fm = ((target_fm == shift_in_fm) * fm_mask).sum(dim=0).to(torch.float32)
-    mask_full_match = torch.all(target_fm == shift_in_fm, dim=0) * torch.any(fm_mask, dim=0)
-    mask_any_mismatch = torch.any(target_fm == shift_in_fm, dim=0) * torch.any(fm_mask, dim=0) * ~mask_full_match
+    # similarity_value = [torch.mm(shift_in_fm.flatten().unsqueeze(0),
+    #                              target_fm[i].flatten().unsqueeze(0).t()) / target_fm[i].sum().unsqueeze(0) for i in
+    #                     range(len(fm_mask))]
+    same_fm = ((target_fm == shift_in_fm) * fm_mask).sum(dim=1).to(torch.float32)
+    mask_full_match = torch.all(target_fm == shift_in_fm, dim=1) * torch.any(fm_mask, dim=1)
+    mask_any_mismatch = torch.any((target_fm == shift_in_fm) * fm_mask, dim=1) * torch.any(fm_mask,
+                                                                                           dim=1) * ~mask_full_match
     all_same_fm = same_fm * mask_full_match
     any_diff_fm = same_fm * mask_any_mismatch
-    same_percent = mask_full_match.sum() / target_fm.sum(dim=0).bool().sum()
+    same_percent = mask_full_match.sum(dim=[1, 2]) / (target_fm.sum(dim=1).bool().sum(dim=[1, 2]) + 1e-20)
     return all_same_fm, any_diff_fm, same_percent
 
 
-def get_siding(data, match_same, match_diff):
+def get_siding(args, data, match_same, match_diff, match_fm_img):
     # exact_matching_matrix = (max_fm == max_img_fm_shift.squeeze()).sum(dim=0).to(torch.float32)
     # exact_matching_matrix = (exact_matching_matrix == max_fm.shape[0]).to(torch.float32)
     # exact_matrix = F.affine(match_same.unsqueeze(0), angle=0,
@@ -264,40 +262,87 @@ def get_siding(data, match_same, match_diff):
 
     # exact_matrix = torch.roll(exact_matrix, shifts=(shift_row, shift_col), dims=(-2, -1))  # Shift all rows up
     # shift_match = F.affine(match_same.unsqueeze(0), angle=0, translate=shift, scale=1.0, shear=[0, 0]).squeeze()
-
+    top_k = args.top_fm_k
     data_mask = data.squeeze() != 0
-    data_onside = match_same * data_mask
-    data_offside = (match_same == 0) * data_mask
 
-    return data_onside, data_offside
+    data_onside = [(match_fm_img[i].squeeze() * data_mask) for i in range(top_k)]
+    data_onside.append((match_fm_img.squeeze().sum(dim=0).float() * data_mask))
+    data_onside = torch.stack(data_onside)
+
+    data_onside_uncertain = [(match_diff[i] * data_mask) for i in range(top_k)]
+    data_onside_uncertain.append((match_diff.sum(dim=0).float() * data_mask))
+    data_onside_uncertain = torch.stack(data_onside_uncertain)
+
+    data_offside = [((match_fm_img[i].squeeze() == 0) * data_mask) for i in range(top_k)]
+    data_offside.append(((match_fm_img.squeeze().sum(dim=0) == 0).float() * data_mask))
+    data_offside = torch.stack(data_offside)
+    return data_onside, data_offside, data_onside_uncertain
+
+
+def load_data(args, idx):
+    image_paths = []
+
+    folder = config.kp_dataset / args.exp_name
+    imgs = file_utils.get_all_files(folder, "png", False)[:500]
+    image_paths += imgs
+
+    file_name, file_extension = image_paths[idx].split(".")
+    data = file_utils.load_json(f"{file_name}.json")
+    patch = data_utils.oco2patch(data).unsqueeze(0).to(args.device)
+
+    return patch
+
+
+def load_shift(args, idx, in_fm, fm_repo):
+    buffer_file = config.output / f"{args.exp_name}" / f'shift_{idx}.pt'
+    if os.path.exists(buffer_file):
+        data = torch.load(buffer_file)
+        match_fm_shift = data['match_fm_shift']
+        match_fm_idx = data['match_fm_idx']
+        top_values = data["top_values"]
+    else:
+        match_fm_shift, match_fm_idx, top_values = get_pair(in_fm, fm_repo)
+        data = {"match_fm_shift": match_fm_shift,
+                "match_fm_idx": match_fm_idx,
+                "top_values": top_values}
+        torch.save(data, buffer_file)
+    top_values = torch.cat((top_values, torch.zeros(1)))
+    return match_fm_shift, match_fm_idx, top_values
 
 
 def main():
     args = args_utils.get_args()
     args.batch_size = 1
-    # load learned triangle fms
-
-    # load test dataset
     args.data_types = args.exp_name
-    train_loader, val_loader = prepare_kp_sy_data(args)
+    # train_loader, val_loader = prepare_kp_sy_data(args)
     os.makedirs(config.output / f"{args.exp_name}", exist_ok=True)
-
-    fm_repo = torch.load(config.output / f"data_triangle" / f"fms.pt").to(args.device)
     kernels = torch.load(config.output / f"data_triangle" / f"kernels.pt").to(args.device)
-    # non_zero_mask = fm_repo != 0
-    for data, labels in tqdm(train_loader):
-        # convert image to its feature map
-        in_fm = perception.extract_fm(data, kernels)
-        match_fm_shift, match_fm_idx, match_fm_value = get_pair(in_fm, fm_repo)
-        match_fm = fm_repo[match_fm_idx]
-        shift_mfm = torch.roll(match_fm, shifts=tuple(match_fm_shift), dims=(-2, -1))
-        match_same, match_diff, same_percent = get_match_detail(shift_mfm, in_fm.squeeze(), match_fm_value)
-        img_onside, img_offside = get_siding(data, match_same, match_diff)
-        visual_all(args, data, in_fm, shift_mfm, same_percent, match_same, match_diff, img_onside,
-                   img_offside)
+    fm_data = torch.load(config.output / f"data_triangle" / f"fms.pt").to(args.device)
+    fm_img = fm_data[:, 0:1]
+    fm_repo = fm_data[:, 1:]
 
-        print("image done")
+    idx = 0
 
+    data = load_data(args, idx=0)
+    in_fm = perception.extract_fm(data.unsqueeze(0), kernels)
+    match_fm_shift, match_fm_idx, match_fm_value = load_shift(args, idx, in_fm, fm_repo)
+    # convert image to its feature map
+    # in_fm = perception.extract_fm(data, kernels)
+    # match_fm_shift, match_fm_idx, match_fm_value = get_pair(in_fm, fm_repo)
+    match_fm = fm_repo[match_fm_idx]
+    match_fm_img = fm_img[match_fm_idx]
+
+    shift_mfm = [torch.roll(match_fm[i], shifts=tuple(match_fm_shift[i]), dims=(-2, -1)) for i in range(args.top_fm_k)]
+    shift_mfm.append(torch.zeros_like(shift_mfm[0]))
+    shift_mfm = torch.stack(shift_mfm)
+
+    shift_mfm_img = torch.stack([torch.roll(match_fm_img[i], shifts=tuple(match_fm_shift[i]), dims=(-2, -1)) for i in
+                                 range(args.top_fm_k)])
+    match_same, match_diff, same_percent = get_match_detail(shift_mfm, in_fm.squeeze(), match_fm_value)
+    img_onside, img_offside, img_onside_uncertain = get_siding(args, data, match_same, match_diff, shift_mfm_img)
+    visual_all(args, data, in_fm, shift_mfm, same_percent, match_same, match_diff, img_onside, img_offside,
+               img_onside_uncertain)
+    print("image done")
     print("program is finished.")
 
 

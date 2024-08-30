@@ -71,7 +71,7 @@ def zoom_img(matrix, zoom_factor=8, add_border=True):
 def color_mapping(matrix, norm_factor, text=None):
     # Choose a colormap, e.g., 'viridis'
     cmap = plt.get_cmap('viridis')
-    zoomed_image = cv2.resize(cmap(matrix/norm_factor)[:, :, :3], (512, 512), interpolation=cv2.INTER_NEAREST)
+    zoomed_image = cv2.resize(cmap(matrix / norm_factor)[:, :, :3], (512, 512), interpolation=cv2.INTER_NEAREST)
     zoomed_image = (zoomed_image * 255).astype(np.uint8)
 
     if text is not None:
@@ -88,5 +88,16 @@ def concat_imgs(img_list):
         pad_img = np.pad(img, pad_width=((pad_width, pad_width), (pad_width, pad_width), (0, 0)), constant_values=255)
         padding_imgs.append(pad_img)
     img = np.hstack(padding_imgs).astype(np.uint8)
+
+    return img
+
+
+def vconcat_imgs(img_list):
+    padding_imgs = []
+    for img in img_list:
+        pad_width = 2
+        pad_img = np.pad(img, pad_width=((pad_width, pad_width), (pad_width, pad_width), (0, 0)), constant_values=255)
+        padding_imgs.append(pad_img)
+    img = np.vstack(padding_imgs).astype(np.uint8)
 
     return img

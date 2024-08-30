@@ -283,13 +283,13 @@ def shift_content_to_top_left(batch_matrices, given_rs=None, given_cs=None):
     for i in tqdm(range(batch_matrices.shape[0]), desc="shift to top left"):
         matrix = batch_matrices[i]
         if given_rs is not None:
-            matrix = torch.roll(matrix, shifts=-given_rs[i].item(), dims=1)  # Shift all rows up
+            matrix = torch.roll(matrix, shifts=int(-given_rs[i].item()), dims=1)  # Shift all rows up
         else:
             matrix, shift_row = shift_up(matrix)  # Apply upward shift
             rs[i] = shift_row
 
         if given_cs is not None:
-            matrix = torch.roll(matrix, shifts=-given_cs[i].item(), dims=2)  # Shift all rows up
+            matrix = torch.roll(matrix, shifts=int(-given_cs[i].item()), dims=2)  # Shift all rows up
         else:
             matrix, shift_col = shift_left(matrix)  # Apply leftward shift
             cs[i] = shift_col

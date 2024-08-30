@@ -123,13 +123,15 @@ def main():
     for data, labels in tqdm(train_loader):
         fms = perception.extract_fm(data, kernels)
         fms, rs, cs = data_utils.shift_content_to_top_left(fms)
-        data_shift = data_utils.shift_content_to_top_left(data, rs, cs)
+        data_shift, _, _ = data_utils.shift_content_to_top_left(data, rs, cs)
         fm_all.append(fms)
         data_shift_all.append(data_shift)
-    fm_all = torch.cat(fm_all, dim=0).unique(dim=0)
-    # save all the fms
-    # fm_all = data_utils.shift_content_to_top_left(fm_all).unique(dim=0)
-    torch.save(fm_all, config.output / f"{args.exp_name}" / f"fms.pt")
+    fm_all = torch.cat(fm_all, dim=0)
+    data_shift_all = torch.cat(data_shift_all, dim=0)
+
+    data_all = torch.cat((data_shift_all, fm_all), dim=1).unique(dim=0)
+    torch.save(data_all, config.output / f"{args.exp_name}" / f"fms.pt")
+
 
 
 if __name__ == "__main__":
