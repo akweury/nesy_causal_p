@@ -280,7 +280,7 @@ def shift_content_to_top_left(batch_matrices, given_rs=None, given_cs=None):
     rs = torch.zeros(batch_matrices.shape[0])
     cs = torch.zeros(batch_matrices.shape[0])
     shifted_matrices = []
-    for i in tqdm(range(batch_matrices.shape[0]), desc="shift to top left"):
+    for i in range(batch_matrices.shape[0]):
         matrix = batch_matrices[i]
         if given_rs is not None:
             matrix = torch.roll(matrix, shifts=int(-given_rs[i].item()), dims=1)  # Shift all rows up

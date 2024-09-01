@@ -211,8 +211,8 @@ def get_pair(img_fm, fm_repo):
     return max_idx_shift, max_idx_fm, top_values
 
 
-def visual_all(args, data, data_fm_shifted, fm_best, max_value, fm_best_same, fm_best_diff, data_onside, data_offside,
-               img_onside_uncertain):
+def visual_all(args, idx, data, data_fm_shifted, fm_best, max_value, fm_best_same, fm_best_diff, data_onside,
+               data_offside, img_onside_uncertain):
     in_fm_img = data_fm_shifted.squeeze().sum(dim=0)
     compare_imgs = []
     for i in range(len(fm_best)):
@@ -235,7 +235,7 @@ def visual_all(args, data, data_fm_shifted, fm_best, max_value, fm_best_same, fm
              data_onside_uncertain_img, data_offside_img]))
     compare_imgs = chart_utils.vconcat_imgs(compare_imgs)
     compare_imgs = cv2.cvtColor(compare_imgs, cv2.COLOR_BGR2RGB)
-    cv2.imwrite(str(config.output / f"{args.exp_name}" / f'compare.png'), compare_imgs)
+    cv2.imwrite(str(config.output / f"{args.exp_name}" / f'compare_{idx}.png'), compare_imgs)
 
 
 def get_match_detail(target_fm, shift_in_fm, max_value):
@@ -279,14 +279,8 @@ def get_siding(args, data, match_same, match_diff, match_fm_img):
     return data_onside, data_offside, data_onside_uncertain
 
 
-def load_data(args, idx):
-    image_paths = []
-
-    folder = config.kp_dataset / args.exp_name
-    imgs = file_utils.get_all_files(folder, "png", False)[:500]
-    image_paths += imgs
-
-    file_name, file_extension = image_paths[idx].split(".")
+def load_data(args, image_path):
+    file_name, file_extension = image_path.split(".")
     data = file_utils.load_json(f"{file_name}.json")
     patch = data_utils.oco2patch(data).unsqueeze(0).to(args.device)
 
@@ -321,28 +315,32 @@ def main():
     fm_img = fm_data[:, 0:1]
     fm_repo = fm_data[:, 1:]
 
-    idx = 0
+    image_paths = []
+    folder = config.kp_dataset / args.exp_name
+    imgs = file_utils.get_all_files(folder, "png", False)[:500]
+    image_paths += imgs
+    for idx in tqdm(range(len(image_paths)), "matching image"):
+        data = load_data(args, image_paths[idx])
+        in_fm = perception.extract_fm(data.unsqueeze(0), kernels)
+        match_fm_shift, match_fm_idx, match_fm_value = load_shift(args, idx, in_fm, fm_repo)
+        # convert image to its feature map
+        # in_fm = perception.extract_fm(data, kernels)
+        # match_fm_shift, match_fm_idx, match_fm_value = get_pair(in_fm, fm_repo)
+        match_fm = fm_repo[match_fm_idx]
+        match_fm_img = fm_img[match_fm_idx]
 
-    data = load_data(args, idx=0)
-    in_fm = perception.extract_fm(data.unsqueeze(0), kernels)
-    match_fm_shift, match_fm_idx, match_fm_value = load_shift(args, idx, in_fm, fm_repo)
-    # convert image to its feature map
-    # in_fm = perception.extract_fm(data, kernels)
-    # match_fm_shift, match_fm_idx, match_fm_value = get_pair(in_fm, fm_repo)
-    match_fm = fm_repo[match_fm_idx]
-    match_fm_img = fm_img[match_fm_idx]
+        shift_mfm = [torch.roll(match_fm[i], shifts=tuple(match_fm_shift[i]), dims=(-2, -1)) for i in
+                     range(args.top_fm_k)]
+        shift_mfm.append(torch.zeros_like(shift_mfm[0]))
+        shift_mfm = torch.stack(shift_mfm)
 
-    shift_mfm = [torch.roll(match_fm[i], shifts=tuple(match_fm_shift[i]), dims=(-2, -1)) for i in range(args.top_fm_k)]
-    shift_mfm.append(torch.zeros_like(shift_mfm[0]))
-    shift_mfm = torch.stack(shift_mfm)
-
-    shift_mfm_img = torch.stack([torch.roll(match_fm_img[i], shifts=tuple(match_fm_shift[i]), dims=(-2, -1)) for i in
-                                 range(args.top_fm_k)])
-    match_same, match_diff, same_percent = get_match_detail(shift_mfm, in_fm.squeeze(), match_fm_value)
-    img_onside, img_offside, img_onside_uncertain = get_siding(args, data, match_same, match_diff, shift_mfm_img)
-    visual_all(args, data, in_fm, shift_mfm, same_percent, match_same, match_diff, img_onside, img_offside,
-               img_onside_uncertain)
-    print("image done")
+        shift_mfm_img = torch.stack(
+            [torch.roll(match_fm_img[i], shifts=tuple(match_fm_shift[i]), dims=(-2, -1)) for i in
+             range(args.top_fm_k)])
+        match_same, match_diff, same_percent = get_match_detail(shift_mfm, in_fm.squeeze(), match_fm_value)
+        img_onside, img_offside, img_onside_uncertain = get_siding(args, data, match_same, match_diff, shift_mfm_img)
+        visual_all(args, idx, data, in_fm, shift_mfm, same_percent, match_same, match_diff, img_onside, img_offside,
+                   img_onside_uncertain)
     print("program is finished.")
 
 
