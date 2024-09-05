@@ -110,7 +110,7 @@ def main():
     kernels = []
 
     patch_size = 5
-    for data, labels in tqdm(train_loader):
+    for data in tqdm(train_loader):
         patches = data.unfold(2, patch_size, 1).unfold(3, patch_size, 1)
         patches = patches.reshape(-1, patch_size, patch_size).unique(dim=0)
         patches = patches[~torch.all(patches == 0, dim=(1, 2))]
@@ -120,7 +120,7 @@ def main():
 
     fm_all = []
     data_shift_all = []
-    for data, labels in tqdm(train_loader):
+    for data in tqdm(train_loader):
         fms = perception.extract_fm(data, kernels)
         fms, rs, cs = data_utils.shift_content_to_top_left(fms)
         data_shift, _, _ = data_utils.shift_content_to_top_left(data, rs, cs)
@@ -131,7 +131,7 @@ def main():
 
     data_all = torch.cat((data_shift_all, fm_all), dim=1).unique(dim=0)
     torch.save(data_all, config.output / f"{args.exp_name}" / f"fms.pt")
-
+    print(f"feature maps have been saved to {config.output / f'{args.exp_name}' / 'fms.pt'}")
 
 
 if __name__ == "__main__":

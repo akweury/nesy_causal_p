@@ -5,7 +5,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-from tqdm import tqdm
 
 
 def data2patch(data):
@@ -92,6 +91,13 @@ def closest_distance(points):
             min_y_dist = y_diff
 
     return min_x_dist, min_y_dist
+
+
+def data2positions(data):
+    positions = torch.cat([torch.tensor([[d["x"], d["y"]]]) for d in data], dim=0)
+    scale = 64
+    grid_position = torch.ceil(positions * (scale - 1)).to(dtype=torch.int)
+    return grid_position
 
 
 def oco2patch(data):
@@ -296,3 +302,5 @@ def shift_content_to_top_left(batch_matrices, given_rs=None, given_cs=None):
         shifted_matrices.append(matrix.unsqueeze(0))
     shifted_matrices = torch.cat(shifted_matrices, dim=0)
     return shifted_matrices, rs, cs
+
+

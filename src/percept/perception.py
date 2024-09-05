@@ -75,13 +75,13 @@ class ShapeDataset(Dataset):
         self.transform = transform
 
         self.image_paths = []
-        self.labels = []
+        # self.labels = []
         self.device = args.device
         folder = config.kp_dataset / args.exp_name
-        imgs = file_utils.get_all_files(folder, "png", False)[:500]
-        labels = [self.get_label(args.exp_name) for img in imgs]
+        imgs = file_utils.get_all_files(folder, "png", False)
+        # labels = [self.get_label(args.exp_name) for img in imgs]
         self.image_paths += imgs
-        self.labels += labels
+        # self.labels += labels
 
     def get_label(self, img_name):
         if 'trianglesquare' in img_name:
@@ -98,8 +98,8 @@ class ShapeDataset(Dataset):
         file_name, file_extension = self.image_paths[idx].split(".")
         data = file_utils.load_json(f"{file_name}.json")
         patch = data_utils.oco2patch(data).unsqueeze(0).to(self.device)
-        label = self.labels[idx].to(self.device)
-        return patch, label
+        # label = self.labels[idx].to(self.device)
+        return patch
 
 
 class MaskOptimizer:
@@ -356,27 +356,10 @@ def kmeans_common_features(args, model, train_loader, val_loader):
 
 
 def extract_fm(data, kernels):
-    # Define a Conv2d layer with 28 output channels and 3x3 kernel
-    # conv_layer = nn.Conv2d(in_channels=1, out_channels=len(kernels),
-    #                        kernel_size=kernels.shape[1], stride=1, padding=2)
     output = F.conv2d(data, kernels, stride=1, padding=2)
     max_value = kernels.sum(dim=[1, 2, 3])
-
     max_value = max_value.unsqueeze(1).unsqueeze(2).unsqueeze(0)
     max_value = torch.repeat_interleave(max_value, output.shape[2], dim=-2)
     max_value = torch.repeat_interleave(max_value, output.shape[3], dim=-1)
-
     mask = (max_value == output).to(torch.float32)
-
     return mask
-
-
-def learn_fm(args, train_loader, val_loader):
-    num_epochs = 100
-    for images, labels in train_loader:
-        # for i in range(len(images)):
-        #     img = visual_utils.patch2img(images[i].squeeze().to(torch.uint8).tolist())
-        #     file_name = str(config.output / f"kp_sy_{args.exp_name}" / f"input_{i}.png")
-        #     cv2.imwrite(file_name, img)
-
-        fms = extract_fm(images.to(args.device))

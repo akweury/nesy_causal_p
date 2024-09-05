@@ -19,6 +19,9 @@ neural_p = {
     # 'repeat': 'repeat:2:group,+;group,+'
 }
 
+obj_ohc = ["color_name", "shape", "x", "y"]
+color = ["blue", "yellow", "red"]
+shape = ["circle", "square", "triangle"]
 # ig_dtype = "input_group,+"
 # og_dtype = "output_group,+"
 

@@ -211,8 +211,8 @@ def get_pair(img_fm, fm_repo):
     return max_idx_shift, max_idx_fm, top_values
 
 
-def visual_all(args, idx, data, data_fm_shifted, fm_best, max_value, fm_best_same, fm_best_diff, data_onside,
-               data_offside, img_onside_uncertain):
+def visual_all(args, idx, img, data, data_fm_shifted, fm_best, max_value, fm_best_same, fm_best_diff, data_onside,
+               data_offside, img_onside_uncertain, bk_shape):
     in_fm_img = data_fm_shifted.squeeze().sum(dim=0)
     compare_imgs = []
     for i in range(len(fm_best)):
@@ -221,7 +221,7 @@ def visual_all(args, idx, data, data_fm_shifted, fm_best, max_value, fm_best_sam
 
         match_percent = f"{int(max_value[i].item() * 100)}%"
 
-        data_img = chart_utils.color_mapping(data.squeeze(), 1, "IN")
+        pos_img = chart_utils.color_mapping(data.squeeze(), 1, "IN")
         data_fm_img = chart_utils.color_mapping(in_fm_img, norm_factor, "IN_FM_SHIFT")
         repo_fm_img = chart_utils.color_mapping(best_fm_img, norm_factor, "Match_FM")
         repo_fm_best_same = chart_utils.color_mapping(fm_best_same[i], norm_factor, f"SAME {match_percent}")
@@ -231,11 +231,11 @@ def visual_all(args, idx, data, data_fm_shifted, fm_best, max_value, fm_best_sam
         data_offside_img = chart_utils.color_mapping(data_offside[i], norm_factor, "Offside")
 
         compare_imgs.append(chart_utils.concat_imgs(
-            [data_img, data_fm_img, repo_fm_img, repo_fm_best_same, repo_fm_best_diff, data_onside_img,
+            [img, pos_img, data_fm_img, repo_fm_img, repo_fm_best_same, repo_fm_best_diff, data_onside_img,
              data_onside_uncertain_img, data_offside_img]))
     compare_imgs = chart_utils.vconcat_imgs(compare_imgs)
     compare_imgs = cv2.cvtColor(compare_imgs, cv2.COLOR_BGR2RGB)
-    cv2.imwrite(str(config.output / f"{args.exp_name}" / f'compare_{idx}.png'), compare_imgs)
+    cv2.imwrite(str(config.output / f"{args.exp_name}" / f'c_{bk_shape["name"]}_{idx}.png'), compare_imgs)
 
 
 def get_match_detail(target_fm, shift_in_fm, max_value):
@@ -279,16 +279,8 @@ def get_siding(args, data, match_same, match_diff, match_fm_img):
     return data_onside, data_offside, data_onside_uncertain
 
 
-def load_data(args, image_path):
-    file_name, file_extension = image_path.split(".")
-    data = file_utils.load_json(f"{file_name}.json")
-    patch = data_utils.oco2patch(data).unsqueeze(0).to(args.device)
-
-    return patch
-
-
-def load_shift(args, idx, in_fm, fm_repo):
-    buffer_file = config.output / f"{args.exp_name}" / f'shift_{idx}.pt'
+def load_shift(args, bk_shape, idx, in_fm, fm_repo):
+    buffer_file = config.output / f"{args.exp_name}" / f"shift_{bk_shape['name']}_{idx}.pt"
     if os.path.exists(buffer_file):
         data = torch.load(buffer_file)
         match_fm_shift = data['match_fm_shift']
@@ -304,44 +296,62 @@ def load_shift(args, idx, in_fm, fm_repo):
     return match_fm_shift, match_fm_idx, top_values
 
 
-def main():
-    args = args_utils.get_args()
-    args.batch_size = 1
-    args.data_types = args.exp_name
-    # train_loader, val_loader = prepare_kp_sy_data(args)
-    os.makedirs(config.output / f"{args.exp_name}", exist_ok=True)
-    kernels = torch.load(config.output / f"data_triangle" / f"kernels.pt").to(args.device)
-    fm_data = torch.load(config.output / f"data_triangle" / f"fms.pt").to(args.device)
-    fm_img = fm_data[:, 0:1]
-    fm_repo = fm_data[:, 1:]
+def img2groups(args, bk, data, idx, img):
+    # run tests
 
-    image_paths = []
-    folder = config.kp_dataset / args.exp_name
-    imgs = file_utils.get_all_files(folder, "png", False)[:500]
-    image_paths += imgs
-    for idx in tqdm(range(len(image_paths)), "matching image"):
-        data = load_data(args, image_paths[idx])
-        in_fm = perception.extract_fm(data.unsqueeze(0), kernels)
-        match_fm_shift, match_fm_idx, match_fm_value = load_shift(args, idx, in_fm, fm_repo)
-        # convert image to its feature map
-        # in_fm = perception.extract_fm(data, kernels)
-        # match_fm_shift, match_fm_idx, match_fm_value = get_pair(in_fm, fm_repo)
+    groups = []
+    for bk_shape in bk:
+        in_fm = perception.extract_fm(data.unsqueeze(0), bk_shape["kernels"])
+        fm_repo = bk_shape["fm_repo"]
+        fm_img = bk_shape["fm_img"]
+        match_fm_shift, match_fm_idx, match_fm_value = load_shift(args, bk_shape, idx, in_fm, fm_repo)
         match_fm = fm_repo[match_fm_idx]
         match_fm_img = fm_img[match_fm_idx]
-
         shift_mfm = [torch.roll(match_fm[i], shifts=tuple(match_fm_shift[i]), dims=(-2, -1)) for i in
                      range(args.top_fm_k)]
         shift_mfm.append(torch.zeros_like(shift_mfm[0]))
         shift_mfm = torch.stack(shift_mfm)
-
         shift_mfm_img = torch.stack(
             [torch.roll(match_fm_img[i], shifts=tuple(match_fm_shift[i]), dims=(-2, -1)) for i in
              range(args.top_fm_k)])
         match_same, match_diff, same_percent = get_match_detail(shift_mfm, in_fm.squeeze(), match_fm_value)
-        img_onside, img_offside, img_onside_uncertain = get_siding(args, data, match_same, match_diff, shift_mfm_img)
-        visual_all(args, idx, data, in_fm, shift_mfm, same_percent, match_same, match_diff, img_onside, img_offside,
-                   img_onside_uncertain)
-    print("program is finished.")
+        img_onside, img_offside, img_onside_uncertain = get_siding(args, data, match_same, match_diff,
+                                                                   shift_mfm_img)
+        visual_all(args, idx, img, data, in_fm, shift_mfm, same_percent, match_same, match_diff, img_onside,
+                   img_offside, img_onside_uncertain, bk_shape)
+        groups.append({
+            "name": bk_shape["name"],
+            "onside": img_onside[-1]
+        })
+    return groups
+
+
+def main():
+    args = args_utils.get_args()
+    bk_shapes = {"data_circle", "data_square", "data_triangle"}
+    args.batch_size = 1
+    args.data_types = args.exp_name
+    # train_loader, val_loader = prepare_kp_sy_data(args)
+    os.makedirs(config.output / f"{args.exp_name}", exist_ok=True)
+    image_paths = file_utils.get_all_files(config.kp_dataset / args.exp_name, "png", False)
+
+    # load background knowledge
+    bk = []
+    for bk_shape in bk_shapes:
+        kernels = torch.load(config.output / bk_shape / f"kernels.pt").to(args.device)
+        fm_data = torch.load(config.output / bk_shape / f"fms.pt").to(args.device)
+        fm_img = fm_data[:, 0:1]
+        fm_repo = fm_data[:, 1:]
+        bk.append({
+            "name": bk_shape,
+            "kernels": kernels,
+            "fm_img": fm_img,
+            "fm_repo": fm_repo
+        })
+
+    for idx in tqdm(range(len(image_paths)), "matching image"):
+        groups = img2groups(args, bk, image_paths[idx], idx)
+        print(f"{idx}: {len(groups)}")
 
 
 if __name__ == "__main__":

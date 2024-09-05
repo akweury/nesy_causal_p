@@ -4,6 +4,8 @@ import json
 import os
 import config
 import torch
+import cv2
+
 
 def get_raw_data():
     f_train_cha = config.data_file_train_cha
@@ -56,3 +58,8 @@ def load_json(path):
 def save_model(model, folder_name, model_name):
     os.makedirs(config.output / folder_name, exist_ok=True)
     torch.save(model.state_dict(), config.output / folder_name / model_name)
+
+
+def load_img(image_path):
+    image = cv2.imread(image_path)
+    return image
