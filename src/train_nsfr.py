@@ -94,6 +94,7 @@ def main():
     img, obj_pos = load_data(args, image_paths[idx])
     groups = train_common_features.img2groups(args, bk, obj_pos, idx, img)
     group_tensors = group2ocm(data, groups)
+
     print(f"{idx}: {len(groups)}")
 
 
