@@ -205,7 +205,7 @@ def genShapeOnShape(shape, n):
         os.makedirs(false_path, exist_ok=True)
         os.makedirs(cf_path, exist_ok=True)
         print(f'Generating dataset {base_path}', task, mode)
-        if shape == "cir":
+        if shape == "circle":
             gen_fun = shapeOnshapeObjects.cir_only
         elif shape == "triangle":
             gen_fun = shapeOnshapeObjects.tri_only
@@ -238,9 +238,9 @@ def genShapeOnShape(shape, n):
 
 if __name__ == '__main__':
     # task = "kp_cha_01"
-    tasks = ["triangle", "trianglecircle", "trianglesquare"]
+    tasks = ["triangle", "circle", "square"]
     for task in tasks:
-        genShapeOnShape(task, 5000)
+        genShapeOnShape(task, 100)
     # min_obj_num = 10
     # max_obj_num = 30
     # color_dict = kandinsky_colors

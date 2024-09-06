@@ -84,7 +84,7 @@ def main():
         "data_square",
         "data_triangle"
     }
-    image_paths = file_utils.get_all_files(config.kp_dataset / args.exp_name, "png", False)
+    image_paths = file_utils.get_all_files(config.kp_dataset / args.exp_name, "png", False)[:500]
 
     # load background knowledge
     bk = load_bk(args, bk_shapes)

@@ -78,7 +78,7 @@ class ShapeDataset(Dataset):
         # self.labels = []
         self.device = args.device
         folder = config.kp_dataset / args.exp_name
-        imgs = file_utils.get_all_files(folder, "png", False)
+        imgs = file_utils.get_all_files(folder, "png", False)[:100]
         # labels = [self.get_label(args.exp_name) for img in imgs]
         self.image_paths += imgs
         # self.labels += labels
