@@ -70,7 +70,7 @@ class FCNNValuationModule(nn.Module):
                 attrs[term] = [term_index, num_cls]
         return attrs
 
-    def forward(self, zs, raw_data, atom):
+    def forward(self, zs, atom):
         """Convert the object-centric representation to a valuation tensor.
 
             Args:
@@ -81,13 +81,13 @@ class FCNNValuationModule(nn.Module):
                 A batch of the probabilities of the target atom.
         """
         if atom.pred.name in self.vfs:
-            args = [self.ground_to_tensor(term, zs, raw_data) for term in atom.terms]
+            args = [self.ground_to_tensor(term, zs) for term in atom.terms]
             # call valuation function
             return self.vfs[atom.pred.name](*args)
         else:
             return torch.zeros(1).to(self.device)
 
-    def ground_to_tensor(self, term, data, raw_data):
+    def ground_to_tensor(self, term, data):
         """Ground terms into tensor representations.
 
             Args:
@@ -98,27 +98,22 @@ class FCNNValuationModule(nn.Module):
                 The tensor representation of the input term.
         """
         if isinstance(term, tuple):
-            group_data = []
-            for t in term:
-                if t.dtype.name != 'feature_map':
-                    raise ValueError
-                term_index = self.lang.term_index(t)
-                # return the coding of the group
-                group_data.append(data[term_index].unsqueeze(0))
-            return torch.cat(group_data, dim=0)
-        elif term.dtype.name == 'feature_map':
+            raise ValueError
+        if term.dtype.name == 'group_pattern':
             term_index = self.lang.term_index(term)
             # return the coding of the group
             group_data = data[term_index]
             return group_data
+        # one-hot coding tensor
+        elif term.dtype.name in ["color", "shape", "group_label"]:
+            gt_tensor = torch.zeros(data.shape[1]) + self.attrs[term][0]
+            return gt_tensor
         elif term.dtype.name in bk.attr_names:
             # return the standard attribute code
-
             return self.attrs[term]
         elif term.dtype.name == 'pattern':
             # return the image
-            group_data = raw_data
-            return group_data
+            return data
         else:
             raise ValueError("Invalid datatype of the given term: " + str(term) + ':' + term.dtype.name)
 
@@ -131,13 +126,27 @@ class VFColor(nn.Module):
         super(VFColor, self).__init__()
         self.name = name
 
-    def forward(self, data, color_mask):
-        data_colors = torch.zeros_like(color_mask).to(color_mask.device)
+    def forward(self, group_data, color_gt, aaa):
+        color_data = group_data[:, bk.prop_idx_dict["color"]]
 
-        color = data["color"]
-        data_colors[0, color - 1] = 1
-        is_color = (color_mask * data_colors).sum(dim=1)
-        return is_color
+        # color = data["color"]
+        # data_colors[0, color - 1] = 1
+        has_color = (color_gt == color_data).sum().bool().float()
+        return has_color
+
+
+class VFShape(nn.Module):
+    """The function v_color.
+    """
+
+    def __init__(self, name):
+        super(VFShape, self).__init__()
+        self.name = name
+
+    def forward(self, group_data, shape_gt, aaa):
+        shape_data = group_data[:, bk.prop_idx_dict["shape"]]
+        has_shape = (shape_gt == shape_data).sum().bool().float()
+        return has_shape
 
 
 class VFDuplicate(nn.Module):
@@ -382,7 +391,7 @@ class VFHasFM(nn.Module):
         super(VFHasFM, self).__init__()
         self.name = name
 
-    def forward(self, fms, images):
+    def forward(self, group_data, obj_gt):
         """
         Args:
             z (tensor): 2-d tensor (B * D), the object-centric representation.
@@ -393,20 +402,25 @@ class VFHasFM(nn.Module):
         Returns:
             A batch of probabilities.
         """
-        fm_existence = torch.zeros(images.shape[0])
-        for img_i, image in enumerate(images):
 
-            non_zero_patches, non_zero_positions = data_utils.find_submatrix(images[img_i].squeeze())
-            unique_patches = non_zero_patches.unique(dim=0).view(-1, fms[0].shape[-1] ** 2)
-            fms_flat = fms.view(-1, fms[0].shape[-1] ** 2)
-            # Create a boolean tensor to store the existence of each patch
-            existence_tensor = torch.zeros(unique_patches.size(0), dtype=torch.bool)
-            # Check for the existence of each patch in the patch_list
-            for i in range(unique_patches.size(0)):
-                existence_tensor[i] = torch.any(torch.all(fms_flat == unique_patches[i], dim=1))
-            if existence_tensor.prod() == 1:
-                fm_existence[img_i] = 1
-        return fm_existence
+        obj_labels = group_data[:, bk.prop_idx_dict["group_name"]]
+        has_label = (obj_gt == obj_labels).sum().bool().float()
+        return has_label
+
+        # fm_existence = torch.zeros(images.shape[0])
+        # for img_i, image in enumerate(images):
+        #
+        #     non_zero_patches, non_zero_positions = data_utils.find_submatrix(images[img_i].squeeze())
+        #     unique_patches = non_zero_patches.unique(dim=0).view(-1, fms[0].shape[-1] ** 2)
+        #     fms_flat = fms.view(-1, fms[0].shape[-1] ** 2)
+        #     # Create a boolean tensor to store the existence of each patch
+        #     existence_tensor = torch.zeros(unique_patches.size(0), dtype=torch.bool)
+        #     # Check for the existence of each patch in the patch_list
+        #     for i in range(unique_patches.size(0)):
+        #         existence_tensor[i] = torch.any(torch.all(fms_flat == unique_patches[i], dim=1))
+        #     if existence_tensor.prod() == 1:
+        #         fm_existence[img_i] = 1
+        # return fm_existence
 
 
 class VFRho(nn.Module):
@@ -537,7 +551,6 @@ class VFPhi(nn.Module):
         for img_i, image in enumerate(images):
             non_zero_patches, non_zero_positions = data_utils.find_submatrix(images[img_i].squeeze())
 
-
             value = data_utils.dot_product_sigmoid_mapping(mask_1, mask_2).item()
             pred[img_i] = valid_min <= value < valid_max
             mask_values[img_i] = data_utils.matrix_to_value(torch.logical_or(mask_1, mask_2))
@@ -613,7 +626,9 @@ def get_valuation_module(args, lang):
     pred_funs = [
         VFHasFM('has'),
         VFRho('rho'),
-        VFPhi('phi')
+        VFPhi('phi'),
+        VFColor("color"),
+        VFShape("shape")
     ]
     VM = FCNNValuationModule(pred_funs, lang=lang, device=args.device)
     return VM

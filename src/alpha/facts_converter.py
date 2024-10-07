@@ -27,8 +27,8 @@ class FactsConverter(nn.Module):
     def __repr__(self):
         return "FactsConverter(entities={}, dimension={})".format(self.e, self.dim)
 
-    def forward(self, Z, raw_data, G, B, scores=None):
-        return self.convert(Z, raw_data, G, B, scores)
+    def forward(self, Z, G, B, scores=None):
+        return self.convert(Z, G, B, scores)
 
     def get_params(self):
         return self.vm.get_params()
@@ -51,10 +51,10 @@ class FactsConverter(nn.Module):
             vs.append(self.convert_i(zs, G))
         return torch.stack(vs)
 
-    def convert(self, fms, raw_data, atoms, B, scores=None):
-        example_num = raw_data.shape[0]
+    def convert(self, group, atoms, B, scores=None):
+        # example_num = raw_data.shape[0]
         # evaluate value of each atom
-        V = torch.zeros((example_num, len(atoms))).to(torch.float32).to(self.device)
+        V = torch.zeros((1, len(atoms))).to(torch.float32).to(self.device)
         # A is the covered area of each atom
         # A = torch.zeros((example_num, len(atoms))).to(self.device)
 
@@ -62,7 +62,7 @@ class FactsConverter(nn.Module):
             # this atom is a neural predicate
             if type(atom.pred) == NeuralPredicate and i > 1:
                 try:
-                    V[:, i] = self.vm(fms, raw_data, atom)
+                    V[:, i] = self.vm(group, atom)
                 except RuntimeError:
                     raise RuntimeError
 
@@ -78,7 +78,7 @@ class FactsConverter(nn.Module):
             #     value = torch.ones((batch_size,)).to(torch.float32).to(self.device)
             #     V[:, i] += value
 
-        V[:, 1] = torch.ones((example_num,)).to(torch.float32).to(self.device)
+        V[:, 1] = torch.ones((1,)).to(torch.float32).to(self.device)
         return V
 
 

@@ -1,8 +1,10 @@
 # Created by shaji at 24/06/2024
 predicate_target = "target:1:pattern,+"
-predicate_has_fm = "has:2:feature_map,-;pattern,+"
-predicate_phi = "phi:4:feature_map,+;feature_map,+;phi,#;pattern,+"
-predicate_rho = "rho:4:feature_map,+;feature_map,+;rho,#;pattern,+"
+predicate_has_gp = "has:2:group_pattern,+;group_label,#"
+predicate_color = "color:3:group_pattern,+;color,#;pattern,+"
+predicate_shape = "shape:3:group_pattern,+;shape,#;pattern,+"
+# predicate_phi = "phi:4:feature_map,+;feature_map,+;phi,#;pattern,+"
+# predicate_rho = "rho:4:feature_map,+;feature_map,+;rho,#;pattern,+"
 
 # dtype:
 variable = {
@@ -19,25 +21,27 @@ neural_p = {
     # 'repeat': 'repeat:2:group,+;group,+'
 }
 
-obj_ohc = ["color_name", "shape", "x", "y"]
+obj_ohc = ["color_name", "shape", "x", "y", "group_name"]
+prop_idx_dict = {
+    "color": 0,
+    "shape": 1,
+    "x": 2,
+    "y": 3,
+    "group_name": 4,
+}
 color = ["blue", "yellow", "red"]
 shape = ["circle", "square", "triangle"]
-# ig_dtype = "input_group,+"
-# og_dtype = "output_group,+"
+group_name = ["data_triangle", "data_square", "data_circle"]
 
 const_dict = {
     'pattern,+': "pattern",
-    'feature_map,+': 'amount_fm',
-    'phi,+': 'amount_phi',
-    'rho,+': 'amount_rho',
-
+    'group_pattern,+': "group_pattern",
+    'color,+': 'enum',
+    'shape,+': 'enum',
+    'group_label,+': 'enum'
 }
 
-# color = [f'color_{i}' for i in range(1, 11)]
-# scale = [f'scale_{i}' for i in range(1, 11)]
-# shape = ['line', 'rectangle']
-
-attr_names = ['rho', 'phi']
+attr_names = ['color', 'shape', "group_label"]
 
 # inv_p_head = {
 #     "input": "inv_i_p",
@@ -49,3 +53,4 @@ neighbor_4 = [(-1, 0), (0, -1), (0, 1), (1, 0)]
 neighbor_8 = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
 
 mode_excluded_preds = ["target"]
+variable_symbol_group = "G"

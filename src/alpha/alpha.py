@@ -8,11 +8,11 @@ from src.utils import log_utils, data_utils
 from . import valuation, facts_converter, nsfr, pruning
 from .fol import language
 from .fol import refinement
+from .fol import  bk
 
-
-def init_ilp(args, fms, variable_num):
-    lang = language.Language(fms, args.variable_symbol, variable_num, args.lark_path,
-                             args.fm_num, args.phi_num, args.rho_num)
+def init_ilp(args, fms, obj_num):
+    args.variable_symbol = bk.variable_symbol_group
+    lang = language.Language(fms, obj_num, args.variable_symbol, args.lark_path, args.phi_num, args.rho_num)
     return lang
 
 
@@ -43,10 +43,10 @@ def extension(args, lang, clauses):
     return refs
 
 
-def eval_ims(NSFR, args, pred_names, objs, raw_data):
+def eval_ims(NSFR, args, pred_names, objs):
     """ input: clause, output: score """
 
-    atom_values = NSFR.clause_eval_quick(objs, raw_data)
+    atom_values = NSFR.clause_eval_quick(objs)
     # each score needs an explanation
     score_positive = NSFR.get_target_prediciton(atom_values, pred_names, args.device)
     # if score_positive.size(2) > 1:
@@ -74,15 +74,15 @@ def sort_clauses_by_score(clauses, scores_all, scores):
     return clause_with_scores
 
 
-def evaluation(args, NSFR, target_preds, objs, data):
+def evaluation(args, NSFR, target_preds, objs):
     # image level scores
-    ils = eval_ims(NSFR, args, target_preds, objs, data)
+    ils = eval_ims(NSFR, args, target_preds, objs)
     # dataset level scores
     dls = eval_dls(ils)
     return ils, dls
 
 
-def beam_search(args, lang, C, FC, objs, raw_data):
+def beam_search(args, lang, C, FC, objs):
     clauses = C
     for bs_step in range(args.max_bs_step):
         # clause extension
@@ -92,7 +92,7 @@ def beam_search(args, lang, C, FC, objs, raw_data):
         NSFR = nsfr.get_nsfr_model(args, lang, FC, extended_C)
         target_preds = list(set([c.head.pred.name for c in extended_C]))
         # clause evaluation
-        ils, dls = evaluation(args, NSFR, target_preds, objs, raw_data)
+        ils, dls = evaluation(args, NSFR, target_preds, objs)
         # prune clauses
         pruned_c = pruning.top_k_clauses(args, ils, dls, extended_C)
         # save data
@@ -128,15 +128,14 @@ def remove_trivial_atoms(args, lang, FC, clauses, objs, data):
     return non_trivial_atoms
 
 
-def alpha(args, fms, images):
+def alpha(args, ocm):
     clauses = []
-
     for obj_num in range(2, args.max_obj_num):
-        args.fm_num = len(fms)
-        lang = init_ilp(args, fms, obj_num)
+        clauses = []
+        lang = init_ilp(args, ocm, obj_num)
         C = lang.reset_lang()
         VM = valuation.get_valuation_module(args, lang)
         FC = facts_converter.FactsConverter(args, lang, VM)
-        lang.atoms = remove_trivial_atoms(args, lang, FC, C, fms, images)
-        clauses = beam_search(args, lang, C, FC, fms, images)
+        # lang.atoms = remove_trivial_atoms(args, lang, FC, C, ocm)
+        clauses = beam_search(args, lang, C, FC, ocm)
     return clauses

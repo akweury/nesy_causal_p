@@ -374,7 +374,7 @@ class ClauseInferModule(nn.Module):
         assert m == self.C, "Invalid m and C: " + \
                             str(m) + ' and ' + str(self.C)
 
-    def forward(self, x, area, atoms):
+    def forward(self, x, atoms):
         """
         In the forward function we accept a Tensor of input data and we must return
         a Tensor of output data. We can use Modules defined in the constructor as
@@ -383,7 +383,7 @@ class ClauseInferModule(nn.Module):
         B = x.size(0)
         # C (clause number) * B (batch_size) * G (atoms)
         R = x.unsqueeze(dim=0).expand(self.C, B, self.G)
-        A = torch.repeat_interleave(area.unsqueeze(dim=0), self.C, dim=0)
+        # A = torch.repeat_interleave(area.unsqueeze(dim=0), self.C, dim=0)
         for t in range(self.infer_step):
             # infer by background knowledge
             # r_bk = self.r_bk(R[0])
@@ -393,7 +393,7 @@ class ClauseInferModule(nn.Module):
             # print("r(R): ", self.r(R).shape)
             # print("r_bk(R): ", self.r_bk(R).shape)
             # shape? dim?
-            r_R = self.r(R, A)
+            r_R = self.r(R)
             # A_A = r_R.detach().to("cpu").numpy().reshape(-1, 1)  # DEBUG
             # r_bk = self.r_bk(R).unsqueeze(dim=0).expand(self.C, B, self.G)
             # A_B = r_bk.detach().to("cpu").numpy().reshape(-1, 1)  # DEBUG
@@ -408,7 +408,7 @@ class ClauseInferModule(nn.Module):
                 R = softor([R, r_R], dim=2, gamma=self.gamma)
         return R
 
-    def r(self, x, area):
+    def r(self, x):
         # x: C * B * G
         batch_size = x.size(1)  # batch size
         substitution_num = self.I.size(0)
@@ -417,10 +417,10 @@ class ClauseInferModule(nn.Module):
         # C * B * G
         # infer from i-th valuation tensor using i-th clause
         all_substitution_batch_images_atom_score = torch.zeros_like(x).to(self.device)
-        all_substitution_batch_images_covered_areas = torch.zeros_like(area).to(self.device)
+        # all_substitution_batch_images_covered_areas = torch.zeros_like(area).to(self.device)
         for i in range(substitution_num):
             all_substitution_batch_images_atom_score[i] = self.cs[i](x[i])
-            all_substitution_batch_images_covered_areas[i] = self.area_funs[i](area[i])
+            # all_substitution_batch_images_covered_areas[i] = self.area_funs[i](area[i])
         return all_substitution_batch_images_atom_score
 
     def r_bk(self, x):

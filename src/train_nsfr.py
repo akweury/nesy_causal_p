@@ -43,7 +43,7 @@ def load_data(args, image_path):
     return img, patch
 
 
-def obj2tensor(shape, color, pos):
+def obj2tensor(shape, color, pos, group_name):
     obj_tensor = torch.zeros(len(bk.obj_ohc))
     i = 0
     obj_tensor[i] = bk.color.index(color)
@@ -53,26 +53,33 @@ def obj2tensor(shape, color, pos):
     obj_tensor[i] = pos[0]
     i += 1
     obj_tensor[i] = pos[1]
+    i += 1
+    obj_tensor[i] = bk.group_name.index(group_name)
     return obj_tensor
 
 
 def group2ocm(data, groups):
     """ return the object centric matrix of the groups """
-    group_ocms = {}
+    group_max_num = 25
+    group_ocms = torch.zeros(len(bk.group_name), group_max_num, len(bk.obj_ohc))
     positions = data_utils.data2positions(data)
-    for group in groups:
-        # group to
+    for g_i, group in enumerate(groups):
+        # group
         group_name = group["name"]
         group_obj_positions = group["onside"]
 
         ocm = []
+        pos_count = 0
         for p_i, pos in enumerate(positions):
             if group_obj_positions[pos[1].item(), pos[0].item()] > 0:
                 shape = data[p_i]["shape"]
                 color = data[p_i]["color_name"]
-                obj_tensor = obj2tensor(shape, color, pos)
-                ocm.append(obj_tensor)
-        group_ocms[group_name] = torch.stack(ocm)
+                obj_tensor = obj2tensor(shape, color, pos, group_name)
+                group_ocms[g_i, pos_count] = obj_tensor
+                pos_count += 1
+                # ocm.append(obj_tensor)
+        # group_ocms[g_i] = torch.stack(ocm)
+
     return group_ocms
 
 
@@ -94,7 +101,7 @@ def main():
     img, obj_pos = load_data(args, image_paths[idx])
     groups = train_common_features.img2groups(args, bk, obj_pos, idx, img)
     group_tensors = group2ocm(data, groups)
-
+    alpha.alpha(args, group_tensors)
     print(f"{idx}: {len(groups)}")
 
 

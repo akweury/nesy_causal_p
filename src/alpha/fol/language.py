@@ -1,10 +1,8 @@
 # Created by shaji at 24/06/2024
-import glob
+
 from lark import Lark
 import itertools
-import re
 import torch.nn.functional as F
-import torch
 
 import config
 from .exp_parser import ExpTree
@@ -50,11 +48,11 @@ class Language(object):
         consts (List[Const]): A set of constants.
     """
 
-    def __init__(self, fms, variable_symbol, variable_num, lark_path, fm_num, phi_num, rho_num):
+    def __init__(self, fms, var_num, variable_symbol, lark_path, phi_num, rho_num):
 
         # BK
-        self.vars = [Var(f"{variable_symbol}_{v_i}") for v_i in range(variable_num)]
-        self.variable_num = variable_num
+        self.vars = [Var(f"{variable_symbol}_{v_i}") for v_i in range(var_num)]
+        self.variable_num = var_num
         self.atoms = []
         self.funcs = []
         self.consts = []
@@ -81,14 +79,16 @@ class Language(object):
 
         # load BK predicates and constants
         self.load_preds()
-        self.consts = self.load_consts(fms, fm_num, phi_num, rho_num)
+        self.consts = self.load_consts(fms, phi_num, rho_num)
 
     def load_preds(self):
         # target predicate
         self.predicates.append(self.parse_pred(bk.predicate_target))
-        self.predicates.append(self.parse_pred(bk.predicate_has_fm))
-        self.predicates.append(self.parse_pred(bk.predicate_phi))
-        self.predicates.append(self.parse_pred(bk.predicate_rho))
+        self.predicates.append(self.parse_pred(bk.predicate_has_gp))
+        self.predicates.append(self.parse_pred(bk.predicate_color))
+        self.predicates.append(self.parse_pred(bk.predicate_shape))
+        # self.predicates.append(self.parse_pred(bk.predicate_phi))
+        # self.predicates.append(self.parse_pred(bk.predicate_rho))
 
     def init_inv_predicates(self, relation_obj_type):
         if relation_obj_type in [config.alpha_mode['inter_input_group'], config.alpha_mode['ig']]:
@@ -117,7 +117,6 @@ class Language(object):
         # update predicates
         self.generate_atoms()
         # update language
-
         self.mode_declarations = mode_declaration.get_mode_declarations(self.predicates, self.variable_num)
         return init_c
 
@@ -195,18 +194,17 @@ class Language(object):
         for pred in self.predicates:
             dtypes = pred.dtypes
             consts_list = [self.get_by_dtype(dtype) for dtype in dtypes]
-            # if pred.pi_type == "clu_pred":
-            #     consts_list = [[atom.terms[0]] for atom in pred.body[0]]
-            if pred.name == bk.predicate_has_fm.split(":")[0]:
-                consts_has = consts_list[0]
-                subsets = []
-                for r in range(1, len(consts_has) + 1):
-                    subset = itertools.combinations(consts_has, r)
-                    subsets.extend(subset)
-                args_list = [(subset, consts_list[1][0]) for subset in subsets]
+            if pred.name == bk.predicate_has_gp.split(":")[0]:
+                # consts_has = consts_list[0]
+                # subsets = []
+                # subsets.append(consts_has)
+                # # for r in range(1, len(consts_has) + 1):
+                # #     subset = itertools.combinations(consts_has, r)
+                # #     subsets.extend(subset)
+                # args_list = [(subset, consts_list[1][0]) for subset in subsets]
+                args_list = list(set(itertools.product(*consts_list)))
             else:
                 args_list = list(set(itertools.product(*consts_list)))
-
             for args in args_list:
                 atoms.append(Atom(pred, args))
 
@@ -219,13 +217,13 @@ class Language(object):
 
         var_pattern = bk.variable['pattern']
         pred_target = bk.predicate_target.split(':')[0]
-        pred_hasFM = bk.predicate_has_fm.split(':')[0]
+        pred_has = bk.predicate_has_gp.split(':')[0]
 
         head = f"{pred_target}({var_pattern}):-"
 
         body = ""
         for j in range(self.variable_num):
-            body += f"{pred_hasFM}({self.vars[j]},{var_pattern}),"
+            body += f"{pred_has}({self.vars[j]},{var_pattern}),"
 
         group_clauses_str.append(head + body[:-1] + ".")
         group_clauses = []
@@ -266,23 +264,33 @@ class Language(object):
         invented_pred = InventedPredicate(pred_with_id, int(arity), dtypes, args=None, pi_type=None)
         return invented_pred
 
-    def parse_const(self, fms, fm_num, phi_num, rho_num, const, const_type):
+    def parse_const(self, fms, phi_num, rho_num, const, const_type):
         """Parse string to function symbols.
         """
         const_data_type = mode_declaration.DataType(const)
         if "amount_" in const_type:
             _, num = const_type.split('_')
-            if num == 'fm':
-                num = fm_num
-            elif num == "phi":
+            if num == "phi":
                 num = phi_num
             elif num == "rho":
                 num = rho_num
             const_names = []
             for i in range(int(num)):
                 const_names.append(f"{const_data_type.name}{i + 1}of{num}")
-        elif 'pattern' in const_type:
+        elif 'pattern' == const_type:
             const_names = ['data']
+        elif 'group_pattern' == const_type:
+            const_names = ['group']
+        elif 'enum' in const_type:
+            const_names = []
+            if const_data_type.name == "color":
+                const_names = bk.color
+            elif const_data_type.name == "shape":
+                const_names = bk.shape
+            elif const_data_type.name == "group_label":
+                const_names = bk.group_name
+            else:
+                raise ValueError
         else:
             raise ValueError
         consts = []
@@ -294,10 +302,10 @@ class Language(object):
             consts.append(const)
         return consts
 
-    def load_consts(self, fms, fm_num, phi_num, rho_num):
+    def load_consts(self, fms, phi_num, rho_num):
         consts = []
         for const_name, const_type in bk.const_dict.items():
-            consts.extend(self.parse_const(fms, fm_num, phi_num, rho_num, const_name, const_type))
+            consts.extend(self.parse_const(fms, phi_num, rho_num, const_name, const_type))
         return consts
 
     def rename_bk_preds_in_clause(self, bk_prefix, line):
@@ -464,7 +472,6 @@ class Language(object):
         """
         consts = []
         for c in self.consts:
-
             if c.dtype == dtype:
                 consts.append(c)
         return consts
