@@ -402,8 +402,8 @@ class VFHasFM(nn.Module):
         """
 
         group_labels = group_data[:, bk.prop_idx_dict["group_name"]]
-
-        has_label = (obj_gt == obj_labels).sum().bool().float()
+        group_conf = group_data[:, bk.prop_idx_dict["group_conf"]].max()
+        has_label = (obj_gt == group_labels).sum().bool() * group_conf
         return has_label
 
         # fm_existence = torch.zeros(images.shape[0])

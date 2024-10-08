@@ -317,6 +317,8 @@ def img2groups(args, bk, data, idx, img):
                                                                    shift_mfm_img)
         visual_all(args, idx, img, data, in_fm, shift_mfm, same_percent, match_same, match_diff, img_onside,
                    img_offside, img_onside_uncertain, bk_shape)
+        if (img_onside[-1] > 0).sum() > fm_repo[0, 0].sum():
+            print("")
         groups.append({
             "name": bk_shape["name"],
             "onside": img_onside[-1],
