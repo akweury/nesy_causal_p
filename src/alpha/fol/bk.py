@@ -21,33 +21,28 @@ neural_p = {
     # 'repeat': 'repeat:2:group,+;group,+'
 }
 
-obj_ohc = ["color_name", "shape", "x", "y", "group_name"]
+obj_ohc = ["color_name", "shape", "x", "y", "group_name", "group_conf"]
 prop_idx_dict = {
     "color": 0,
     "shape": 1,
     "x": 2,
     "y": 3,
     "group_name": 4,
+    "group_conf": 5,
 }
 color = ["blue", "yellow", "red"]
 shape = ["circle", "square", "triangle"]
-group_name = ["data_triangle", "data_square", "data_circle"]
+group_name = ["none", "data_triangle", "data_square", "data_circle"]
 
 const_dict = {
     'pattern,+': "pattern",
-    'group_pattern,+': "group_pattern",
+    'group_pattern,+': 'amount_group',
     'color,+': 'enum',
     'shape,+': 'enum',
     'group_label,+': 'enum'
 }
 
 attr_names = ['color', 'shape', "group_label"]
-
-# inv_p_head = {
-#     "input": "inv_i_p",
-#     "output": "inv_o_p",
-#     "input_output": "inv_io_p"
-# }
 
 neighbor_4 = [(-1, 0), (0, -1), (0, 1), (1, 0)]
 neighbor_8 = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]

@@ -97,16 +97,17 @@ class FCNNValuationModule(nn.Module):
             Return:
                 The tensor representation of the input term.
         """
-        if isinstance(term, tuple):
-            raise ValueError
+
         if term.dtype.name == 'group_pattern':
             term_index = self.lang.term_index(term)
-            # return the coding of the group
             group_data = data[term_index]
-            return group_data
-        # one-hot coding tensor
+            self.group_indices = group_data[:, bk.prop_idx_dict["group_name"]] > 0
+
+            valid_data = group_data[self.group_indices]
+            return valid_data
         elif term.dtype.name in ["color", "shape", "group_label"]:
             gt_tensor = torch.zeros(data.shape[1]) + self.attrs[term][0]
+            gt_tensor = gt_tensor[self.group_indices]
             return gt_tensor
         elif term.dtype.name in bk.attr_names:
             # return the standard attribute code
@@ -128,9 +129,6 @@ class VFColor(nn.Module):
 
     def forward(self, group_data, color_gt, aaa):
         color_data = group_data[:, bk.prop_idx_dict["color"]]
-
-        # color = data["color"]
-        # data_colors[0, color - 1] = 1
         has_color = (color_gt == color_data).sum().bool().float()
         return has_color
 
@@ -403,7 +401,8 @@ class VFHasFM(nn.Module):
             A batch of probabilities.
         """
 
-        obj_labels = group_data[:, bk.prop_idx_dict["group_name"]]
+        group_labels = group_data[:, bk.prop_idx_dict["group_name"]]
+
         has_label = (obj_gt == obj_labels).sum().bool().float()
         return has_label
 

@@ -297,8 +297,6 @@ def load_shift(args, bk_shape, idx, in_fm, fm_repo):
 
 
 def img2groups(args, bk, data, idx, img):
-    # run tests
-
     groups = []
     for bk_shape in bk:
         in_fm = perception.extract_fm(data.unsqueeze(0), bk_shape["kernels"])
@@ -321,7 +319,8 @@ def img2groups(args, bk, data, idx, img):
                    img_offside, img_onside_uncertain, bk_shape)
         groups.append({
             "name": bk_shape["name"],
-            "onside": img_onside[-1]
+            "onside": img_onside[-1],
+            "count_conf": ((img_onside[-1] > 0).sum() / fm_repo[0, 0].sum()).item()
         })
     return groups
 

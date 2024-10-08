@@ -8,11 +8,13 @@ from src.utils import log_utils, data_utils
 from . import valuation, facts_converter, nsfr, pruning
 from .fol import language
 from .fol import refinement
-from .fol import  bk
+from .fol import bk
+
 
 def init_ilp(args, fms, obj_num):
     args.variable_symbol = bk.variable_symbol_group
-    lang = language.Language(fms, obj_num, args.variable_symbol, args.lark_path, args.phi_num, args.rho_num)
+    lang = language.Language(fms, obj_num, args.variable_symbol, args.lark_path, args.phi_num, args.rho_num,
+                             args.group_num)
     return lang
 
 

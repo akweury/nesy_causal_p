@@ -43,18 +43,20 @@ def load_data(args, image_path):
     return img, patch
 
 
-def obj2tensor(shape, color, pos, group_name):
+def obj2tensor(shape, color, pos, group_name, group_count_conf):
     obj_tensor = torch.zeros(len(bk.obj_ohc))
     i = 0
-    obj_tensor[i] = bk.color.index(color)
+    obj_tensor[i] = bk.color.index(color)  # color
     i += 1
-    obj_tensor[i] = bk.shape.index(shape)
+    obj_tensor[i] = bk.shape.index(shape)  # shape
     i += 1
-    obj_tensor[i] = pos[0]
+    obj_tensor[i] = pos[0]  # x position
     i += 1
-    obj_tensor[i] = pos[1]
+    obj_tensor[i] = pos[1]  # y position
     i += 1
-    obj_tensor[i] = bk.group_name.index(group_name)
+    obj_tensor[i] = bk.group_name.index(group_name)  # group label
+    i += 1
+    obj_tensor[i] = group_count_conf  # group confidence according to the count of objects
     return obj_tensor
 
 
@@ -67,18 +69,15 @@ def group2ocm(data, groups):
         # group
         group_name = group["name"]
         group_obj_positions = group["onside"]
-
-        ocm = []
+        group_count_conf = group["count_conf"]
         pos_count = 0
         for p_i, pos in enumerate(positions):
             if group_obj_positions[pos[1].item(), pos[0].item()] > 0:
                 shape = data[p_i]["shape"]
                 color = data[p_i]["color_name"]
-                obj_tensor = obj2tensor(shape, color, pos, group_name)
+                obj_tensor = obj2tensor(shape, color, pos, group_name, group_count_conf)
                 group_ocms[g_i, pos_count] = obj_tensor
                 pos_count += 1
-                # ocm.append(obj_tensor)
-        # group_ocms[g_i] = torch.stack(ocm)
 
     return group_ocms
 

@@ -48,7 +48,7 @@ class Language(object):
         consts (List[Const]): A set of constants.
     """
 
-    def __init__(self, fms, var_num, variable_symbol, lark_path, phi_num, rho_num):
+    def __init__(self, fms, var_num, variable_symbol, lark_path, phi_num, rho_num, group_num):
 
         # BK
         self.vars = [Var(f"{variable_symbol}_{v_i}") for v_i in range(var_num)]
@@ -79,7 +79,7 @@ class Language(object):
 
         # load BK predicates and constants
         self.load_preds()
-        self.consts = self.load_consts(fms, phi_num, rho_num)
+        self.consts = self.load_consts(fms, phi_num, rho_num, group_num)
 
     def load_preds(self):
         # target predicate
@@ -264,7 +264,7 @@ class Language(object):
         invented_pred = InventedPredicate(pred_with_id, int(arity), dtypes, args=None, pi_type=None)
         return invented_pred
 
-    def parse_const(self, fms, phi_num, rho_num, const, const_type):
+    def parse_const(self, fms, phi_num, rho_num, group_num, const, const_type):
         """Parse string to function symbols.
         """
         const_data_type = mode_declaration.DataType(const)
@@ -274,6 +274,8 @@ class Language(object):
                 num = phi_num
             elif num == "rho":
                 num = rho_num
+            elif num == "group":
+                num = group_num
             const_names = []
             for i in range(int(num)):
                 const_names.append(f"{const_data_type.name}{i + 1}of{num}")
@@ -302,10 +304,10 @@ class Language(object):
             consts.append(const)
         return consts
 
-    def load_consts(self, fms, phi_num, rho_num):
+    def load_consts(self, fms, phi_num, rho_num, group_num):
         consts = []
         for const_name, const_type in bk.const_dict.items():
-            consts.extend(self.parse_const(fms, phi_num, rho_num, const_name, const_type))
+            consts.extend(self.parse_const(fms, phi_num, rho_num, group_num, const_name, const_type))
         return consts
 
     def rename_bk_preds_in_clause(self, bk_prefix, line):
