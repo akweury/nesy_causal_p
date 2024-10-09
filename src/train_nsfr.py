@@ -63,10 +63,11 @@ def obj2tensor(shape, color, pos, group_name, group_count_conf):
 def group2ocm(data, groups):
     """ return the object centric matrix of the groups """
     group_max_num = 25
-    group_ocms = torch.zeros(len(bk.group_name), group_max_num, len(bk.obj_ohc))
+    group_ocms = []
     positions = data_utils.data2positions(data)
     for g_i, group in enumerate(groups):
         # group
+        group_ocm = torch.zeros(group_max_num, len(bk.obj_ohc))
         group_name = group["name"]
         group_obj_positions = group["onside"]
         group_count_conf = group["count_conf"]
@@ -76,9 +77,10 @@ def group2ocm(data, groups):
                 shape = data[p_i]["shape"]
                 color = data[p_i]["color_name"]
                 obj_tensor = obj2tensor(shape, color, pos, group_name, group_count_conf)
-                group_ocms[g_i, pos_count] = obj_tensor
+                group_ocm[pos_count] = obj_tensor
                 pos_count += 1
-
+        group_ocms.append(group_ocm)
+    group_ocms = torch.stack(group_ocms, dim=0)
     return group_ocms
 
 

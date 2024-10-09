@@ -69,5 +69,5 @@ def remove_conflict_clauses(clauses, pi_clauses, args):
 def top_k_clauses(args, ils, dls, clauses):
     ness_score, ness_rank = dls.sort(descending=True)
     top_clauses = [clauses[ness_rank[i]] for i in range(len(ness_score)) if ness_score[i] > 0.99]
-
+    top_clauses = top_clauses[:args.top_k]
     return top_clauses

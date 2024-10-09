@@ -13,8 +13,7 @@ from .fol import bk
 
 def init_ilp(args, fms, obj_num):
     args.variable_symbol = bk.variable_symbol_group
-    lang = language.Language(fms, obj_num, args.variable_symbol, args.lark_path, args.phi_num, args.rho_num,
-                             args.group_num)
+    lang = language.Language(fms, obj_num, args.variable_symbol, args.lark_path, args.phi_num, args.rho_num)
     return lang
 
 
@@ -42,6 +41,8 @@ def extension(args, lang, clauses):
         log_utils.add_lines(f"=============== extended clauses =================", args.log_file)
         for ref in refs:
             log_utils.add_lines(f"{ref}", args.log_file)
+    if len(refs)==0:
+        print("No extended clauses found")
     return refs
 
 
@@ -102,7 +103,7 @@ def beam_search(args, lang, C, FC, objs):
             break
         else:
             clauses = pruned_c
-    print(f"Target Clauses Num : {len(clauses)}")
+        print(f"Target Clauses Num : {len(clauses)}, Step: {bs_step}")
     return clauses
 
 

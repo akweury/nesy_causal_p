@@ -319,10 +319,14 @@ def img2groups(args, bk, data, idx, img):
                    img_offside, img_onside_uncertain, bk_shape)
         if (img_onside[-1] > 0).sum() > fm_repo[0, 0].sum():
             print("")
+        group_count_conf = ((img_onside[-1] > 0).sum() / fm_repo[0, 0].sum()).item()
+        if group_count_conf < args.group_count_conf_th:
+            continue
+
         groups.append({
             "name": bk_shape["name"],
             "onside": img_onside[-1],
-            "count_conf": ((img_onside[-1] > 0).sum() / fm_repo[0, 0].sum()).item()
+            "count_conf": group_count_conf
         })
     return groups
 

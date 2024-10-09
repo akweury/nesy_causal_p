@@ -48,5 +48,7 @@ attr_names = ['color', 'shape', "group_label"]
 neighbor_4 = [(-1, 0), (0, -1), (0, 1), (1, 0)]
 neighbor_8 = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
 
-mode_excluded_preds = ["target"]
+mode_excluded_preds = ["target", "has"]
 variable_symbol_group = "G"
+
+mode_recall = 8

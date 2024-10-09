@@ -281,6 +281,11 @@ class TensorEncoder(object):
         # Generate the Cartesian product of the domains
         substitutions = list(itertools.product(*const_domains))
 
+        def remove_same_elements_tuples(lst):
+            return [tup for tup in lst if len(set(tup)) == len(tup)]
+
+        substitutions = remove_same_elements_tuples(substitutions)
+
         theta_list = []
         # Store as tuples
         for substitution in substitutions:

@@ -89,22 +89,23 @@ def get_invented_pred_by_name(preds, invented_pred_name):
     return invented_pred[0]
 
 
-def get_mode_data(dtypes, g_num):
+def get_mode_data(dtypes):
     mode_terms = []
     for dt in dtypes:
         term = ModeTerm(dt.sign, dt)
         mode_terms.append(term)
-    return mode_terms, g_num
+    return mode_terms
 
 
-def get_mode_declarations_bk(preds, g_num):
+def get_mode_declarations_bk(preds):
     modeb_list = []
     for pred in preds:
         if pred.name in bk.mode_excluded_preds:
             continue
         pred_name = pred.name
         dtypes = pred.dtypes
-        mode_terms, recall = get_mode_data(dtypes, g_num)
+        recall = bk.mode_recall
+        mode_terms = get_mode_data(dtypes)
         modeb_list.append(ModeDeclaration('body', recall, get_pred_by_name(preds, pred_name), mode_terms))
     return modeb_list
 
@@ -121,8 +122,8 @@ def get_pi_mode_declarations(inv_preds, obj_num):
     return pi_mode_declarations
 
 
-def get_mode_declarations(predicates, obj_num):
+def get_mode_declarations(predicates):
 
-    basic_mode_declarations = get_mode_declarations_bk(predicates, obj_num)
+    basic_mode_declarations = get_mode_declarations_bk(predicates)
     # pi_model_declarations = get_pi_mode_declarations(inv_predicates, e)
     return basic_mode_declarations  # + pi_model_declarations
