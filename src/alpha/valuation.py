@@ -129,6 +129,8 @@ class VFColor(nn.Module):
 
     def forward(self, group_data, color_gt, aaa):
         color_data = group_data[:, bk.prop_idx_dict["color"]]
+        if len(color_data.unique()) > 2 and group_data[0, 4] != 1:
+            print("")
         has_color = (color_gt == color_data).sum().bool().float()
         return has_color
 
@@ -381,6 +383,21 @@ class VFHasIG(nn.Module):
         return prob
 
 
+class VFGShape(nn.Module):
+    """The function v_in.
+    """
+
+    def __init__(self, name):
+        super(VFGShape, self).__init__()
+        self.name = name
+
+    def forward(self, group_data, obj_gt):
+        group_labels = group_data[:, bk.prop_idx_dict["group_name"]]
+        group_conf = group_data[:, bk.prop_idx_dict["group_conf"]].max()
+        has_label = (obj_gt == group_labels).sum().bool() * group_conf
+        return has_label
+
+
 class VFHasFM(nn.Module):
     """The function v_in.
     """
@@ -389,26 +406,13 @@ class VFHasFM(nn.Module):
         super(VFHasFM, self).__init__()
         self.name = name
 
-    def forward(self, group_data, obj_gt):
-        """
-        Args:
-            z (tensor): 2-d tensor (B * D), the object-centric representation.
-                [x1, y1, x2, y2, color1, color2, color3,
-                    shape1, shape2, shape3, objectness]
-            x (none): A dummy argment to represent the input constant.
-
-        Returns:
-            A batch of probabilities.
-        """
-
-        group_labels = group_data[:, bk.prop_idx_dict["group_name"]]
-        group_conf = group_data[:, bk.prop_idx_dict["group_conf"]].max()
-        has_label = (obj_gt == group_labels).sum().bool() * group_conf
-        return has_label
+    def forward(self, group_data, all_data):
+        has_gp = True
+        return has_gp
 
         # fm_existence = torch.zeros(images.shape[0])
         # for img_i, image in enumerate(images):
-        #
+
         #     non_zero_patches, non_zero_positions = data_utils.find_submatrix(images[img_i].squeeze())
         #     unique_patches = non_zero_patches.unique(dim=0).view(-1, fms[0].shape[-1] ** 2)
         #     fms_flat = fms.view(-1, fms[0].shape[-1] ** 2)
@@ -627,7 +631,8 @@ def get_valuation_module(args, lang):
         VFRho('rho'),
         VFPhi('phi'),
         VFColor("color"),
-        VFShape("shape")
+        VFShape("shape"),
+        VFGShape("gshape")
     ]
     VM = FCNNValuationModule(pred_funs, lang=lang, device=args.device)
     return VM

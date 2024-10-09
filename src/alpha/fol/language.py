@@ -87,6 +87,7 @@ class Language(object):
         self.predicates.append(self.parse_pred(bk.predicate_has_gp))
         self.predicates.append(self.parse_pred(bk.predicate_color))
         self.predicates.append(self.parse_pred(bk.predicate_shape))
+        self.predicates.append(self.parse_pred(bk.predicate_g_shape))
         # self.predicates.append(self.parse_pred(bk.predicate_phi))
         # self.predicates.append(self.parse_pred(bk.predicate_rho))
 

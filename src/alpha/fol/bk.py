@@ -1,6 +1,7 @@
 # Created by shaji at 24/06/2024
 predicate_target = "target:1:pattern,+"
-predicate_has_gp = "has:2:group_pattern,+;group_label,#"
+predicate_g_shape = "gshape:2:group_pattern,+;group_label,#"
+predicate_has_gp = "has:2:group_pattern,-;pattern,+"
 predicate_color = "color:3:group_pattern,+;color,#;pattern,+"
 predicate_shape = "shape:3:group_pattern,+;shape,#;pattern,+"
 # predicate_phi = "phi:4:feature_map,+;feature_map,+;phi,#;pattern,+"
