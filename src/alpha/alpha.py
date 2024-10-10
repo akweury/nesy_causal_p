@@ -109,6 +109,23 @@ def beam_search(args, lang, C, FC, objs):
     return clauses
 
 
+def df_search(args, lang, C, FC, objs):
+
+    # node evaluation
+    atom_C = extension(args, lang, C)
+    NSFR = nsfr.get_nsfr_model(args, lang, FC, atom_C)
+    target_preds = list(set([c.head.pred.name for c in atom_C]))
+    # clause evaluation
+    ils, dls = evaluation(args, NSFR, target_preds, objs)
+
+
+    # node extension (DFS)
+    nodes =[atom_C[s_i] for s_i in range(len(ils)) if ils[s_i]>0.99]
+    extended_nodes = node_extension(args, lang, nodes)
+
+    clauses = []
+    return clauses
+
 def remove_trivial_atoms(args, lang, FC, clauses, objs, data):
     lang.trivial_atom_terms = []
     # clause extension
@@ -140,5 +157,6 @@ def alpha(args, ocm):
         C = lang.reset_lang()
         VM = valuation.get_valuation_module(args, lang)
         FC = facts_converter.FactsConverter(args, lang, VM)
-        clauses = beam_search(args, lang, C, FC, ocm)
+        # clauses = beam_search(args, lang, C, FC, ocm)
+        clauses = df_search(args, lang, C, FC, ocm)
     return clauses

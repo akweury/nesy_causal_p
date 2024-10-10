@@ -368,9 +368,9 @@ class VFColor(nn.Module):
         super(VFColor, self).__init__()
         self.name = name
 
-    def forward(self, obj_idx, color_gt, group_data):
-        color_data = group_data[obj_idx, bk.prop_idx_dict["color"]]
-        is_color = (color_gt == color_data).float()
+    def forward(self, color_gt, group_data):
+        color_data = group_data[:, bk.prop_idx_dict["color"]]
+        is_color = (color_gt == color_data).sum().bool().float()
         return is_color
 
 
@@ -382,9 +382,9 @@ class VFShape(nn.Module):
         super(VFShape, self).__init__()
         self.name = name
 
-    def forward(self, obj_idx, shape_gt, group_data):
-        shape_data = group_data[obj_idx, bk.prop_idx_dict["shape"]]
-        has_shape = (shape_gt == shape_data).float()
+    def forward(self, shape_gt, group_data):
+        shape_data = group_data[:, bk.prop_idx_dict["shape"]]
+        has_shape = (shape_gt == shape_data).sum().bool().float()
         return has_shape
 
 
@@ -658,13 +658,10 @@ class VFHasFM(nn.Module):
 
 def get_valuation_module(args, lang):
     pred_funs = [
-        # VFHasFM('has'),
         VFInP("inp"),
         VFInG("ing"),
-        # VFRho('rho'),
-        # VFPhi('phi'),
-        VFColor("color"),
-        VFShape("shape"),
+        VFColor("has_color"),
+        VFShape("has_shape"),
         VFGShape("gshape")
     ]
     VM = FCNNValuationModule(pred_funs, lang=lang, device=args.device)

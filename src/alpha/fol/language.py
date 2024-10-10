@@ -184,14 +184,14 @@ class Language(object):
         var_pattern = bk.variable['pattern']
         pred_target = bk.predicate_configs["predicate_target"].split(':')[0]
         pred_pattern_in = bk.predicate_configs["predicate_in_pattern"].split(':')[0]
-        pred_group_in = bk.predicate_configs["predicate_in_group"].split(':')[0]
+        # pred_group_in = bk.predicate_configs["predicate_in_group"].split(':')[0]
 
         head = f"{pred_target}({var_pattern}):-"
         body = ""
         for g_i in range(self.group_variable_num):
             body += f"{pred_pattern_in}({self.group_vars[g_i]},{var_pattern}),"
-            for o_i in range(self.obj_variable_num):
-                body += f"{pred_group_in}({self.obj_vars[o_i]},{self.group_vars[g_i]}),"
+            # for o_i in range(self.obj_variable_num):
+            #     body += f"{pred_group_in}({self.obj_vars[o_i]},{self.group_vars[g_i]}),"
         group_clauses_str.append(head + body[:-1] + ".")
         group_clauses = []
         for group_clause_str in group_clauses_str:
