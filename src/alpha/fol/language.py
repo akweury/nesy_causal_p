@@ -48,11 +48,13 @@ class Language(object):
         consts (List[Const]): A set of constants.
     """
 
-    def __init__(self, fms, var_num, variable_symbol, lark_path, phi_num, rho_num):
+    def __init__(self, fms, obj_num, variable_group_symbol, variable_obj_symbol, lark_path, phi_num, rho_num):
 
         # BK
-        self.vars = [Var(f"{variable_symbol}_{v_i}") for v_i in range(var_num)]
-        self.variable_num = var_num
+        self.group_vars = [Var(f"{variable_group_symbol}_{v_i}") for v_i in range(len(fms))]
+        self.obj_vars = [Var(f"{variable_obj_symbol}_{v_i}") for v_i in range(obj_num)]
+        self.group_variable_num = len(fms)
+        self.obj_variable_num = obj_num
         self.atoms = []
         self.funcs = []
         self.consts = []
@@ -79,37 +81,12 @@ class Language(object):
 
         # load BK predicates and constants
         self.load_preds()
-        self.consts = self.load_consts(fms, phi_num, rho_num)
+        self.consts = self.load_consts(fms, phi_num, rho_num, obj_num)
 
     def load_preds(self):
-        # target predicate
-        self.predicates.append(self.parse_pred(bk.predicate_target))
-        self.predicates.append(self.parse_pred(bk.predicate_has_gp))
-        self.predicates.append(self.parse_pred(bk.predicate_color))
-        self.predicates.append(self.parse_pred(bk.predicate_shape))
-        self.predicates.append(self.parse_pred(bk.predicate_g_shape))
-        # self.predicates.append(self.parse_pred(bk.predicate_phi))
-        # self.predicates.append(self.parse_pred(bk.predicate_rho))
-
-    def init_inv_predicates(self, relation_obj_type):
-        if relation_obj_type in [config.alpha_mode['inter_input_group'], config.alpha_mode['ig']]:
-            for i in range(self.ig_num):
-                inv_pred = self.parse_inv_predicates(i, "ig")
-                self.inv_predicates.append(inv_pred)
-                if inv_pred not in self.predicates:
-                    self.predicates.append(inv_pred)
-        if relation_obj_type in [config.alpha_mode['inter_output_group'], config.alpha_mode['og']]:
-            for i in range(self.og_num):
-                inv_pred = self.parse_inv_predicates(i, "og")
-                self.inv_predicates.append(inv_pred)
-                if inv_pred not in self.predicates:
-                    self.predicates.append(inv_pred)
-        if relation_obj_type == config.alpha_mode['inter_io_group']:
-            for i in range(self.og_num):
-                inv_pred = self.parse_inv_predicates(i, "io")
-                self.inv_predicates.append(inv_pred)
-                if inv_pred is not None and inv_pred not in self.predicates:
-                    self.predicates.append(inv_pred)
+        # load all the bk predicates
+        for pred_config in bk.predicate_configs.values():
+            self.predicates.append(self.parse_pred(pred_config))
 
     def reset_lang(self):
         self.learned_c = []
@@ -194,17 +171,7 @@ class Language(object):
         for pred in self.predicates:
             dtypes = pred.dtypes
             consts_list = [self.get_by_dtype(dtype) for dtype in dtypes]
-            if pred.name == bk.predicate_has_gp.split(":")[0]:
-                # consts_has = consts_list[0]
-                # subsets = []
-                # subsets.append(consts_has)
-                # # for r in range(1, len(consts_has) + 1):
-                # #     subset = itertools.combinations(consts_has, r)
-                # #     subsets.extend(subset)
-                # args_list = [(subset, consts_list[1][0]) for subset in subsets]
-                args_list = list(set(itertools.product(*consts_list)))
-            else:
-                args_list = list(set(itertools.product(*consts_list)))
+            args_list = list(set(itertools.product(*consts_list)))
             for args in args_list:
                 atoms.append(Atom(pred, args))
 
@@ -214,17 +181,17 @@ class Language(object):
         """Read lines and parse to Atom objects.
         """
         group_clauses_str = []
-
         var_pattern = bk.variable['pattern']
-        pred_target = bk.predicate_target.split(':')[0]
-        pred_has = bk.predicate_has_gp.split(':')[0]
+        pred_target = bk.predicate_configs["predicate_target"].split(':')[0]
+        pred_pattern_in = bk.predicate_configs["predicate_in_pattern"].split(':')[0]
+        pred_group_in = bk.predicate_configs["predicate_in_group"].split(':')[0]
 
         head = f"{pred_target}({var_pattern}):-"
-
         body = ""
-        for j in range(self.variable_num):
-            body += f"{pred_has}({self.vars[j]},{var_pattern}),"
-
+        for g_i in range(self.group_variable_num):
+            body += f"{pred_pattern_in}({self.group_vars[g_i]},{var_pattern}),"
+            for o_i in range(self.obj_variable_num):
+                body += f"{pred_group_in}({self.obj_vars[o_i]},{self.group_vars[g_i]}),"
         group_clauses_str.append(head + body[:-1] + ".")
         group_clauses = []
         for group_clause_str in group_clauses_str:
@@ -264,7 +231,7 @@ class Language(object):
         invented_pred = InventedPredicate(pred_with_id, int(arity), dtypes, args=None, pi_type=None)
         return invented_pred
 
-    def parse_const(self, fms, phi_num, rho_num, const, const_type):
+    def parse_const(self, fms, phi_num, rho_num, obj_num, const, const_type):
         """Parse string to function symbols.
         """
         const_data_type = mode_declaration.DataType(const)
@@ -276,6 +243,8 @@ class Language(object):
                 num = rho_num
             elif num == "group":
                 num = len(fms)
+            elif num == "object":
+                num = obj_num
             const_names = []
             for i in range(int(num)):
                 const_names.append(f"{const_data_type.name}{i + 1}of{num}")
@@ -304,10 +273,10 @@ class Language(object):
             consts.append(const)
         return consts
 
-    def load_consts(self, fms, phi_num, rho_num):
+    def load_consts(self, fms, phi_num, rho_num, obj_num):
         consts = []
         for const_name, const_type in bk.const_dict.items():
-            consts.extend(self.parse_const(fms, phi_num, rho_num, const_name, const_type))
+            consts.extend(self.parse_const(fms, phi_num, rho_num, obj_num, const_name, const_type))
         return consts
 
     def rename_bk_preds_in_clause(self, bk_prefix, line):

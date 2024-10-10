@@ -12,8 +12,10 @@ from .fol import bk
 
 
 def init_ilp(args, fms, obj_num):
-    args.variable_symbol = bk.variable_symbol_group
-    lang = language.Language(fms, obj_num, args.variable_symbol, args.lark_path, args.phi_num, args.rho_num)
+    args.variable_group_symbol = bk.variable_symbol_group
+    args.variable_obj_symbol = bk.variable_symbol_obj
+    lang = language.Language(fms, obj_num, args.variable_group_symbol, args.variable_obj_symbol, args.lark_path,
+                             args.phi_num, args.rho_num)
     return lang
 
 
@@ -41,7 +43,7 @@ def extension(args, lang, clauses):
         log_utils.add_lines(f"=============== extended clauses =================", args.log_file)
         for ref in refs:
             log_utils.add_lines(f"{ref}", args.log_file)
-    if len(refs)==0:
+    if len(refs) == 0:
         print("No extended clauses found")
     return refs
 
@@ -134,11 +136,9 @@ def remove_trivial_atoms(args, lang, FC, clauses, objs, data):
 def alpha(args, ocm):
     clauses = []
     for obj_num in range(2, args.max_obj_num):
-        clauses = []
         lang = init_ilp(args, ocm, obj_num)
         C = lang.reset_lang()
         VM = valuation.get_valuation_module(args, lang)
         FC = facts_converter.FactsConverter(args, lang, VM)
-        # lang.atoms = remove_trivial_atoms(args, lang, FC, C, ocm)
         clauses = beam_search(args, lang, C, FC, ocm)
     return clauses
