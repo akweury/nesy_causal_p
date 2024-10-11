@@ -666,3 +666,12 @@ def get_valuation_module(args, lang):
     ]
     VM = FCNNValuationModule(pred_funs, lang=lang, device=args.device)
     return VM
+
+
+valuation_modules = {
+    "inp": VFInP("inp"),
+    "ing": VFInG("ing"),
+    "has_color": VFColor("has_color"),
+    "has_shape": VFShape("has_shape"),
+    "gshape": VFGShape("gshape")
+}

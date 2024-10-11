@@ -176,6 +176,26 @@ class Language(object):
                 atoms.append(Atom(pred, args))
 
         self.atoms = spec_atoms + sorted(atoms)  # + sorted(bk_pi_atoms) + sorted(pi_atoms)
+    def assign_terms(self, mode, dtype, vars):
+        if mode == "#":
+            return self.get_by_dtype(dtype)
+        elif mode == "+":
+            return  vars
+        else:
+            raise ValueError
+
+    def generate_inv_atoms(self, pred, vars):
+        # return ungrounded atoms
+
+        dtypes = pred.dtypes
+        assignments = [self.assign_terms(dtype.data[1], dtype, vars) for dtype in dtypes]
+        arg_lists =list(itertools.product(*assignments))
+        # consts_list = [self.get_by_dtype(dtype) for dtype in dtypes]
+        # args_list = list(set(itertools.product(*consts_list)))
+        atoms = []
+        for args in arg_lists:
+            atoms.append(Atom(pred, args))
+        return atoms
 
     def load_init_clauses(self):
         """Read lines and parse to Atom objects.
@@ -184,14 +204,14 @@ class Language(object):
         var_pattern = bk.variable['pattern']
         pred_target = bk.predicate_configs["predicate_target"].split(':')[0]
         pred_pattern_in = bk.predicate_configs["predicate_in_pattern"].split(':')[0]
-        # pred_group_in = bk.predicate_configs["predicate_in_group"].split(':')[0]
+        pred_group_in = bk.predicate_configs["predicate_in_group"].split(':')[0]
 
         head = f"{pred_target}({var_pattern}):-"
         body = ""
         for g_i in range(self.group_variable_num):
             body += f"{pred_pattern_in}({self.group_vars[g_i]},{var_pattern}),"
-            # for o_i in range(self.obj_variable_num):
-            #     body += f"{pred_group_in}({self.obj_vars[o_i]},{self.group_vars[g_i]}),"
+            for o_i in range(self.obj_variable_num):
+                body += f"{pred_group_in}({self.obj_vars[o_i]},{self.group_vars[g_i]}),"
         group_clauses_str.append(head + body[:-1] + ".")
         group_clauses = []
         for group_clause_str in group_clauses_str:

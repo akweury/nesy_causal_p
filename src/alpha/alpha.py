@@ -1,11 +1,9 @@
 # Created by shaji at 24/06/2024
-import torch
-import datetime
+import itertools
 
-import config
-from src.utils import log_utils, data_utils
+from src.utils import log_utils
 
-from . import valuation, facts_converter, nsfr, pruning
+from . import valuation, facts_converter, nsfr, pruning, clause_op
 from .fol import language
 from .fol import refinement
 from .fol import bk
@@ -46,6 +44,28 @@ def extension(args, lang, clauses):
     if len(refs) == 0:
         print("No extended clauses found")
     return refs
+
+
+def node_extension(args, lang, node_c):
+    # refinement_generator = refinement.RefinementGenerator(lang=lang)
+    # extend nodes
+    extended_nodes = []
+    node_combs = list(itertools.combinations(node_c, 2))
+    for node_comb in node_combs:
+        clause_combined, new_atoms = clause_op.merge_clauses(node_comb, lang)
+        if len(clause_combined) > 0:
+            for a_i in range(len(new_atoms)):
+                if new_atoms[a_i] not in lang.atoms:
+                    extended_nodes.append(clause_combined[a_i])
+                    lang.atoms.append(new_atoms[a_i])
+
+    if args.show_process:
+        log_utils.add_lines(f"=============== extended clauses =================", args.log_file)
+        for ref in extended_nodes:
+            log_utils.add_lines(f"{ref}", args.log_file)
+    if len(extended_nodes) == 0:
+        print("No extended clauses found")
+    return extended_nodes
 
 
 def eval_ims(NSFR, args, pred_names, objs):
@@ -110,7 +130,6 @@ def beam_search(args, lang, C, FC, objs):
 
 
 def df_search(args, lang, C, FC, objs):
-
     # node evaluation
     atom_C = extension(args, lang, C)
     NSFR = nsfr.get_nsfr_model(args, lang, FC, atom_C)
@@ -118,13 +137,19 @@ def df_search(args, lang, C, FC, objs):
     # clause evaluation
     ils, dls = evaluation(args, NSFR, target_preds, objs)
 
-
     # node extension (DFS)
-    nodes =[atom_C[s_i] for s_i in range(len(ils)) if ils[s_i]>0.99]
+    nodes = [atom_C[s_i] for s_i in range(len(ils)) if ils[s_i] > 0.99]
     extended_nodes = node_extension(args, lang, nodes)
 
-    clauses = []
-    return clauses
+    NSFR = nsfr.get_nsfr_model(args, lang, FC, extended_nodes)
+    target_preds = list(set([c.head.pred.name for c in extended_nodes]))
+    # clause evaluation
+    ils, dls = evaluation(args, NSFR, target_preds, objs)
+    # prune clauses
+    pruned_c = pruning.top_k_clauses(args, ils, dls, extended_nodes)
+
+    return extended_nodes
+
 
 def remove_trivial_atoms(args, lang, FC, clauses, objs, data):
     lang.trivial_atom_terms = []
@@ -152,7 +177,7 @@ def remove_trivial_atoms(args, lang, FC, clauses, objs, data):
 
 def alpha(args, ocm):
     clauses = []
-    for obj_num in range(2, args.max_obj_num):
+    for obj_num in range(1, args.max_obj_num):
         lang = init_ilp(args, ocm, obj_num)
         C = lang.reset_lang()
         VM = valuation.get_valuation_module(args, lang)

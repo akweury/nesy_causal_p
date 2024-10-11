@@ -6,7 +6,7 @@ variable_symbol_obj = "O"
 predicate_configs = {
     "predicate_target": "target:1:pattern,+",
     "predicate_in_pattern": "inp:2:group_data,-;pattern,+",
-    # "predicate_in_group": "ing:2:object,-;group_data,+",
+    "predicate_in_group": "ing:2:object,-;group_data,+",
     "predicate_color": "has_color:2:color,#;group_data,+",
     "predicate_shape": "has_shape:2:shape,#;group_data,+",
     "predicate_g_shape": "gshape:2:group_data,+;group_label,#",

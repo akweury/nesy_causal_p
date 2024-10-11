@@ -5,7 +5,9 @@ import torch
 import torch.nn as nn
 from tqdm import tqdm
 
-from .fol.logic import NeuralPredicate
+from .fol.logic import NeuralPredicate, InventedPredicate
+from .fol import bk
+from src.alpha import valuation
 
 
 class FactsConverter(nn.Module):
@@ -18,8 +20,27 @@ class FactsConverter(nn.Module):
         # self.dim = args.d
         self.lang = lang
         self.vm = valuation_module  # valuation functions
-
         self.device = args.device
+        self.attrs = self.init_attr_encodings(args.device)
+
+    def init_attr_encodings(self, device):
+        """Encode color and shape into one-hot encoding.
+
+            Args:
+                device (device): The device.
+
+            Returns:
+                attrs (dic(term->tensor)): The dictionary that maps an attribute term to the corresponding one-hot encoding.
+        """
+        attr_names = bk.attr_names
+        attrs = {}
+        for dtype_name in attr_names:
+            for term in self.lang.get_by_dtype_name(dtype_name):
+                term_index = torch.tensor(self.lang.term_index(term)).tolist()
+                num_cls = len(self.lang.get_by_dtype_name(dtype_name))
+                # attrs[term] = F.one_hot(term_index, num_classes=num_cls).to(device)
+                attrs[term] = [term_index, num_cls]
+        return attrs
 
     def __str__(self):
         return "FactsConverter(entities={}, dimension={})".format(self.e, self.dim)
@@ -51,21 +72,46 @@ class FactsConverter(nn.Module):
             vs.append(self.convert_i(zs, G))
         return torch.stack(vs)
 
+    def ground_to_tensor(self, term, data):
+        if term.dtype.name == "group_data":
+            group_idx = self.lang.term_index(term)
+            group_data = data[group_idx]
+            self.group_indices = group_data[:, bk.prop_idx_dict["group_name"]] > 0
+            valid_data = group_data[self.group_indices]
+            return valid_data
+        elif term.dtype.name == "object":
+            term_index = self.lang.term_index(term)
+            # obj_data = data[:, term_index]
+            return term_index
+        elif term.dtype.name in ["color", "shape", "group_label"]:
+            gt_tensor = self.attrs[term][0]
+            return gt_tensor
+        elif term.dtype.name in bk.attr_names:
+            # return the standard attribute code
+            return self.attrs[term]
+        elif term.dtype.name == 'pattern':
+            # return the image
+            return data
+        else:
+            raise ValueError("Invalid datatype of the given term: " + str(term) + ':' + term.dtype.name)
+
     def convert(self, group, atoms, B, scores=None):
-        # example_num = raw_data.shape[0]
         # evaluate value of each atom
         V = torch.zeros((1, len(atoms))).to(torch.float32).to(self.device)
-        # A is the covered area of each atom
-        # A = torch.zeros((example_num, len(atoms))).to(self.device)
-
         for i, atom in tqdm(enumerate(atoms), desc="Evaluating atoms..."):
             # this atom is a neural predicate
             if type(atom.pred) == NeuralPredicate and i > 1:
-                try:
-                    V[:, i] = self.vm(group, atom)
-                except RuntimeError:
-                    raise RuntimeError
-
+                V[:, i] = self.vm(group, atom)
+            elif type(atom.pred) == InventedPredicate:
+                # collecting the data
+                args = [self.ground_to_tensor(term, group) for term in atom.terms]
+                atom_res = True
+                for module_name in atom.pred.args:
+                    # valuating via the predicate mechanics
+                    module = valuation.valuation_modules[module_name]
+                    module_res = module(*args)
+                    atom_res *= module_res
+                V[:, i] = atom_res
             # this atom is an invented predicate
             # elif type(atom.pred) == InventedPredicate:
             #     if atom.pred.body is not None:
