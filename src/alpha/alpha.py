@@ -54,9 +54,11 @@ def node_extension(args, lang, node_c):
     for node_comb in node_combs:
         clause_combined, new_atoms = clause_op.merge_clauses(node_comb, lang)
         if len(clause_combined) > 0:
+            for c in clause_combined:
+                if c not in extended_nodes:
+                    extended_nodes.append(c)
             for a_i in range(len(new_atoms)):
                 if new_atoms[a_i] not in lang.atoms:
-                    extended_nodes.append(clause_combined[a_i])
                     lang.atoms.append(new_atoms[a_i])
 
     if args.show_process:

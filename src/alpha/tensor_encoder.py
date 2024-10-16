@@ -252,7 +252,15 @@ class TensorEncoder(object):
         for atom in body:
             terms = atom.terms
             for i, term in enumerate(terms):
-                if term.is_var():
+                if isinstance(term, list):
+                    for t_i, t in enumerate(term):
+                        if t.is_var():
+                            dtype = atom.pred.arg_list[i][t_i]
+                            var_dtype_list.append((t, dtype))
+                            dtypes.append(dtype)
+                            vars.append(t)
+
+                elif term.is_var():
                     v = term
                     dtype = atom.pred.dtypes[i]
                     var_dtype_list.append((v, dtype))

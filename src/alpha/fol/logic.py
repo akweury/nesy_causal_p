@@ -498,7 +498,7 @@ class InventedPredicate(Predicate):
         dtypes (List[DataTypes]): The data types of the arguments for the predicate.
     """
 
-    def __init__(self, name, arity, dtypes, args, pi_type=None):
+    def __init__(self, name, arity, dtypes, args, arg_list, pi_type=None):
         super(InventedPredicate, self).__init__(name, arity, dtypes)
         self.name = name
         self.arity = arity
@@ -507,6 +507,7 @@ class InventedPredicate(Predicate):
         self.body = None
         self.args = args
         self.pi_type = pi_type
+        self.arg_list = arg_list
 
     def __str__(self):
         return self.name + '/' + str(self.arity) + '/' + str(self.dtypes)
@@ -587,6 +588,112 @@ class Atom(object):
         for term in self.terms:
             # var_list.append(term.all_vars())
             var_list += term.all_vars()
+        return var_list
+
+    def all_consts(self):
+        const_list = []
+        for term in self.terms:
+            const_list += term.all_consts()
+        return const_list
+
+    def all_funcs(self):
+        func_list = []
+        for term in self.terms:
+            func_list += term.all_funcs()
+        return func_list
+
+    def max_depth(self):
+        return max([term.max_depth() for term in self.terms])
+
+    def min_depth(self):
+        return min([term.min_depth() for term in self.terms])
+
+    def size(self):
+        size = 0
+        for term in self.terms:
+            size += term.size()
+        return size
+
+    def get_terms_by_dtype(self, dtype):
+        """Return terms that have type of dtype.
+        Returns: (list(Term))
+        """
+        result = []
+        for i, term in enumerate(self.terms):
+            if self.pred.dtypes[i] == dtype:
+                # print( self.pred.dtypes[i], dtype,  self.pred.dtypes[i] == dtype)
+                result.append(term)
+
+        return result
+
+
+class InvAtom(object):
+    """Atoms in first-oder logic.
+
+    A class of atoms: p(t1, ..., tn)
+
+    Attributes:
+        pred (Predicate): A predicate of the atom.
+        terms (List[Term]): The terms for the atoms.
+    """
+
+    def __init__(self, pred, terms):
+        # if pred.arity != len(terms):
+        #     print(f"pred:{pred}, terms:{terms}, arity:{pred.arity}")
+        #     raise ValueError(f'Invalid arguments for predicate symbol {pred.name}')
+
+        self.pred = pred
+        self.terms = terms
+        self.neg_state = False
+
+    def __eq__(self, other):
+        if other == None:
+            return False
+        if self.pred == other.pred:
+            for i in range(len(self.terms)):
+                if not self.terms[i] == other.terms[i]:
+                    return False
+            return True
+        else:
+            return False
+
+    def __str__(self):
+        s = self.pred.name + '('
+        for arg in self.terms:
+            s += arg.__str__() + ','
+        s = s[0:-1]
+        s += ')'
+        return s
+
+    def __hash__(self):
+        return hash(self.__str__())
+
+    def __repr__(self):
+        return self.__str__()
+
+    def __lt__(self, other):
+        """comparison < """
+        return self.__str__() < other.__str__()
+
+    def __gt__(self, other):
+        """comparison > """
+        return self.__str__() < other.__str__()
+
+    def subs(self, target_var, const):
+        self.terms = [term.subs(target_var, const) for term in self.terms]
+
+    def neg(self):
+        self.neg_state = not self.neg_state
+
+    def all_vars(self):
+        var_list = []
+        for term in self.terms:
+            if isinstance(term, list):
+                for t in term:
+                    var_list += t.all_vars()
+            else:
+                # var_list.append(term.all_vars())
+                var_list += term.all_vars()
         return var_list
 
     def all_consts(self):

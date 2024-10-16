@@ -81,9 +81,13 @@ class FCNNValuationModule(nn.Module):
                 A batch of the probabilities of the target atom.
         """
         if atom.pred.name in self.vfs:
-            args = [self.ground_to_tensor(term, zs) for term in atom.terms]
+            pred_args = {}
+            for term in atom.terms:
+                term_name, term_data = self.ground_to_tensor(term, zs)
+                pred_args[term_name] = term_data
+            # args = [self.ground_to_tensor(term, zs) for term in atom.terms]
             # call valuation function
-            return self.vfs[atom.pred.name](*args)
+            return self.vfs[atom.pred.name](pred_args)
         else:
             return torch.zeros(1).to(self.device)
 
@@ -104,27 +108,47 @@ class FCNNValuationModule(nn.Module):
         #     # self.group_indices = group_data[:, bk.prop_idx_dict["group_name"]] > 0
         #     # valid_data = group_data[self.group_indices]
         #     return term_index
-        if term.dtype.name == "group_data":
+        # if term.dtype.name == "group_data":
+        #     group_idx = self.lang.term_index(term)
+        #     group_data = data[group_idx]
+        #     self.group_indices = group_data[:, bk.prop_idx_dict["group_name"]] > 0
+        #     valid_data = group_data[self.group_indices]
+        #     return valid_data
+        # elif term.dtype.name == "object":
+        #     term_index = self.lang.term_index(term)
+        #     # obj_data = data[:, term_index]
+        #     return term_index
+        # elif term.dtype.name in ["color", "shape", "group_label"]:
+        #     gt_tensor = self.attrs[term][0]
+        #     return gt_tensor
+        # elif term.dtype.name in bk.attr_names:
+        #     # return the standard attribute code
+        #     return self.attrs[term]
+        # elif term.dtype.name == 'pattern':
+        #     # return the image
+        #     return data
+        # else:
+        #     raise ValueError("Invalid datatype of the given term: " + str(term) + ':' + term.dtype.name)
+        term_name = term.dtype.name
+        if term_name == "group_data":
             group_idx = self.lang.term_index(term)
             group_data = data[group_idx]
             self.group_indices = group_data[:, bk.prop_idx_dict["group_name"]] > 0
-            valid_data = group_data[self.group_indices]
-            return valid_data
-        elif term.dtype.name == "object":
-            term_index = self.lang.term_index(term)
-            # obj_data = data[:, term_index]
-            return term_index
-        elif term.dtype.name in ["color", "shape", "group_label"]:
-            gt_tensor = self.attrs[term][0]
-            return gt_tensor
-        elif term.dtype.name in bk.attr_names:
+            term_data = group_data[self.group_indices]
+            term_name = "group_data"
+        elif term_name == "object":
+            term_data = self.lang.term_index(term)
+        elif term_name in ["color", "shape", "group_label"]:
+            term_data = self.attrs[term][0]
+        elif term_name in bk.attr_names:
             # return the standard attribute code
-            return self.attrs[term]
-        elif term.dtype.name == 'pattern':
+            term_data = self.attrs[term]
+        elif term_name == 'pattern':
             # return the image
-            return data
+            term_data = data
         else:
             raise ValueError("Invalid datatype of the given term: " + str(term) + ':' + term.dtype.name)
+        return term_name, term_data
 
 
 # class VFDuplicate(nn.Module):
@@ -368,7 +392,9 @@ class VFColor(nn.Module):
         super(VFColor, self).__init__()
         self.name = name
 
-    def forward(self, color_gt, group_data):
+    def forward(self, args_dict):
+        color_gt = args_dict["color"]
+        group_data = args_dict["group_data"]
         color_data = group_data[:, bk.prop_idx_dict["color"]]
         is_color = (color_gt == color_data).sum().bool().float()
         return is_color
@@ -382,7 +408,9 @@ class VFShape(nn.Module):
         super(VFShape, self).__init__()
         self.name = name
 
-    def forward(self, shape_gt, group_data):
+    def forward(self, args_dict):
+        group_data = args_dict["group_data"]
+        shape_gt = args_dict["shape"]
         shape_data = group_data[:, bk.prop_idx_dict["shape"]]
         has_shape = (shape_gt == shape_data).sum().bool().float()
         return has_shape
@@ -396,7 +424,9 @@ class VFGShape(nn.Module):
         super(VFGShape, self).__init__()
         self.name = name
 
-    def forward(self, group_data, group_label_gt):
+    def forward(self, args_dict):
+        group_data = args_dict["group_data"]
+        group_label_gt = args_dict["group_label"]
         group_label = group_data[:, bk.prop_idx_dict["group_name"]][0]
         group_conf = group_data[:, bk.prop_idx_dict["group_conf"]][0]
         has_label = (group_label_gt == group_label) * group_conf
@@ -411,7 +441,7 @@ class VFInG(nn.Module):
         super(VFInG, self).__init__()
         self.name = name
 
-    def forward(self, obj_idx, group_data):
+    def forward(self, args_dict):
         obj_in_group = True
         return obj_in_group
 
@@ -424,7 +454,7 @@ class VFInP(nn.Module):
         super(VFInP, self).__init__()
         self.name = name
 
-    def forward(self, group_data, pattern_data):
+    def forward(self, args_dict):
         has_gp = True
         return has_gp
 
@@ -437,7 +467,7 @@ class VFHasFM(nn.Module):
         super(VFHasFM, self).__init__()
         self.name = name
 
-    def forward(self, group_data, all_data):
+    def forward(self, args_dict):
         has_gp = True
         return has_gp
 

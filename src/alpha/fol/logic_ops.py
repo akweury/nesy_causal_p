@@ -1,6 +1,6 @@
 # Created by jing at 25.06.24
 
-from .logic import Clause, Atom, FuncTerm, Const, Var, InventedClause
+from .logic import Clause, Atom, FuncTerm, Const, Var, InventedClause, InvAtom
 
 
 def subs(exp, target_var, const):
@@ -31,6 +31,12 @@ def subs(exp, target_var, const):
     elif type(exp) == Atom:
         terms = [subs(term, target_var, const) for term in exp.terms]
         return Atom(exp.pred, terms)
+    elif type(exp) == InvAtom:
+        atom_terms=  []
+        for terms in exp.terms:
+            term = [subs(term, target_var, const) for term in terms]
+            atom_terms.append(term)
+        return InvAtom(exp.pred, atom_terms)
     elif type(exp) == FuncTerm:
         args = [subs(arg, target_var, const) for arg in exp.args]
         return FuncTerm(exp.func_symbol, args)
@@ -58,6 +64,14 @@ def subs_list(exp, theta_list):
         for target_var, const in theta_list:
             terms = [subs(term, target_var, const) for term in terms]
         return Atom(exp.pred, terms)
+    elif type(exp) == InvAtom:
+        term_list = exp.terms
+        term_list_subs = []
+        for terms in term_list:
+            for target_var, const in theta_list:
+                terms = [subs(term, target_var, const) for term in terms]
+            term_list_subs.append(terms)
+        return InvAtom(exp.pred, term_list_subs)
     elif type(exp) == InventedClause:
         head = exp.head
         body = exp.body

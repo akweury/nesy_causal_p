@@ -73,27 +73,26 @@ class FactsConverter(nn.Module):
         return torch.stack(vs)
 
     def ground_to_tensor(self, term, data):
-        if term.dtype.name == "group_data":
+        term_name = term.dtype.name
+        if term_name == "group_data":
             group_idx = self.lang.term_index(term)
             group_data = data[group_idx]
             self.group_indices = group_data[:, bk.prop_idx_dict["group_name"]] > 0
-            valid_data = group_data[self.group_indices]
-            return valid_data
-        elif term.dtype.name == "object":
-            term_index = self.lang.term_index(term)
-            # obj_data = data[:, term_index]
-            return term_index
-        elif term.dtype.name in ["color", "shape", "group_label"]:
-            gt_tensor = self.attrs[term][0]
-            return gt_tensor
-        elif term.dtype.name in bk.attr_names:
+            term_data = group_data[self.group_indices]
+            term_name = "group_data"
+        elif term_name == "object":
+            term_data = self.lang.term_index(term)
+        elif term_name in ["color", "shape", "group_label"]:
+            term_data = self.attrs[term][0]
+        elif term_name in bk.attr_names:
             # return the standard attribute code
-            return self.attrs[term]
-        elif term.dtype.name == 'pattern':
+            term_data = self.attrs[term]
+        elif term_name == 'pattern':
             # return the image
-            return data
+            term_data = data
         else:
             raise ValueError("Invalid datatype of the given term: " + str(term) + ':' + term.dtype.name)
+        return term_name, term_data
 
     def convert(self, group, atoms, B, scores=None):
         # evaluate value of each atom
@@ -104,12 +103,18 @@ class FactsConverter(nn.Module):
                 V[:, i] = self.vm(group, atom)
             elif type(atom.pred) == InventedPredicate:
                 # collecting the data
-                args = [self.ground_to_tensor(term, group) for term in atom.terms]
                 atom_res = True
-                for module_name in atom.pred.args:
+
+                for a_i in range(len(atom.pred.arg_list)):
+                    pred_args = {}
+                    term = atom.terms[a_i]
+                    for t in term:
+                        term_name, term_data = self.ground_to_tensor(t, group)
+                        pred_args[term_name] = term_data
+                    module_name = atom.pred.args[a_i]
                     # valuating via the predicate mechanics
                     module = valuation.valuation_modules[module_name]
-                    module_res = module(*args)
+                    module_res = module(pred_args)
                     atom_res *= module_res
                 V[:, i] = atom_res
             # this atom is an invented predicate

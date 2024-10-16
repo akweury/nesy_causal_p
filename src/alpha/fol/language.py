@@ -176,26 +176,41 @@ class Language(object):
                 atoms.append(Atom(pred, args))
 
         self.atoms = spec_atoms + sorted(atoms)  # + sorted(bk_pi_atoms) + sorted(pi_atoms)
+
     def assign_terms(self, mode, dtype, vars):
         if mode == "#":
             return self.get_by_dtype(dtype)
         elif mode == "+":
-            return  vars
+            return vars
         else:
             raise ValueError
 
     def generate_inv_atoms(self, pred, vars):
         # return ungrounded atoms
+        dtype_list = pred.arg_list
 
-        dtypes = pred.dtypes
-        assignments = [self.assign_terms(dtype.data[1], dtype, vars) for dtype in dtypes]
-        arg_lists =list(itertools.product(*assignments))
-        # consts_list = [self.get_by_dtype(dtype) for dtype in dtypes]
-        # args_list = list(set(itertools.product(*consts_list)))
-        atoms = []
-        for args in arg_lists:
-            atoms.append(Atom(pred, args))
-        return atoms
+        term_list = []
+        for dtypes in dtype_list:
+            const_list = [self.get_by_dtype(dtype) for dtype in dtypes]
+            grounded_terms = list(set(itertools.product(*const_list)))
+            term_list.append(grounded_terms)
+        term_list = list(set(itertools.product(*term_list)))
+
+        grounded_atoms = []
+        for terms in term_list:
+            grounded_atoms.append(InvAtom(pred, terms))
+
+        ungrounded_term_list = []
+        for dtypes in dtype_list:
+            assignment_list = [self.assign_terms(dtype.data[1], dtype, vars) for dtype in dtypes]
+            ungrounded_terms = list(itertools.product(*assignment_list))
+            ungrounded_term_list.append(ungrounded_terms)
+        ungrounded_term_list = list(set(itertools.product(*ungrounded_term_list)))
+        ungrounded_atoms = []
+        for terms in ungrounded_term_list:
+            ungrounded_atoms.append(InvAtom(pred, terms))
+
+        return grounded_atoms, ungrounded_atoms
 
     def load_init_clauses(self):
         """Read lines and parse to Atom objects.
