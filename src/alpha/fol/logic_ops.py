@@ -62,14 +62,14 @@ def subs_list(exp, theta_list):
     elif type(exp) == Atom:
         terms = exp.terms
         for target_var, const in theta_list:
-            terms = [subs(term, target_var, const) for term in terms]
+            terms = tuple([subs(term, target_var, const) for term in terms])
         return Atom(exp.pred, terms)
     elif type(exp) == InvAtom:
         term_list = exp.terms
         term_list_subs = []
         for terms in term_list:
             for target_var, const in theta_list:
-                terms = [subs(term, target_var, const) for term in terms]
+                terms = tuple([subs(term, target_var, const) for term in terms])
             term_list_subs.append(terms)
         return InvAtom(exp.pred, term_list_subs)
     elif type(exp) == InventedClause:

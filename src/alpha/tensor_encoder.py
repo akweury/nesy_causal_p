@@ -149,8 +149,7 @@ class TensorEncoder(object):
             var_list += atom.all_vars()
         var_list = list(set(var_list))
 
-        assert len(
-            var_list) <= 10, 'Too many existentially quantified variables in an atom: ' + str(atom)
+        assert len(var_list) <= 10, 'Too many existentially quantified variables in an atom: ' + str(atom)
 
         if len(var_list) == 0:
             # the case of the body atoms are already grounded

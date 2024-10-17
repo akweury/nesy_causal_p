@@ -182,8 +182,8 @@ class Language(object):
             return self.get_by_dtype(dtype)
         elif mode == "+":
             # TODO: pattern and group are treated separately
-            raise NotImplementedError
-            return vars
+            dtype_vars = [v for v in vars if v.var_type == dtype]
+            return dtype_vars
         else:
             raise ValueError
 
@@ -195,6 +195,7 @@ class Language(object):
         for dtypes in dtype_list:
             const_list = [self.get_by_dtype(dtype) for dtype in dtypes]
             grounded_terms = list(set(itertools.product(*const_list)))
+            # grounded_terms = [list(t) for t in grounded_terms]
             term_list.append(grounded_terms)
         term_list = list(set(itertools.product(*term_list)))
         term_list = lang_utils.remove_chaos_terms(term_list)

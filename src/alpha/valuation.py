@@ -393,7 +393,10 @@ class VFColor(nn.Module):
         self.name = name
 
     def forward(self, args_dict):
-        color_gt = args_dict["color"]
+        try:
+            color_gt = args_dict["color"]
+        except KeyError:
+            print("")
         group_data = args_dict["group_data"]
         color_data = group_data[:, bk.prop_idx_dict["color"]]
         is_color = (color_gt == color_data).sum().bool().float()
