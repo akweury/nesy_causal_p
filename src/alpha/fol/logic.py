@@ -200,8 +200,9 @@ class Var(Term):
         name (str): Name of the variable.
     """
 
-    def __init__(self, name):
+    def __init__(self, name, var_type):
         tokes = name.split("_")
+        self.var_type = var_type
         if len(tokes) == 1:
             self.name = name
             self.id = None

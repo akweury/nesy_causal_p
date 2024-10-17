@@ -51,8 +51,8 @@ class Language(object):
     def __init__(self, fms, obj_num, variable_group_symbol, variable_obj_symbol, lark_path, phi_num, rho_num):
 
         # BK
-        self.group_vars = [Var(f"{variable_group_symbol}_{v_i}") for v_i in range(len(fms))]
-        self.obj_vars = [Var(f"{variable_obj_symbol}_{v_i}") for v_i in range(obj_num)]
+        self.group_vars = [Var(f"{variable_group_symbol}_{v_i}", bk.var_dtypes["group"]) for v_i in range(len(fms))]
+        self.obj_vars = [Var(f"{variable_obj_symbol}_{v_i}", bk.var_dtypes["object"]) for v_i in range(obj_num)]
         self.group_variable_num = len(fms)
         self.obj_variable_num = obj_num
         self.atoms = []
@@ -181,6 +181,8 @@ class Language(object):
         if mode == "#":
             return self.get_by_dtype(dtype)
         elif mode == "+":
+            # TODO: pattern and group are treated separately
+            raise NotImplementedError
             return vars
         else:
             raise ValueError
@@ -195,7 +197,7 @@ class Language(object):
             grounded_terms = list(set(itertools.product(*const_list)))
             term_list.append(grounded_terms)
         term_list = list(set(itertools.product(*term_list)))
-
+        term_list = lang_utils.remove_chaos_terms(term_list)
         grounded_atoms = []
         for terms in term_list:
             grounded_atoms.append(InvAtom(pred, terms))
@@ -226,7 +228,7 @@ class Language(object):
         for g_i in range(self.group_variable_num):
             body += f"{pred_pattern_in}({self.group_vars[g_i]},{var_pattern}),"
             for o_i in range(self.obj_variable_num):
-                body += f"{pred_group_in}({self.obj_vars[o_i]},{self.group_vars[g_i]}),"
+                body += f"{pred_group_in}({self.obj_vars[o_i]},{self.group_vars[g_i]},{var_pattern}),"
         group_clauses_str.append(head + body[:-1] + ".")
         group_clauses = []
         for group_clause_str in group_clauses_str:

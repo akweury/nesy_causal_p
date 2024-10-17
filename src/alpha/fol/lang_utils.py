@@ -1,4 +1,5 @@
 # Created by jing at 25.06.24
+from . import bk
 
 def get_pi_bodies_by_name(pi_clauses, pi_name):
     pi_bodies_all = []
@@ -44,3 +45,30 @@ def is_conflict_bodies(pi_bodies, clause_bodies):
 def get_c_head(pred, arguments):
     head_str = f"{pred.split(':')[0]}({arguments})"
     return head_str
+
+
+def remove_chaos_terms(inv_atom_terms):
+    # guarantee only one var term in each term list
+    rational_terms = []
+    for term_list in inv_atom_terms:
+        var_terms = []
+        for terms in term_list:
+            for term in terms:
+                if "group_data" in term.name:
+                    if term.name not in var_terms:
+                        var_terms.append(term.name)
+        if len(var_terms) == 1:
+            rational_terms.append(term_list)
+    return rational_terms
+
+
+def get_var_type(var_str):
+    if bk.variable_symbol_group in var_str:
+        var_type = bk.var_dtypes["group"]
+    elif bk.variable_symbol_obj in var_str:
+        var_type = bk.var_dtypes["object"]
+    elif bk.variable_symbol_pattern in var_str:
+        var_type = bk.var_dtypes["pattern"]
+    else:
+        raise ValueError
+    return var_type

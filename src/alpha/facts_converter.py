@@ -104,7 +104,6 @@ class FactsConverter(nn.Module):
             elif type(atom.pred) == InventedPredicate:
                 # collecting the data
                 atom_res = True
-
                 for a_i in range(len(atom.pred.arg_list)):
                     pred_args = {}
                     term = atom.terms[a_i]

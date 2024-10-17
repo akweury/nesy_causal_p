@@ -42,7 +42,7 @@ def merge_clauses(clauses, lang):
     vars_in_body = non_trivial_vars(bodies)
     merged_clauses = []
     inv_atoms_grounded = []
-    if len(vars_in_body) == 1:
+    if len(vars_in_body) == 2:
         trivial_body = [b for b in bodies if b.pred.name in ["ing", "inp", "target"]]
         new_body = [b for b in bodies if b.pred.name not in ["ing", "inp", "target"]]
         vars = list(set([t for b in new_body for t in b.terms if type(t) == Var]))

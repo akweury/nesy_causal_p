@@ -3,7 +3,7 @@ import numpy as np
 
 import itertools
 from .logic import Atom, Clause, Var
-from . import bk
+from . import bk, lang_utils
 
 
 # TODOL refine_from_modeb, generate_by_refinement
@@ -44,7 +44,8 @@ class RefinementGenerator(object):
     def generate_new_variable(self, clause):
         obj_id, obj_name = self.get_max_obj_id(clause)
         obj_name = str(obj_name).split("_")[0]
-        return Var(obj_name + "_" + str(obj_id + 1))
+        var_type = lang_utils.get_var_type(obj_name)
+        return Var(obj_name + "_" + str(obj_id + 1), var_type)
 
     def refine_from_modeb(self, clause, modeb):
         """Generate clauses by adding atoms to body using mode declaration.

@@ -4,6 +4,7 @@ import itertools
 from lark import Lark
 from lark import Transformer
 from .logic import *
+from . import bk, lang_utils
 
 
 def flatten(x): return [z for y in x for z in (
@@ -59,7 +60,8 @@ class ExpTree(Transformer):
         return Const(name[0], dtype)
 
     def variable(self, name):
-        return Var(name[0])
+        var_type = lang_utils.get_var_type(str(name[0]))
+        return Var(name[0], var_type)
 
     def functor(self, name):
         func = [f for f in self.lang.funcs if f.name == name[0]][0]
