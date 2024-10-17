@@ -138,18 +138,20 @@ def df_search(args, lang, C, FC, objs):
     target_preds = list(set([c.head.pred.name for c in atom_C]))
     # clause evaluation
     ils, dls = evaluation(args, NSFR, target_preds, objs)
-
     # node extension (DFS)
     nodes = [atom_C[s_i] for s_i in range(len(ils)) if ils[s_i] > 0.9]
-    extended_nodes = node_extension(args, lang, nodes)
 
-    NSFR = nsfr.get_nsfr_model(args, lang, FC, extended_nodes)
-    target_preds = list(set([c.head.pred.name for c in extended_nodes]))
-    # clause evaluation
-    ils, dls = evaluation(args, NSFR, target_preds, objs)
-    print(f"inv clauses score: {ils.unique()}")
+    for e_i in range(2):
+        extended_nodes = node_extension(args, lang, nodes)
+        NSFR = nsfr.get_nsfr_model(args, lang, FC, extended_nodes)
+        target_preds = list(set([c.head.pred.name for c in extended_nodes]))
+        # clause evaluation
+        ils, dls = evaluation(args, NSFR, target_preds, objs)
+        nodes = [extended_nodes[s_i] for s_i in range(len(ils)) if ils[s_i] > 0.9]
+        print(f"inv clauses score: {ils.unique()}")
+
     # prune clauses
-    pruned_c = pruning.top_k_clauses(args, ils, dls, extended_nodes)
+    pruned_c = pruning.top_k_clauses(args, ils, dls, nodes)
 
     return extended_nodes
 
