@@ -46,28 +46,29 @@ def extension(args, lang, clauses):
     return refs
 
 
-def node_extension(args, lang, node_c):
+def node_extension(args, lang, base_nodes, extended_nodes):
     # refinement_generator = refinement.RefinementGenerator(lang=lang)
     # extend nodes
-    extended_nodes = []
-    node_combs = list(itertools.combinations(node_c, 2))
+    new_nodes = []
+    # node_combs = list(itertools.combinations(base_nodes, 2))
+    node_combs = list(set(itertools.product(base_nodes, extended_nodes)))
     for node_comb in node_combs:
         clause_combined, new_atoms = clause_op.merge_clauses(node_comb, lang)
         if len(clause_combined) > 0:
             for c in clause_combined:
-                if c not in extended_nodes:
-                    extended_nodes.append(c)
+                if c not in new_nodes:
+                    new_nodes.append(c)
             for a_i in range(len(new_atoms)):
                 if new_atoms[a_i] not in lang.atoms:
                     lang.atoms.append(new_atoms[a_i])
 
     if args.show_process:
         log_utils.add_lines(f"=============== extended clauses =================", args.log_file)
-        for ref in extended_nodes:
+        for ref in new_nodes:
             log_utils.add_lines(f"{ref}", args.log_file)
-    if len(extended_nodes) == 0:
+    if len(new_nodes) == 0:
         print("No extended clauses found")
-    return extended_nodes
+    return new_nodes
 
 
 def eval_ims(NSFR, args, pred_names, objs):
@@ -139,19 +140,19 @@ def df_search(args, lang, C, FC, objs):
     # clause evaluation
     ils, dls = evaluation(args, NSFR, target_preds, objs)
     # node extension (DFS)
-    nodes = [atom_C[s_i] for s_i in range(len(ils)) if ils[s_i] > 0.9]
-
+    base_nodes = [atom_C[s_i] for s_i in range(len(ils)) if ils[s_i] > 0.9]
+    extended_nodes = [atom_C[s_i] for s_i in range(len(ils)) if ils[s_i] > 0.9]
     for e_i in range(2):
-        extended_nodes = node_extension(args, lang, nodes)
+        extended_nodes = node_extension(args, lang, base_nodes, extended_nodes)
         NSFR = nsfr.get_nsfr_model(args, lang, FC, extended_nodes)
         target_preds = list(set([c.head.pred.name for c in extended_nodes]))
         # clause evaluation
         ils, dls = evaluation(args, NSFR, target_preds, objs)
-        nodes = [extended_nodes[s_i] for s_i in range(len(ils)) if ils[s_i] > 0.9]
+        extended_nodes = [extended_nodes[s_i] for s_i in range(len(ils)) if ils[s_i] > 0.9]
         print(f"inv clauses score: {ils.unique()}")
 
     # prune clauses
-    pruned_c = pruning.top_k_clauses(args, ils, dls, nodes)
+    pruned_c = pruning.top_k_clauses(args, ils, dls, extended_nodes)
 
     return extended_nodes
 

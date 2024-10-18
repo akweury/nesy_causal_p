@@ -189,10 +189,11 @@ class Language(object):
 
     def generate_inv_atoms(self, pred, vars):
         # return ungrounded atoms
-        dtype_list = pred.arg_list
+        # dtype_list = pred.arg_list
 
         term_list = []
-        for dtypes in dtype_list:
+        for sub_pred in pred.sub_preds:
+            dtypes = sub_pred.dtypes
             const_list = [self.get_by_dtype(dtype) for dtype in dtypes]
             grounded_terms = list(set(itertools.product(*const_list)))
             # grounded_terms = [list(t) for t in grounded_terms]
@@ -204,7 +205,8 @@ class Language(object):
             grounded_atoms.append(InvAtom(pred, terms))
 
         ungrounded_term_list = []
-        for dtypes in dtype_list:
+        for sub_pred in pred.sub_preds:
+            dtypes = sub_pred.dtypes
             assignment_list = [self.assign_terms(dtype.data[1], dtype, vars) for dtype in dtypes]
             ungrounded_terms = list(itertools.product(*assignment_list))
             ungrounded_term_list.append(ungrounded_terms)

@@ -14,28 +14,21 @@ def non_trivial_vars(merged_body):
 
 def inv_pred_merge_bodies(bodies):
     # new predicate
-    pred_names = [b.pred.name for b in bodies]
-    args_list = [b.pred.dtypes for b in bodies]
-    sorted_indices = sorted(range(len(pred_names)), key=lambda i: pred_names[i])
-    pred_names = [pred_names[i] for i in sorted_indices]
-    args_list = [args_list[i] for i in sorted_indices]
+    # pred_names = [b.pred.name for b in bodies]
+    # args_list = [b.pred.dtypes for b in bodies]
+    # sorted_indices = sorted(range(len(pred_names)), key=lambda i: pred_names[i])
+    # pred_names = [pred_names[i] for i in sorted_indices]
+    # args_list = [args_list[i] for i in sorted_indices]
 
+    preds = list(set([b.pred for b in bodies]))
+    pred_indices = sorted(range(len(preds)), key=lambda i: preds[i])
+    preds = [preds[i] for i in pred_indices]
 
-    dtypes = [dt for b in bodies for dt in b.pred.dtypes]
-    terms = [t for b in bodies for t in b.terms]
-
-    seen = set()
-    new_list1 = []
-    new_list2 = []
-    for item1, item2 in zip(dtypes, terms):
-        if item2 not in seen:
-            seen.add(item2)
-            new_list1.append(item1)
-            new_list2.append(item2)
-    dtypes = new_list1
+    dtypes = [dt for pred in preds for dt in pred.dtypes]
+    # terms = [t for b in bodies for t in b.terms]
 
     arity = len(dtypes)
-    inv_pred = InventedPredicate('_'.join(pred_names), arity, dtypes, pred_names, args_list)
+    inv_pred = InventedPredicate(preds, arity, dtypes)
 
     return inv_pred
 
@@ -53,7 +46,7 @@ def merge_clauses(clauses, lang):
         new_body = [b for b in bodies if b.pred.name not in ["ing", "inp", "target"]]
         vars = list(set([t for b in new_body for t in b.terms if type(t) == Var]))
         inv_pred = inv_pred_merge_bodies(new_body)
-        if inv_pred not in lang.predicates:
+        if inv_pred is not None and inv_pred not in lang.predicates:
             lang.predicates.append(inv_pred)
         inv_atoms_grounded, inv_atoms_ungrounded = lang.generate_inv_atoms(inv_pred, vars)
         head = clauses[0].head

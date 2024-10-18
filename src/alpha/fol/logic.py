@@ -499,16 +499,17 @@ class InventedPredicate(Predicate):
         dtypes (List[DataTypes]): The data types of the arguments for the predicate.
     """
 
-    def __init__(self, name, arity, dtypes, args, arg_list, pi_type=None):
-        super(InventedPredicate, self).__init__(name, arity, dtypes)
-        self.name = name
+    def __init__(self, sub_preds, arity, dtypes, pi_type=None):
+        super(InventedPredicate, self).__init__(sub_preds, arity, dtypes)
+        self.sub_preds = sub_preds
+        self.name = "_".join([p.name for p in sub_preds])
         self.arity = arity
         self.dtypes = dtypes
         self.ptype = None
         self.body = None
-        self.args = args
+        # self.args = args
         self.pi_type = pi_type
-        self.arg_list = arg_list
+        # self.arg_list = arg_list
 
     def __str__(self):
         return self.name + '/' + str(self.arity) + '/' + str(self.dtypes)
@@ -689,9 +690,11 @@ class InvAtom(object):
     def all_vars(self):
         var_list = []
         for term in self.terms:
-            if isinstance(term, list):
+            if isinstance(term, tuple):
                 for t in term:
                     var_list += t.all_vars()
+            elif isinstance(term, list):
+                print("")
             else:
                 # var_list.append(term.all_vars())
                 var_list += term.all_vars()

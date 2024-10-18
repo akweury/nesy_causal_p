@@ -32,9 +32,9 @@ def subs(exp, target_var, const):
         terms = [subs(term, target_var, const) for term in exp.terms]
         return Atom(exp.pred, terms)
     elif type(exp) == InvAtom:
-        atom_terms=  []
+        atom_terms = []
         for terms in exp.terms:
-            term = [subs(term, target_var, const) for term in terms]
+            term = tuple([subs(term, target_var, const) for term in terms])
             atom_terms.append(term)
         return InvAtom(exp.pred, atom_terms)
     elif type(exp) == FuncTerm:
