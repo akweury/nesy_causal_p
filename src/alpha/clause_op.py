@@ -1,6 +1,7 @@
 # Created by jing at 11.10.24
 
-from src.alpha.fol.logic import Var, Clause, InventedPredicate, Atom
+from src.alpha.fol.logic import Var, Clause, InventedPredicate, Atom, InvAtom
+
 
 
 def non_trivial_vars(merged_body):
@@ -19,14 +20,18 @@ def inv_pred_merge_bodies(bodies):
     # sorted_indices = sorted(range(len(pred_names)), key=lambda i: pred_names[i])
     # pred_names = [pred_names[i] for i in sorted_indices]
     # args_list = [args_list[i] for i in sorted_indices]
+    preds = []
+    for atom in bodies:
+        if isinstance(atom, Atom):
+            preds.append(atom.pred)
+        elif isinstance(atom, InvAtom):
+            preds+=atom.pred.sub_preds
+    preds = list(set(preds))
 
-    preds = list(set([b.pred for b in bodies]))
     pred_indices = sorted(range(len(preds)), key=lambda i: preds[i])
     preds = [preds[i] for i in pred_indices]
-
     dtypes = [dt for pred in preds for dt in pred.dtypes]
     # terms = [t for b in bodies for t in b.terms]
-
     arity = len(dtypes)
     inv_pred = InventedPredicate(preds, arity, dtypes)
 
@@ -40,7 +45,7 @@ def merge_clauses(clauses, lang):
     vars_in_body = non_trivial_vars(bodies)
     merged_clauses = []
     inv_atoms_grounded = []
-
+    inv_atoms_ungrounded = []
     if len(vars_in_body) == 2:
         trivial_body = [b for b in bodies if b.pred.name in ["ing", "inp", "target"]]
         new_body = [b for b in bodies if b.pred.name not in ["ing", "inp", "target"]]
@@ -48,7 +53,8 @@ def merge_clauses(clauses, lang):
         inv_pred = inv_pred_merge_bodies(new_body)
         if inv_pred is not None and inv_pred not in lang.predicates:
             lang.predicates.append(inv_pred)
-        inv_atoms_grounded, inv_atoms_ungrounded = lang.generate_inv_atoms(inv_pred, vars)
+            inv_atoms_grounded, inv_atoms_ungrounded = lang.generate_inv_atoms(inv_pred, vars)
+
         head = clauses[0].head
         for inv_atom in inv_atoms_ungrounded:
             body = trivial_body + [inv_atom]
