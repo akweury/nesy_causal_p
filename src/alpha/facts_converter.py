@@ -104,13 +104,13 @@ class FactsConverter(nn.Module):
             elif type(atom.pred) == InventedPredicate:
                 # collecting the data
                 atom_res = True
-                for a_i in range(len(atom.pred.arg_list)):
+                for a_i in range(len(atom.pred.sub_preds)):
                     pred_args = {}
                     term = atom.terms[a_i]
                     for t in term:
                         term_name, term_data = self.ground_to_tensor(t, group)
                         pred_args[term_name] = term_data
-                    module_name = atom.pred.args[a_i]
+                    module_name = atom.pred.sub_preds[a_i].name
                     # valuating via the predicate mechanics
                     module = valuation.valuation_modules[module_name]
                     module_res = module(pred_args)

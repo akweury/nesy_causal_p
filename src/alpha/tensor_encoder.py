@@ -254,7 +254,7 @@ class TensorEncoder(object):
                 if isinstance(term, tuple):
                     for t_i, t in enumerate(term):
                         if t.is_var():
-                            dtype = atom.pred.arg_list[i][t_i]
+                            dtype = atom.pred.sub_preds[i].dtypes[t_i]
                             var_dtype_list.append((t, dtype))
                             dtypes.append(dtype)
                             vars.append(t)
