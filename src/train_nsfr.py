@@ -103,9 +103,7 @@ def main():
     groups = train_common_features.img2groups(args, bk, obj_pos, idx, img)
     group_tensors = group2ocm(data, groups)
     clauses = alpha.alpha(args, group_tensors)
-
-    print(f"{idx}: {len(groups)}")
-
+    return clauses
 
 if __name__ == "__main__":
     main()

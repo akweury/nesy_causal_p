@@ -149,9 +149,8 @@ def df_search(args, lang, C, FC, objs):
         # clause evaluation
         ils, dls = evaluation(args, NSFR, target_preds, objs)
         pass_indices = [s_i for s_i in range(len(ils)) if ils[s_i] > 0.9]
-        ils = ils[pass_indices]
         extended_nodes = [extended_nodes[s_i] for s_i in range(len(ils)) if ils[s_i] > 0.9]
-
+        ils = ils[pass_indices]
         print(f"inv clauses score: {ils.unique()}")
 
     # prune clauses

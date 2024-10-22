@@ -236,6 +236,7 @@ def visual_all(args, idx, img, data, data_fm_shifted, fm_best, max_value, fm_bes
     compare_imgs = chart_utils.vconcat_imgs(compare_imgs)
     compare_imgs = cv2.cvtColor(compare_imgs, cv2.COLOR_BGR2RGB)
     cv2.imwrite(str(config.output / f"{args.exp_name}" / f'c_{bk_shape["name"]}_{idx}.png'), compare_imgs)
+    print(f"- grouping result: " + str(config.output / f"{args.exp_name}" / f'c_{bk_shape["name"]}_{idx}.png'))
 
 
 def get_match_detail(target_fm, shift_in_fm, max_value):
