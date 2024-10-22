@@ -30,7 +30,16 @@ def clause2rule(clause):
     prompt_prefix = ("Given a set of images consist of different shapes and colors of objects. "
                      "Each image might have different number, shape, color of objects, but they do have common logic patterns."
                      "The following clause describes the common logic pattern: ")
+    prompt = (f"Rename the string to a meaningful name: {clause.body[0].pred.name} consists of 1-4 words, "
+              f"where has color means an object has color, "
+              f"has shape means an object has shape, "
+              f"gshape means a group of objects form a shape,"
+              f"the corresponding arguments of each word is {clause.body[0].terms}."
+              f"Just return a name.")
+
+    llama3(prompt)
     clause_prompt = prompt_prefix + str(clause) + " Can you convert the clause into natural language?"
+
     response = llama3(clause_prompt)
     return response
 

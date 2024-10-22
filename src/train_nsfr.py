@@ -7,6 +7,7 @@ import torch.optim as optim
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader, random_split
 import cv2
+from collections import Counter
 
 import config
 import train_common_features
@@ -86,7 +87,7 @@ def group2ocm(data, groups):
 
 def main():
     args = args_utils.get_args()
-    idx = 0
+
     bk_shapes = {
         "data_circle",
         "data_square",
@@ -96,14 +97,27 @@ def main():
 
     # load background knowledge
     bk = load_bk(args, bk_shapes)
-    file_name, file_extension = image_paths[idx].split(".")
-    data = file_utils.load_json(f"{file_name}.json")
 
-    img, obj_pos = load_data(args, image_paths[idx])
-    groups = train_common_features.img2groups(args, bk, obj_pos, idx, img)
-    group_tensors = group2ocm(data, groups)
-    clauses = alpha.alpha(args, group_tensors)
-    return clauses
+    clause_all = []
+    for idx in tqdm(range(min(4, len(image_paths)))):
+        file_name, file_extension = image_paths[idx].split(".")
+        data = file_utils.load_json(f"{file_name}.json")
+
+        img, obj_pos = load_data(args, image_paths[idx])
+        groups = train_common_features.img2groups(args, bk, obj_pos, idx, img)
+        group_tensors = group2ocm(data, groups)
+        clauses = alpha.alpha(args, group_tensors)
+        clause_all.append(clauses)
+
+
+    clause_list = [c for cc in clause_all for c in cc]
+    frequency = {}
+    for item in clause_list:
+        frequency[item] = frequency.get(item, 0) + 1
+    most_frequency_value = max(frequency.values())
+    most_frequent_clauses = [key for key, value in frequency.items() if value == most_frequency_value]
+    return most_frequent_clauses
+
 
 if __name__ == "__main__":
     main()
