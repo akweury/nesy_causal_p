@@ -148,11 +148,14 @@ def df_search(args, lang, C, FC, objs):
         target_preds = list(set([c.head.pred.name for c in extended_nodes]))
         # clause evaluation
         ils, dls = evaluation(args, NSFR, target_preds, objs)
+        pass_indices = [s_i for s_i in range(len(ils)) if ils[s_i] > 0.9]
+        ils = ils[pass_indices]
         extended_nodes = [extended_nodes[s_i] for s_i in range(len(ils)) if ils[s_i] > 0.9]
+
         print(f"inv clauses score: {ils.unique()}")
 
     # prune clauses
-    pruned_c = pruning.top_k_clauses(args, ils, dls, extended_nodes)
+    # pruned_c = pruning.top_k_clauses(args, ils, dls, extended_nodes)
 
     return extended_nodes
 
@@ -183,11 +186,12 @@ def remove_trivial_atoms(args, lang, FC, clauses, objs, data):
 
 def alpha(args, ocm):
     clauses = []
-    for obj_num in range(1, args.max_obj_num):
-        lang = init_ilp(args, ocm, obj_num)
-        C = lang.reset_lang()
-        VM = valuation.get_valuation_module(args, lang)
-        FC = facts_converter.FactsConverter(args, lang, VM)
-        # clauses = beam_search(args, lang, C, FC, ocm)
-        clauses = df_search(args, lang, C, FC, ocm)
+    # for obj_num in range(1, args.max_obj_num):
+    obj_num = 1
+    lang = init_ilp(args, ocm, obj_num)
+    C = lang.reset_lang()
+    VM = valuation.get_valuation_module(args, lang)
+    FC = facts_converter.FactsConverter(args, lang, VM)
+    # clauses = beam_search(args, lang, C, FC, ocm)
+    clauses = df_search(args, lang, C, FC, ocm)
     return clauses
