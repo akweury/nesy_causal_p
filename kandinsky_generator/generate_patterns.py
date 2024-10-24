@@ -238,6 +238,6 @@ def genShapeOnShape(shape, n):
 
 if __name__ == '__main__':
     # task = "kp_cha_01"
-    tasks = ["diamond"]
+    tasks = ["diamondcircle"]
     for task in tasks:
         genShapeOnShape(task, 100)
