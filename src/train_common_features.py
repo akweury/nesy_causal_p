@@ -356,7 +356,7 @@ def main():
         })
 
     for idx in tqdm(range(len(image_paths)), "matching image"):
-        groups = img2groups(args, bk, image_paths[idx], idx)
+        groups = img2groups(args, bk, image_paths[idx], idx, img)
         print(f"{idx}: {len(groups)}")
 
 

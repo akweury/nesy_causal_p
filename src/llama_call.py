@@ -30,7 +30,7 @@ def clause2rule(clause):
     prompt_prefix = ("Given a set of images consist of different shapes and colors of objects. "
                      "Each image might have different number, shape, color of objects, but they do have common logic patterns."
                      "The following clause describes the common logic pattern: ")
-    prompt = (f"Rename the string to a meaningful name: {clause.body[0].pred.name} consists of 1-4 words, "
+    prompt = (f"Rename the string to a meaningful name: {clause.body[0].pred.name}, using 1-4 words, "
               f"where has color means an object has color, "
               f"has shape means an object has shape, "
               f"gshape means a group of objects form a shape,"

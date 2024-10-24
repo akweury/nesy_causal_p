@@ -105,7 +105,7 @@ def main():
     args = args_utils.get_args()
 
     patch_size = 5
-    bk_shapes = ["data_circle", "data_square", "data_triangle"]
+    bk_shapes = ["data_diamond"]
     for bk_shape in bk_shapes:
         args.exp_name = bk_shape
         train_loader, val_loader = prepare_kp_sy_data(args)

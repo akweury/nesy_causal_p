@@ -89,6 +89,7 @@ def main():
     args = args_utils.get_args()
 
     bk_shapes = {
+        "data_diamond",
         "data_circle",
         "data_square",
         "data_triangle"
@@ -108,7 +109,6 @@ def main():
         group_tensors = group2ocm(data, groups)
         clauses = alpha.alpha(args, group_tensors)
         clause_all.append(clauses)
-
 
     clause_list = [c for cc in clause_all for c in cc]
     frequency = {}

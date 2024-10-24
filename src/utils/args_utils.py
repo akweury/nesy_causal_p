@@ -24,6 +24,7 @@ def get_args():
     parser.add_argument("--kernel", type=int, default=10)
     parser.add_argument("--is_visual", action="store_true")
     parser.add_argument("--is_done", action="store_true")
+    parser.add_argument("--extend", action="store_true")
     parser.add_argument("--show_process", action="store_true")
     parser.add_argument("--number_num", type=int, default=10)
     parser.add_argument("--phi_num", type=int, default=2)

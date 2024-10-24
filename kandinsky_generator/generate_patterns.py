@@ -2,14 +2,13 @@ from PIL import Image, ImageDraw
 import numpy as np
 import os
 import json
-import matplotlib
 import config
 from tqdm import tqdm
 from kandinsky_generator.src.kp import KandinskyUniverse
 import kandinsky_generator.utils as utils
 import kandinsky_generator.patterns as patterns
-
 from kandinsky_generator.ShapeOnShapes import ShapeOnShape
+from kandinsky_generator.src.kp.KandinskyUniverse import matplotlib_colors
 
 u = KandinskyUniverse.SimpleUniverse()
 
@@ -21,12 +20,9 @@ WIDTH = 640
 MINSIZE = 10 * 5
 MAXSIZE = 24 * 5
 
-matplotlib_colors = {k: tuple(int(v[i:i + 2], 16) for i in (1, 3, 5)) for k, v in
-                     list(matplotlib.colors.cnames.items())}
-matplotlib_colors.pop("black")
-
 # clevr
-kandinsky_colors = {"red": (173, 35, 35), "yellow": (255, 238, 51), "blue": (42, 75, 215)}
+# kandinsky_colors = {"red": (173, 35, 35),
+#                     "yellow": (255, 238, 51), "blue": (42, 75, 215)}
 
 # a bit lighter
 # kandinsky_colors = [(193, 85, 85), (255, 238, 101), (90, 135, 235)]
@@ -128,9 +124,9 @@ def kf2data(kf, width):
                      "y": obj.y,
                      "size": obj.size,
                      "color_name": obj.color,
-                     "color_r": kandinsky_colors[obj.color][0],
-                     "color_g": kandinsky_colors[obj.color][1],
-                     "color_b": kandinsky_colors[obj.color][2],
+                     "color_r": matplotlib_colors[obj.color][0],
+                     "color_g": matplotlib_colors[obj.color][1],
+                     "color_b": matplotlib_colors[obj.color][2],
                      "shape": obj.shape,
                      "width": width
                      })
@@ -207,6 +203,8 @@ def genShapeOnShape(shape, n):
         print(f'Generating dataset {base_path}', task, mode)
         if shape == "circle":
             gen_fun = shapeOnshapeObjects.cir_only
+        elif shape == "diamond":
+            gen_fun = shapeOnshapeObjects.dia_only
         elif shape == "triangle":
             gen_fun = shapeOnshapeObjects.tri_only
         elif shape == "square":
@@ -217,6 +215,8 @@ def genShapeOnShape(shape, n):
             gen_fun = shapeOnshapeObjects.square_circle
         elif shape == "trianglesquare":
             gen_fun = shapeOnshapeObjects.triangle_square
+        elif shape == "diamondcircle":
+            gen_fun = shapeOnshapeObjects.diamond_circle
         elif shape == "trianglesquarecircle":
             gen_fun = shapeOnshapeObjects.triangle_square_circle
         elif shape == "trianglepartsquare":
@@ -238,21 +238,6 @@ def genShapeOnShape(shape, n):
 
 if __name__ == '__main__':
     # task = "kp_cha_01"
-    tasks = ["triangle", "circle", "square"]
+    tasks = ["diamondcircle", "triangle", "circle", "square"]
     for task in tasks:
-        genShapeOnShape(task, 100)
-    # min_obj_num = 10
-    # max_obj_num = 30
-    # color_dict = kandinsky_colors
-    #
-    # shapeOnshapeObjects = ShapeOnShape(u, 20, 40)
-    #
-    # for mode in ['train', 'val', 'test']:
-    #     generateClasses(task, mode, shapeOnshapeObjects, n=100, width=512, counterfactual=True)
-
-    # for mode in ['train', 'val', 'test']:
-    #     # n: number of examples for each class
-    #     if mode == 'train':
-    #         main(task, min_obj_num, max_obj_num, color_dict, mode, img_num=5)
-    #     else:
-    #         main(task, min_obj_num, max_obj_num, color_dict, mode, img_num=5)
+        genShapeOnShape(task, 10)

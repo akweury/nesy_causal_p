@@ -1,4 +1,7 @@
 # Created by shaji at 24/06/2024
+import matplotlib
+
+
 mode_recall = 8
 mode_excluded_preds = ["target", "has"]
 variable_symbol_pattern = "I"
@@ -43,6 +46,7 @@ prop_idx_dict = {
     "group_conf": 5,
 }
 color = ["blue", "yellow", "red"]
+
 shape = ["circle", "square", "triangle"]
 group_name = ["none", "data_triangle", "data_square", "data_circle"]
 
@@ -50,3 +54,10 @@ attr_names = ['color', 'shape', "group_label"]
 
 neighbor_4 = [(-1, 0), (0, -1), (0, 1), (1, 0)]
 neighbor_8 = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
+
+color_matplotlib = {k: tuple(int(v[i:i + 2], 16) for i in (1, 3, 5)) for k, v in
+                    list(matplotlib.colors.cnames.items())}
+color_matplotlib.pop("black")
+
+shape_extend = ["circle", "square", "triangle", "diamond"]
+group_name_extend = ["none", "data_triangle", "data_square", "data_circle", "data_diamond"]

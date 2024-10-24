@@ -1,9 +1,10 @@
 import random
 import math
 from tqdm import tqdm
+import numpy as np
 
 from kandinsky_generator.src.kp.KandinskyTruth import KandinskyTruthInterfce
-from kandinsky_generator.src.kp.KandinskyUniverse import kandinskyShape, overlaps
+from kandinsky_generator.src.kp.KandinskyUniverse import kandinskyShape, overlaps, ExtendedUniverse
 from kandinsky_generator.src.kp.RandomKandinskyFigure import Random
 
 
@@ -186,6 +187,64 @@ class ShapeOnShape(KandinskyTruthInterfce):
         kf = kf[:int(len(kf) * random_percent)]
         return kf
 
+    def _bigDiamond(self, so, t, min_percent=1.0, max_percent=1.0):
+        """
+        Generates n points that form a diamond shape.
+
+        :param center: Tuple (x, y) representing the center of the diamond.
+        :param scale: Scale factor to control the size of the diamond.
+        :param n: Number of points to generate along the diamond's edges.
+        :return: A NumPy array of shape (n, 2) with the (x, y) coordinates of the diamond points.
+        """
+        n = 20
+
+        x = 0.4 + random.random() * 0.2
+        y = 0.4 + random.random() * 0.2
+        scale = 0.4 - min(abs(0.5 - x), abs(0.5 - y))
+
+        # Define the 4 key corners of the diamond
+        top = (x, y - scale)  # Top point
+        right = (x + scale, y)  # Right point
+        bottom = (x, y + scale)  # Bottom point
+        left = (x - scale, y)  # Left point
+
+        # Divide n points into 4 segments (1 for each edge)
+        points_per_edge = n // 4
+        remainder = n % 4  # To handle cases where n is not divisible by 4
+
+        # Linear interpolation between each pair of diamond corners
+        def interpolate(start, end, num_points):
+            return np.linspace(start, end, num_points, endpoint=False)
+
+        # Generate points for each edge
+        top_right = interpolate(top, right, points_per_edge + (1 if remainder > 0 else 0))
+        remainder -= 1
+        right_bottom = interpolate(right, bottom, points_per_edge + (1 if remainder > 0 else 0))
+        remainder -= 1
+        bottom_left = interpolate(bottom, left, points_per_edge + (1 if remainder > 0 else 0))
+        remainder -= 1
+        left_top = interpolate(left, top, points_per_edge + (1 if remainder > 0 else 0))
+
+        # Combine all the points into a single array
+        diamond_points = np.vstack((top_right, right_bottom, bottom_left, left_top))
+        kf = []
+        for i in range(n):
+            o = kandinskyShape()
+            if t:
+                o.color = random.choice(["pink", "green"])
+                o.shape = random.choice(["diamond", "square"])
+            else:
+                o.color = random.choice(self.u.kandinsky_colors)
+                o.shape = random.choice(self.u.kandinsky_shapes)
+            o.size = so
+            o.x = diamond_points[i, 0]
+            o.y = diamond_points[i, 1]
+            kf.append(o)
+
+        random_percent = random.uniform(min_percent, max_percent)
+        kf = kf[:int(len(kf) * random_percent)]
+        return kf
+
     def _shapesOnShapes(self, truth):
         so = 0.04
 
@@ -211,10 +270,14 @@ class ShapeOnShape(KandinskyTruthInterfce):
         so = 0.04
         if shape == "circle":
             g = lambda so, truth: self._bigCircle(so, truth)
+        elif shape == "diamond":
+            g = lambda so, truth: self._bigDiamond(so, truth)
         elif shape == "triangle":
             g = lambda so, truth: self._bigTriangle(so, truth)
         elif shape == "square":
             g = lambda so, truth: self._bigSquare(so, truth)
+        elif shape == "diamondcircle":
+            g = lambda so, truth: self._bigDiamond(so, truth) + self._bigCircle(so, truth)
         elif shape == "trianglecircle":
             g = lambda so, truth: self._bigCircle(so, truth) + self._bigTriangle(so, truth)
         elif shape == 'trianglesquare':
@@ -230,7 +293,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
             g = lambda so, truth: self._bigSquare(
                 so, truth, min_percent=0, max_percent=1) + self._bigTriangle(so, truth, min_percent=0, max_percent=0.8)
         else:
-            raise ValueError("Shape must be either 'circle', 'triangle' or 'square'")
+            raise ValueError("Shape does not support.")
         kf = g(so, truth)
         t = 0
         tt = 0
@@ -250,6 +313,15 @@ class ShapeOnShape(KandinskyTruthInterfce):
         for i in tqdm(range(n), desc="generating objects"):
             # print(i)
             kf = self._only(True, "circle")
+            kfs.append(kf)
+        return kfs
+
+    def dia_only(self, n=1):
+        print("MAKE DIAMOND")
+        kfs = []
+        for i in tqdm(range(n), desc="generating objects"):
+            # print(i)
+            kf = self._only(True, "diamond")
             kfs.append(kf)
         return kfs
 
@@ -295,6 +367,15 @@ class ShapeOnShape(KandinskyTruthInterfce):
         for i in tqdm(range(n), desc="generating objects"):
             # print(i)
             kf = self._only(True, "trianglesquare")
+            kfs.append(kf)
+        return kfs
+
+    def diamond_circle(self, n=1):
+        print("MAKE DIAMOND AND CIRCLE")
+        kfs = []
+        for i in tqdm(range(n), desc="generating objects"):
+            # print(i)
+            kf = self._only(True, "diamondcircle")
             kfs.append(kf)
         return kfs
 
