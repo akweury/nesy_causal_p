@@ -1,7 +1,6 @@
 # Created by shaji at 24/06/2024
 import matplotlib
 
-
 mode_recall = 8
 mode_excluded_preds = ["target", "has"]
 variable_symbol_pattern = "I"
@@ -45,10 +44,10 @@ prop_idx_dict = {
     "group_name": 4,
     "group_conf": 5,
 }
-color = ["blue", "yellow", "red"]
+color_small = ["blue", "yellow", "red"]
 
-shape = ["circle", "square", "triangle"]
-group_name = ["none", "data_triangle", "data_square", "data_circle"]
+shape_small = ["circle", "square", "triangle"]
+group_name_small = ["none", "data_triangle", "data_square", "data_circle"]
 
 attr_names = ['color', 'shape', "group_label"]
 
