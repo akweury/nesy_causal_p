@@ -81,7 +81,7 @@ class Language(object):
 
         # load BK predicates and constants
         self.load_preds()
-        self.consts = self.load_consts(fms, phi_num, rho_num, obj_num)
+        self.consts, self.min_consts = self.load_consts(fms, phi_num, rho_num, obj_num)
 
     def load_preds(self):
         # load all the bk predicates
@@ -114,6 +114,15 @@ class Language(object):
 
     def __repr__(self):
         return self.__str__()
+
+    def update_consts(self, clauses):
+        new_consts = self.min_consts
+        for c in clauses:
+            for atom in c.body:
+                for term in atom.terms:
+                    if isinstance(term, Const) and term not in new_consts:
+                        new_consts.append(term)
+        self.consts = new_consts
 
     def generate_minimum_atoms(self, prim_args_list):
         p_ = Predicate('.', 1, [mode_declaration.DataType('spec')])
@@ -271,7 +280,30 @@ class Language(object):
         invented_pred = InventedPredicate(pred_with_id, int(arity), dtypes, args=None, pi_type=None)
         return invented_pred
 
-    def parse_const(self, fms, phi_num, rho_num, obj_num, const, const_type):
+    def parse_min_const(self, fms, obj_num, const, const_type):
+        """Parse string to function symbols.
+        """
+        const_data_type = mode_declaration.DataType(const)
+        const_names = []
+        if "amount_" in const_type:
+            _, num = const_type.split('_')
+            if num == "group":
+                num = len(fms)
+            elif num == "object":
+                num = obj_num
+            const_names = []
+            for i in range(int(num)):
+                const_names.append(f"{const_data_type.name}{i + 1}of{num}")
+        elif 'pattern' == const_type:
+            const_names = ['data']
+        elif 'group_pattern' == const_type:
+            const_names = ['group']
+        consts = []
+        for c_i, name in enumerate(const_names):
+            consts.append(Const(name, const_data_type))
+        return consts
+
+    def parse_const(self, data, phi_num, rho_num, obj_num, const, const_type):
         """Parse string to function symbols.
         """
         const_data_type = mode_declaration.DataType(const)
@@ -282,7 +314,7 @@ class Language(object):
             elif num == "rho":
                 num = rho_num
             elif num == "group":
-                num = len(fms)
+                num = len(data)
             elif num == "object":
                 num = obj_num
             const_names = []
@@ -295,11 +327,11 @@ class Language(object):
         elif 'enum' in const_type:
             const_names = []
             if const_data_type.name == "color":
-                const_names = bk.color
+                const_names = bk.color_large
             elif const_data_type.name == "shape":
-                const_names = bk.shape
+                const_names = bk.shape_extend
             elif const_data_type.name == "group_label":
-                const_names = bk.group_name
+                const_names = bk.group_name_extend
             else:
                 raise ValueError
         else:
@@ -307,7 +339,7 @@ class Language(object):
         consts = []
         for c_i, name in enumerate(const_names):
             if "feature_map" in name:
-                const = Const(name, const_data_type, values=fms[c_i])
+                const = Const(name, const_data_type, values=data[c_i])
             else:
                 const = Const(name, const_data_type)
             consts.append(const)
@@ -315,9 +347,11 @@ class Language(object):
 
     def load_consts(self, fms, phi_num, rho_num, obj_num):
         consts = []
+        min_consts = []
         for const_name, const_type in bk.const_dict.items():
+            min_consts.extend(self.parse_min_const(fms, obj_num, const_name, const_type))
             consts.extend(self.parse_const(fms, phi_num, rho_num, obj_num, const_name, const_type))
-        return consts
+        return consts, min_consts
 
     def rename_bk_preds_in_clause(self, bk_prefix, line):
         """Parse string to invented predicates.

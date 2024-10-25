@@ -142,6 +142,11 @@ def df_search(args, lang, C, FC, objs):
     # node extension (DFS)
     base_nodes = [atom_C[s_i] for s_i in range(len(ils)) if ils[s_i] > 0.9]
     extended_nodes = [atom_C[s_i] for s_i in range(len(ils)) if ils[s_i] > 0.9]
+
+    # update const lists
+    lang.update_consts(base_nodes)
+
+
     for e_i in range(2):
         extended_nodes = node_extension(args, lang, base_nodes, extended_nodes)
         NSFR = nsfr.get_nsfr_model(args, lang, FC, extended_nodes)

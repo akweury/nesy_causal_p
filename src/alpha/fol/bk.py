@@ -57,6 +57,7 @@ neighbor_8 = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 
 color_matplotlib = {k: tuple(int(v[i:i + 2], 16) for i in (1, 3, 5)) for k, v in
                     list(matplotlib.colors.cnames.items())}
 color_matplotlib.pop("black")
+color_large = [k for k, v in list(color_matplotlib.items())]
 
 shape_extend = ["circle", "square", "triangle", "diamond"]
 group_name_extend = ["none", "data_triangle", "data_square", "data_circle", "data_diamond"]

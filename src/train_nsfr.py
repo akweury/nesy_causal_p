@@ -47,15 +47,15 @@ def load_data(args, image_path):
 def obj2tensor(shape, color, pos, group_name, group_count_conf):
     obj_tensor = torch.zeros(len(bk.obj_ohc))
     i = 0
-    obj_tensor[i] = bk.color.index(color)  # color
+    obj_tensor[i] = bk.color_large.index(color)  # color
     i += 1
-    obj_tensor[i] = bk.shape.index(shape)  # shape
+    obj_tensor[i] = bk.shape_extend.index(shape)  # shape
     i += 1
     obj_tensor[i] = pos[0]  # x position
     i += 1
     obj_tensor[i] = pos[1]  # y position
     i += 1
-    obj_tensor[i] = bk.group_name.index(group_name)  # group label
+    obj_tensor[i] = bk.group_name_extend.index(group_name)  # group label
     i += 1
     obj_tensor[i] = group_count_conf  # group confidence according to the count of objects
     return obj_tensor
