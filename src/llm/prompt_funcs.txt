@@ -1,0 +1,39 @@
+Combine the following two class to one class. Make sure that
+the return is a single boolean value
+Only return the code of new class and nothing else.
+```
+class VFColor(nn.Module):
+    """The function v_color.
+    """
+
+    def __init__(self, name):
+        super(VFColor, self).__init__()
+        self.name = name
+
+    def forward(self, args_dict):
+        try:
+            color_gt = args_dict["color"]
+        except KeyError:
+            print("")
+        group_data = args_dict["group_data"]
+        color_data = group_data[:, bk.prop_idx_dict["color"]]
+        is_color = (color_gt == color_data).sum().bool().float()
+        return is_color
+
+
+class VFShape(nn.Module):
+    """The function v_color.
+    """
+
+    def __init__(self, name):
+        super(VFShape, self).__init__()
+        self.name = name
+
+    def forward(self, args_dict):
+        group_data = args_dict["group_data"]
+        shape_gt = args_dict["shape"]
+        shape_data = group_data[:, bk.prop_idx_dict["shape"]]
+        has_shape = (shape_gt == shape_data).sum().bool().float()
+        return has_shape
+
+```
