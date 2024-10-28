@@ -190,14 +190,14 @@ def genShapeOnShape(shape, n):
     shapeOnshapeObjects = ShapeOnShape(u, 20, 40)
     for mode in ['train']:
         width = 512
-        base_path = config.kp_dataset / f"data_{shape}"
-        true_path = base_path / mode / 'true'
-        false_path = base_path / mode / 'false'
-        cf_path = base_path / mode / 'counterfactual'
+        base_path = config.kp_dataset / f"{shape}"
+        # true_path = base_path / mode / 'true'
+        # false_path = base_path / mode / 'false'
+        # cf_path = base_path / mode / 'counterfactual'
         os.makedirs(base_path, exist_ok=True)
-        os.makedirs(true_path, exist_ok=True)
-        os.makedirs(false_path, exist_ok=True)
-        os.makedirs(cf_path, exist_ok=True)
+        # os.makedirs(true_path, exist_ok=True)
+        # os.makedirs(false_path, exist_ok=True)
+        # os.makedirs(cf_path, exist_ok=True)
         print(f'Generating dataset {base_path}', task, mode)
         if shape == "circle":
             gen_fun = shapeOnshapeObjects.cir_only
@@ -226,12 +226,12 @@ def genShapeOnShape(shape, n):
         else:
             raise ValueError
 
-        for (i, kf) in tqdm(enumerate(gen_fun(n))):
+        for (i, kf) in tqdm(enumerate(gen_fun(n,rule_style=False))):
             image = KandinskyUniverse.kandinskyFigureAsImage(kf, width)
             data = kf2data(kf, width)
-            with open(true_path / f"{task}_{i:06d}.json", 'w') as f:
+            with open(base_path / f"{task}_{i:06d}.json", 'w') as f:
                 json.dump(data, f)
-            image.save(true_path / f"{task}_{i:06d}.png")
+            image.save(base_path / f"{task}_{i:06d}.png")
 
 
 def genShapeOnShapeTask(task, n):
@@ -251,6 +251,8 @@ def genShapeOnShapeTask(task, n):
             print(f'Generating dataset {base_path}', task, mode)
             if task[label] == "diamondcircle":
                 gen_fun = shapeOnshapeObjects.diamond_circle
+            elif task[label] == "diamondcircle_cf":
+                gen_fun = shapeOnshapeObjects.diamond_circle_cf
             elif task[label] == "trianglecircle":
                 gen_fun = shapeOnshapeObjects.triangle_circle
             elif task[label] == "random":
@@ -267,14 +269,6 @@ def genShapeOnShapeTask(task, n):
 
 
 if __name__ == '__main__':
-    # task = "kp_cha_01"
-    task = {"name": "diamondcircle",
-             "true": "diamondcircle",
-             "random": "random",
-             "counterfactual": "trianglecircle"}
-
-    genShapeOnShapeTask(task, 10)
-
-    # tasks = ["diamondcircle"]
-    # for task in tasks:
-    #     genShapeOnShape(task, 100)
+    tasks = ["circle"]
+    for task in tasks:
+        genShapeOnShape(task, 500)

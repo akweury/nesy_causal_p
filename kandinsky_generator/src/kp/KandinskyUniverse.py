@@ -24,10 +24,10 @@ class SimpleUniverse:
     kandinsky_shapes = ['square', 'circle', 'triangle']
 
 
-class ExtendedUniverse:
-    # still have to add drawing functions below
-    kandinsky_colors = ['red', 'yellow', 'blue', "green", "orange"]
-    kandinsky_shapes = ['square', 'circle', 'triangle', "star"]
+# class ExtendedUniverse:
+#     # still have to add drawing functions below
+#     kandinsky_colors = ['red', 'yellow', 'blue', "green", "orange"]
+#     kandinsky_shapes = ['square', 'circle', 'triangle', "star"]
 
 
 def square(d, cx, cy, s, f):
@@ -480,3 +480,6 @@ def overlaps(shapes, width=1024):
 matplotlib_colors = {k: tuple(int(v[i:i + 2], 16) for i in (1, 3, 5)) for k, v in
                      list(matplotlib.colors.cnames.items())}
 matplotlib_colors.pop("black")
+matplotlib_colors_list = [k for k,v in matplotlib_colors.items()]
+
+kandinsky_shapes = ['square', 'circle', 'triangle']

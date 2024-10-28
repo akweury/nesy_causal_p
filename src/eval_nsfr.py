@@ -1,13 +1,22 @@
-# Created by jing at 17.06.24
+# Created by shaji at 27/10/2024
 from tqdm import tqdm
-import torch
 import cv2
+import torch
 
 import config
-import train_common_features
 from utils import file_utils, args_utils, data_utils
+import train_common_features
 from src.alpha import alpha
 from src.alpha.fol import bk
+
+
+def load_data(args, image_path):
+    file_name, file_extension = image_path.split(".")
+    data = file_utils.load_json(f"{file_name}.json")
+    patch = data_utils.oco2patch(data).unsqueeze(0).to(args.device)
+    img = file_utils.load_img(image_path)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    return img, patch
 
 
 def load_bk(args, bk_shapes):
@@ -28,15 +37,6 @@ def load_bk(args, bk_shapes):
         })
 
     return bk
-
-
-def load_data(args, image_path):
-    file_name, file_extension = image_path.split(".")
-    data = file_utils.load_json(f"{file_name}.json")
-    patch = data_utils.oco2patch(data).unsqueeze(0).to(args.device)
-    img = file_utils.load_img(image_path)
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    return img, patch
 
 
 def obj2tensor(shape, color, pos, group_name, group_count_conf):
@@ -80,13 +80,10 @@ def group2ocm(data, groups):
     return group_ocms
 
 
-def main(args, image_paths):
-    save_file = config.output / args.exp_name / f'learned_clause.pkl'
-    learned_clauses = data_utils.load_pickle(save_file)
-    if learned_clauses is not None:
-        return learned_clauses
-
+def check_clause(args, clauses, image_paths, image_label):
     # load background knowledge
+    preds = torch.zeros(len(image_paths), dtype=torch.bool)
+
     group_bk = load_bk(args, bk.group_name_extend)
     clause_all = []
     for idx in tqdm(range(min(4, len(image_paths)))):
@@ -95,22 +92,17 @@ def main(args, image_paths):
 
         img, obj_pos = load_data(args, image_paths[idx])
         groups = train_common_features.img2groups(args, group_bk, obj_pos, idx, img)
-        group_tensors = group2ocm(data, groups)
-        clauses = alpha.alpha(args, group_tensors)
-        clause_all.append(clauses)
+        if len(groups) != 0:
+            group_tensors = group2ocm(data, groups)
+            clauses = alpha.alpha(args, group_tensors)
+            clause_all.append(clauses)
+    acc = (preds == image_label) / len(preds)
 
-    clause_list = [c for cc in clause_all for c in cc]
-    frequency = {}
-    for item in clause_list:
-        frequency[item] = frequency.get(item, 0) + 1
-    most_frequency_value = max(frequency.values())
-    most_frequent_clauses = [key for key, value in frequency.items() if value == most_frequency_value]
-    data_utils.save_pickle(save_file, most_frequent_clauses)
-
-    return most_frequent_clauses
+    return acc
 
 
 if __name__ == "__main__":
     args = args_utils.get_args()
+    clauses = []
     image_paths = file_utils.get_all_files(config.kp_dataset / args.exp_name / "train" / "true", "png", False)[:500]
-    main(args, image_paths)
+    check_clause(args, clauses, image_paths, True)

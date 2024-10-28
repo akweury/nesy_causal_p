@@ -37,3 +37,12 @@ class VFShape(nn.Module):
         return has_shape
 
 ```
+
+bk:
+has_color, has_shape, has_group_type
+
+llm:
+color_shape()
+
+
+

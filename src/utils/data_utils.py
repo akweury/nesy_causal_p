@@ -1,10 +1,12 @@
 # Created by shaji at 21/06/2024
 
 import numpy as np
-
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
+import pickle
+import os
+
 
 
 def data2patch(data):
@@ -304,3 +306,14 @@ def shift_content_to_top_left(batch_matrices, given_rs=None, given_cs=None):
     return shifted_matrices, rs, cs
 
 
+def save_pickle(file_name, data):
+    with open(file_name, 'wb') as f:
+        pickle.dump(data, f)
+
+def load_pickle(file_name):
+    if os.path.exists(file_name):
+        with open(file_name, 'rb') as file:
+            loaded_data = pickle.load(file)
+        return loaded_data
+    else:
+        return None

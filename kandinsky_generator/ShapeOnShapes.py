@@ -4,7 +4,7 @@ from tqdm import tqdm
 import numpy as np
 
 from kandinsky_generator.src.kp.KandinskyTruth import KandinskyTruthInterfce
-from kandinsky_generator.src.kp.KandinskyUniverse import kandinskyShape, overlaps, ExtendedUniverse
+from kandinsky_generator.src.kp import KandinskyUniverse
 from kandinsky_generator.src.kp.RandomKandinskyFigure import Random
 
 
@@ -24,14 +24,14 @@ class ShapeOnShape(KandinskyTruthInterfce):
         if n > self.max:   n = self.max
 
         for i in range(n):
-            o = kandinskyShape()
+            o = KandinskyUniverse.kandinskyShape()
             d = i * 2 * math.pi / n
             if t:
                 o.color = random.choice(["blue", "yellow"])
                 o.shape = random.choice(["square", "triangle"])
             else:
-                o.color = random.choice(self.u.kandinsky_colors)
-                o.shape = random.choice(self.u.kandinsky_shapes)
+                o.color = random.choice(KandinskyUniverse.matplotlib_colors_list)
+                o.shape = random.choice(KandinskyUniverse.kandinsky_shapes)
 
             o.size = so
             o.x = x + r * math.cos(d)
@@ -63,7 +63,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
         dyi = (ye - ys) / n
 
         for i in range(n + 1):
-            o = kandinskyShape()
+            o = KandinskyUniverse.kandinskyShape()
             if t:
                 o.color = random.choice(["yellow", "red"])
                 o.shape = random.choice(["circle", "square"])
@@ -83,7 +83,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
         dyi = (ye - ys) / n
 
         for i in range(n):
-            o = kandinskyShape()
+            o = KandinskyUniverse.kandinskyShape()
             if t:
                 o.color = random.choice(["yellow", "red"])
                 o.shape = random.choice(["circle", "square"])
@@ -103,7 +103,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
         dyi = (ye - ys) / n
 
         for i in range(n - 1):
-            o = kandinskyShape()
+            o = KandinskyUniverse.kandinskyShape()
             if t:
                 o.color = random.choice(["yellow", "red"])
                 o.shape = random.choice(["circle", "square"])
@@ -137,7 +137,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
 
         dx = r / n
         for i in range(n + 1):
-            o = kandinskyShape()
+            o = KandinskyUniverse.kandinskyShape()
             if t:
                 o.color = random.choice(["blue", "red"])
                 o.shape = random.choice(["circle", "triangle"])
@@ -148,7 +148,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
             o.x = minx + i * dx
             o.y = miny
             kf.append(o)
-            o = kandinskyShape()
+            o = KandinskyUniverse.kandinskyShape()
             if t:
                 o.color = random.choice(["blue", "red"])
                 o.shape = random.choice(["circle", "triangle"])
@@ -161,7 +161,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
             kf.append(o)
 
         for i in range(n - 1):
-            o = kandinskyShape()
+            o = KandinskyUniverse.kandinskyShape()
             if t:
                 o.color = random.choice(["blue", "red"])
                 o.shape = random.choice(["circle", "triangle"])
@@ -172,7 +172,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
             o.x = minx
             o.y = miny + (i + 1) * dx
             kf.append(o)
-            o = kandinskyShape()
+            o = KandinskyUniverse.kandinskyShape()
             if t:
                 o.color = random.choice(["blue", "red"])
                 o.shape = random.choice(["circle", "triangle"])
@@ -229,13 +229,13 @@ class ShapeOnShape(KandinskyTruthInterfce):
         diamond_points = np.vstack((top_right, right_bottom, bottom_left, left_top))
         kf = []
         for i in range(n):
-            o = kandinskyShape()
+            o = KandinskyUniverse.kandinskyShape()
             if t:
                 o.color = random.choice(["pink", "green"])
                 o.shape = random.choice(["diamond", "square"])
             else:
-                o.color = random.choice(self.u.kandinsky_colors)
-                o.shape = random.choice(self.u.kandinsky_shapes)
+                o.color = random.choice(["pink", "yellow"])
+                o.shape = random.choice(["diamond", "square"])
             o.size = so
             o.x = diamond_points[i, 0]
             o.y = diamond_points[i, 1]
@@ -257,7 +257,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
         t = 0
         tt = 0
         maxtry = 1000
-        while overlaps(kf) and (t < maxtry):
+        while KandinskyUniverse.overlaps(kf) and (t < maxtry):
             kf = g(so, truth)
             if tt > 10:
                 tt = 0
@@ -298,7 +298,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
         t = 0
         tt = 0
         maxtry = 1000
-        while overlaps(kf) and (t < maxtry):
+        while KandinskyUniverse.overlaps(kf) and (t < maxtry):
             kf = g(so, truth)
             if tt > 10:
                 tt = 0
@@ -307,12 +307,11 @@ class ShapeOnShape(KandinskyTruthInterfce):
             t = t + 1
         return kf
 
-    def cir_only(self, n=1):
+    def cir_only(self, n=1, rule_style=False):
         print("MAKE CIRCLE")
         kfs = []
-        for i in tqdm(range(n), desc="generating objects"):
-            # print(i)
-            kf = self._only(True, "circle")
+        for i in tqdm(range(n), desc="generating group objects"):
+            kf = self._only(rule_style, "circle")
             kfs.append(kf)
         return kfs
 
@@ -376,6 +375,15 @@ class ShapeOnShape(KandinskyTruthInterfce):
         for i in tqdm(range(n), desc="generating objects"):
             # print(i)
             kf = self._only(True, "diamondcircle")
+            kfs.append(kf)
+        return kfs
+
+    def diamond_circle_cf(self, n=1):
+        print("MAKE DIAMOND AND CIRCLE (COUNTERFACTUAL)")
+        kfs = []
+        for i in tqdm(range(n), desc="generating objects"):
+            # print(i)
+            kf = self._only(False, "diamondcircle")
             kfs.append(kf)
         return kfs
 
