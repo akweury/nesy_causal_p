@@ -96,7 +96,7 @@ def check_clause(args, clauses, image_paths, image_label):
             group_tensors = group2ocm(data, groups)
             clauses = alpha.alpha(args, group_tensors)
             clause_all.append(clauses)
-    acc = (preds == image_label) / len(preds)
+    acc = (preds == image_label) / 4
 
     return acc
 

@@ -68,8 +68,8 @@ class ShapeOnShape(KandinskyTruthInterfce):
                 o.color = random.choice(["yellow", "red"])
                 o.shape = random.choice(["circle", "square"])
             else:
-                o.color = random.choice(self.u.kandinsky_colors)
-                o.shape = random.choice(self.u.kandinsky_shapes)
+                o.color = random.choice(KandinskyUniverse.matplotlib_colors_list)
+                o.shape = random.choice(KandinskyUniverse.kandinsky_shapes)
             o.size = so
             o.x = xs + i * dxi
             o.y = ys + i * dyi
@@ -88,8 +88,8 @@ class ShapeOnShape(KandinskyTruthInterfce):
                 o.color = random.choice(["yellow", "red"])
                 o.shape = random.choice(["circle", "square"])
             else:
-                o.color = random.choice(self.u.kandinsky_colors)
-                o.shape = random.choice(self.u.kandinsky_shapes)
+                o.color = random.choice(KandinskyUniverse.matplotlib_colors_list)
+                o.shape = random.choice(KandinskyUniverse.kandinsky_shapes)
             o.size = so
             o.x = xs + (i + 1) * dxi
             o.y = ys + (i + 1) * dyi
@@ -108,8 +108,8 @@ class ShapeOnShape(KandinskyTruthInterfce):
                 o.color = random.choice(["yellow", "red"])
                 o.shape = random.choice(["circle", "square"])
             else:
-                o.color = random.choice(self.u.kandinsky_colors)
-                o.shape = random.choice(self.u.kandinsky_shapes)
+                o.color = random.choice(KandinskyUniverse.matplotlib_colors_list)
+                o.shape = random.choice(KandinskyUniverse.kandinsky_shapes)
             o.size = so
             o.x = xs + (i + 1) * dxi
             o.y = ys + (i + 1) * dyi
@@ -142,8 +142,8 @@ class ShapeOnShape(KandinskyTruthInterfce):
                 o.color = random.choice(["blue", "red"])
                 o.shape = random.choice(["circle", "triangle"])
             else:
-                o.color = random.choice(self.u.kandinsky_colors)
-                o.shape = random.choice(self.u.kandinsky_shapes)
+                o.color = random.choice(KandinskyUniverse.matplotlib_colors_list)
+                o.shape = random.choice(KandinskyUniverse.kandinsky_shapes)
             o.size = so
             o.x = minx + i * dx
             o.y = miny
@@ -153,8 +153,8 @@ class ShapeOnShape(KandinskyTruthInterfce):
                 o.color = random.choice(["blue", "red"])
                 o.shape = random.choice(["circle", "triangle"])
             else:
-                o.color = random.choice(self.u.kandinsky_colors)
-                o.shape = random.choice(self.u.kandinsky_shapes)
+                o.color = random.choice(KandinskyUniverse.matplotlib_colors_list)
+                o.shape = random.choice(KandinskyUniverse.kandinsky_shapes)
             o.size = so
             o.x = minx + i * dx
             o.y = maxy
@@ -166,8 +166,8 @@ class ShapeOnShape(KandinskyTruthInterfce):
                 o.color = random.choice(["blue", "red"])
                 o.shape = random.choice(["circle", "triangle"])
             else:
-                o.color = random.choice(self.u.kandinsky_colors)
-                o.shape = random.choice(self.u.kandinsky_shapes)
+                o.color = random.choice(KandinskyUniverse.matplotlib_colors_list)
+                o.shape = random.choice(KandinskyUniverse.kandinsky_shapes)
             o.size = so
             o.x = minx
             o.y = miny + (i + 1) * dx
@@ -177,8 +177,8 @@ class ShapeOnShape(KandinskyTruthInterfce):
                 o.color = random.choice(["blue", "red"])
                 o.shape = random.choice(["circle", "triangle"])
             else:
-                o.color = random.choice(self.u.kandinsky_colors)
-                o.shape = random.choice(self.u.kandinsky_shapes)
+                o.color = random.choice(KandinskyUniverse.matplotlib_colors_list)
+                o.shape = random.choice(KandinskyUniverse.kandinsky_shapes)
             o.size = so
             o.x = maxx
             o.y = miny + (i + 1) * dx
@@ -234,8 +234,8 @@ class ShapeOnShape(KandinskyTruthInterfce):
                 o.color = random.choice(["pink", "green"])
                 o.shape = random.choice(["diamond", "square"])
             else:
-                o.color = random.choice(["pink", "yellow"])
-                o.shape = random.choice(["diamond", "square"])
+                o.color = random.choice(KandinskyUniverse.matplotlib_colors_list)
+                o.shape = random.choice(KandinskyUniverse.kandinsky_shapes)
             o.size = so
             o.x = diamond_points[i, 0]
             o.y = diamond_points[i, 1]
@@ -315,7 +315,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
             kfs.append(kf)
         return kfs
 
-    def dia_only(self, n=1):
+    def dia_only(self, n=1, rule_style=False):
         print("MAKE DIAMOND")
         kfs = []
         for i in tqdm(range(n), desc="generating objects"):
@@ -324,16 +324,15 @@ class ShapeOnShape(KandinskyTruthInterfce):
             kfs.append(kf)
         return kfs
 
-    def tri_only(self, n=1):
+    def tri_only(self, n=1, rule_style=False):
         print("MAKE TRIANGLE")
         kfs = []
         for i in tqdm(range(n), desc="generating objects"):
-            # print(i)
-            kf = self._only(True, "triangle")
+            kf = self._only(rule_style, "triangle")
             kfs.append(kf)
         return kfs
 
-    def square_only(self, n=1):
+    def square_only(self, n=1, rule_style=False):
         print("MAKE SQUARE")
         kfs = []
         for i in tqdm(range(n), desc="generating objects"):
@@ -342,16 +341,24 @@ class ShapeOnShape(KandinskyTruthInterfce):
             kfs.append(kf)
         return kfs
 
-    def triangle_circle(self, n=1):
+    def triangle_circle(self, n=1, rule_style=False):
         print("MAKE TRIANGLE AND CIRCLE")
         kfs = []
         for i in tqdm(range(n), desc="generating objects"):
-            # print(i)
-            kf = self._only(True, "trianglecircle")
+            kf = self._only(rule_style, "trianglecircle")
             kfs.append(kf)
         return kfs
 
-    def square_circle(self, n=1):
+    def diamond_circle_cf(self, n=1, rule_style=False):
+        print("MAKE TRIANGLE AND CIRCLE (COUNTERFACTUAL)")
+        kfs = []
+        for i in tqdm(range(n), desc="generating objects"):
+            # print(i)
+            kf = self._only(False, "trianglecircle")
+            kfs.append(kf)
+        return kfs
+
+    def square_circle(self, n=1, rule_style=False):
         print("MAKE SQUARE AND CIRCLE")
         kfs = []
         for i in tqdm(range(n), desc="generating objects"):
@@ -360,7 +367,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
             kfs.append(kf)
         return kfs
 
-    def triangle_square(self, n=1):
+    def triangle_square(self, n=1, rule_style=False):
         print("MAKE TRIANGLE AND SQUARE")
         kfs = []
         for i in tqdm(range(n), desc="generating objects"):
@@ -369,7 +376,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
             kfs.append(kf)
         return kfs
 
-    def diamond_circle(self, n=1):
+    def diamond_circle(self, n=1, rule_style=False):
         print("MAKE DIAMOND AND CIRCLE")
         kfs = []
         for i in tqdm(range(n), desc="generating objects"):
@@ -378,16 +385,16 @@ class ShapeOnShape(KandinskyTruthInterfce):
             kfs.append(kf)
         return kfs
 
-    def diamond_circle_cf(self, n=1):
+    def triangle_circle_cf(self, n=1, rule_style=False):
         print("MAKE DIAMOND AND CIRCLE (COUNTERFACTUAL)")
         kfs = []
         for i in tqdm(range(n), desc="generating objects"):
             # print(i)
-            kf = self._only(False, "diamondcircle")
+            kf = self._only(False, "trianglecircle")
             kfs.append(kf)
         return kfs
 
-    def triangle_square_circle(self, n=1):
+    def triangle_square_circle(self, n=1, rule_style=False):
         print("MAKE TRIANGLE AND SQUARE AND CIRCLE")
         kfs = []
         for i in tqdm(range(n), desc="generating objects"):
@@ -396,7 +403,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
             kfs.append(kf)
         return kfs
 
-    def triangle_partsquare(self, n=1):
+    def triangle_partsquare(self, n=1, rule_style=False):
         print("MAKE TRIANGLE AND PART SQUARE")
         kfs = []
         for i in tqdm(range(n), desc="generating objects"):
@@ -405,7 +412,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
             kfs.append(kf)
         return kfs
 
-    def parttriangle_partsquare(self, n=1):
+    def parttriangle_partsquare(self, n=1, rule_style=False):
         print("MAKE PART TRIANGLE AND PART SQUARE")
         kfs = []
         for i in tqdm(range(n), desc="generating objects"):
@@ -414,7 +421,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
             kfs.append(kf)
         return kfs
 
-    def true_kf(self, n=1):
+    def true_kf(self, n=1, rule_style=False):
         print("MAKE TRUE")
         kfs = []
         for i in tqdm(range(n), desc="generating objects"):
@@ -423,7 +430,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
             kfs.append(kf)
         return kfs
 
-    def almost_true_kf(self, n=1):
+    def almost_true_kf(self, n=1, rule_style=False):
         kfs = []
         print("MAKE CONTRAFACTUALS")
         for i in tqdm(range(n), desc="generating objects"):
@@ -432,7 +439,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
             kfs.append(kf)
         return kfs
 
-    def false_kf(self, n=1):
+    def false_kf(self, n=1, rule_style=False):
         print("MAKE FALSE")
         # we are  sure that random image does not contain "shapes on shapes"
         t = self.min + self.max

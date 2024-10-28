@@ -255,12 +255,14 @@ def genShapeOnShapeTask(task, n):
                 gen_fun = shapeOnshapeObjects.diamond_circle_cf
             elif task[label] == "trianglecircle":
                 gen_fun = shapeOnshapeObjects.triangle_circle
+            elif task[label] == "trianglecircle_cf":
+                gen_fun = shapeOnshapeObjects.triangle_circle_cf
             elif task[label] == "random":
                 gen_fun = shapeOnshapeObjects.false_kf
             else:
                 raise ValueError
 
-            for (i, kf) in tqdm(enumerate(gen_fun(n))):
+            for (i, kf) in tqdm(enumerate(gen_fun(n, rule_style=True))):
                 image = KandinskyUniverse.kandinskyFigureAsImage(kf, width)
                 data = kf2data(kf, width)
                 with open(data_path / f"{i:06d}.json", 'w') as f:
@@ -270,10 +272,10 @@ def genShapeOnShapeTask(task, n):
 
 if __name__ == '__main__':
     # task = "kp_cha_01"
-    task = {"name": "diamondcircle",
-            "true": "diamondcircle",
+    task = {"name": "trianglecircle",
+            "true": "trianglecircle",
             "random": "random",
-            "counterfactual": "diamondcircle_cf"}
+            "counterfactual": "trianglecircle_cf"}
     genShapeOnShapeTask(task, 10)
 
     # tasks = ["diamondcircle"]

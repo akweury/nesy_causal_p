@@ -201,10 +201,11 @@ def genShapeOnShape(shape, n):
         print(f'Generating dataset {base_path}', task, mode)
         if shape == "circle":
             gen_fun = shapeOnshapeObjects.cir_only
-        elif shape == "diamond":
-            gen_fun = shapeOnshapeObjects.dia_only
         elif shape == "triangle":
             gen_fun = shapeOnshapeObjects.tri_only
+        elif shape == "diamond":
+            gen_fun = shapeOnshapeObjects.dia_only
+
         elif shape == "square":
             gen_fun = shapeOnshapeObjects.square_only
         elif shape == "trianglecircle":
@@ -269,6 +270,6 @@ def genShapeOnShapeTask(task, n):
 
 
 if __name__ == '__main__':
-    tasks = ["circle"]
+    tasks = ["triangle"]
     for task in tasks:
         genShapeOnShape(task, 500)
