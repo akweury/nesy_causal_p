@@ -78,12 +78,14 @@ class FactsConverter(nn.Module):
 
     def ground_to_tensor(self, term, data):
         term_name = term.dtype.name
+        term_data = None
         if term_name == "group_data":
             group_idx = self.lang.term_index(term)
-            group_data = data[group_idx]
-            self.group_indices = group_data[:, bk.prop_idx_dict["group_name"]] > 0
-            term_data = group_data[self.group_indices]
-            term_name = "group_data"
+            if group_idx < data.shape[0]:
+                group_data = data[group_idx]
+                self.group_indices = group_data[:, bk.prop_idx_dict["group_name"]] > 0
+                term_data = group_data[self.group_indices]
+                term_name = "group_data"
         elif term_name == "object":
             term_data = self.lang.term_index(term)
         elif term_name in ["color", "shape", "group_label"]:

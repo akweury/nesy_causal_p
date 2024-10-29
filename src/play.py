@@ -29,7 +29,7 @@ step_counter += 1
 
 exp_folder = config.kp_dataset / args.exp_name
 train_imges = file_utils.get_all_files(exp_folder / "train" / "task_true_pattern", "png", False)[:500]
-positive_images = file_utils.get_all_files(exp_folder / "train" / "task_true_pattern", "png", False)[:500]
+positive_images = file_utils.get_all_files(exp_folder / "test" / "task_true_pattern", "png", False)[:500]
 random_imges = file_utils.get_all_files(exp_folder / "test" / "task_random_pattern", "png", False)[:500]
 counterfactual_imges = file_utils.get_all_files(exp_folder / "test" / "task_cf_pattern", "png", False)[:500]
 print(f"Step {step_counter}/{total_step}: Imported training and testing data.")
@@ -44,21 +44,24 @@ print(f"Step {step_counter}/{total_step}: Reasoned {len(lang.clauses)} clauses")
 step_counter += 1
 
 positive_acc = check_clause(args, lang, positive_images, True)
-print(f"Step {step_counter}/{total_step}: Test Positive Image Accuracy: {positive_acc}")
+print(f"Step {step_counter}/{total_step}: Test Positive Image Accuracy: \n"
+      f"{positive_acc}")
 
 # Step 6: Test counterfactual patterns
 step_counter += 1
 
 cf_acc = check_clause(args, lang, counterfactual_imges, False)
-print(f"Step {step_counter}/{total_step}: Test Counterfactual Image Accuracy: {cf_acc}")
+print(f"Step {step_counter}/{total_step}: Test Counterfactual Image Accuracy: \n"
+      f"{cf_acc}")
 
 # Step 7: Test random patterns
 step_counter += 1
 
-random_acc = check_clause(args, clauses, random_imges, False)
+random_acc = check_clause(args, lang, random_imges, False)
 print(f"Step {step_counter}/{total_step}: random image accuracy: {random_acc}")
 
 # Step 8: Using LLM to convert clauses to natural language
 step_counter += 1
 
-rules = natural_rule_learner(clauses)
+rules = natural_rule_learner(lang)
+print(f"Step {step_counter}/{total_step}: LLM Conversion.")

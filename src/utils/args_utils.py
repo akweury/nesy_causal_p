@@ -40,7 +40,7 @@ def get_args():
     parser.add_argument("--top_k", type=int, default=10)
     parser.add_argument("--max_bs_step", type=int, default=12)
     parser.add_argument("--max_obj_num", type=int, default=5)
-    parser.add_argument("--group_count_conf_th", type=float, default=0.95)
+    parser.add_argument("--group_count_conf_th", type=float, default=0.90)
 
     args = parser.parse_args()
 

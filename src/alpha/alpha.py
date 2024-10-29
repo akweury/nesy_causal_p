@@ -177,8 +177,7 @@ def eval_task(args, lang, FC, objs):
     target_preds = list(set([c.head.pred.name for c in lang.clauses]))
     # clause evaluation
     ils, dls = evaluation(args, NSFR, target_preds, objs)
-    pred = torch.tensor(ils)
-    return pred
+    return ils
 
 
 def remove_trivial_atoms(args, lang, FC, clauses, objs, data):

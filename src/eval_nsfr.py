@@ -82,7 +82,7 @@ def group2ocm(data, groups):
 
 def check_clause(args, lang, image_paths, image_label):
     # load background knowledge
-    preds = torch.zeros((len(image_paths), len(lang.clauses)))
+    preds = torch.zeros((len(image_paths), min(4, len(image_paths))))
     group_bk = load_bk(args, bk.group_name_extend)
 
     for idx in tqdm(range(min(4, len(image_paths)))):

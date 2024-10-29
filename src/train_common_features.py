@@ -321,6 +321,7 @@ def img2groups(args, bk, data, idx, img):
         if (img_onside[-1] > 0).sum() > fm_repo[0, 0].sum():
             print("")
         group_count_conf = ((img_onside[-1] > 0).sum() / fm_repo[0, 0].sum()).item()
+        print(f"{bk_shape['name']} group conf: {group_count_conf:.2f}, th: {args.group_count_conf_th}")
         if group_count_conf < args.group_count_conf_th:
             continue
 

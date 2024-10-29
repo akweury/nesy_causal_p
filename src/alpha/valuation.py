@@ -130,12 +130,15 @@ class FCNNValuationModule(nn.Module):
         # else:
         #     raise ValueError("Invalid datatype of the given term: " + str(term) + ':' + term.dtype.name)
         term_name = term.dtype.name
+        term_data = None
+        self.group_indices = None
         if term_name == "group_data":
             group_idx = self.lang.term_index(term)
-            group_data = data[group_idx]
-            self.group_indices = group_data[:, bk.prop_idx_dict["group_name"]] > 0
-            term_data = group_data[self.group_indices]
-            term_name = "group_data"
+            if group_idx < data.shape[0]:
+                group_data = data[group_idx]
+                self.group_indices = group_data[:, bk.prop_idx_dict["group_name"]] > 0
+                term_data = group_data[self.group_indices]
+                term_name = "group_data"
         elif term_name == "object":
             term_data = self.lang.term_index(term)
         elif term_name in ["color", "shape", "group_label"]:
@@ -398,6 +401,8 @@ class VFColor(nn.Module):
         except KeyError:
             print("")
         group_data = args_dict["group_data"]
+        if group_data is None:
+            return False
         color_data = group_data[:, bk.prop_idx_dict["color"]]
         is_color = (color_gt == color_data).sum().bool().float()
         return is_color
@@ -413,6 +418,9 @@ class VFShape(nn.Module):
 
     def forward(self, args_dict):
         group_data = args_dict["group_data"]
+        if group_data is None:
+            return False
+
         shape_gt = args_dict["shape"]
         shape_data = group_data[:, bk.prop_idx_dict["shape"]]
         has_shape = (shape_gt == shape_data).sum().bool().float()
@@ -430,6 +438,10 @@ class VFGShape(nn.Module):
     def forward(self, args_dict):
         group_data = args_dict["group_data"]
         group_label_gt = args_dict["group_label"]
+
+        if group_data is None:
+            return False
+
         group_label = group_data[:, bk.prop_idx_dict["group_name"]][0]
         group_conf = group_data[:, bk.prop_idx_dict["group_conf"]][0]
         has_label = (group_label_gt == group_label) * group_conf
