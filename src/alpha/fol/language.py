@@ -48,13 +48,12 @@ class Language(object):
         consts (List[Const]): A set of constants.
     """
 
-    def __init__(self, fms, obj_num, variable_group_symbol, variable_obj_symbol, lark_path, phi_num, rho_num):
-
-        # BK
-        self.group_vars = [Var(f"{variable_group_symbol}_{v_i}", bk.var_dtypes["group"]) for v_i in range(len(fms))]
+    def __init__(self, obj_num, variable_group_symbol, variable_obj_symbol, lark_path, phi_num, rho_num):
         self.obj_vars = [Var(f"{variable_obj_symbol}_{v_i}", bk.var_dtypes["object"]) for v_i in range(obj_num)]
-        self.group_variable_num = len(fms)
         self.obj_variable_num = obj_num
+        self.variable_group_symbol = variable_group_symbol
+        self.phi_num = phi_num
+        self.rho_num = rho_num
         self.atoms = []
         self.funcs = []
         self.consts = []
@@ -82,15 +81,19 @@ class Language(object):
 
         # load BK predicates and constants
         self.load_preds()
-        self.consts, self.min_consts = self.load_consts(fms, phi_num, rho_num, obj_num)
+
+
 
     def load_preds(self):
         # load all the bk predicates
         for pred_config in bk.predicate_configs.values():
             self.predicates.append(self.parse_pred(pred_config))
 
-    def reset_lang(self):
-        self.learned_c = []
+    def reset_lang(self, g_num):
+        self.consts, self.min_consts = self.load_consts(g_num, self.phi_num, self.rho_num, self.obj_variable_num)
+        self.group_vars = [Var(f"{self.variable_group_symbol}_{v_i}", bk.var_dtypes["group"]) for v_i in range(g_num)]
+        self.group_variable_num = g_num
+
         init_c = self.load_init_clauses()
         # update predicates
         self.generate_atoms()
@@ -281,7 +284,7 @@ class Language(object):
         invented_pred = InventedPredicate(pred_with_id, int(arity), dtypes, args=None, pi_type=None)
         return invented_pred
 
-    def parse_min_const(self, fms, obj_num, const, const_type):
+    def parse_min_const(self, g_num, obj_num, const, const_type):
         """Parse string to function symbols.
         """
         const_data_type = mode_declaration.DataType(const)
@@ -289,7 +292,7 @@ class Language(object):
         if "amount_" in const_type:
             _, num = const_type.split('_')
             if num == "group":
-                num = len(fms)
+                num = g_num
             elif num == "object":
                 num = obj_num
             const_names = []
@@ -304,7 +307,7 @@ class Language(object):
             consts.append(Const(name, const_data_type))
         return consts
 
-    def parse_const(self, data, phi_num, rho_num, obj_num, const, const_type):
+    def parse_const(self, g_num, phi_num, rho_num, obj_num, const, const_type):
         """Parse string to function symbols.
         """
         const_data_type = mode_declaration.DataType(const)
@@ -315,7 +318,7 @@ class Language(object):
             elif num == "rho":
                 num = rho_num
             elif num == "group":
-                num = len(data)
+                num = g_num
             elif num == "object":
                 num = obj_num
             const_names = []
@@ -346,12 +349,12 @@ class Language(object):
             consts.append(const)
         return consts
 
-    def load_consts(self, fms, phi_num, rho_num, obj_num):
+    def load_consts(self, g_num, phi_num, rho_num, obj_num):
         consts = []
         min_consts = []
         for const_name, const_type in bk.const_dict.items():
-            min_consts.extend(self.parse_min_const(fms, obj_num, const_name, const_type))
-            consts.extend(self.parse_const(fms, phi_num, rho_num, obj_num, const_name, const_type))
+            min_consts.extend(self.parse_min_const(g_num, obj_num, const_name, const_type))
+            consts.extend(self.parse_const(g_num, phi_num, rho_num, obj_num, const_name, const_type))
         return consts, min_consts
 
     def rename_bk_preds_in_clause(self, bk_prefix, line):

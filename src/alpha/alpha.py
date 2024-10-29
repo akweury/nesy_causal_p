@@ -9,13 +9,22 @@ from .fol import refinement
 from .fol import bk
 
 
-def init_ilp(args, fms, obj_num):
+def init_ilp(args, obj_num):
     args.variable_group_symbol = bk.variable_symbol_group
     args.variable_obj_symbol = bk.variable_symbol_obj
-    lang = language.Language(fms, obj_num, args.variable_group_symbol, args.variable_obj_symbol, args.lark_path,
+    lang = language.Language(obj_num, args.variable_group_symbol, args.variable_obj_symbol, args.lark_path,
                              args.phi_num, args.rho_num)
     return lang
 
+
+def load_lang(args, lang_data):
+    lang = init_ilp(args, 1)
+    lang.clauses = lang_data["clauses"]
+    lang.predicates = lang_data["preds"]
+    lang.reset_lang(lang_data["g_num"])
+    lang.consts = lang_data["consts"]
+    lang.generate_atoms()
+    return lang
 
 def extension(args, lang, clauses):
     refs = []
@@ -145,6 +154,7 @@ def df_search(args, lang, C, FC, objs):
     # update const lists
     lang.update_consts(base_nodes)
 
+    lang.generate_atoms()
     for e_i in range(2):
         extended_nodes = node_extension(args, lang, base_nodes, extended_nodes)
         NSFR = nsfr.get_nsfr_model(args, lang, FC, extended_nodes)
@@ -196,8 +206,8 @@ def remove_trivial_atoms(args, lang, FC, clauses, objs, data):
 
 def alpha(args, ocm):
     obj_num = 1
-    lang = init_ilp(args, ocm, obj_num)
-    C = lang.reset_lang()
+    lang = init_ilp(args, obj_num)
+    C = lang.reset_lang(g_num=len(ocm))
     VM = valuation.get_valuation_module(args, lang)
     FC = facts_converter.FactsConverter(args, lang, VM)
     df_search(args, lang, C, FC, ocm)

@@ -3,6 +3,7 @@ from tqdm import tqdm
 import torch
 import cv2
 import pickle
+import os
 
 import config
 import train_common_features
@@ -83,9 +84,11 @@ def group2ocm(data, groups):
 
 def train_clauses(args, image_paths):
     save_file = config.output / args.exp_name / f'learned_lang.pkl'
-    learned_clauses = data_utils.load_pickle(save_file)
-    if learned_clauses is not None:
-        return learned_clauses
+    if os.path.exists(save_file):
+        lang_data = torch.load(save_file)
+        if lang_data is not None:
+            lang = alpha.load_lang(args, lang_data)
+            return lang
 
     # load background knowledge
     lang = None
@@ -107,12 +110,17 @@ def train_clauses(args, image_paths):
     most_frequent_clauses = [key for key, value in frequency.items() if value == most_frequency_value]
     lang.clauses = most_frequent_clauses
 
-    data_utils.save_pickle(save_file, lang)
-
+    lang_dict = {
+        "clauses": lang.clauses,
+        "consts": lang.consts,
+        "preds": lang.predicates,
+        "g_num": lang.group_variable_num
+    }
+    torch.save(lang_dict, save_file)
     return lang
 
 
 if __name__ == "__main__":
     args = args_utils.get_args()
     image_paths = file_utils.get_all_files(config.kp_dataset / args.exp_name / "train" / "true", "png", False)[:500]
-    main(args, image_paths)
+    train_clauses(args, image_paths)
