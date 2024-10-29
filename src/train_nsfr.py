@@ -111,10 +111,12 @@ def train_clauses(args, image_paths):
     lang.clauses = most_frequent_clauses
 
     lang_dict = {
+        "atoms": lang.atoms,
         "clauses": lang.clauses,
         "consts": lang.consts,
         "preds": lang.predicates,
-        "g_num": lang.group_variable_num
+        "g_num": lang.group_variable_num,
+        "attrs": lang.attrs
     }
     torch.save(lang_dict, save_file)
     return lang

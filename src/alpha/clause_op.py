@@ -3,7 +3,6 @@
 from src.alpha.fol.logic import Var, Clause, InventedPredicate, Atom, InvAtom
 
 
-
 def non_trivial_vars(merged_body):
     vars = []
     for atom in merged_body:
@@ -20,13 +19,17 @@ def inv_pred_merge_bodies(bodies):
     # sorted_indices = sorted(range(len(pred_names)), key=lambda i: pred_names[i])
     # pred_names = [pred_names[i] for i in sorted_indices]
     # args_list = [args_list[i] for i in sorted_indices]
+
     preds = []
     for atom in bodies:
         if isinstance(atom, Atom):
             preds.append(atom.pred)
         elif isinstance(atom, InvAtom):
-            preds+=atom.pred.sub_preds
+            preds += atom.pred.sub_preds
     preds = list(set(preds))
+
+    if len(preds) == 1:
+        return None
 
     pred_indices = sorted(range(len(preds)), key=lambda i: preds[i])
     preds = [preds[i] for i in pred_indices]

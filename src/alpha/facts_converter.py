@@ -15,13 +15,17 @@ class FactsConverter(nn.Module):
     FactsConverter converts the output from the perception module to the valuation vector.
     """
 
-    def __init__(self, args, lang, valuation_module):
+    def __init__(self, args, lang, valuation_module, given_attrs=None):
         super(FactsConverter, self).__init__()
         # self.dim = args.d
         self.lang = lang
         self.vm = valuation_module  # valuation functions
         self.device = args.device
-        self.attrs = self.init_attr_encodings(args.device)
+        if given_attrs is None:
+            self.attrs = self.init_attr_encodings(args.device)
+            lang.attrs = self.attrs
+        else:
+            self.attrs = given_attrs
 
     def init_attr_encodings(self, device):
         """Encode color and shape into one-hot encoding.

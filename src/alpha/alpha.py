@@ -23,7 +23,8 @@ def load_lang(args, lang_data):
     lang.predicates = lang_data["preds"]
     lang.reset_lang(lang_data["g_num"])
     lang.consts = lang_data["consts"]
-    lang.generate_atoms()
+    lang.atoms = lang_data["atoms"]
+    lang.attrs = lang_data["attrs"]
     return lang
 
 def extension(args, lang, clauses):
@@ -216,6 +217,6 @@ def alpha(args, ocm):
 
 def alpha_test(args, ocm, lang):
     VM = valuation.get_valuation_module(args, lang)
-    FC = facts_converter.FactsConverter(args, lang, VM)
-    pred = eval_task(args, lang, FC, ocm)
+    FC = facts_converter.FactsConverter(args, lang, VM, given_attrs=lang.attrs)
+    pred = eval_task(args, lang, FC, ocm).squeeze()
     return pred

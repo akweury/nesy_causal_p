@@ -82,7 +82,7 @@ def group2ocm(data, groups):
 
 def check_clause(args, lang, image_paths, image_label):
     # load background knowledge
-    preds = torch.zeros(len(image_paths), dtype=torch.bool)
+    preds = torch.zeros((len(image_paths), len(lang.clauses)))
     group_bk = load_bk(args, bk.group_name_extend)
 
     for idx in tqdm(range(min(4, len(image_paths)))):
@@ -94,8 +94,7 @@ def check_clause(args, lang, image_paths, image_label):
         if len(groups) != 0:
             group_tensors = group2ocm(data, groups)
             preds[idx] = alpha.alpha_test(args, group_tensors, lang)
-    acc = (preds == image_label) / min(4, len(image_paths))
-    return acc
+    return preds
 
 
 if __name__ == "__main__":
