@@ -1,8 +1,8 @@
 # Created by shaji at 24/06/2024
 import itertools
+import torch
 
 from src.utils import log_utils
-
 from . import valuation, facts_converter, nsfr, pruning, clause_op
 from .fol import language
 from .fol import refinement
@@ -142,10 +142,8 @@ def df_search(args, lang, C, FC, objs):
     # node extension (DFS)
     base_nodes = [atom_C[s_i] for s_i in range(len(ils)) if ils[s_i] > 0.9]
     extended_nodes = [atom_C[s_i] for s_i in range(len(ils)) if ils[s_i] > 0.9]
-
     # update const lists
     lang.update_consts(base_nodes)
-
 
     for e_i in range(2):
         extended_nodes = node_extension(args, lang, base_nodes, extended_nodes)
@@ -160,8 +158,16 @@ def df_search(args, lang, C, FC, objs):
 
     # prune clauses
     # pruned_c = pruning.top_k_clauses(args, ils, dls, extended_nodes)
+    lang.clauses += extended_nodes
 
-    return extended_nodes
+
+def eval_task(args, lang, FC, objs):
+    NSFR = nsfr.get_nsfr_model(args, lang, FC, lang.clauses)
+    target_preds = list(set([c.head.pred.name for c in lang.clauses]))
+    # clause evaluation
+    ils, dls = evaluation(args, NSFR, target_preds, objs)
+    pred = torch.tensor(ils)
+    return pred
 
 
 def remove_trivial_atoms(args, lang, FC, clauses, objs, data):
@@ -189,13 +195,17 @@ def remove_trivial_atoms(args, lang, FC, clauses, objs, data):
 
 
 def alpha(args, ocm):
-    clauses = []
-    # for obj_num in range(1, args.max_obj_num):
     obj_num = 1
     lang = init_ilp(args, ocm, obj_num)
     C = lang.reset_lang()
     VM = valuation.get_valuation_module(args, lang)
     FC = facts_converter.FactsConverter(args, lang, VM)
-    # clauses = beam_search(args, lang, C, FC, ocm)
-    clauses = df_search(args, lang, C, FC, ocm)
-    return clauses
+    df_search(args, lang, C, FC, ocm)
+    return lang
+
+
+def alpha_test(args, ocm, lang):
+    VM = valuation.get_valuation_module(args, lang)
+    FC = facts_converter.FactsConverter(args, lang, VM)
+    pred = eval_task(args, lang, FC, ocm)
+    return pred

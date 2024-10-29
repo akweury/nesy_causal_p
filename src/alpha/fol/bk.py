@@ -61,3 +61,11 @@ color_large = [k for k, v in list(color_matplotlib.items())]
 
 shape_extend = ["circle", "square", "triangle", "diamond"]
 group_name_extend = ["none", "data_triangle", "data_square", "data_circle", "data_diamond"]
+
+# exp setting
+task_pattern_types = ["task_true_pattern", "task_random_pattern", "task_cf_pattern"]
+exp_demo = {"bk_groups": ["triangle", "circle"],
+            "task_name": "trianglecircle",
+            "task_true_pattern": "trianglecircle",
+            "task_random_pattern": "random",
+            "task_cf_pattern": "trianglecircle_cf"}

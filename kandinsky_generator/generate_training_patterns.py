@@ -2,6 +2,8 @@ from PIL import Image, ImageDraw
 import numpy as np
 import os
 import json
+from pathlib import Path
+
 import config
 from tqdm import tqdm
 from kandinsky_generator.src.kp import KandinskyUniverse
@@ -186,53 +188,48 @@ def kf2data(kf, width):
     return data
 
 
-def genShapeOnShape(shape, n):
-    shapeOnshapeObjects = ShapeOnShape(u, 20, 40)
-    for mode in ['train']:
-        width = 512
+def genShapeOnShape(shapes, n):
+    width = 512
+    for shape in shapes:
         base_path = config.kp_dataset / f"{shape}"
-        # true_path = base_path / mode / 'true'
-        # false_path = base_path / mode / 'false'
-        # cf_path = base_path / mode / 'counterfactual'
         os.makedirs(base_path, exist_ok=True)
-        # os.makedirs(true_path, exist_ok=True)
-        # os.makedirs(false_path, exist_ok=True)
-        # os.makedirs(cf_path, exist_ok=True)
-        print(f'Generating dataset {base_path}', task, mode)
-        if shape == "circle":
-            gen_fun = shapeOnshapeObjects.cir_only
-        elif shape == "triangle":
-            gen_fun = shapeOnshapeObjects.tri_only
-        elif shape == "diamond":
-            gen_fun = shapeOnshapeObjects.dia_only
+        png_num = len([f for f in Path(base_path).iterdir() if f.is_file() and f.suffix == '.png'])
+        n = n - png_num  # only generate insufficient ones
 
-        elif shape == "square":
-            gen_fun = shapeOnshapeObjects.square_only
-        elif shape == "trianglecircle":
-            gen_fun = shapeOnshapeObjects.triangle_circle
-        elif shape == "squarecircle":
-            gen_fun = shapeOnshapeObjects.square_circle
-        elif shape == "trianglesquare":
-            gen_fun = shapeOnshapeObjects.triangle_square
-        elif shape == "diamondcircle":
-            gen_fun = shapeOnshapeObjects.diamond_circle
-        elif shape == "trianglesquarecircle":
-            gen_fun = shapeOnshapeObjects.triangle_square_circle
-        elif shape == "trianglepartsquare":
-            gen_fun = shapeOnshapeObjects.triangle_partsquare
-        elif shape == "parttrianglepartsquare":
-            gen_fun = shapeOnshapeObjects.parttriangle_partsquare
-        elif shape == "random":
-            gen_fun = shapeOnshapeObjects.false_kf
-        else:
-            raise ValueError
-
-        for (i, kf) in tqdm(enumerate(gen_fun(n,rule_style=False))):
-            image = KandinskyUniverse.kandinskyFigureAsImage(kf, width)
-            data = kf2data(kf, width)
-            with open(base_path / f"{task}_{i:06d}.json", 'w') as f:
-                json.dump(data, f)
-            image.save(base_path / f"{task}_{i:06d}.png")
+        shapeOnshapeObjects = ShapeOnShape(u, 20, 40)
+        for mode in ['train']:
+            if shape == "circle":
+                gen_fun = shapeOnshapeObjects.cir_only
+            elif shape == "triangle":
+                gen_fun = shapeOnshapeObjects.tri_only
+            elif shape == "diamond":
+                gen_fun = shapeOnshapeObjects.dia_only
+            elif shape == "square":
+                gen_fun = shapeOnshapeObjects.square_only
+            elif shape == "trianglecircle":
+                gen_fun = shapeOnshapeObjects.triangle_circle
+            elif shape == "squarecircle":
+                gen_fun = shapeOnshapeObjects.square_circle
+            elif shape == "trianglesquare":
+                gen_fun = shapeOnshapeObjects.triangle_square
+            elif shape == "diamondcircle":
+                gen_fun = shapeOnshapeObjects.diamond_circle
+            elif shape == "trianglesquarecircle":
+                gen_fun = shapeOnshapeObjects.triangle_square_circle
+            elif shape == "trianglepartsquare":
+                gen_fun = shapeOnshapeObjects.triangle_partsquare
+            elif shape == "parttrianglepartsquare":
+                gen_fun = shapeOnshapeObjects.parttriangle_partsquare
+            elif shape == "random":
+                gen_fun = shapeOnshapeObjects.false_kf
+            else:
+                raise ValueError
+            for (i, kf) in tqdm(enumerate(gen_fun(n, rule_style=False))):
+                image = KandinskyUniverse.kandinskyFigureAsImage(kf, width)
+                data = kf2data(kf, width)
+                with open(base_path / f"{shape}_{i:06d}.json", 'w') as f:
+                    json.dump(data, f)
+                image.save(base_path / f"{shape}_{i:06d}.png")
 
 
 def genShapeOnShapeTask(task, n):
@@ -270,6 +267,5 @@ def genShapeOnShapeTask(task, n):
 
 
 if __name__ == '__main__':
-    tasks = ["triangle"]
-    for task in tasks:
-        genShapeOnShape(task, 500)
+    tasks = ["triangle", "circle"]
+    genShapeOnShape(tasks, 500)

@@ -2,6 +2,7 @@
 from tqdm import tqdm
 import torch
 import cv2
+import pickle
 
 import config
 import train_common_features
@@ -80,34 +81,35 @@ def group2ocm(data, groups):
     return group_ocms
 
 
-def main(args, image_paths):
-    save_file = config.output / args.exp_name / f'learned_clause.pkl'
+def train_clauses(args, image_paths):
+    save_file = config.output / args.exp_name / f'learned_lang.pkl'
     learned_clauses = data_utils.load_pickle(save_file)
     if learned_clauses is not None:
         return learned_clauses
 
     # load background knowledge
+    lang = None
     group_bk = load_bk(args, bk.group_name_extend)
-    clause_all = []
     for idx in tqdm(range(min(4, len(image_paths)))):
         file_name, file_extension = image_paths[idx].split(".")
         data = file_utils.load_json(f"{file_name}.json")
-
         img, obj_pos = load_data(args, image_paths[idx])
         groups = train_common_features.img2groups(args, group_bk, obj_pos, idx, img)
         group_tensors = group2ocm(data, groups)
-        clauses = alpha.alpha(args, group_tensors)
-        clause_all.append(clauses)
+        lang = alpha.alpha(args, group_tensors)
 
-    clause_list = [c for cc in clause_all for c in cc]
+    # remove the less occurred clauses
+    clause_list = [c for c in lang.clauses]
     frequency = {}
     for item in clause_list:
         frequency[item] = frequency.get(item, 0) + 1
     most_frequency_value = max(frequency.values())
     most_frequent_clauses = [key for key, value in frequency.items() if value == most_frequency_value]
-    data_utils.save_pickle(save_file, most_frequent_clauses)
+    lang.clauses = most_frequent_clauses
 
-    return most_frequent_clauses
+    data_utils.save_pickle(save_file, lang)
+
+    return lang
 
 
 if __name__ == "__main__":

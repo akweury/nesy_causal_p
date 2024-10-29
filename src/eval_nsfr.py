@@ -80,12 +80,11 @@ def group2ocm(data, groups):
     return group_ocms
 
 
-def check_clause(args, clauses, image_paths, image_label):
+def check_clause(args, lang, image_paths, image_label):
     # load background knowledge
     preds = torch.zeros(len(image_paths), dtype=torch.bool)
-
     group_bk = load_bk(args, bk.group_name_extend)
-    clause_all = []
+
     for idx in tqdm(range(min(4, len(image_paths)))):
         file_name, file_extension = image_paths[idx].split(".")
         data = file_utils.load_json(f"{file_name}.json")
@@ -94,10 +93,8 @@ def check_clause(args, clauses, image_paths, image_label):
         groups = train_common_features.img2groups(args, group_bk, obj_pos, idx, img)
         if len(groups) != 0:
             group_tensors = group2ocm(data, groups)
-            clauses = alpha.alpha(args, group_tensors)
-            clause_all.append(clauses)
-    acc = (preds == image_label) / 4
-
+            preds[idx] = alpha.alpha_test(args, group_tensors, lang)
+    acc = (preds == image_label) / min(4, len(image_paths))
     return acc
 
 

@@ -2,12 +2,16 @@ from PIL import Image, ImageDraw
 import numpy as np
 import os
 import json
-import config
 from tqdm import tqdm
+from pathlib import Path
+
+
+import config
+
 from kandinsky_generator.src.kp import KandinskyUniverse
 from kandinsky_generator.ShapeOnShapes import ShapeOnShape
 from kandinsky_generator.src.kp.KandinskyUniverse import matplotlib_colors
-
+from src.alpha.fol import bk
 u = KandinskyUniverse.SimpleUniverse()
 
 
@@ -198,7 +202,6 @@ def genShapeOnShape(shape, n):
         os.makedirs(true_path, exist_ok=True)
         os.makedirs(false_path, exist_ok=True)
         os.makedirs(cf_path, exist_ok=True)
-        print(f'Generating dataset {base_path}', task, mode)
         if shape == "circle":
             gen_fun = shapeOnshapeObjects.cir_only
         elif shape == "diamond":
@@ -235,20 +238,17 @@ def genShapeOnShape(shape, n):
 
 
 def genShapeOnShapeTask(task, n):
+    width = 512
     shapeOnshapeObjects = ShapeOnShape(u, 20, 40)
-    base_path = config.kp_dataset / f"{task['name']}"
+    base_path = config.kp_dataset / f"{task['task_name']}"
     os.makedirs(base_path, exist_ok=True)
-
     for mode in ['train', "test"]:
-        for label in ["true", "random", "counterfactual"]:
-            width = 512
+        for label in bk.task_pattern_types:
             data_path = base_path / mode / label
-            # false_path = base_path / mode / 'random'
-            # cf_path = base_path / mode / 'counterfactual'
             os.makedirs(data_path, exist_ok=True)
-            # os.makedirs(false_path, exist_ok=True)
-            # os.makedirs(cf_path, exist_ok=True)
             print(f'Generating dataset {base_path}', task, mode)
+            png_num = len([f for f in Path(data_path).iterdir() if f.is_file() and f.suffix == '.png'])
+            n = n - png_num  # only generate insufficient ones
             if task[label] == "diamondcircle":
                 gen_fun = shapeOnshapeObjects.diamond_circle
             elif task[label] == "diamondcircle_cf":
@@ -261,7 +261,6 @@ def genShapeOnShapeTask(task, n):
                 gen_fun = shapeOnshapeObjects.false_kf
             else:
                 raise ValueError
-
             for (i, kf) in tqdm(enumerate(gen_fun(n, rule_style=True))):
                 image = KandinskyUniverse.kandinskyFigureAsImage(kf, width)
                 data = kf2data(kf, width)
@@ -271,13 +270,4 @@ def genShapeOnShapeTask(task, n):
 
 
 if __name__ == '__main__':
-    # task = "kp_cha_01"
-    task = {"name": "trianglecircle",
-            "true": "trianglecircle",
-            "random": "random",
-            "counterfactual": "trianglecircle_cf"}
-    genShapeOnShapeTask(task, 10)
-
-    # tasks = ["diamondcircle"]
-    # for task in tasks:
-    #     genShapeOnShape(task, 100)
+    genShapeOnShapeTask(bk.exp_demo, 10)
