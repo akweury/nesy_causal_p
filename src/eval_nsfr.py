@@ -80,9 +80,9 @@ def group2ocm(data, groups):
     return group_ocms
 
 
-def check_clause(args, lang, image_paths, image_label):
+def check_clause(args, lang, image_paths, image_label, output_path):
     # load background knowledge
-    preds = torch.zeros((len(image_paths), min(4, len(image_paths))))
+    preds = torch.zeros((min(4, len(image_paths)), len(lang.clauses)))
     group_bk = load_bk(args, bk.group_name_extend)
 
     for idx in tqdm(range(min(4, len(image_paths)))):
@@ -90,7 +90,7 @@ def check_clause(args, lang, image_paths, image_label):
         data = file_utils.load_json(f"{file_name}.json")
 
         img, obj_pos = load_data(args, image_paths[idx])
-        groups = train_common_features.img2groups(args, group_bk, obj_pos, idx, img)
+        groups = train_common_features.img2groups(args, group_bk, obj_pos, idx, img, output_path)
         if len(groups) != 0:
             group_tensors = group2ocm(data, groups)
             preds[idx] = alpha.alpha_test(args, group_tensors, lang)
@@ -99,6 +99,8 @@ def check_clause(args, lang, image_paths, image_label):
 
 if __name__ == "__main__":
     args = args_utils.get_args()
-    clauses = []
+
     image_paths = file_utils.get_all_files(config.kp_dataset / args.exp_name / "train" / "true", "png", False)[:500]
-    check_clause(args, clauses, image_paths, True)
+    lang = None
+    raise NotImplementedError
+    check_clause(args, lang, image_paths, True, output_path=config.kp_dataset / args.exp_name / "train" / "true")

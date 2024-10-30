@@ -212,7 +212,7 @@ def get_pair(img_fm, fm_repo):
 
 
 def visual_all(args, idx, img, data, data_fm_shifted, fm_best, max_value, fm_best_same, fm_best_diff, data_onside,
-               data_offside, img_onside_uncertain, bk_shape):
+               data_offside, img_onside_uncertain, bk_shape, out_path):
     in_fm_img = data_fm_shifted.squeeze().sum(dim=0)
     compare_imgs = []
     for i in range(len(fm_best)):
@@ -235,7 +235,7 @@ def visual_all(args, idx, img, data, data_fm_shifted, fm_best, max_value, fm_bes
              data_onside_uncertain_img, data_offside_img]))
     compare_imgs = chart_utils.vconcat_imgs(compare_imgs)
     compare_imgs = cv2.cvtColor(compare_imgs, cv2.COLOR_BGR2RGB)
-    cv2.imwrite(str(config.output / f"{args.exp_name}" / f'c_{bk_shape["name"]}_{idx}.png'), compare_imgs)
+    cv2.imwrite(str(out_path / f'{idx}_{bk_shape["name"]}.png'), compare_imgs)
     print(f"- grouping result: " + str(config.output / f"{args.exp_name}" / f'c_{bk_shape["name"]}_{idx}.png'))
 
 
@@ -280,8 +280,8 @@ def get_siding(args, data, match_same, match_diff, match_fm_img):
     return data_onside, data_offside, data_onside_uncertain
 
 
-def load_shift(args, bk_shape, idx, in_fm, fm_repo):
-    buffer_file = config.output / f"{args.exp_name}" / f"shift_{bk_shape['name']}_{idx}.pt"
+def load_shift(args, bk_shape, idx, in_fm, fm_repo, out_path):
+    buffer_file = out_path / f"shift_{bk_shape['name']}_{idx}.pt"
     if os.path.exists(buffer_file):
         data = torch.load(buffer_file)
         match_fm_shift = data['match_fm_shift']
@@ -297,13 +297,13 @@ def load_shift(args, bk_shape, idx, in_fm, fm_repo):
     return match_fm_shift, match_fm_idx, top_values
 
 
-def img2groups(args, bk, data, idx, img):
+def img2groups(args, bk, data, idx, img, out_path):
     groups = []
     for bk_shape in bk:
         in_fm = perception.extract_fm(data.unsqueeze(0), bk_shape["kernels"])
         fm_repo = bk_shape["fm_repo"]
         fm_img = bk_shape["fm_img"]
-        match_fm_shift, match_fm_idx, match_fm_value = load_shift(args, bk_shape, idx, in_fm, fm_repo)
+        match_fm_shift, match_fm_idx, match_fm_value = load_shift(args, bk_shape, idx, in_fm, fm_repo, out_path)
         match_fm = fm_repo[match_fm_idx]
         match_fm_img = fm_img[match_fm_idx]
         shift_mfm = [torch.roll(match_fm[i], shifts=tuple(match_fm_shift[i]), dims=(-2, -1)) for i in
@@ -317,7 +317,7 @@ def img2groups(args, bk, data, idx, img):
         img_onside, img_offside, img_onside_uncertain = get_siding(args, data, match_same, match_diff,
                                                                    shift_mfm_img)
         visual_all(args, idx, img, data, in_fm, shift_mfm, same_percent, match_same, match_diff, img_onside,
-                   img_offside, img_onside_uncertain, bk_shape)
+                   img_offside, img_onside_uncertain, bk_shape, out_path)
         if (img_onside[-1] > 0).sum() > fm_repo[0, 0].sum():
             print("")
         group_count_conf = ((img_onside[-1] > 0).sum() / fm_repo[0, 0].sum()).item()

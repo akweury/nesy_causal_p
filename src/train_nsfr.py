@@ -82,7 +82,7 @@ def group2ocm(data, groups):
     return group_ocms
 
 
-def train_clauses(args, image_paths):
+def train_clauses(args, image_paths, out_path):
     save_file = config.output / args.exp_name / f'learned_lang.pkl'
     if os.path.exists(save_file):
         lang_data = torch.load(save_file)
@@ -97,7 +97,7 @@ def train_clauses(args, image_paths):
         file_name, file_extension = image_paths[idx].split(".")
         data = file_utils.load_json(f"{file_name}.json")
         img, obj_pos = load_data(args, image_paths[idx])
-        groups = train_common_features.img2groups(args, group_bk, obj_pos, idx, img)
+        groups = train_common_features.img2groups(args, group_bk, obj_pos, idx, img, out_path)
         group_tensors = group2ocm(data, groups)
         lang = alpha.alpha(args, group_tensors)
 
