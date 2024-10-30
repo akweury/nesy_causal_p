@@ -119,6 +119,100 @@ class ShapeOnShape(KandinskyTruthInterfce):
         kf = kf[:int(len(kf) * random_percent)]
         return kf
 
+    def _bigTriangler(self, so, t, min_percent=1.0, max_percent=1.0):
+        kf = []
+        x = 0.4 + random.random() * 0.2
+        y = 0.4 + random.random() * 0.2
+        r = 0.3 - min(abs(0.5 - x), abs(0.5 - y))
+        n = int(2 * r * math.pi / 0.25)
+
+        innerdegree = math.radians(30)
+        dx = r * math.cos(innerdegree)
+        dy = r * math.sin(innerdegree)
+
+        if n < self.min:   n = self.min
+        if n > self.max:   n = self.max
+
+        n = round(n / 3)
+
+        xs = x
+        ys = y - r
+        xe = x + dx
+        ye = y + dy
+
+        edge_n = n - random.randint(0, 2)
+        dxi = (xe - xs) / edge_n
+        dyi = (ye - ys) / edge_n
+
+        first_edge_shift = random.random() * 0.8
+        for i in range(edge_n + 1):
+            o = KandinskyUniverse.kandinskyShape()
+            if t:
+                o.color = random.choice(["yellow", "red"])
+                o.shape = random.choice(["circle", "square"])
+            else:
+                o.color = random.choice(KandinskyUniverse.matplotlib_colors_list)
+                o.shape = random.choice(KandinskyUniverse.kandinsky_shapes)
+            o.size = so
+            o.x = xs + i * dxi + first_edge_shift * dxi
+            o.y = ys + i * dyi + first_edge_shift * dyi
+
+            if o.x <= xs + edge_n * dxi and o.y <= ys + edge_n * dyi:
+                kf.append(o)
+
+        xs = x + dx
+        ys = y + dy
+        xe = x - dx
+        ye = y + dy
+        edge_n = n - random.randint(0, 2)
+        dxi = (xe - xs) / edge_n
+        dyi = (ye - ys) / edge_n
+
+        second_edge_shift = random.random() * 0.8
+
+        for i in range(edge_n):
+            o = KandinskyUniverse.kandinskyShape()
+            if t:
+                o.color = random.choice(["yellow", "red"])
+                o.shape = random.choice(["circle", "square"])
+            else:
+                o.color = random.choice(KandinskyUniverse.matplotlib_colors_list)
+                o.shape = random.choice(KandinskyUniverse.kandinsky_shapes)
+            o.size = so
+            o.x = xs + (i + 1) * dxi - second_edge_shift * dxi
+            o.y = ys + (i + 1) * dyi + second_edge_shift * dyi
+
+            if o.x >= xs + (edge_n + 1) * dxi and o.y >= ys + (edge_n + 1) * dyi:
+                kf.append(o)
+
+        xs = x - dx
+        ys = y + dy
+        xe = x
+        ye = y - r
+        edge_n = n - random.randint(0, 2)
+        dxi = (xe - xs) / edge_n
+        dyi = (ye - ys) / edge_n
+
+        third_edge_shift = random.random() * 0.8
+        for i in range(edge_n - 1):
+            o = KandinskyUniverse.kandinskyShape()
+            if t:
+                o.color = random.choice(["yellow", "red"])
+                o.shape = random.choice(["circle", "square"])
+            else:
+                o.color = random.choice(KandinskyUniverse.matplotlib_colors_list)
+                o.shape = random.choice(KandinskyUniverse.kandinsky_shapes)
+            o.size = so
+            o.x = xs + (i + 1) * dxi - third_edge_shift * dxi
+            o.y = ys + (i + 1) * dyi - third_edge_shift * dyi
+
+            if o.x <= xs + (edge_n + 1) * dxi and o.y >= ys + (edge_n + 1) * dyi:
+                kf.append(o)
+
+        random_percent = random.uniform(min_percent, max_percent)
+        kf = kf[:int(len(kf) * random_percent)]
+        return kf
+
     def _bigSquare(self, so, t, min_percent=1.0, max_percent=1.0):
         kf = []
         x = 0.4 + random.random() * 0.2
@@ -274,6 +368,8 @@ class ShapeOnShape(KandinskyTruthInterfce):
             g = lambda so, truth: self._bigDiamond(so, truth)
         elif shape == "triangle":
             g = lambda so, truth: self._bigTriangle(so, truth)
+        elif shape == "triangler":
+            g = lambda so, truth: self._bigTriangler(so, truth)
         elif shape == "square":
             g = lambda so, truth: self._bigSquare(so, truth)
         elif shape == "diamondcircle":
@@ -329,6 +425,14 @@ class ShapeOnShape(KandinskyTruthInterfce):
         kfs = []
         for i in tqdm(range(n), desc="generating objects"):
             kf = self._only(rule_style, "triangle")
+            kfs.append(kf)
+        return kfs
+
+    def trir_only(self, n=1, rule_style=False):
+        print("MAKE TRIANGLER")
+        kfs = []
+        for i in tqdm(range(n), desc="generating objects"):
+            kf = self._only(rule_style, "triangler")
             kfs.append(kf)
         return kfs
 

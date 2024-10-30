@@ -202,6 +202,8 @@ def genShapeOnShape(shapes, n):
                 gen_fun = shapeOnshapeObjects.cir_only
             elif shape == "triangle":
                 gen_fun = shapeOnshapeObjects.tri_only
+            elif shape == "triangler":
+                gen_fun = shapeOnshapeObjects.trir_only
             elif shape == "diamond":
                 gen_fun = shapeOnshapeObjects.dia_only
             elif shape == "square":
@@ -227,9 +229,9 @@ def genShapeOnShape(shapes, n):
             for (i, kf) in tqdm(enumerate(gen_fun(n, rule_style=False))):
                 image = KandinskyUniverse.kandinskyFigureAsImage(kf, width)
                 data = kf2data(kf, width)
-                with open(base_path / f"{shape}_{i:06d}.json", 'w') as f:
+                with open(base_path / f"{shape}_{(png_num+i):06d}.json", 'w') as f:
                     json.dump(data, f)
-                image.save(base_path / f"{shape}_{i:06d}.png")
+                image.save(base_path / f"{shape}_{(png_num+i):06d}.png")
 
 
 def genShapeOnShapeTask(task, n):
@@ -267,5 +269,5 @@ def genShapeOnShapeTask(task, n):
 
 
 if __name__ == '__main__':
-    tasks = ["triangle", "circle"]
-    genShapeOnShape(tasks, 500)
+    tasks = ["triangler"]
+    genShapeOnShape(tasks, 1000)

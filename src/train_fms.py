@@ -105,7 +105,7 @@ def main():
     args = args_utils.get_args()
 
     patch_size = 5
-    bk_shapes = ["triangle", "circle"]
+    bk_shapes = ["triangler"]
     for bk_shape in bk_shapes:
         args.exp_name = bk_shape
         train_loader, val_loader = prepare_kp_sy_data(args)
@@ -132,6 +132,7 @@ def main():
         data_shift_all = torch.cat(data_shift_all, dim=0)
 
         data_all = torch.cat((data_shift_all, fm_all), dim=1).unique(dim=0)
+
         print(f"#FM: {len(data_all)}. #Data: {len(train_loader)}")
         torch.save(data_all, config.output / f"{args.exp_name}" / f"fms.pt")
         print(f"feature maps have been saved to {config.output / f'{args.exp_name}' / 'fms.pt'}")
