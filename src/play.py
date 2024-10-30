@@ -33,32 +33,30 @@ os.makedirs(out_cf_folder, exist_ok=True)
 
 step_counter = 0
 total_step = 8
-# Step 1: Generate Training Data -- Single Group Pattern
+# Generate Training Data -- Single Group Pattern
 step_counter += 1
 generate_training_patterns.genShapeOnShape(exp_setting["bk_groups"], 500)
 print(f"Step {step_counter}/{total_step}: Generated {exp_setting['bk_groups']} training patterns")
 
-# Step 2: Generate Task Data -- Multiple Group Pattern
+# Generate Task Data -- Multiple Group Pattern
 step_counter += 1
 generate_task_patterns.genShapeOnShapeTask(exp_setting, 10)
 print(f"Step {step_counter}/{total_step}: Generated {exp_setting['task_name']} task patterns")
 
-# Step 3: Import Generated Data
+# Import Generated Data
 step_counter += 1
-
 train_imges = file_utils.get_all_files(train_folder, "png", False)[:500]
 positive_images = file_utils.get_all_files(test_true_folder, "png", False)[:500]
 random_imges = file_utils.get_all_files(test_random_folder, "png", False)[:500]
 counterfactual_imges = file_utils.get_all_files(test_cf_folder, "png", False)[:500]
 print(f"Step {step_counter}/{total_step}: Imported training and testing data.")
 
-# Step 4: Learn Clauses from Training Data
+# Learn Clauses from Training Data
 step_counter += 1
-
 lang = train_clauses(args, train_imges, data_folder / "train" / "task_true_pattern")
 print(f"Step {step_counter}/{total_step}: Reasoned {len(lang.clauses)} clauses")
 
-# Step 5: Test Positive Patterns
+# Test Positive Patterns
 step_counter += 1
 
 positive_acc = check_clause(args, lang, positive_images, True, out_positive_folder)

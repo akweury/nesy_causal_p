@@ -7,12 +7,12 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image, ImageDraw
-
+import cv2
 import os
 
 import config
 from src.percept import perception
-from src.utils import args_utils, data_utils
+from src.utils import args_utils, data_utils, chart_utils
 
 
 def prepare_kp_sy_data(args):
@@ -101,7 +101,7 @@ def draw_angle():
     return torch.cat((angle_imgs), dim=0)
 
 
-def main():
+def train_fm_stack():
     args = args_utils.get_args()
 
     patch_size = 5
@@ -138,5 +138,53 @@ def main():
         print(f"feature maps have been saved to {config.output / f'{args.exp_name}' / 'fms.pt'}")
 
 
+def train_fm_cloud():
+    args = args_utils.get_args()
+    patch_size = 5
+    bk_shapes = ["triangler"]
+    for bk_shape in bk_shapes:
+        args.exp_name = bk_shape
+        train_loader, val_loader = prepare_kp_sy_data(args)
+        os.makedirs(config.output / f"{args.exp_name}", exist_ok=True)
+        kernels = []
+        for data in tqdm(train_loader):
+            patches = data.unfold(2, patch_size, 1).unfold(3, patch_size, 1)
+            patches = patches.reshape(-1, patch_size, patch_size).unique(dim=0)
+            patches = patches[~torch.all(patches == 0, dim=(1, 2))]
+            kernels.append(patches)
+        kernels = torch.cat(kernels, dim=0).unique(dim=0).unsqueeze(1)
+        torch.save(kernels, config.output / f"{args.exp_name}" / f"kernels.pt")
+
+        fm_all = []
+        data_shift_all = []
+        for data in tqdm(train_loader):
+            fms = perception.extract_fm(data, kernels)
+            fms, row_shift, col_shift = data_utils.shift_content_to_top_left(fms)
+            data_shift, _, _ = data_utils.shift_content_to_top_left(data, row_shift, col_shift)
+            fm_all.append(fms)
+            data_shift_all.append(data_shift)
+        fm_all = torch.cat(fm_all, dim=0)
+
+        for fm_i in range(10):
+            compare_imgs = []
+            compare_imgs.append(chart_utils.color_mapping(kernels[fm_i].squeeze(), 1, f"K {fm_i}"))
+            for img_i in range(10):
+                compare_imgs.append(chart_utils.color_mapping(fm_all[img_i][fm_i].squeeze(), 1, f"IMG{img_i} FM{fm_i}"))
+            compare_imgs.append(chart_utils.color_mapping(fm_all[:, fm_i].squeeze().sum(dim=0), 1, f"IMG SUM"))
+
+            compare_imgs = chart_utils.concat_imgs(compare_imgs)
+            compare_imgs = cv2.cvtColor(compare_imgs, cv2.COLOR_BGR2RGB)
+            cv2.imwrite(str(config.output / f"{args.exp_name}" / f"FM_{fm_i}.png"), compare_imgs)
+
+        fm_sum = fm_all.sum(dim=0)
+        data_shift_all = torch.cat(data_shift_all, dim=0).sum(dim=0)
+
+        data_all = torch.cat((data_shift_all, fm_sum), dim=0)
+
+        print(f"#FM: {len(data_all)}. #Data: {len(train_loader)}")
+        torch.save(data_all, config.output / f"{args.exp_name}" / f"fms.pt")
+        print(f"feature maps have been saved to {config.output / f'{args.exp_name}' / 'fms.pt'}")
+
+
 if __name__ == "__main__":
-    main()
+    train_fm_cloud()
