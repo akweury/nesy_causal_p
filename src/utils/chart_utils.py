@@ -101,3 +101,9 @@ def vconcat_imgs(img_list):
     img = np.vstack(padding_imgs).astype(np.uint8)
 
     return img
+
+
+def visual_np_array(array):
+    plt.imshow(array)
+    plt.axis('off')
+    plt.show()

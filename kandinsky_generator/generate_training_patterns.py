@@ -270,4 +270,4 @@ def genShapeOnShapeTask(task, n):
 
 if __name__ == '__main__':
     tasks = ["triangler"]
-    genShapeOnShape(tasks, 1000)
+    genShapeOnShape(tasks, 10000)

@@ -452,7 +452,6 @@ class ShapeOnShape(KandinskyTruthInterfce):
             kf = self._only(rule_style, "trianglecircle")
             kfs.append(kf)
         return kfs
-
     def diamond_circle_cf(self, n=1, rule_style=False):
         print("MAKE TRIANGLE AND CIRCLE (COUNTERFACTUAL)")
         kfs = []

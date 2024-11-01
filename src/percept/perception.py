@@ -78,7 +78,7 @@ class ShapeDataset(Dataset):
         # self.labels = []
         self.device = args.device
         folder = config.kp_dataset / args.exp_name
-        imgs = file_utils.get_all_files(folder, "png", False)
+        imgs = file_utils.get_all_files(folder, "png", False)[:1000]
         # labels = [self.get_label(args.exp_name) for img in imgs]
         self.image_paths += imgs
         # self.labels += labels
@@ -356,7 +356,13 @@ def kmeans_common_features(args, model, train_loader, val_loader):
 
 
 def extract_fm(data, kernels):
-    output = F.conv2d(data, kernels, stride=1, padding=2)
+    if kernels.shape[-1]==5:
+        padding = 2
+    elif kernels.shape[-1]==3:
+        padding = 1
+    else:
+        raise ValueError("kernels has to be 5 or 3 dimensional")
+    output = F.conv2d(data, kernels, stride=1, padding=padding)
     max_value = kernels.sum(dim=[1, 2, 3])
     max_value = max_value.unsqueeze(1).unsqueeze(2).unsqueeze(0)
     max_value = torch.repeat_interleave(max_value, output.shape[2], dim=-2)

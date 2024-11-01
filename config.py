@@ -24,7 +24,7 @@ code_group_relation = {
 obj_true = [1, 0]
 obj_false = [0, 1]
 # --------------------------------------------------
-
+pixel_size = 64
 tile_pad_width = 1
 index_font_scale = 80
 index_x_pos = 2.3

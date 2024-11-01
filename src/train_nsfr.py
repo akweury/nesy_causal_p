@@ -97,7 +97,9 @@ def train_clauses(args, image_paths, out_path):
         file_name, file_extension = image_paths[idx].split(".")
         data = file_utils.load_json(f"{file_name}.json")
         img, obj_pos = load_data(args, image_paths[idx])
-        groups = train_common_features.img2groups(args, group_bk, obj_pos, idx, img, out_path)
+        groups = train_common_features.img2groups_flexible(args, group_bk, obj_pos, idx, img, out_path)
+        # groups = train_common_features.img2groups(args, group_bk, obj_pos, idx, img, out_path)
+
         group_tensors = group2ocm(data, groups)
         lang = alpha.alpha(args, group_tensors)
 
@@ -124,5 +126,7 @@ def train_clauses(args, image_paths, out_path):
 
 if __name__ == "__main__":
     args = args_utils.get_args()
-    image_paths = file_utils.get_all_files(config.kp_dataset / args.exp_name / "train" / "true", "png", False)[:500]
-    train_clauses(args, image_paths)
+    # image_paths = file_utils.get_all_files(config.kp_dataset / args.exp_name / "train" / "true", "png", False)[:500]
+    image_paths = file_utils.get_all_files(config.kp_dataset / args.exp_name, "png", False)[:500]
+    out_path = config.output / args.exp_name
+    train_clauses(args, image_paths, out_path)

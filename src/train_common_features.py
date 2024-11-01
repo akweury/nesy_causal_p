@@ -203,12 +203,52 @@ def get_pair(img_fm, fm_repo):
     similarity_matrix = torch.mm(g1_flat, g2_flat.t()) / g2_flat.sum(dim=1).unsqueeze(0)  # Shape: (N1, N2)
 
     top_values, top_indices = torch.topk(similarity_matrix.flatten(), 5)
+    # top_indices_2d: (best_shift_idx_1d, best_fm_idx)
     top_indices_2d = torch.stack(torch.unravel_index(top_indices, similarity_matrix.shape)).t()
+    # best shift idx 2d
+    best_shift_idx = torch.stack(torch.unravel_index(top_indices_2d[:, 0], img_fm.shape[-2:])).t()
+    # best fm idx
+    best_fm_idx = top_indices_2d[:, 1]
 
-    max_idx_shift = torch.stack(torch.unravel_index(top_indices_2d[:, 0], img_fm.shape[-2:])).t()
-    max_idx_fm = top_indices_2d[:, 1]
+    return best_shift_idx, best_fm_idx, top_values
 
-    return max_idx_shift, max_idx_fm, top_values
+
+# shifted_images = torch.cat([torch.roll(img, shifts=(row, col), dims=(-2, -1)) for row, col in shifts])
+
+
+def fm_intersection(img_fm, fm_repo):
+    img_fm_shifts = get_shifted_versions(img_fm)
+
+    # img_fm_shifts, row_shifts, col_shifts = data_utils.shift_content_to_top_left(img_fm)
+    chart_utils.visual_np_array(img_fm_shifts[0, 0].squeeze().numpy())
+    # Flatten the matrices from (192, 64, 64) to (192*64*64)
+    g1_flat = img_fm_shifts.view(img_fm_shifts.size(0), -1)  # Shape: (N1, 192 * 64 * 64)
+    g2_flat = fm_repo.view(fm_repo.size(0), -1)  # Shape: (N2, 192 * 64 * 64)
+
+    similarity_matrix = torch.mm(g1_flat, g2_flat.t()) / g2_flat.sum(dim=1).unsqueeze(0)  # Shape: (N1, N2)
+    top_values, top_indices = torch.topk(similarity_matrix.flatten(), 5)
+    # top_indices_2d: (best_shift_idx_1d, best_fm_idx)
+    top_indices_2d = torch.stack(torch.unravel_index(top_indices, similarity_matrix.shape)).t()
+    # best shift idx 2d
+    best_shift_idx = torch.stack(torch.unravel_index(top_indices_2d[:, 0], img_fm.shape[-2:])).t()
+    # best fm idx
+    best_fm_idx = top_indices_2d[:, 1]
+    return best_shift_idx, best_fm_idx, top_values
+
+    # g2_flat = torch.where(g2_flat != 0, torch.tensor(1), g2_flat)
+    # g1_flat_mask = g1_flat > 0
+    # equal_matrix = torch.zeros_like(g1_flat)
+    # equal_matrix[g1_flat_mask] = (g1_flat == g2_flat)[g1_flat_mask].float()
+    # equal_counts = equal_matrix.sum(dim=1)
+    # fm_counts = img_fm.sum(dim=[1, 2, 3])
+    # equal_percents = equal_counts / (fm_counts + 1e-20)
+    # top_fm_similar_percents, top_fm_indices = torch.topk(equal_percents, 5)
+    # top_fm_shifts = torch.stack([row_shifts[top_fm_indices], col_shifts[top_fm_indices]], dim=1)
+    # top_indices_2d = torch.stack(torch.unravel_index(top_indices, similarity_matrix.shape)).t()
+    # max_idx_shift = torch.stack(torch.unravel_index(top_indices_2d[:, 0], img_fm.shape[-2:])).t()
+    # max_idx_fm = top_indices_2d[:, 1]
+
+    # return top_fm_shifts, top_fm_indices, top_fm_similar_percents
 
 
 def visual_all(args, idx, img, data, data_fm_shifted, fm_best, max_value, fm_best_same, fm_best_diff, data_onside,
@@ -280,7 +320,7 @@ def get_siding(args, data, match_same, match_diff, match_fm_img):
     return data_onside, data_offside, data_onside_uncertain
 
 
-def load_shift(args, bk_shape, idx, in_fm, fm_repo, out_path):
+def load_shift(bk_shape, idx, in_fm, fm_repo, out_path):
     buffer_file = out_path / f"shift_{bk_shape['name']}_{idx}.pt"
     if os.path.exists(buffer_file):
         data = torch.load(buffer_file)
@@ -288,7 +328,9 @@ def load_shift(args, bk_shape, idx, in_fm, fm_repo, out_path):
         match_fm_idx = data['match_fm_idx']
         top_values = data["top_values"]
     else:
+        # match_fm_shift, match_fm_idx, top_values = fm_intersection(in_fm, fm_repo)
         match_fm_shift, match_fm_idx, top_values = get_pair(in_fm, fm_repo)
+        # chart_utils.visual_np_array(in_fm[0, 0].squeeze().numpy())
         data = {"match_fm_shift": match_fm_shift,
                 "match_fm_idx": match_fm_idx,
                 "top_values": top_values}
@@ -303,7 +345,7 @@ def img2groups(args, bk, data, idx, img, out_path):
         in_fm = perception.extract_fm(data.unsqueeze(0), bk_shape["kernels"])
         fm_repo = bk_shape["fm_repo"]
         fm_img = bk_shape["fm_img"]
-        match_fm_shift, match_fm_idx, match_fm_value = load_shift(args, bk_shape, idx, in_fm, fm_repo, out_path)
+        match_fm_shift, match_fm_idx, match_fm_value = load_shift(bk_shape, idx, in_fm, fm_repo, out_path)
         match_fm = fm_repo[match_fm_idx]
         match_fm_img = fm_img[match_fm_idx]
         shift_mfm = [torch.roll(match_fm[i], shifts=tuple(match_fm_shift[i]), dims=(-2, -1)) for i in
@@ -330,6 +372,93 @@ def img2groups(args, bk, data, idx, img, out_path):
             "onside": img_onside[-1],
             "count_conf": group_count_conf
         })
+    return groups
+
+
+def img2groups_flexible(args, bk, data, idx, img, out_path):
+    groups = []
+    for bk_shape in bk:
+        in_fm = perception.extract_fm(data.unsqueeze(0), bk_shape["kernels"])
+        fm_repo = bk_shape["fm_repo"] #  (#fm, #kernel, row, col)
+        fm_img = bk_shape["fm_img"] # (#fm, #channel, row, col)
+        # chart_utils.visual_np_array(in_fm[0].numpy())
+        # get top matched feature maps and its shift
+        match_fm_shift, match_fm_idx, match_fm_value = get_pair(in_fm, fm_repo)
+        match_fm = fm_repo[match_fm_idx]
+        match_fm_img = fm_img[match_fm_idx]
+        shift_mfm = [torch.roll(match_fm[i], shifts=tuple(match_fm_shift[i]), dims=(-2, -1)) for i in
+                     range(args.top_fm_k)]
+        shift_mfm.append(torch.zeros_like(shift_mfm[0]))
+        shift_mfm = torch.stack(shift_mfm)
+        shift_mfm_img = torch.stack(
+            [torch.roll(match_fm_img[i], shifts=tuple(match_fm_shift[i]), dims=(-2, -1)) for i in
+             range(args.top_fm_k)])
+        match_same, match_diff, same_percent = get_match_detail(shift_mfm, in_fm.squeeze(), match_fm_value)
+        img_onside, img_offside, img_onside_uncertain = get_siding(args, data, match_same, match_diff,
+                                                                   shift_mfm_img)
+        visual_all(args, idx, img, data, in_fm, shift_mfm, same_percent, match_same, match_diff, img_onside,
+                   img_offside, img_onside_uncertain, bk_shape, out_path)
+        if (img_onside[-1] > 0).sum() > fm_repo[0, 0].sum():
+            print("")
+        group_count_conf = ((img_onside[-1] > 0).sum() / fm_repo[0, 0].sum()).item()
+        print(f"{bk_shape['name']} group conf: {group_count_conf:.2f}, th: {args.group_count_conf_th}")
+        if group_count_conf < args.group_count_conf_th:
+            continue
+
+        groups.append({
+            "name": bk_shape["name"],
+            "onside": img_onside[-1],
+            "count_conf": group_count_conf
+        })
+        # match_fm_value = torch.cat((match_fm_value, torch.zeros(1)))
+        # match_fm_shift = match_fm_shift.to(torch.int).tolist()
+        # match_fm = fm_repo[match_fm_idx]
+        # # match_fm_img = fm_img.sum(dim=0)
+        # # shift matched feature map to the same position as the input image
+        # match_fm = fm_repo[match_fm_idx]
+        # match_fm_img = fm_img[match_fm_idx]
+        # shift_mfm = [torch.roll(match_fm[i], shifts=tuple(match_fm_shift[i]), dims=(-2, -1)) for i in
+        #              range(args.top_fm_k)]
+        # shift_mfm.append(torch.zeros_like(shift_mfm[0]))
+        # shift_mfm = torch.stack(shift_mfm)
+        # # shift the original image of the feature map to the same position as the input image
+        # # shift_mfm_img = torch.stack(
+        # #     [torch.roll(match_fm_img[i], shifts=tuple(match_fm_shift[i]), dims=(-2, -1)) for i in
+        # #      range(args.top_fm_k)])
+        #
+        # # repo feature maps same/different with the input feature map
+        # fm_mask = shift_mfm != 0
+        #
+        # # similarity_value = [torch.mm(shift_in_fm.flatten().unsqueeze(0),
+        # #                              target_fm[i].flatten().unsqueeze(0).t()) / target_fm[i].sum().unsqueeze(0) for i in
+        # #                     range(len(fm_mask))]
+        #
+        # same_fm = ((shift_mfm == in_fm) * fm_mask).sum(dim=1).to(torch.float32)
+        # mask_full_match = torch.all(shift_mfm == in_fm, dim=1) * torch.any(fm_mask, dim=1)
+        # mask_any_mismatch = torch.any((shift_mfm == in_fm) * fm_mask, dim=1) * torch.any(fm_mask,
+        #                                                                                        dim=1) * ~mask_full_match
+        # all_same_fm = same_fm * mask_full_match
+        # any_diff_fm = same_fm * mask_any_mismatch
+        # same_percent = mask_full_match.sum(dim=[1, 2]) / (target_fm.sum(dim=1).bool().sum(dim=[1, 2]) + 1e-20)
+        #
+        #
+        # match_same, match_diff, same_percent = get_match_detail(shift_mfm, in_fm.squeeze(), match_fm_value)
+        #
+        # # points on the group, out of the group, on or out of the group
+        # img_onside, img_offside, img_onside_uncertain = get_siding(args, data, match_same, match_diff,
+        #                                                            shift_mfm_img)
+        # visual_all(args, idx, img, data, in_fm, shift_mfm, same_percent, match_same, match_diff, img_onside,
+        #            img_offside, img_onside_uncertain, bk_shape, out_path)
+        # group_count_conf = ((img_onside[-1] > 0).sum() / fm_repo[0, 0].sum()).item()
+        # print(f"{bk_shape['name']} group conf: {group_count_conf:.2f}, th: {args.group_count_conf_th}")
+        # if group_count_conf < args.group_count_conf_th:
+        #     continue
+        #
+        # groups.append({
+        #     "name": bk_shape["name"],
+        #     "onside": img_onside[-1],
+        #     "count_conf": group_count_conf
+        # })
     return groups
 
 

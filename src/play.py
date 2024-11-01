@@ -23,13 +23,14 @@ os.makedirs(test_random_folder, exist_ok=True)
 test_cf_folder = data_folder / "test" / "task_cf_pattern"
 os.makedirs(test_cf_folder, exist_ok=True)
 
+out_train_folder = config.output / args.exp_name / "train" / "task_true_pattern"
+os.makedirs(out_train_folder, exist_ok=True)
 out_positive_folder = config.output / args.exp_name / "test" / "task_true_pattern"
 os.makedirs(out_positive_folder, exist_ok=True)
 out_random_folder = config.output / args.exp_name / "test" / "task_random_pattern"
 os.makedirs(out_random_folder, exist_ok=True)
 out_cf_folder = config.output / args.exp_name / "test" / "task_cf_pattern"
 os.makedirs(out_cf_folder, exist_ok=True)
-
 
 step_counter = 0
 total_step = 8

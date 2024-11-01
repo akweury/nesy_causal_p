@@ -6,7 +6,7 @@ import torch.nn as nn
 from torch.nn import functional as F
 import pickle
 import os
-
+import config
 
 
 def data2patch(data):
@@ -104,17 +104,13 @@ def data2positions(data):
 
 def oco2patch(data):
     positions = torch.cat([torch.tensor([[d["x"], d["y"]]]) for d in data], dim=0)
-    patch = None
-    max_counts = 100
-    scale = 64
-    grid_position = torch.ceil(positions * scale).to(dtype=torch.int)
-
-    # while max_counts > 1:
+    scale = config.pixel_size
     patch = torch.zeros((scale, scale))
     grid_position = torch.ceil(positions * (scale - 1)).to(dtype=torch.int)
     unique_pos, pos_counts = torch.unique(grid_position, dim=0, return_counts=True)
     max_counts = torch.max(pos_counts)
-    scale += 1
+    if max_counts != 1:
+        raise ValueError(f"pixel size is too small, overlay {max_counts}")
     for p_i in range(len(grid_position)):
         patch[grid_position[p_i, 1], grid_position[p_i, 0]] = 1
     return patch
@@ -266,7 +262,7 @@ def value_to_matrix(value):
 
 def shift_up(matrix):
     shift_count = 0
-    while torch.all(matrix[:, 0] == 0):  # Check if the top row is full of zeros
+    while matrix.sum() > 0 and torch.all(matrix[:, 0] == 0):  # Check if the top row is full of zeros
         matrix = torch.roll(matrix, shifts=-1, dims=1)  # Shift all rows up
         matrix[:, -1] = 0  # Fill the last row with zeros after the shift
         shift_count += 1
@@ -276,7 +272,7 @@ def shift_up(matrix):
 # Function to shift the matrix left if the leftmost column is all zeros
 def shift_left(matrix):
     shift_count = 0
-    while torch.all(matrix[:, :, 0] == 0):  # Check if the leftmost column is full of zeros
+    while matrix.sum() > 0 and torch.all(matrix[:, :, 0] == 0):  # Check if the leftmost column is full of zeros
         matrix = torch.roll(matrix, shifts=-1, dims=2)  # Shift all columns to the left
         matrix[:, :, -1] = 0  # Fill the last column with zeros after the shift
         shift_count += 1
