@@ -65,8 +65,8 @@ group_name_extend = ["none", "triangler"]
 
 # exp setting
 task_pattern_types = ["task_true_pattern", "task_random_pattern", "task_cf_pattern"]
-exp_demo = {"bk_groups": ["triangle", "circle"],
-            "task_name": "trianglecircle",
-            "task_true_pattern": "trianglecircle",
+exp_demo = {"bk_groups": ["triangler", "circle_flex"],
+            "task_name": "trianglecircle_flex",
+            "task_true_pattern": "trianglecircle_flex",
             "task_random_pattern": "random",
-            "task_cf_pattern": "trianglecircle_cf"}
+            "task_cf_pattern": "trianglecircle_flex_cf"}

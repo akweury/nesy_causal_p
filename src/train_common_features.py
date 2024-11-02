@@ -404,7 +404,6 @@ def img2groups_flexible(args, bk, data, idx, img, out_path):
         print(f"{bk_shape['name']} group conf: {group_count_conf:.2f}, th: {args.group_count_conf_th}")
         if group_count_conf < args.group_count_conf_th:
             continue
-
         groups.append({
             "name": bk_shape["name"],
             "onside": img_onside[-1],

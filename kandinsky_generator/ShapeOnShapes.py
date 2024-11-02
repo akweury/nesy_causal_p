@@ -39,6 +39,33 @@ class ShapeOnShape(KandinskyTruthInterfce):
             kf.append(o)
         return kf
 
+    def _bigCircleFlex(self, so, t):
+        kf = []
+        x = 0.4 + random.random() * 0.2
+        y = 0.4 + random.random() * 0.2
+        r = 0.3 - min(abs(0.5 - x), abs(0.5 - y))
+        n = int(2 * r * math.pi / 0.2)
+
+        if n < self.min:   n = self.min
+        if n > self.max:   n = self.max
+
+        random_rotate_rad = random.random()
+        for i in range(n):
+            o = KandinskyUniverse.kandinskyShape()
+            d = (i + random_rotate_rad) * 2 * math.pi / n
+            if t:
+                o.color = random.choice(["blue", "yellow"])
+                o.shape = random.choice(["square", "triangle"])
+            else:
+                o.color = random.choice(KandinskyUniverse.matplotlib_colors_list)
+                o.shape = random.choice(KandinskyUniverse.kandinsky_shapes)
+
+            o.size = so
+            o.x = x + r * math.cos(d)
+            o.y = y + r * math.sin(d)
+            kf.append(o)
+        return kf
+
     def _bigTriangle(self, so, t, min_percent=1.0, max_percent=1.0):
         kf = []
         x = 0.4 + random.random() * 0.2
@@ -364,6 +391,8 @@ class ShapeOnShape(KandinskyTruthInterfce):
         so = 0.04
         if shape == "circle":
             g = lambda so, truth: self._bigCircle(so, truth)
+        elif shape == "circle_flex":
+            g = lambda so, truth: self._bigCircleFlex(so, truth)
         elif shape == "diamond":
             g = lambda so, truth: self._bigDiamond(so, truth)
         elif shape == "triangle":
@@ -376,6 +405,8 @@ class ShapeOnShape(KandinskyTruthInterfce):
             g = lambda so, truth: self._bigDiamond(so, truth) + self._bigCircle(so, truth)
         elif shape == "trianglecircle":
             g = lambda so, truth: self._bigCircle(so, truth) + self._bigTriangle(so, truth)
+        elif shape == "trianglecircle_flex":
+            g = lambda so, truth: self._bigCircleFlex(so, truth) + self._bigTriangler(so, truth)
         elif shape == 'trianglesquare':
             g = lambda so, truth: self._bigSquare(so, truth) + self._bigTriangle(so, truth)
         elif shape == "squarecircle":
@@ -408,6 +439,14 @@ class ShapeOnShape(KandinskyTruthInterfce):
         kfs = []
         for i in tqdm(range(n), desc="generating group objects"):
             kf = self._only(rule_style, "circle")
+            kfs.append(kf)
+        return kfs
+
+    def cir_flex_only(self, n=1, rule_style=False):
+        print("MAKE FLEX CIRCLE")
+        kfs = []
+        for i in tqdm(range(n), desc="generating group objects"):
+            kf = self._only(rule_style, "circle_flex")
             kfs.append(kf)
         return kfs
 
@@ -452,6 +491,14 @@ class ShapeOnShape(KandinskyTruthInterfce):
             kf = self._only(rule_style, "trianglecircle")
             kfs.append(kf)
         return kfs
+    def triangle_circle_flex(self, n=1, rule_style=False):
+        print("MAKE FLEX TRIANGLE AND CIRCLE")
+        kfs = []
+        for i in tqdm(range(n), desc="generating objects"):
+            kf = self._only(rule_style, "trianglecircle_flex")
+            kfs.append(kf)
+        return kfs
+
     def diamond_circle_cf(self, n=1, rule_style=False):
         print("MAKE TRIANGLE AND CIRCLE (COUNTERFACTUAL)")
         kfs = []

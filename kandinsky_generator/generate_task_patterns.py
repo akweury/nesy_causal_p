@@ -255,6 +255,8 @@ def genShapeOnShapeTask(task, n):
                 gen_fun = shapeOnshapeObjects.diamond_circle_cf
             elif task[label] == "trianglecircle":
                 gen_fun = shapeOnshapeObjects.triangle_circle
+            elif task[label] == "trianglecircle_flex":
+                gen_fun = shapeOnshapeObjects.triangle_circle_flex
             elif task[label] == "triangler":
                 gen_fun = shapeOnshapeObjects.trir_only
             elif task[label] == "trianglecircle_cf":

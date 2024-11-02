@@ -200,6 +200,8 @@ def genShapeOnShape(shapes, n):
         for mode in ['train']:
             if shape == "circle":
                 gen_fun = shapeOnshapeObjects.cir_only
+            elif shape == "circle_flex":
+                gen_fun = shapeOnshapeObjects.cir_flex_only
             elif shape == "triangle":
                 gen_fun = shapeOnshapeObjects.tri_only
             elif shape == "triangler":
@@ -269,5 +271,5 @@ def genShapeOnShapeTask(task, n):
 
 
 if __name__ == '__main__':
-    tasks = ["triangler"]
-    genShapeOnShape(tasks, 10000)
+    tasks = ["circle_flex"]
+    genShapeOnShape(tasks, 1000)
