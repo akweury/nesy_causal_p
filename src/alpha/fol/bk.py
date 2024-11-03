@@ -60,8 +60,8 @@ color_matplotlib.pop("black")
 color_large = [k for k, v in list(color_matplotlib.items())]
 
 shape_extend = ["circle", "square", "triangle", "diamond"]
-# group_name_extend = ["none", "triangle", "data_square", "circle", "data_diamond"]
-group_name_extend = ["none", "triangler"]
+group_name_extend = ["none", "triangler", "data_square", "circle_flex", "data_diamond"]
+# group_name_extend = ["none", "circle_flex"]
 
 # exp setting
 task_pattern_types = ["task_true_pattern", "task_random_pattern", "task_cf_pattern"]

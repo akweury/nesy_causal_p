@@ -276,7 +276,7 @@ def visual_all(args, idx, img, data, data_fm_shifted, fm_best, max_value, fm_bes
     compare_imgs = chart_utils.vconcat_imgs(compare_imgs)
     compare_imgs = cv2.cvtColor(compare_imgs, cv2.COLOR_BGR2RGB)
     cv2.imwrite(str(out_path / f'{idx}_{bk_shape["name"]}.png'), compare_imgs)
-    print(f"- grouping result: " + str(config.output / f"{args.exp_name}" / f'c_{bk_shape["name"]}_{idx}.png'))
+    print(f"- grouping result: " + str(out_path / f'{idx}_{bk_shape["name"]}.png'))
 
 
 def get_match_detail(target_fm, shift_in_fm, max_value):
@@ -339,6 +339,22 @@ def load_shift(bk_shape, idx, in_fm, fm_repo, out_path):
     return match_fm_shift, match_fm_idx, top_values
 
 
+def eval_onside_conf(onside_img, fm_imgs):
+
+    onside_mask = onside_img > 0
+    onside_mask = onside_mask.unsqueeze(0)
+    onside_mask = torch.repeat_interleave(onside_mask, len(fm_imgs), dim=0)
+    same = onside_mask.to(torch.float) == fm_imgs
+
+
+    chart_utils.visual_np_array(onside_img.numpy())
+    same[~onside_mask] = False
+    group_count_conf = same.sum(dim=[1, 2]) / onside_mask[0].sum()
+    group_count_conf = group_count_conf.mean()
+
+    return group_count_conf
+
+
 def img2groups(args, bk, data, idx, img, out_path):
     groups = []
     for bk_shape in bk:
@@ -362,7 +378,9 @@ def img2groups(args, bk, data, idx, img, out_path):
                    img_offside, img_onside_uncertain, bk_shape, out_path)
         if (img_onside[-1] > 0).sum() > fm_repo[0, 0].sum():
             print("")
-        group_count_conf = ((img_onside[-1] > 0).sum() / fm_repo[0, 0].sum()).item()
+
+        group_count_conf = eval_onside_conf(img_onside[-1], shift_mfm_img.squeeze())
+
         print(f"{bk_shape['name']} group conf: {group_count_conf:.2f}, th: {args.group_count_conf_th}")
         if group_count_conf < args.group_count_conf_th:
             continue
@@ -379,8 +397,8 @@ def img2groups_flexible(args, bk, data, idx, img, out_path):
     groups = []
     for bk_shape in bk:
         in_fm = perception.extract_fm(data.unsqueeze(0), bk_shape["kernels"])
-        fm_repo = bk_shape["fm_repo"] #  (#fm, #kernel, row, col)
-        fm_img = bk_shape["fm_img"] # (#fm, #channel, row, col)
+        fm_repo = bk_shape["fm_repo"]  # (#fm, #kernel, row, col)
+        fm_img = bk_shape["fm_img"]  # (#fm, #channel, row, col)
         # chart_utils.visual_np_array(in_fm[0].numpy())
         # get top matched feature maps and its shift
         match_fm_shift, match_fm_idx, match_fm_value = get_pair(in_fm, fm_repo)
@@ -398,8 +416,8 @@ def img2groups_flexible(args, bk, data, idx, img, out_path):
                                                                    shift_mfm_img)
         visual_all(args, idx, img, data, in_fm, shift_mfm, same_percent, match_same, match_diff, img_onside,
                    img_offside, img_onside_uncertain, bk_shape, out_path)
-        if (img_onside[-1] > 0).sum() > fm_repo[0, 0].sum():
-            print("")
+        # if (img_onside[-1] > 0).sum() > fm_repo[0, 0].sum():
+        #     print("")
         group_count_conf = ((img_onside[-1] > 0).sum() / fm_repo[0, 0].sum()).item()
         print(f"{bk_shape['name']} group conf: {group_count_conf:.2f}, th: {args.group_count_conf_th}")
         if group_count_conf < args.group_count_conf_th:

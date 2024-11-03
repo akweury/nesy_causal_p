@@ -237,7 +237,7 @@ def genShapeOnShape(shape, n):
             image.save(true_path / f"{task}_{i:06d}.png")
 
 
-def genShapeOnShapeTask(task, n):
+def genShapeOnShapeTask(task, total_n):
     width = 512
     shapeOnshapeObjects = ShapeOnShape(u, 20, 40)
     base_path = config.kp_dataset / f"{task['task_name']}"
@@ -248,7 +248,7 @@ def genShapeOnShapeTask(task, n):
             os.makedirs(data_path, exist_ok=True)
             print(f'Generating dataset {base_path}', task, mode)
             png_num = len([f for f in Path(data_path).iterdir() if f.is_file() and f.suffix == '.png'])
-            n = n - png_num  # only generate insufficient ones
+            n = total_n - png_num  # only generate insufficient ones
             if task[label] == "diamondcircle":
                 gen_fun = shapeOnshapeObjects.diamond_circle
             elif task[label] == "diamondcircle_cf":
@@ -257,6 +257,8 @@ def genShapeOnShapeTask(task, n):
                 gen_fun = shapeOnshapeObjects.triangle_circle
             elif task[label] == "trianglecircle_flex":
                 gen_fun = shapeOnshapeObjects.triangle_circle_flex
+            elif task[label] == "trianglecircle_flex_cf":
+                gen_fun = shapeOnshapeObjects.triangle_circle_flex_cf
             elif task[label] == "triangler":
                 gen_fun = shapeOnshapeObjects.trir_only
             elif task[label] == "trianglecircle_cf":

@@ -150,20 +150,23 @@ def df_search(args, lang, C, FC, objs):
     # clause evaluation
     ils, dls = evaluation(args, NSFR, target_preds, objs)
     # node extension (DFS)
-    base_nodes = [atom_C[s_i] for s_i in range(len(ils)) if ils[s_i] > 0.9]
-    extended_nodes = [atom_C[s_i] for s_i in range(len(ils)) if ils[s_i] > 0.9]
+    base_nodes = [atom_C[s_i] for s_i in range(len(ils)) if ils[s_i] > 0.8]
+    extended_nodes = [atom_C[s_i] for s_i in range(len(ils)) if ils[s_i] > 0.8]
     # update const lists
     lang.update_consts(base_nodes)
 
     lang.generate_atoms()
     for e_i in range(2):
         extended_nodes = node_extension(args, lang, base_nodes, extended_nodes)
-        NSFR = nsfr.get_nsfr_model(args, lang, FC, extended_nodes)
+        try:
+            NSFR = nsfr.get_nsfr_model(args, lang, FC, extended_nodes)
+        except ValueError:
+            raise ValueError
         target_preds = list(set([c.head.pred.name for c in extended_nodes]))
         # clause evaluation
         ils, dls = evaluation(args, NSFR, target_preds, objs)
-        pass_indices = [s_i for s_i in range(len(ils)) if ils[s_i] > 0.9]
-        extended_nodes = [extended_nodes[s_i] for s_i in range(len(ils)) if ils[s_i] > 0.9]
+        pass_indices = [s_i for s_i in range(len(ils)) if ils[s_i] > 0.8]
+        extended_nodes = [extended_nodes[s_i] for s_i in range(len(ils)) if ils[s_i] > 0.8]
         ils = ils[pass_indices]
         print(f"inv clauses score: {ils.unique()}")
 

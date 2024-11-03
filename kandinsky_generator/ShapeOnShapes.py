@@ -498,6 +498,13 @@ class ShapeOnShape(KandinskyTruthInterfce):
             kf = self._only(rule_style, "trianglecircle_flex")
             kfs.append(kf)
         return kfs
+    def triangle_circle_flex_cf(self, n=1, rule_style=False):
+        print("MAKE FLEX TRIANGLE AND CIRCLE COUNTERFACT")
+        kfs = []
+        for i in tqdm(range(n), desc="generating objects"):
+            kf = self._only(False, "trianglecircle_flex")
+            kfs.append(kf)
+        return kfs
 
     def diamond_circle_cf(self, n=1, rule_style=False):
         print("MAKE TRIANGLE AND CIRCLE (COUNTERFACTUAL)")

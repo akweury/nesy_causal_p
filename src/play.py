@@ -61,7 +61,7 @@ print(f"Step {step_counter}/{total_step}: Reasoned {len(lang.clauses)} clauses")
 step_counter += 1
 
 positive_acc = check_clause(args, lang, positive_images, True, out_positive_folder)
-print(f"Step {step_counter}/{total_step}: Test Positive Image Accuracy: \n"
+print(f"Step {step_counter}/{total_step}: Test Positive Image Accuracy: {positive_acc.prod(dim=1)}\n"
       f"{positive_acc}")
 
 # Step 6: Test counterfactual patterns
