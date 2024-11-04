@@ -5,7 +5,7 @@ import torch
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader, random_split
 from tqdm import tqdm
-import torchvision.transforms.functional as F
+import torch.nn.functional as F
 import numpy as np
 import cv2
 from PIL import Image, ImageDraw
@@ -339,18 +339,58 @@ def load_shift(bk_shape, idx, in_fm, fm_repo, out_path):
     return match_fm_shift, match_fm_idx, top_values
 
 
-def eval_onside_conf(onside_img, fm_imgs):
+def calculate_non_zero_distances(tensor):
+    # Get coordinates of all non-zero elements
+    non_zero_coords = torch.nonzero(tensor, as_tuple=False)
 
+    if non_zero_coords.size(0) == 0:
+        return torch.tensor([])  # Return an empty tensor if no non-zero elements
+
+    # Calculate the centroid of non-zero elements
+    center = non_zero_coords.float().mean(dim=0)
+
+    # Calculate distances from each non-zero point to the centroid
+    distances = torch.norm(non_zero_coords.float() - center, dim=1)
+
+    return distances
+
+
+def tensor_similarity(tensor1, ref_tensor):
+    # Calculate non-zero distances for each tensor
+    distances1 = calculate_non_zero_distances(tensor1)
+    distances2 = calculate_non_zero_distances(ref_tensor)
+
+    # If one or both tensors have no non-zero elements, similarity is zero
+    if distances1.numel() == 0 or distances2.numel() == 0:
+        return 0.0
+
+    dist_sum_ref = distances2.sum()
+    dist_pred = distances1.sum()
+    similarity_score = 1 - torch.abs(dist_sum_ref - dist_pred) / dist_sum_ref
+    return similarity_score
+
+
+def eval_onside_conf(onside_img, fm_imgs, idx, bk_shape, out_path):
     onside_mask = onside_img > 0
     onside_mask = onside_mask.unsqueeze(0)
     onside_mask = torch.repeat_interleave(onside_mask, len(fm_imgs), dim=0)
-    same = onside_mask.to(torch.float) == fm_imgs
-
-
-    chart_utils.visual_np_array(onside_img.numpy())
-    same[~onside_mask] = False
-    group_count_conf = same.sum(dim=[1, 2]) / onside_mask[0].sum()
-    group_count_conf = group_count_conf.mean()
+    # same = onside_mask.to(torch.float) == fm_imgs
+    # same[~onside_mask] = False
+    # group_count_conf = similarity.sum(dim=[1, 2]) / onside_mask[0].sum()
+    # group_count_conf = group_count_conf.mean()
+    group_count_conf = torch.zeros(len(onside_mask))
+    for i in range(len(onside_mask)):
+        group_count_conf[i] = tensor_similarity(onside_mask.to(torch.float)[i], fm_imgs[i])
+    group_count_conf = torch.mean(group_count_conf)
+    # group_count_conf = cosine_similarity(onside_mask.to(torch.float), fm_imgs)
+    # visualization
+    show_imgs = []
+    for i in range(onside_mask.shape[0]):
+        show_imgs.append(chart_utils.color_mapping(fm_imgs[i].squeeze(), 1, f"TOP FM {i}"))
+    show_imgs.append(chart_utils.color_mapping(onside_img.squeeze(), 1, f"Conf:{group_count_conf:.2f}"))
+    show_imgs = chart_utils.concat_imgs(show_imgs)
+    show_imgs = cv2.cvtColor(show_imgs, cv2.COLOR_BGR2RGB)
+    cv2.imwrite(str(out_path / f'{idx}_group_conf_{bk_shape["name"]}.png'), show_imgs)
 
     return group_count_conf
 
@@ -379,7 +419,7 @@ def img2groups(args, bk, data, idx, img, out_path):
         if (img_onside[-1] > 0).sum() > fm_repo[0, 0].sum():
             print("")
 
-        group_count_conf = eval_onside_conf(img_onside[-1], shift_mfm_img.squeeze())
+        group_count_conf = eval_onside_conf(img_onside[-1], shift_mfm_img.squeeze(), idx, bk_shape, out_path)
 
         print(f"{bk_shape['name']} group conf: {group_count_conf:.2f}, th: {args.group_count_conf_th}")
         if group_count_conf < args.group_count_conf_th:
@@ -418,7 +458,8 @@ def img2groups_flexible(args, bk, data, idx, img, out_path):
                    img_offside, img_onside_uncertain, bk_shape, out_path)
         # if (img_onside[-1] > 0).sum() > fm_repo[0, 0].sum():
         #     print("")
-        group_count_conf = ((img_onside[-1] > 0).sum() / fm_repo[0, 0].sum()).item()
+        # group_count_conf = ((img_onside[-1] > 0).sum() / fm_repo[0, 0].sum()).item()
+        group_count_conf = eval_onside_conf(img_onside[-1], shift_mfm_img.squeeze(), idx, bk_shape, out_path)
         print(f"{bk_shape['name']} group conf: {group_count_conf:.2f}, th: {args.group_count_conf_th}")
         if group_count_conf < args.group_count_conf_th:
             continue

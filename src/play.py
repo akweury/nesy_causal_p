@@ -54,7 +54,7 @@ print(f"Step {step_counter}/{total_step}: Imported training and testing data.")
 
 # Learn Clauses from Training Data
 step_counter += 1
-lang = train_clauses(args, train_imges, data_folder / "train" / "task_true_pattern")
+lang = train_clauses(args, train_imges, out_train_folder)
 print(f"Step {step_counter}/{total_step}: Reasoned {len(lang.clauses)} clauses")
 
 # Test Positive Patterns
