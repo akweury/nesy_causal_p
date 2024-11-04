@@ -150,8 +150,8 @@ def df_search(args, lang, C, FC, objs):
     # clause evaluation
     ils, dls = evaluation(args, NSFR, target_preds, objs)
     # node extension (DFS)
-    base_nodes = [atom_C[s_i] for s_i in range(len(ils)) if ils[s_i] > 0.8]
-    extended_nodes = [atom_C[s_i] for s_i in range(len(ils)) if ils[s_i] > 0.8]
+    base_nodes = [atom_C[s_i] for s_i in range(len(ils)) if ils[s_i] > 0.6]
+    extended_nodes = [atom_C[s_i] for s_i in range(len(ils)) if ils[s_i] > 0.6]
     # update const lists
     lang.update_consts(base_nodes)
 
@@ -166,12 +166,16 @@ def df_search(args, lang, C, FC, objs):
         # clause evaluation
         ils, dls = evaluation(args, NSFR, target_preds, objs)
         pass_indices = [s_i for s_i in range(len(ils)) if ils[s_i] > 0.8]
-        extended_nodes = [extended_nodes[s_i] for s_i in range(len(ils)) if ils[s_i] > 0.8]
+        extended_nodes = [extended_nodes[s_i] for s_i in range(len(ils)) if ils[s_i] > 0.6]
         ils = ils[pass_indices]
         print(f"inv clauses score: {ils.unique()}")
 
     # prune clauses
     # pruned_c = pruning.top_k_clauses(args, ils, dls, extended_nodes)
+    print(f"extend nodes num: {len(extended_nodes)}")
+    extended_nodes = sorted(extended_nodes)
+    for n_i in range(len(extended_nodes)):
+        print(extended_nodes[n_i])
     lang.clauses += extended_nodes
 
 

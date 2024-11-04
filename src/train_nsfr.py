@@ -92,6 +92,7 @@ def train_clauses(args, image_paths, out_path):
 
     # load background knowledge
     lang = None
+    all_clauses = []
     group_bk = load_bk(args, bk.group_name_extend)
     for idx in tqdm(range(min(4, len(image_paths)))):
         file_name, file_extension = image_paths[idx].split(".")
@@ -102,9 +103,9 @@ def train_clauses(args, image_paths, out_path):
 
         group_tensors = group2ocm(data, groups)
         lang = alpha.alpha(args, group_tensors)
-
+        all_clauses += lang.clauses
     # remove the less occurred clauses
-    clause_list = [c for c in lang.clauses]
+    clause_list = [c for c in all_clauses]
     frequency = {}
     for item in clause_list:
         frequency[item] = frequency.get(item, 0) + 1

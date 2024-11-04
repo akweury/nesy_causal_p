@@ -65,7 +65,6 @@ class Language(object):
         self.all_inv_p = []
         self.pi_c = []
         self.clauses = []
-        self.all_pi_c = []
         self.clause_with_scores = []
         self.invented_predicates_number = 0
         self.invented_consts_number = 0

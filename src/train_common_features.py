@@ -276,7 +276,7 @@ def visual_all(args, idx, img, data, data_fm_shifted, fm_best, max_value, fm_bes
     compare_imgs = chart_utils.vconcat_imgs(compare_imgs)
     compare_imgs = cv2.cvtColor(compare_imgs, cv2.COLOR_BGR2RGB)
     cv2.imwrite(str(out_path / f'{idx}_{bk_shape["name"]}.png'), compare_imgs)
-    print(f"- grouping result: " + str(out_path / f'{idx}_{bk_shape["name"]}.png'))
+    # print(f"- grouping result: {idx}_{bk_shape['name']}.png")
 
 
 def get_match_detail(target_fm, shift_in_fm, max_value):
@@ -355,42 +355,53 @@ def calculate_non_zero_distances(tensor):
     return distances
 
 
-def tensor_similarity(tensor1, ref_tensor):
+def tensor_similarity(onside_tensor, ref_tensor):
     # Calculate non-zero distances for each tensor
-    distances1 = calculate_non_zero_distances(tensor1)
-    distances2 = calculate_non_zero_distances(ref_tensor)
+    ref_coords = torch.nonzero(ref_tensor, as_tuple=False).float()
+    onside_coords = torch.nonzero(onside_tensor, as_tuple=False).float()
 
-    # If one or both tensors have no non-zero elements, similarity is zero
-    if distances1.numel() == 0 or distances2.numel() == 0:
-        return 0.0
+    # If either tensor has no non-zero elements, return an empty tensor for distances
+    if ref_coords.size(0) == 0 or onside_coords.size(0) == 0:
+        return torch.tensor(0)  # No distances to calculate
 
-    dist_sum_ref = distances2.sum()
-    dist_pred = distances1.sum()
-    similarity_score = 1 - torch.abs(dist_sum_ref - dist_pred) / dist_sum_ref
-    return similarity_score
+    # Step 2: Calculate pairwise distances between points in coords2 to coords1
+    # Expand dimensions to (N, M, 2) and (M, N, 2) for broadcasting
+    onside_coords_exp = onside_coords.unsqueeze(0)  # Shape: (1, M, 2)
+    ref_coords_exp = ref_coords.unsqueeze(1)  # Shape: (N, 1, 2)
+
+    # Calculate Euclidean distances
+    distances = torch.norm(ref_coords_exp - onside_coords_exp, dim=2)  # Shape: (N, M)
+
+    # Step 3: Find the minimum distance for each point in coords2 to any point in coords1
+    min_distances = torch.min(distances, dim=1).values  # Shape: (N,)
+    conf = (100 - min_distances.sum()) * 0.01
+    if conf < 0:
+        conf = torch.tensor(0)
+    return conf
 
 
-def eval_onside_conf(onside_img, fm_imgs, idx, bk_shape, out_path):
+def eval_onside_conf(args, onside_img, fm_imgs, idx, bk_shape, out_path):
     onside_mask = onside_img > 0
     onside_mask = onside_mask.unsqueeze(0)
     onside_mask = torch.repeat_interleave(onside_mask, len(fm_imgs), dim=0)
-    # same = onside_mask.to(torch.float) == fm_imgs
-    # same[~onside_mask] = False
-    # group_count_conf = similarity.sum(dim=[1, 2]) / onside_mask[0].sum()
-    # group_count_conf = group_count_conf.mean()
+    same = onside_mask.to(torch.float) == fm_imgs
+    same[~onside_mask] = False
     group_count_conf = torch.zeros(len(onside_mask))
     for i in range(len(onside_mask)):
         group_count_conf[i] = tensor_similarity(onside_mask.to(torch.float)[i], fm_imgs[i])
     group_count_conf = torch.mean(group_count_conf)
-    # group_count_conf = cosine_similarity(onside_mask.to(torch.float), fm_imgs)
-    # visualization
+
     show_imgs = []
     for i in range(onside_mask.shape[0]):
-        show_imgs.append(chart_utils.color_mapping(fm_imgs[i].squeeze(), 1, f"TOP FM {i}"))
+        show_imgs.append(chart_utils.color_mapping(same[i].squeeze(), 1, f"TOP FM {i}"))
     show_imgs.append(chart_utils.color_mapping(onside_img.squeeze(), 1, f"Conf:{group_count_conf:.2f}"))
+
     show_imgs = chart_utils.concat_imgs(show_imgs)
     show_imgs = cv2.cvtColor(show_imgs, cv2.COLOR_BGR2RGB)
-    cv2.imwrite(str(out_path / f'{idx}_group_conf_{bk_shape["name"]}.png'), show_imgs)
+    save_img_name = f'{idx}_group_conf_{bk_shape["name"]}.png'
+    cv2.imwrite(str(out_path/save_img_name), show_imgs)
+
+    print(f"- Group {bk_shape['name']}, #conf: [pred {group_count_conf:.2f}, th {args.group_count_conf_th}], #visual: {save_img_name} ")
 
     return group_count_conf
 
@@ -419,9 +430,9 @@ def img2groups(args, bk, data, idx, img, out_path):
         if (img_onside[-1] > 0).sum() > fm_repo[0, 0].sum():
             print("")
 
-        group_count_conf = eval_onside_conf(img_onside[-1], shift_mfm_img.squeeze(), idx, bk_shape, out_path)
+        group_count_conf = eval_onside_conf(args, img_onside[-1], shift_mfm_img.squeeze(), idx, bk_shape, out_path)
 
-        print(f"{bk_shape['name']} group conf: {group_count_conf:.2f}, th: {args.group_count_conf_th}")
+        # print(f"{bk_shape['name']} group conf: {group_count_conf:.2f}, th: {args.group_count_conf_th}")
         if group_count_conf < args.group_count_conf_th:
             continue
 
@@ -456,11 +467,8 @@ def img2groups_flexible(args, bk, data, idx, img, out_path):
                                                                    shift_mfm_img)
         visual_all(args, idx, img, data, in_fm, shift_mfm, same_percent, match_same, match_diff, img_onside,
                    img_offside, img_onside_uncertain, bk_shape, out_path)
-        # if (img_onside[-1] > 0).sum() > fm_repo[0, 0].sum():
-        #     print("")
-        # group_count_conf = ((img_onside[-1] > 0).sum() / fm_repo[0, 0].sum()).item()
-        group_count_conf = eval_onside_conf(img_onside[-1], shift_mfm_img.squeeze(), idx, bk_shape, out_path)
-        print(f"{bk_shape['name']} group conf: {group_count_conf:.2f}, th: {args.group_count_conf_th}")
+
+        group_count_conf = eval_onside_conf(args, img_onside[-1], shift_mfm_img.squeeze(), idx, bk_shape, out_path)
         if group_count_conf < args.group_count_conf_th:
             continue
         groups.append({
