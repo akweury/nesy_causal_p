@@ -259,8 +259,10 @@ def genShapeOnShapeTask(task, total_n):
                 gen_fun = shapeOnshapeObjects.triangle_circle_flex
             elif task[label] == "trianglecircle_flex_cf":
                 gen_fun = shapeOnshapeObjects.triangle_circle_flex_cf
-            elif task[label] == "triangler":
-                gen_fun = shapeOnshapeObjects.trir_only
+            elif task[label] == "circlesquare_count":
+                gen_fun = shapeOnshapeObjects.circle_square_count
+            elif task[label] == "circlesquare_count_cf":
+                gen_fun = shapeOnshapeObjects.circle_square_count_cf
             elif task[label] == "trianglecircle_cf":
                 gen_fun = shapeOnshapeObjects.triangle_circle_cf
             elif task[label] == "random":
@@ -276,4 +278,4 @@ def genShapeOnShapeTask(task, total_n):
 
 
 if __name__ == '__main__':
-    genShapeOnShapeTask(bk.exp_demo, 10)
+    genShapeOnShapeTask(bk.exp_count_group, 10)

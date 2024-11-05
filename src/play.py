@@ -4,14 +4,14 @@ import os
 import config
 from train_nsfr import train_clauses
 from eval_nsfr import check_clause
-from llama_call import natural_rule_learner
+import llama_call
 from utils import file_utils, args_utils
 from kandinsky_generator import generate_training_patterns, generate_task_patterns
 from src.alpha.fol import bk
 
 # load exp arguments
 args = args_utils.get_args()
-exp_setting = bk.exp_demo
+exp_setting = bk.exp_count_group
 data_folder = config.kp_dataset / args.exp_name
 
 train_folder = data_folder / "train" / "task_true_pattern"
@@ -57,6 +57,8 @@ step_counter += 1
 lang = train_clauses(args, train_imges, out_train_folder)
 print(f"Step {step_counter}/{total_step}: Reasoned {len(lang.clauses)} clauses")
 
+rules = llama_call.natural_rule_learner(lang)
+
 # Test Positive Patterns
 step_counter += 1
 
@@ -76,9 +78,3 @@ step_counter += 1
 
 random_acc = check_clause(args, lang, random_imges, False, out_random_folder)
 print(f"Step {step_counter}/{total_step}: random image accuracy: {random_acc}")
-
-# Step 8: Using LLM to convert clauses to natural language
-step_counter += 1
-
-rules = natural_rule_learner(lang)
-print(f"Step {step_counter}/{total_step}: LLM Conversion.")

@@ -2,18 +2,34 @@
 import matplotlib
 
 mode_recall = 8
-mode_excluded_preds = ["target", "has"]
+mode_excluded_preds = ["target"]
 variable_symbol_pattern = "I"
 variable_symbol_group = "G"
 variable_symbol_obj = "O"
-predicate_configs = {
-    "predicate_target": "target:1:pattern,+",
-    "predicate_in_pattern": "inp:2:group_data,-;pattern,+",
-    "predicate_in_group": "ing:3:object,-;group_data,+;pattern,+",
-    "predicate_color": "has_color:3:color,#;group_data,+;pattern,+",
-    "predicate_shape": "has_shape:3:shape,#;group_data,+;pattern,+",
-    "predicate_g_shape": "gshape:3:group_label,#;group_data,+;pattern,+",
+
+trivial_preds = {
+    "target": "target",
+    "in_group": "in_group",
+    "in_pattern": "in_pattern",
 }
+pred_names = {
+    "target": "target",
+    "in_group": "in_group",
+    "in_pattern": "in_pattern",
+    "has_color": "has_color",
+    "has_shape": "has_shape",
+    "group_shape": "group_shape"
+}
+
+predicate_configs = {
+    "predicate_target": f"{pred_names['target']}:1:pattern,+",
+    "predicate_in_pattern": f"{pred_names['in_pattern']}:2:group_data,-;pattern,+",
+    "predicate_in_group": f"{pred_names['in_group']}:3:object,-;group_data,+;pattern,+",
+    "predicate_color": f"{pred_names['has_color']}:3:color,#;group_data,+;pattern,+",
+    "predicate_shape": f"{pred_names['has_shape']}:3:shape,#;group_data,+;pattern,+",
+    "predicate_g_shape": f"{pred_names['group_shape']}:3:group_label,#;group_data,+;pattern,+",
+}
+
 var_dtypes = {
     "pattern": "pattern",
     "group": "group_data",
@@ -60,13 +76,24 @@ color_matplotlib.pop("black")
 color_large = [k for k, v in list(color_matplotlib.items())]
 
 shape_extend = ["circle", "square", "triangle", "diamond"]
-group_name_extend = ["none", "triangler", "data_square", "circle_flex", "data_diamond"]
+group_name_extend = ["none", "triangler", "data_square", "circle_flex",
+                     "data_diamond", "circle_small", "square_small"]
 # group_name_extend = ["none", "circle_flex"]
 
 # exp setting
 task_pattern_types = ["task_true_pattern", "task_random_pattern", "task_cf_pattern"]
-exp_demo = {"bk_groups": ["triangler", "circle_flex"],
-            "task_name": "trianglecircle_flex",
-            "task_true_pattern": "trianglecircle_flex",
-            "task_random_pattern": "random",
-            "task_cf_pattern": "trianglecircle_flex_cf"}
+exp_demo = {
+    "bk_groups": ["triangler", "circle_flex"],
+    "task_name": "trianglecircle_flex",
+    "task_true_pattern": "trianglecircle_flex",
+    "task_random_pattern": "random",
+    "task_cf_pattern": "trianglecircle_flex_cf"
+}
+
+exp_count_group = {
+    "bk_groups": ["circle_small", "square_small"],
+    "task_name": "circlesquare_count",
+    "task_true_pattern": "circlesquare_count",
+    "task_random_pattern": "random",
+    "task_cf_pattern": "circlesquare_count_cf"
+}

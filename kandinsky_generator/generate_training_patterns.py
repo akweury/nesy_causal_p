@@ -200,6 +200,8 @@ def genShapeOnShape(shapes, n):
         for mode in ['train']:
             if shape == "circle":
                 gen_fun = shapeOnshapeObjects.cir_only
+            elif shape == "circle_small":
+                gen_fun = shapeOnshapeObjects.cir_small_only
             elif shape == "circle_flex":
                 gen_fun = shapeOnshapeObjects.cir_flex_only
             elif shape == "triangle":
@@ -210,6 +212,8 @@ def genShapeOnShape(shapes, n):
                 gen_fun = shapeOnshapeObjects.dia_only
             elif shape == "square":
                 gen_fun = shapeOnshapeObjects.square_only
+            elif shape == "square_small":
+                gen_fun = shapeOnshapeObjects.square_small_only
             elif shape == "trianglecircle":
                 gen_fun = shapeOnshapeObjects.triangle_circle
             elif shape == "squarecircle":
@@ -271,5 +275,5 @@ def genShapeOnShapeTask(task, n):
 
 
 if __name__ == '__main__':
-    tasks = ["circle_flex"]
+    tasks = ["square_small"]
     genShapeOnShape(tasks, 1000)

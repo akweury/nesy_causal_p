@@ -141,7 +141,7 @@ def train_fm_stack():
 def train_fm_cloud():
     args = args_utils.get_args()
     patch_size = 3
-    bk_shapes = ["triangler"]
+    bk_shapes = ["circle_small", "square_small"]
     for bk_shape in bk_shapes:
         args.exp_name = bk_shape
         train_loader, val_loader = prepare_kp_sy_data(args)

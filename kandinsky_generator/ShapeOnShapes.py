@@ -39,6 +39,33 @@ class ShapeOnShape(KandinskyTruthInterfce):
             kf.append(o)
         return kf
 
+    def _smallCircleFlex(self, so, t):
+        kf = []
+        x = 0.4 + random.random() * 0.2
+        y = 0.4 + random.random() * 0.2
+        r = 0.1 - min(abs(0.5 - x), abs(0.5 - y))
+        n = int(10 * r * math.pi / 0.2)
+
+        if n < 5:   n = 5
+        if n > 15:   n = 15
+
+        random_rotate_rad = random.random()
+        for i in range(n):
+            o = KandinskyUniverse.kandinskyShape()
+            d = (i + random_rotate_rad) * 2 * math.pi / n
+            if t:
+                o.color = random.choice(["blue", "yellow"])
+                o.shape = random.choice(["square", "triangle"])
+            else:
+                o.color = random.choice(KandinskyUniverse.matplotlib_colors_list)
+                o.shape = random.choice(KandinskyUniverse.kandinsky_shapes)
+
+            o.size = so
+            o.x = x + r * math.cos(d)
+            o.y = y + r * math.sin(d)
+            kf.append(o)
+        return kf
+
     def _bigCircleFlex(self, so, t):
         kf = []
         x = 0.4 + random.random() * 0.2
@@ -240,6 +267,74 @@ class ShapeOnShape(KandinskyTruthInterfce):
         kf = kf[:int(len(kf) * random_percent)]
         return kf
 
+    def _smallSquare(self, so, t, min_percent=1.0, max_percent=1.0):
+        kf = []
+        x = 0.4 + random.random() * 0.2
+        y = 0.4 + random.random() * 0.2
+        r = 0.1 - min(abs(0.5 - x), abs(0.5 - y))
+        m = 4 * round(r / 0.02)
+        if m < 8:   m = 8
+        if m > 20:   m = 20
+
+        minx = x - r / 2
+        maxx = x + r / 2
+        miny = y - r / 2
+        maxy = y + r / 2
+
+        n = int(m / 4)
+
+        dx = r / n
+        for i in range(n + 1):
+            o = KandinskyUniverse.kandinskyShape()
+            if t:
+                o.color = random.choice(["blue", "red"])
+                o.shape = random.choice(["circle", "triangle"])
+            else:
+                o.color = random.choice(KandinskyUniverse.matplotlib_colors_list)
+                o.shape = random.choice(KandinskyUniverse.kandinsky_shapes)
+            o.size = so
+            o.x = minx + i * dx
+            o.y = miny
+            kf.append(o)
+            o = KandinskyUniverse.kandinskyShape()
+            if t:
+                o.color = random.choice(["blue", "red"])
+                o.shape = random.choice(["circle", "triangle"])
+            else:
+                o.color = random.choice(KandinskyUniverse.matplotlib_colors_list)
+                o.shape = random.choice(KandinskyUniverse.kandinsky_shapes)
+            o.size = so
+            o.x = minx + i * dx
+            o.y = maxy
+            kf.append(o)
+
+        for i in range(n - 1):
+            o = KandinskyUniverse.kandinskyShape()
+            if t:
+                o.color = random.choice(["blue", "red"])
+                o.shape = random.choice(["circle", "triangle"])
+            else:
+                o.color = random.choice(KandinskyUniverse.matplotlib_colors_list)
+                o.shape = random.choice(KandinskyUniverse.kandinsky_shapes)
+            o.size = so
+            o.x = minx
+            o.y = miny + (i + 1) * dx
+            kf.append(o)
+            o = KandinskyUniverse.kandinskyShape()
+            if t:
+                o.color = random.choice(["blue", "red"])
+                o.shape = random.choice(["circle", "triangle"])
+            else:
+                o.color = random.choice(KandinskyUniverse.matplotlib_colors_list)
+                o.shape = random.choice(KandinskyUniverse.kandinsky_shapes)
+            o.size = so
+            o.x = maxx
+            o.y = miny + (i + 1) * dx
+            kf.append(o)
+        random_percent = random.uniform(min_percent, max_percent)
+        kf = kf[:int(len(kf) * random_percent)]
+        return kf
+
     def _bigSquare(self, so, t, min_percent=1.0, max_percent=1.0):
         kf = []
         x = 0.4 + random.random() * 0.2
@@ -391,6 +486,8 @@ class ShapeOnShape(KandinskyTruthInterfce):
         so = 0.04
         if shape == "circle":
             g = lambda so, truth: self._bigCircle(so, truth)
+        elif shape == "circle_small":
+            g = lambda so, truth: self._smallCircleFlex(so, truth)
         elif shape == "circle_flex":
             g = lambda so, truth: self._bigCircleFlex(so, truth)
         elif shape == "diamond":
@@ -401,6 +498,8 @@ class ShapeOnShape(KandinskyTruthInterfce):
             g = lambda so, truth: self._bigTriangler(so, truth)
         elif shape == "square":
             g = lambda so, truth: self._bigSquare(so, truth)
+        elif shape == "square_small":
+            g = lambda so, truth: self._smallSquare(so, truth)
         elif shape == "diamondcircle":
             g = lambda so, truth: self._bigDiamond(so, truth) + self._bigCircle(so, truth)
         elif shape == "trianglecircle":
@@ -411,6 +510,9 @@ class ShapeOnShape(KandinskyTruthInterfce):
             g = lambda so, truth: self._bigSquare(so, truth) + self._bigTriangle(so, truth)
         elif shape == "squarecircle":
             g = lambda so, truth: self._bigSquare(so, truth) + self._bigCircle(so, truth)
+        elif shape == "circlesquare_count":
+            g = lambda so, truth: self._smallCircleFlex(
+                so, truth) + self._smallSquare(so, truth) + self._smallCircleFlex(so, truth)
         elif shape == "trianglesquarecircle":
             g = lambda so, truth: self._bigSquare(so, truth) + self._bigCircle(so, truth) + self._bigTriangle(so, truth)
         elif shape == "trianglepartsquare":
@@ -439,6 +541,14 @@ class ShapeOnShape(KandinskyTruthInterfce):
         kfs = []
         for i in tqdm(range(n), desc="generating group objects"):
             kf = self._only(rule_style, "circle")
+            kfs.append(kf)
+        return kfs
+
+    def cir_small_only(self, n=1, rule_style=False):
+        print("MAKE SMALL CIRCLE")
+        kfs = []
+        for i in tqdm(range(n), desc="generating group objects"):
+            kf = self._only(rule_style, "circle_small")
             kfs.append(kf)
         return kfs
 
@@ -484,6 +594,15 @@ class ShapeOnShape(KandinskyTruthInterfce):
             kfs.append(kf)
         return kfs
 
+    def square_small_only(self, n=1, rule_style=False):
+        print("MAKE SMALL SQUARE")
+        kfs = []
+        for i in tqdm(range(n), desc="generating objects"):
+            # print(i)
+            kf = self._only(True, "square_small")
+            kfs.append(kf)
+        return kfs
+
     def triangle_circle(self, n=1, rule_style=False):
         print("MAKE TRIANGLE AND CIRCLE")
         kfs = []
@@ -491,6 +610,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
             kf = self._only(rule_style, "trianglecircle")
             kfs.append(kf)
         return kfs
+
     def triangle_circle_flex(self, n=1, rule_style=False):
         print("MAKE FLEX TRIANGLE AND CIRCLE")
         kfs = []
@@ -498,11 +618,28 @@ class ShapeOnShape(KandinskyTruthInterfce):
             kf = self._only(rule_style, "trianglecircle_flex")
             kfs.append(kf)
         return kfs
+
     def triangle_circle_flex_cf(self, n=1, rule_style=False):
         print("MAKE FLEX TRIANGLE AND CIRCLE COUNTERFACT")
         kfs = []
         for i in tqdm(range(n), desc="generating objects"):
             kf = self._only(False, "trianglecircle_flex")
+            kfs.append(kf)
+        return kfs
+
+    def circle_square_count(self, n=1, rule_style=False):
+        print("MAKE CIRCLE AND SQUARE COUNT")
+        kfs = []
+        for i in tqdm(range(n), desc="generating objects"):
+            kf = self._only(rule_style, "circlesquare_count")
+            kfs.append(kf)
+        return kfs
+
+    def circle_square_count_cf(self, n=1, rule_style=False):
+        print("MAKE CIRCLE AND SQUARE COUNT COUNTERFACT")
+        kfs = []
+        for i in tqdm(range(n), desc="generating objects"):
+            kf = self._only(False, "circlesquare_count")
             kfs.append(kf)
         return kfs
 

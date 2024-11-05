@@ -1,12 +1,12 @@
 # Created by jing at 11.10.24
 
 from src.alpha.fol.logic import Var, Clause, InventedPredicate, Atom, InvAtom
-
+from src.alpha.fol import bk
 
 def non_trivial_vars(merged_body):
     vars = []
     for atom in merged_body:
-        if atom.pred.name not in ["ing", "inp", "target"]:
+        if atom.pred.name not in bk.trivial_preds.keys():
             vars += atom.all_vars()
     vars = list(set(vars))
     return vars
@@ -50,8 +50,8 @@ def merge_clauses(clauses, lang):
     inv_atoms_grounded = []
     inv_atoms_ungrounded = []
     if len(vars_in_body) == 2:
-        trivial_body = [b for b in bodies if b.pred.name in ["ing", "inp", "target"]]
-        new_body = [b for b in bodies if b.pred.name not in ["ing", "inp", "target"]]
+        trivial_body = [b for b in bodies if b.pred.name in list(bk.trivial_preds.keys())]
+        new_body = [b for b in bodies if b.pred.name not in list(bk.trivial_preds.keys())]
         vars = list(set([t for b in new_body for t in b.terms if type(t) == Var]))
         inv_pred = inv_pred_merge_bodies(new_body)
         if inv_pred is not None and inv_pred not in lang.predicates:

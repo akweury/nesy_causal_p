@@ -702,21 +702,19 @@ class VFHasFM(nn.Module):
 
 
 def get_valuation_module(args, lang):
-    pred_funs = [
-        VFInP("inp"),
-        VFInG("ing"),
-        VFColor("has_color"),
-        VFShape("has_shape"),
-        VFGShape("gshape")
-    ]
+    pred_funs = [VFInP(bk.pred_names["in_pattern"]),
+                 VFInG(bk.pred_names["in_group"]),
+                 VFColor(bk.pred_names["has_color"]),
+                 VFShape(bk.pred_names["has_shape"]),
+                 VFGShape(bk.pred_names["group_shape"])]
     VM = FCNNValuationModule(pred_funs, lang=lang, device=args.device)
     return VM
 
 
 valuation_modules = {
-    "inp": VFInP("inp"),
-    "ing": VFInG("ing"),
-    "has_color": VFColor("has_color"),
-    "has_shape": VFShape("has_shape"),
-    "gshape": VFGShape("gshape")
+    bk.pred_names["in_pattern"]: VFInP(bk.pred_names["in_pattern"]),
+    bk.pred_names["in_group"]: VFInG(bk.pred_names["in_group"]),
+    bk.pred_names["has_color"]: VFColor(bk.pred_names["has_color"]),
+    bk.pred_names["has_shape"]: VFShape(bk.pred_names["has_shape"]),
+    bk.pred_names["group_shape"]: VFGShape(bk.pred_names["group_shape"])
 }
