@@ -202,6 +202,8 @@ def genShapeOnShape(shapes, n):
                 gen_fun = shapeOnshapeObjects.cir_only
             elif shape == "circle_small":
                 gen_fun = shapeOnshapeObjects.cir_small_only
+            elif shape == "triangle_small":
+                gen_fun = shapeOnshapeObjects.tri_small_only
             elif shape == "circle_flex":
                 gen_fun = shapeOnshapeObjects.cir_flex_only
             elif shape == "triangle":
@@ -239,41 +241,6 @@ def genShapeOnShape(shapes, n):
                     json.dump(data, f)
                 image.save(base_path / f"{shape}_{(png_num+i):06d}.png")
 
-
-def genShapeOnShapeTask(task, n):
-    shapeOnshapeObjects = ShapeOnShape(u, 20, 40)
-    base_path = config.kp_dataset / f"{task['name']}"
-    os.makedirs(base_path, exist_ok=True)
-
-    for mode in ['train', "test"]:
-        for label in ["true", "random", "counterfactual"]:
-            width = 512
-            data_path = base_path / mode / label
-            # false_path = base_path / mode / 'random'
-            # cf_path = base_path / mode / 'counterfactual'
-            os.makedirs(data_path, exist_ok=True)
-            # os.makedirs(false_path, exist_ok=True)
-            # os.makedirs(cf_path, exist_ok=True)
-            print(f'Generating dataset {base_path}', task, mode)
-            if task[label] == "diamondcircle":
-                gen_fun = shapeOnshapeObjects.diamond_circle
-            elif task[label] == "diamondcircle_cf":
-                gen_fun = shapeOnshapeObjects.diamond_circle_cf
-            elif task[label] == "trianglecircle":
-                gen_fun = shapeOnshapeObjects.triangle_circle
-            elif task[label] == "random":
-                gen_fun = shapeOnshapeObjects.false_kf
-            else:
-                raise ValueError
-
-            for (i, kf) in tqdm(enumerate(gen_fun(n))):
-                image = KandinskyUniverse.kandinskyFigureAsImage(kf, width)
-                data = kf2data(kf, width)
-                with open(data_path / f"{i:06d}.json", 'w') as f:
-                    json.dump(data, f)
-                image.save(data_path / f"{i:06d}.png")
-
-
 if __name__ == '__main__':
-    tasks = ["square_small"]
+    tasks = ["triangle_small", "square_small", "circle_small"]
     genShapeOnShape(tasks, 1000)

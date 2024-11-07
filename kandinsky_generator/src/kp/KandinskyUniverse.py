@@ -477,9 +477,16 @@ def overlaps(shapes, width=1024):
     return sumimage.getextrema()[1] > 10
 
 
+def overflow(shapes):
+    for s in shapes:
+        if not (0.05 < s.x < 0.95 and 0.05 < s.y < 0.95):
+            return True
+    return False
+
+
 matplotlib_colors = {k: tuple(int(v[i:i + 2], 16) for i in (1, 3, 5)) for k, v in
                      list(matplotlib.colors.cnames.items())}
 matplotlib_colors.pop("black")
-matplotlib_colors_list = [k for k,v in matplotlib_colors.items()]
+matplotlib_colors_list = [k for k, v in matplotlib_colors.items()]
 
 kandinsky_shapes = ['square', 'circle', 'triangle']
