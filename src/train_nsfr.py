@@ -10,7 +10,7 @@ import train_common_features
 from utils import file_utils, args_utils, data_utils
 from src.alpha import alpha
 from src.alpha.fol import bk
-
+from src import llama_call
 
 def load_bk(args, bk_shapes):
     # load background knowledge
@@ -99,15 +99,15 @@ def train_clauses(args, image_paths, out_path):
         data = file_utils.load_json(f"{file_name}.json")
         img, obj_pos = load_data(args, image_paths[idx])
         groups = train_common_features.img2groups_flexible(args, group_bk, obj_pos, idx, img, out_path)
-        # groups = train_common_features.img2groups(args, group_bk, obj_pos, idx, img, out_path)
-
         group_tensors = group2ocm(data, groups)
         lang = alpha.alpha(args, group_tensors)
+        # rename predicates
+        # update clauses
         all_clauses += lang.clauses
     # remove the less occurred clauses
-    clause_list = [c for c in all_clauses]
+
     frequency = {}
-    for item in clause_list:
+    for item in all_clauses:
         frequency[item] = frequency.get(item, 0) + 1
     most_frequency_value = max(frequency.values())
     most_frequent_clauses = [key for key, value in frequency.items() if value == most_frequency_value]

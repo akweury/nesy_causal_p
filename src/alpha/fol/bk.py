@@ -18,7 +18,7 @@ pred_names = {
     "in_pattern": "in_pattern",
     "has_color": "has_color",
     "has_shape": "has_shape",
-    "group_shape": "group_shape"
+    "group_shape": "has_shape_of_shape"
 }
 
 predicate_configs = {

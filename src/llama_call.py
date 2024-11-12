@@ -1,7 +1,7 @@
 # Created by jing at 16.07.24
 import requests
 import json
-from src.alpha.fol.logic import InvAtom
+from src.alpha.fol.logic import InvAtom, InventedPredicate
 
 url = "http://localhost:11434/api/chat"
 
@@ -61,6 +61,8 @@ def clause2rule(clause):
     return response
 
 
+
+
 def natural_rule_learner(lang):
     natural_rules = []
     for clause in lang.clauses:
@@ -68,7 +70,42 @@ def natural_rule_learner(lang):
         natural_rules.append(response)
     return natural_rules
 
+def llama_rename_predicate(sub_pred_names):
+    name_str = ",".join(sub_pred_names)
+    prompt = (f"The system just invented a new predicate which refers to a high-level concept that was not exist in the system language."
+              f"The new predicate is usually invented based on multiple given predicates in the system language,"
+              f"its functionality is the combination of the functionality of the given predicates. "
+              f"For example, by combine the predicate has_shape and has_color, "
+              f"where the first predicate has_shape checks if an object has specific shape,"
+              f"the second predicate has_color checks if an object has specific color," 
+              f"the new predicate can be invented by combining both two predicates with having the functionality "
+              f"that check an object has both specific shape and specific color. "
+              f"Now the question is, how to give a proper name for the new predicate. "
+              f"If the given predicates are has_shape and has_color, it can be named as has_shape_and_color."
+              f"Given the following given predicates, return the name of the invented predicates, the predicates are splited by comma:"
+              f"{name_str}")
+    response = llama3(prompt + f"\n Only answer with the name.")
+    if len(response)>30:
+        response = llama3("Only return a name")
+    return response
+
+
+def rename_predicates(lang):
+    inv_predicates = [p for p in lang.predicates if isinstance(p, InventedPredicate)]
+    name_dict = {}
+    for inv_p in inv_predicates:
+
+        inv_p.old_name = inv_p.name
+        sub_pred_names = [p.name for p in inv_p.sub_preds]
+        inv_p.name = llama_rename_predicate(sub_pred_names)
+        name_dict[inv_p.old_name] = inv_p.name
+
+    return name_dict
 
 if __name__ == "__main__":
     response = llama3("who wrote the book godfather")
     print(response)
+
+
+
+

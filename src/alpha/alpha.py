@@ -7,6 +7,7 @@ from . import valuation, facts_converter, nsfr, pruning, clause_op
 from .fol import language
 from .fol import refinement
 from .fol import bk
+from src import llama_call
 
 
 def init_ilp(args, obj_num):
@@ -26,6 +27,7 @@ def load_lang(args, lang_data):
     lang.atoms = lang_data["atoms"]
     lang.attrs = lang_data["attrs"]
     return lang
+
 
 def extension(args, lang, clauses):
     refs = []
@@ -214,10 +216,17 @@ def remove_trivial_atoms(args, lang, FC, clauses, objs, data):
 def alpha(args, ocm):
     obj_num = 1
     lang = init_ilp(args, obj_num)
-    C = lang.reset_lang(g_num=len(ocm))
+    lang.reset_lang(g_num=1)
     VM = valuation.get_valuation_module(args, lang)
     FC = facts_converter.FactsConverter(args, lang, VM)
-    df_search(args, lang, C, FC, ocm)
+    C = lang.load_init_clauses()
+    for g_i in range(len(ocm)):
+        lang.reset_lang(g_num=1)
+        df_search(args, lang, C, FC, ocm[g_i:g_i + 1])
+        lang.variable_set_id(g_i)
+        name_dict = llama_call.rename_predicates(lang)
+        lang.record_milestone()
+    lang.clear_repeat_language()
     return lang
 
 

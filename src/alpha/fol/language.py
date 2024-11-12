@@ -70,7 +70,11 @@ class Language(object):
         self.invented_consts_number = 0
 
         # Results
-        self.learned_c = []
+        self.record_clauses = []
+        self.record_atoms = []
+        self.record_consts = []
+        self.record_predicates = []
+        self.record_group_variable_num = 0
 
         # GRAMMAR
         with open(lark_path, encoding="utf-8") as grammar:
@@ -79,26 +83,25 @@ class Language(object):
             self.lp_atom = Lark(grammar.read(), start="atom")
 
         # load BK predicates and constants
-        self.load_preds()
-
-
+        self.predicates = self.load_preds()
 
     def load_preds(self):
         # load all the bk predicates
+        predicates = []
         for pred_config in bk.predicate_configs.values():
-            self.predicates.append(self.parse_pred(pred_config))
+            predicates.append(self.parse_pred(pred_config))
+        return predicates
 
     def reset_lang(self, g_num):
-        self.consts, self.min_consts = self.load_consts(g_num, self.phi_num, self.rho_num, self.obj_variable_num)
+        self.consts, self.min_consts = self.load_consts(1, self.phi_num, self.rho_num, 1)
         self.group_vars = [Var(f"{self.variable_group_symbol}_{v_i}", bk.var_dtypes["group"]) for v_i in range(g_num)]
         self.group_variable_num = g_num
-
-        init_c = self.load_init_clauses()
         # update predicates
+        self.predicates = self.load_preds()
+        self.clauses = []
         self.generate_atoms()
         # update language
         self.mode_declarations = mode_declaration.get_mode_declarations(self.predicates)
-        return init_c
 
     def __str__(self):
         s = "===Predicates===\n"
@@ -120,12 +123,15 @@ class Language(object):
 
     def update_consts(self, clauses):
         new_consts = self.min_consts
+        occurred_consts = []
         for c in clauses:
             for atom in c.body:
                 for term in atom.terms:
                     if isinstance(term, Const) and term not in new_consts:
                         new_consts.append(term)
+                        occurred_consts.append(term)
         self.consts = new_consts
+        self.occurred_consts = occurred_consts
 
     def generate_minimum_atoms(self, prim_args_list):
         p_ = Predicate('.', 1, [mode_declaration.DataType('spec')])
@@ -240,10 +246,9 @@ class Language(object):
 
         head = f"{pred_target}({var_pattern}):-"
         body = ""
-        for g_i in range(self.group_variable_num):
-            body += f"{pred_pattern_in}({self.group_vars[g_i]},{var_pattern}),"
-            for o_i in range(self.obj_variable_num):
-                body += f"{pred_group_in}({self.obj_vars[o_i]},{self.group_vars[g_i]},{var_pattern}),"
+        body += f"{pred_pattern_in}({self.group_vars[0]},{var_pattern}),"
+        for o_i in range(self.obj_variable_num):
+            body += f"{pred_group_in}({self.obj_vars[o_i]},{self.group_vars[0]},{var_pattern}),"
         group_clauses_str.append(head + body[:-1] + ".")
         group_clauses = []
         for group_clause_str in group_clauses_str:
@@ -677,3 +682,51 @@ class Language(object):
 
     def update_bk(self):
         self.generate_atoms()
+
+    def variable_set_id(self, var_id):
+        for c in self.clauses:
+            for a_i in range(len(c.body)):
+                if isinstance(c.body[a_i], InvAtom):
+                    for t_i in range(len(c.body[a_i].terms)):
+                        c.body[a_i].terms = list(c.body[a_i].terms)
+                        for tt_i in range(len(c.body[a_i].terms[t_i])):
+                            c.body[a_i].terms[t_i] = list(c.body[a_i].terms[t_i])
+                            if isinstance(c.body[a_i].terms[t_i][tt_i], Var):
+                                if bk.variable_symbol_group in c.body[a_i].terms[t_i][tt_i].name:
+                                    c.body[a_i].terms[t_i][tt_i] = Var(f"{bk.variable_symbol_group}_{var_id}",
+                                                                       bk.var_dtypes["group"])
+                            c.body[a_i].terms[t_i] = tuple(c.body[a_i].terms[t_i])
+                        c.body[a_i].terms = tuple(c.body[a_i].terms)
+
+                else:
+                    for t_i in range(len(c.body[a_i].terms)):
+                        c.body[a_i].terms = list(c.body[a_i].terms)
+                        if isinstance(c.body[a_i].terms[t_i], Var):
+                            if bk.variable_symbol_group in c.body[a_i].terms[t_i].name:
+                                c.body[a_i].terms[t_i] = Var(f"{bk.variable_symbol_group}_{var_id}",
+                                                             bk.var_dtypes["group"])
+                        c.body[a_i].terms = tuple(c.body[a_i].terms)
+
+    def record_milestone(self):
+        self.record_clauses += self.clauses
+        self.record_atoms += self.atoms
+        self.record_consts += self.occurred_consts
+        self.record_predicates += self.predicates
+        self.record_group_variable_num += 1
+
+    def clear_repeat_language(self):
+        self.clauses = list(set(self.record_clauses))
+        self.atoms = list(set(self.record_atoms))
+        self.consts = list(set(self.record_consts))
+        self.predicates = list(set(self.record_predicates))
+        self.group_variable_num = self.record_group_variable_num
+
+        _, self.min_consts = self.load_consts(self.group_variable_num, self.phi_num, self.rho_num, 1)
+        for min_const in self.min_consts:
+            if min_const not in self.consts:
+                self.consts.append(min_const)
+        self.group_vars = [Var(f"{self.variable_group_symbol}_{v_i}", bk.var_dtypes["group"]) for v_i in
+                           range(self.group_variable_num)]
+        self.generate_atoms()
+
+
