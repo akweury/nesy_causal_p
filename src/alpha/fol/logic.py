@@ -499,12 +499,12 @@ class InventedPredicate(Predicate):
         dtypes (List[DataTypes]): The data types of the arguments for the predicate.
     """
 
-    def __init__(self, sub_preds, arity, dtypes, pi_type=None):
-        super(InventedPredicate, self).__init__(sub_preds, arity, dtypes)
+    def __init__(self, sub_preds, arity, pi_type=None):
+        super(InventedPredicate, self).__init__(sub_preds, arity, None)
         self.sub_preds = sub_preds
         self.name = "_".join([p.name for p in sub_preds])
         self.arity = arity
-        self.dtypes = dtypes
+        # self.dtypes = dtypes
         self.ptype = None
         self.body = None
         # self.args = args

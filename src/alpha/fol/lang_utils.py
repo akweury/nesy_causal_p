@@ -89,17 +89,7 @@ def inv_new_atom_terms(preds, terms):
     term_groups = [t[0] for t in exist_group_terms]
 
 
+    return term_objs, term_groups
 
 
 
-
-
-
-
-    for idx in exist_p_idx:
-
-    # merge obj level existence
-    # exist_color =
-
-
-    pass

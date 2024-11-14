@@ -13,13 +13,6 @@ def non_trivial_vars(merged_body):
 
 
 def inv_pred_merge_bodies(bodies):
-    # new predicate
-    # pred_names = [b.pred.name for b in bodies]
-    # args_list = [b.pred.dtypes for b in bodies]
-    # sorted_indices = sorted(range(len(pred_names)), key=lambda i: pred_names[i])
-    # pred_names = [pred_names[i] for i in sorted_indices]
-    # args_list = [args_list[i] for i in sorted_indices]
-
     preds = []
     for atom in bodies:
         if isinstance(atom, Atom):
@@ -36,7 +29,7 @@ def inv_pred_merge_bodies(bodies):
     dtypes = [dt for pred in preds for dt in pred.dtypes]
     # terms = [t for b in bodies for t in b.terms]
     arity = len(dtypes)
-    inv_pred = InventedPredicate(preds, arity, dtypes)
+    inv_pred = InventedPredicate(preds, arity)
 
     return inv_pred
 
