@@ -729,4 +729,14 @@ class Language(object):
                            range(self.group_variable_num)]
         self.generate_atoms()
 
+    def rephase_clauses(self):
+        for clause in self.clauses:
+            for atom in clause.body:
+                if isinstance(atom, InvAtom):
+                    # new term, new ...
+                    lang_utils.inv_new_atom_terms(atom.pred.sub_preds, atom.terms)
+                    print("")
+
+        pass
+
 

@@ -16,9 +16,9 @@ pred_names = {
     "target": "target",
     "in_group": "in_group",
     "in_pattern": "in_pattern",
-    "has_color": "has_color",
-    "has_shape": "has_shape",
-    "group_shape": "has_shape_of_shape"
+    "has_color": "exist_obj_color",
+    "has_shape": "exist_obj_shape",
+    "group_shape": "exist_group_shape"
 }
 
 predicate_configs = {

@@ -90,7 +90,7 @@ def check_clause(args, lang, image_paths, image_label, output_path):
         data = file_utils.load_json(f"{file_name}.json")
 
         img, obj_pos = load_data(args, image_paths[idx])
-        groups = train_common_features.img2groups(args, group_bk, obj_pos, idx, img, output_path)
+        groups = train_common_features.img2groups_flexible(args, group_bk, obj_pos, idx, img, output_path)
         if len(groups) != 0:
             group_tensors = group2ocm(data, groups)
             preds[idx] = alpha.alpha_test(args, group_tensors, lang)

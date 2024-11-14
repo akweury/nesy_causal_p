@@ -72,3 +72,34 @@ def get_var_type(var_str):
     else:
         raise ValueError
     return var_type
+
+
+def inv_new_atom_terms(preds, terms):
+    # invent exist terms
+    name_dict = {}
+    exist_p_idx = [i for i in range(len(preds)) if "exist_obj" in preds[i].name]
+    exist_ps = [preds[i] for i in exist_p_idx]
+    exist_terms = [terms[i] for i in exist_p_idx]
+    term_objs = [t[0] for t in exist_terms]
+
+
+    exist_group_p_idx = [i for i in range(len(preds)) if "exist_group" in preds[i].name]
+    exist_group_preds = [preds[i] for i in exist_group_p_idx]
+    exist_group_terms = [terms[i] for i in exist_group_p_idx]
+    term_groups = [t[0] for t in exist_group_terms]
+
+
+
+
+
+
+
+
+
+    for idx in exist_p_idx:
+
+    # merge obj level existence
+    # exist_color =
+
+
+    pass

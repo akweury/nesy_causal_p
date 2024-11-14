@@ -44,20 +44,28 @@ def query_predicate(predicates):
 
 
 def clause2rule(clause):
-    atom_prompt = (f"Convert the logic atom to natural language sentence using the following explanations: "
-                   f"group shape means a group of objects form a shape of XXX, "
-                   f"has shape means exist an object in the group has shape XXX,"
-                   f"has color means exist an object in the group has color XXX,"
-                   f"the actual group shape, object shape, object color is written in the parenthesis."
-                   f"The atom is ")
+    atom_prompt = (f"Using one or several sentences to describe a Prolog clause in English. "
+                   f"There are the explanations of the variables: "
+                   f"I, refers to an image, an image includes multiple objects, each object has its shape and color, "
+                   f"some of them together form another shape;"
+                   f"G_x, refers to a group of objects, x is the group id;"
+                   f"O_x, refers to an object; x is the object id."
+                   f"Explanations of Terms:"
+                   f"(color_xx, G_x, I), means an object with color_xx in the group G_x, and G_x in the image I;"
+                   f"(shape_xx, G_x, I), means an object with shape_xx in the group G_x, and G_x in the image I;"
+                   f"(group_xx, G_x, I), means a set of objects form a shape of group_xx, the group is presented as G_x, and G_x in the image I;"
+                   f"(O_x, G_x, I), means object O_x in the group G_x, and G_x in the image I;"
+                   f"(G_x, I), means G_x in the image I."
+                   f"\n\nThe actual group shape, object shape, object color is written in the parenthesis."
+                   )
     response = ""
     for atom in clause.body:
         atom_str = ""
         if isinstance(atom, InvAtom):
             for s_i, sub_pred in enumerate(atom.pred.sub_preds):
                 atom_str += f"{sub_pred.name}" + f"{atom.terms[s_i]},"
-
-        response += llama3(atom_prompt + atom_str + f"\n Only return the converted result, no extra words.")
+        llama3(atom_prompt + atom_str + f". \n Only answer the converted sentences. No other words.")
+        response += llama3(atom_prompt + atom_str + f". \n Only answer the converted sentences. No other words.")
     return response
 
 
@@ -99,7 +107,10 @@ def rename_predicates(lang):
         sub_pred_names = [p.name for p in inv_p.sub_preds]
         inv_p.name = llama_rename_predicate(sub_pred_names)
         name_dict[inv_p.old_name] = inv_p.name
+        print(f"Renaming Predicate: {inv_p.old_name} ---> {inv_p.name}")
 
+    for c_i in range(len(lang.clauses)):
+        print(f"Clause {c_i+1}/{len(lang.clauses)}: {lang.clauses[c_i]}")
     return name_dict
 
 if __name__ == "__main__":

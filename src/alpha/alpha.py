@@ -224,8 +224,9 @@ def alpha(args, ocm):
         lang.reset_lang(g_num=1)
         df_search(args, lang, C, FC, ocm[g_i:g_i + 1])
         lang.variable_set_id(g_i)
-        name_dict = llama_call.rename_predicates(lang)
+        lang.rephase_clauses()
         lang.record_milestone()
+    llama_call.rename_predicates(lang)
     lang.clear_repeat_language()
     return lang
 

@@ -326,7 +326,7 @@ def get_siding(data, match_fm_img):
     return data_onside, data_offside
 
 
-def load_shift(bk_shape, idx, in_fm, fm_repo, out_path):
+def load_shift(args, bk_shape, idx, in_fm, fm_repo, out_path):
     buffer_file = out_path / f"shift_{bk_shape['name']}_{idx}.pt"
     if os.path.exists(buffer_file):
         data = torch.load(buffer_file)
@@ -421,7 +421,7 @@ def img2groups(args, bk, data, idx, img, out_path):
         in_fm = perception.extract_fm(data.unsqueeze(0), bk_shape["kernels"])
         fm_repo = bk_shape["fm_repo"]
         fm_img = bk_shape["fm_img"]
-        match_fm_shift, match_fm_idx, match_fm_value = load_shift(bk_shape, idx, in_fm, fm_repo, out_path)
+        match_fm_shift, match_fm_idx, match_fm_value = load_shift(args, bk_shape, idx, in_fm, fm_repo, out_path)
         match_fm = fm_repo[match_fm_idx]
         match_fm_img = fm_img[match_fm_idx]
         shift_mfm = [torch.roll(match_fm[i], shifts=tuple(match_fm_shift[i]), dims=(-2, -1)) for i in
