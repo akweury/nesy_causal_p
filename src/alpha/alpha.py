@@ -220,11 +220,12 @@ def alpha(args, ocm):
     VM = valuation.get_valuation_module(args, lang)
     FC = facts_converter.FactsConverter(args, lang, VM)
     C = lang.load_init_clauses()
+    final_clauses = []
     for g_i in range(len(ocm)):
         lang.reset_lang(g_num=1)
         df_search(args, lang, C, FC, ocm[g_i:g_i + 1])
         lang.variable_set_id(g_i)
-        lang.rephase_clauses()
+        final_clauses.append(lang.rephase_clauses())
         lang.record_milestone()
     llama_call.rename_predicates(lang)
     lang.clear_repeat_language()

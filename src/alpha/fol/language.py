@@ -740,12 +740,15 @@ class Language(object):
                     # new term
                     new_obj_terms, new_group_terms = lang_utils.inv_new_atom_terms(atom.pred.sub_preds, atom.terms)
                     obj_term_lists.append(new_obj_terms)
-                    group_term_lists.append(new_group_terms)
+                    if new_group_terms not in group_term_lists:
+                        group_term_lists.append(new_group_terms)
                     # new predicates
                     predicate_list.append(atom.pred)
         # invent predicate for rephased clauses
-        inv_p = Predicate(predicate_list,3)
+        inv_p = FinalPredicate(predicate_list,"exist", 3)
+
         terms = [obj_term_lists, group_term_lists]
+
         inv_atom = InvAtom(inv_p, terms)
         body = [inv_atom]
         rephased_clause = Clause(self.clauses[0].head, body)

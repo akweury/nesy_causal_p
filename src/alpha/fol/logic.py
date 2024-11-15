@@ -454,6 +454,42 @@ class Predicate():
         return self.__str__() < other.__str__()
 
 
+class FinalPredicate():
+    """Predicats in first-order logic.
+
+    A class of predicates in first-order logic.
+
+    Attributes:
+        name (str): A name of the predicate.
+        arity (int): The arity of the predicate.
+        dtypes (List[DataTypes]): The data types of the arguments for the predicate.
+    """
+
+    def __init__(self, sub_preds, name, arity):
+        self.sub_preds = sub_preds
+        self.name = name
+        self.arity = arity
+
+    def __str__(self):
+        # return self.name
+        return self.name + '/' + str(self.arity) + '/' + str(self.dtypes)
+
+    def __hash__(self):
+        return hash(self.__str__())
+
+    def __repr__(self):
+        return self.__str__()
+
+    def __eq__(self, other):
+        if type(other) == Predicate:
+            return self.name == other.name
+        else:
+            return False
+
+    def __lt__(self, other):
+        return self.__str__() < other.__str__()
+
+
 class NeuralPredicate(Predicate):
     """Neural predicats.
 
