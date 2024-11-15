@@ -98,22 +98,42 @@ def llama_rename_predicate(sub_pred_names):
     return response
 
 def llama_rename_term(term_str):
-    prompt = (f"Given following words {term_str}. Find a proper term to describe the given words.")
-    response = llama3(prompt + f"\n Only answer with the name.")
+    prompt = (f"Given two words to describe an object: {term_str}. "
+              f"Now reorganise them and return a new phase that covers all the given descriptions but no other words."
+              f"Only answer with the phase.")
+    response = llama3(prompt)
     if len(response)>30:
-        response = llama3("Only return a name")
+        response = llama3("Answered irrelevant words.")
     return response
 
-def rename_terms(merged_clause):
+
+def llama_rewrite_clause(term_str):
+    prompt = (f"There are following types of objects in the group: {term_str}. "
+              f"Now use one sentence to describe what kind of objects exist in the group. "
+              f"Only answer with the sentence. ")
+    response = llama3(prompt)
+    return response
+
+
+def rename_terms(merged_clauses):
+
+    # rephase the terms
     name_dict = {}
     new_terms = []
-    for obj_term in merged_clause.body[0].terms[0]:
-        term_str = ",".join([t.name for t in obj_term])
-        new_term = llama_rename_term(term_str)
-        new_terms.append(new_term)
-        name_dict[new_term] = obj_term
-        print(f"Renaming Term: {obj_term} ---> {new_term}")
-    return name_dict
+    final_clauses = []
+    for merged_clause in merged_clauses:
+        for obj_term in merged_clause.body[0].terms[0]:
+            term_str = ",".join([t.name for t in obj_term])
+            new_term = llama_rename_term(term_str)
+            new_terms.append(new_term)
+            name_dict[new_term] = obj_term
+            print(f"Renaming Term: {obj_term} ---> {new_term}")
+
+        # rephase the whole clause
+        final_clause = llama_rewrite_clause(new_terms)
+        print(f"Final Clause: {final_clause}")
+        final_clauses.append(final_clause)
+    return final_clauses, name_dict
 
 if __name__ == "__main__":
     response = llama3("who wrote the book godfather")

@@ -94,7 +94,7 @@ def train_clauses(args, image_paths, out_path):
     lang = None
     all_clauses = []
     group_bk = load_bk(args, bk.group_name_extend)
-    for idx in tqdm(range(min(4, len(image_paths)))):
+    for idx in tqdm(range(min(2, len(image_paths)))):
         file_name, file_extension = image_paths[idx].split(".")
         data = file_utils.load_json(f"{file_name}.json")
         img, obj_pos = load_data(args, image_paths[idx])
@@ -113,13 +113,20 @@ def train_clauses(args, image_paths, out_path):
     most_frequent_clauses = [key for key, value in frequency.items() if value == most_frequency_value]
     lang.clauses = most_frequent_clauses
 
+    # convert machine clause to final clause
+    merged_clauses = lang.rephase_clauses()
+    final_clauses, name_dict = llama_call.rename_terms(merged_clauses)
+
+
     lang_dict = {
         "atoms": lang.atoms,
         "clauses": lang.clauses,
         "consts": lang.consts,
         "preds": lang.predicates,
         "g_num": lang.group_variable_num,
-        "attrs": lang.attrs
+        "attrs": lang.attrs,
+        "final_clauses":final_clauses,
+        "name_dict": name_dict
     }
     torch.save(lang_dict, save_file)
     return lang

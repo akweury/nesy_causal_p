@@ -74,6 +74,7 @@ class Language(object):
         self.record_atoms = []
         self.record_consts = []
         self.record_predicates = []
+        self.record_final_clauses = []
         self.record_group_variable_num = 0
 
         # GRAMMAR
@@ -265,28 +266,7 @@ class Language(object):
         dtypes = [mode_declaration.DataType(dt) for dt in dtype_data]
         return NeuralPredicate(head_str, int(arity), dtypes)
 
-    def parse_inv_predicates(self, idx, p_type):
-        if p_type == "ig":
-            head = f"{bk.inv_p_head['input']}_{idx}"
-            head_dtype_names = ['in_pattern,+']
-            arity = 1
-        elif p_type == "og":
-            head = f"{bk.inv_p_head['output']}_{idx}"
-            head_dtype_names = ['out_pattern,+']
-            arity = 1
-        elif p_type == "io":
-            head = f"{bk.inv_p_head['input_output']}_{idx}"
-            head_dtype_names = ['in_pattern,+', 'out_pattern,+']
-            arity = 2
-        else:
-            raise ValueError
 
-        dtypes = [mode_declaration.DataType(dt) for dt in head_dtype_names]
-
-        # pred_with_id = pred + f"_{i}"
-        pred_with_id = head.split("(")[0]
-        invented_pred = InventedPredicate(pred_with_id, int(arity), dtypes, args=None, pi_type=None)
-        return invented_pred
 
     def parse_min_const(self, g_num, obj_num, const, const_type):
         """Parse string to function symbols.
@@ -713,6 +693,11 @@ class Language(object):
         self.record_consts += self.occurred_consts
         self.record_predicates += self.predicates
         self.record_group_variable_num += 1
+        # self.record_final_clauses.append({
+        #     "group_id": g_i,
+        #     "final_clause": final_clause,
+        #     "machine_clauses": self.clauses
+        # })
 
     def clear_repeat_language(self):
         self.clauses = list(set(self.record_clauses))
@@ -730,31 +715,35 @@ class Language(object):
         self.generate_atoms()
 
     def rephase_clauses(self):
-        obj_term_lists = []
-        group_term_lists = []
-        predicate_list = []
-        for clause in self.clauses:
-            for atom in clause.body:
-                if isinstance(atom, InvAtom):
-                    # new term
-                    new_obj_terms, new_group_terms = lang_utils.inv_new_atom_terms(atom.pred.sub_preds, atom.terms)
-                    obj_term_lists.append(new_obj_terms)
-                    if new_group_terms not in group_term_lists:
-                        group_term_lists.append(new_group_terms)
-                    # new predicates
-                    predicate_list.append(atom.pred)
+        rewritted_clauses = []
+        for g_i in range(self.group_variable_num):
+            predicate_list = []
+            obj_term_lists = []
+            group_term_lists = []
+            for clause in self.clauses:
+                if clause.body[0].terms[0][1].name.split("_")[-1] != str(g_i):
+                    continue
+                for atom in clause.body:
+                    if isinstance(atom, InvAtom):
+                        # new term
+                        new_obj_terms, new_group_terms = lang_utils.inv_new_atom_terms(atom.pred.sub_preds, atom.terms)
+                        obj_term_lists.append(new_obj_terms)
+                        if new_group_terms not in group_term_lists:
+                            group_term_lists.append(new_group_terms)
+                        # new predicates
+                        predicate_list.append(atom.pred)
         # invent predicate for rephased clauses
-        inv_p = FinalPredicate(predicate_list,"exist", 3)
-        terms = [obj_term_lists, group_term_lists]
-        inv_atom = InvAtom(inv_p, terms)
-        body = [inv_atom]
-        rephased_clause = Clause(self.clauses[0].head, body)
-
+            inv_p = FinalPredicate(predicate_list,"exist", 3)
+            terms = [obj_term_lists, group_term_lists]
+            inv_atom = InvAtom(inv_p, terms)
+            body = [inv_atom]
+            rewritted_clauses.append(Clause(self.clauses[0].head, body))
         for n_i in range(len(self.clauses)):
             print(f"Machine Clause: {self.clauses[n_i]}")
         print(f"===>")
-        print(f"Merged Clause: {rephased_clause}")
+        for n_i in range(len(rewritted_clauses)):
+            print(f"Merged Clause: {rewritted_clauses[n_i]}")
 
-        return rephased_clause
+        return rewritted_clauses
 
 

@@ -2,7 +2,7 @@
 
 from src.alpha.fol.logic import Var, Clause, InventedPredicate, Atom, InvAtom
 from src.alpha.fol import bk
-
+from src.alpha.fol import lang_utils
 def non_trivial_vars(merged_body):
     vars = []
     for atom in merged_body:
@@ -26,10 +26,11 @@ def inv_pred_merge_bodies(bodies):
 
     pred_indices = sorted(range(len(preds)), key=lambda i: preds[i])
     preds = [preds[i] for i in pred_indices]
-    dtypes = [dt for pred in preds for dt in pred.dtypes]
+    dtypes = [pred.dtypes for pred in preds]
+    dtypes = lang_utils.orgnize_inv_pred_dtypes(dtypes)
     # terms = [t for b in bodies for t in b.terms]
     arity = len(dtypes)
-    inv_pred = InventedPredicate(preds, arity)
+    inv_pred = InventedPredicate(preds, arity, dtypes)
 
     return inv_pred
 

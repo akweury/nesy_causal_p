@@ -223,9 +223,8 @@ def alpha(args, ocm):
         lang.reset_lang(g_num=1)
         df_search(args, lang, C, FC, ocm[g_i:g_i + 1])
         lang.variable_set_id(g_i)
-        merged_clause = lang.rephase_clauses()
-
-        llama_call.rename_terms(merged_clause)
+        # merged_clause = lang.rephase_clauses()
+        # final_clause, name_dict = llama_call.rename_terms(merged_clause)
         lang.record_milestone()
     lang.clear_repeat_language()
     return lang

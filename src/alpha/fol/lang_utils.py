@@ -92,4 +92,10 @@ def inv_new_atom_terms(preds, terms):
     return term_objs, term_groups
 
 
-
+def orgnize_inv_pred_dtypes(dtypes):
+    reorgnized_dtypes = []
+    for dt in dtypes:
+        reorgnized_dtypes.append(dt[0])
+    reorgnized_dtypes.append(dtypes[0][1])
+    reorgnized_dtypes.append(dtypes[0][2])
+    return reorgnized_dtypes
