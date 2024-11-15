@@ -97,20 +97,22 @@ def llama_rename_predicate(sub_pred_names):
         response = llama3("Only return a name")
     return response
 
+def llama_rename_term(term_str):
+    prompt = (f"Given following words {term_str}. Find a proper term to describe the given words.")
+    response = llama3(prompt + f"\n Only answer with the name.")
+    if len(response)>30:
+        response = llama3("Only return a name")
+    return response
 
-def rename_predicates(lang):
-    inv_predicates = [p for p in lang.predicates if isinstance(p, InventedPredicate)]
+def rename_terms(merged_clause):
     name_dict = {}
-    for inv_p in inv_predicates:
-
-        inv_p.old_name = inv_p.name
-        sub_pred_names = [p.name for p in inv_p.sub_preds]
-        inv_p.name = llama_rename_predicate(sub_pred_names)
-        name_dict[inv_p.old_name] = inv_p.name
-        print(f"Renaming Predicate: {inv_p.old_name} ---> {inv_p.name}")
-
-    for c_i in range(len(lang.clauses)):
-        print(f"Clause {c_i+1}/{len(lang.clauses)}: {lang.clauses[c_i]}")
+    new_terms = []
+    for obj_term in merged_clause.body[0].terms[0]:
+        term_str = ",".join([t.name for t in obj_term])
+        new_term = llama_rename_term(term_str)
+        new_terms.append(new_term)
+        name_dict[new_term] = obj_term
+        print(f"Renaming Term: {obj_term} ---> {new_term}")
     return name_dict
 
 if __name__ == "__main__":

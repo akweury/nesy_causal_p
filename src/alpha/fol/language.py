@@ -733,7 +733,6 @@ class Language(object):
         obj_term_lists = []
         group_term_lists = []
         predicate_list = []
-
         for clause in self.clauses:
             for atom in clause.body:
                 if isinstance(atom, InvAtom):
@@ -746,12 +745,15 @@ class Language(object):
                     predicate_list.append(atom.pred)
         # invent predicate for rephased clauses
         inv_p = FinalPredicate(predicate_list,"exist", 3)
-
         terms = [obj_term_lists, group_term_lists]
-
         inv_atom = InvAtom(inv_p, terms)
         body = [inv_atom]
         rephased_clause = Clause(self.clauses[0].head, body)
+
+        for n_i in range(len(self.clauses)):
+            print(f"Machine Clause: {self.clauses[n_i]}")
+        print(f"===>")
+        print(f"Merged Clause: {rephased_clause}")
 
         return rephased_clause
 

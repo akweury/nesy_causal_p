@@ -176,8 +176,6 @@ def df_search(args, lang, C, FC, objs):
     # pruned_c = pruning.top_k_clauses(args, ils, dls, extended_nodes)
     print(f"extend nodes num: {len(extended_nodes)}")
     extended_nodes = sorted(extended_nodes)
-    for n_i in range(len(extended_nodes)):
-        print(extended_nodes[n_i])
     lang.clauses += extended_nodes
 
 
@@ -225,9 +223,10 @@ def alpha(args, ocm):
         lang.reset_lang(g_num=1)
         df_search(args, lang, C, FC, ocm[g_i:g_i + 1])
         lang.variable_set_id(g_i)
-        final_clauses.append(lang.rephase_clauses())
+        merged_clause = lang.rephase_clauses()
+
+        llama_call.rename_terms(merged_clause)
         lang.record_milestone()
-    llama_call.rename_predicates(lang)
     lang.clear_repeat_language()
     return lang
 
