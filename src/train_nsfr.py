@@ -1,4 +1,6 @@
 # Created by jing at 17.06.24
+import logging
+
 from tqdm import tqdm
 import torch
 import cv2
@@ -11,6 +13,7 @@ from utils import file_utils, args_utils, data_utils
 from src.alpha import alpha
 from src.alpha.fol import bk
 from src import llama_call
+
 
 def load_bk(args, bk_shapes):
     # load background knowledge
@@ -88,13 +91,15 @@ def train_clauses(args, image_paths, out_path):
         lang_data = torch.load(save_file)
         if lang_data is not None:
             lang = alpha.load_lang(args, lang_data)
-            return lang
+            if lang is not None:
+                return lang
 
     # load background knowledge
     lang = None
     all_clauses = []
     group_bk = load_bk(args, bk.group_name_extend)
-    for idx in tqdm(range(min(2, len(image_paths)))):
+    for idx in range(min(2, len(image_paths))):
+        args.logger.debug(f"\n =========== Analysis Image {idx + 1}/{min(2, len(image_paths))} ==============")
         file_name, file_extension = image_paths[idx].split(".")
         data = file_utils.load_json(f"{file_name}.json")
         img, obj_pos = load_data(args, image_paths[idx])
@@ -114,9 +119,9 @@ def train_clauses(args, image_paths, out_path):
     lang.clauses = most_frequent_clauses
 
     # convert machine clause to final clause
-    merged_clauses = lang.rephase_clauses()
-    final_clauses, name_dict = llama_call.rename_terms(merged_clauses)
-
+    merged_clauses = lang.rephase_clauses(args)
+    llm_clauses, name_dict = llama_call.rewrite_clauses(args, merged_clauses)
+    lang.llm_clauses = llm_clauses
 
     lang_dict = {
         "atoms": lang.atoms,
@@ -125,7 +130,7 @@ def train_clauses(args, image_paths, out_path):
         "preds": lang.predicates,
         "g_num": lang.group_variable_num,
         "attrs": lang.attrs,
-        "final_clauses":final_clauses,
+        "llm_clauses": llm_clauses,
         "name_dict": name_dict
     }
     torch.save(lang_dict, save_file)

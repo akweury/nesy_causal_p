@@ -103,7 +103,7 @@ class FactsConverter(nn.Module):
     def convert(self, group, atoms, B, scores=None):
         # evaluate value of each atom
         V = torch.zeros((1, len(atoms))).to(torch.float32).to(self.device)
-        for i, atom in tqdm(enumerate(atoms), desc="Evaluating atoms..."):
+        for i, atom in enumerate(atoms):
             # this atom is a neural predicate
             if type(atom.pred) == NeuralPredicate and i > 1:
                 V[:, i] = self.vm(group, atom)

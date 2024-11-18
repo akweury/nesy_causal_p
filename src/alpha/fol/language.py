@@ -1,4 +1,5 @@
 # Created by shaji at 24/06/2024
+import logging
 
 from lark import Lark
 import itertools
@@ -265,8 +266,6 @@ class Language(object):
         dtype_data = dtype_names_str.split(';')
         dtypes = [mode_declaration.DataType(dt) for dt in dtype_data]
         return NeuralPredicate(head_str, int(arity), dtypes)
-
-
 
     def parse_min_const(self, g_num, obj_num, const, const_type):
         """Parse string to function symbols.
@@ -714,7 +713,7 @@ class Language(object):
                            range(self.group_variable_num)]
         self.generate_atoms()
 
-    def rephase_clauses(self):
+    def rephase_clauses(self, args):
         rewritted_clauses = []
         for g_i in range(self.group_variable_num):
             predicate_list = []
@@ -732,18 +731,18 @@ class Language(object):
                             group_term_lists.append(new_group_terms)
                         # new predicates
                         predicate_list.append(atom.pred)
-        # invent predicate for rephased clauses
-            inv_p = FinalPredicate(predicate_list,"exist", 3)
-            terms = [obj_term_lists, group_term_lists]
+            # invent predicate for rephased clauses
+            inv_p = FinalPredicate(predicate_list, "exist", 3)
+            terms = [obj_term_lists, group_term_lists, self.group_vars[g_i]]
             inv_atom = InvAtom(inv_p, terms)
             body = [inv_atom]
             rewritted_clauses.append(Clause(self.clauses[0].head, body))
-        for n_i in range(len(self.clauses)):
-            print(f"Machine Clause: {self.clauses[n_i]}")
-        print(f"===>")
-        for n_i in range(len(rewritted_clauses)):
-            print(f"Merged Clause: {rewritted_clauses[n_i]}")
+
+        args.logger.debug(f" \n =============== Learned Machine Clauses =================" + "".join(
+            [f"\n{c_i + 1}/{len(self.clauses)} {self.clauses[c_i]}" for c_i in range(len(self.clauses))]))
+
+        args.logger.debug(f" \n =============== Rewrote and Merged Clauses =================" + "".join(
+            [f"\n{c_i + 1}/{len(rewritted_clauses)} {rewritted_clauses[c_i]}" for c_i in
+             range(len(rewritted_clauses))]))
 
         return rewritted_clauses
-
-

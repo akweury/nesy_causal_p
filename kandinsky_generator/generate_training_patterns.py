@@ -234,7 +234,7 @@ def genShapeOnShape(shapes, n):
                 gen_fun = shapeOnshapeObjects.false_kf
             else:
                 raise ValueError
-            for (i, kf) in tqdm(enumerate(gen_fun(n, rule_style=False))):
+            for (i, kf) in enumerate(gen_fun(n, rule_style=False)):
                 image = KandinskyUniverse.kandinskyFigureAsImage(kf, width)
                 data = kf2data(kf, width)
                 with open(base_path / f"{shape}_{(png_num+i):06d}.json", 'w') as f:

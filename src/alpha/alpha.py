@@ -1,5 +1,6 @@
 # Created by shaji at 24/06/2024
 import itertools
+
 import torch
 
 from src.utils import log_utils
@@ -19,13 +20,26 @@ def init_ilp(args, obj_num):
 
 
 def load_lang(args, lang_data):
-    lang = init_ilp(args, 1)
-    lang.clauses = lang_data["clauses"]
-    lang.predicates = lang_data["preds"]
-    lang.reset_lang(lang_data["g_num"])
-    lang.consts = lang_data["consts"]
-    lang.atoms = lang_data["atoms"]
-    lang.attrs = lang_data["attrs"]
+    try:
+        lang = init_ilp(args, 1)
+        lang.reset_lang(lang_data["g_num"])
+        lang.clauses = lang_data["clauses"]
+        lang.predicates = lang_data["preds"]
+
+        lang.consts = lang_data["consts"]
+        lang.atoms = lang_data["atoms"]
+        lang.attrs = lang_data["attrs"]
+        lang.llm_clauses = lang_data["llm_clauses"]
+
+        args.logger.debug(
+            f"\n ================= Loaded Pretrained Language ================= " +
+            f"\n ==== Machine Clauses: " +
+            "".join([f"\n{c_i+1}/{len(lang.clauses)} {lang.clauses[c_i]}" for c_i in range(len(lang.clauses))]) +
+            f"\n ==== LLM Description: " +
+            "".join([f"\n{c_i+1}/{len(lang.llm_clauses)} {lang.llm_clauses[c_i]}" for c_i in range(len(lang.llm_clauses))])
+        )
+    except Exception:
+        return None
     return lang
 
 
@@ -170,11 +184,15 @@ def df_search(args, lang, C, FC, objs):
         pass_indices = [s_i for s_i in range(len(ils)) if ils[s_i] > 0.8]
         extended_nodes = [extended_nodes[s_i] for s_i in range(len(ils)) if ils[s_i] > 0.6]
         ils = ils[pass_indices]
-        print(f"inv clauses score: {ils.unique()}")
+
+        args.logger.debug(f" ----- Rule Searching Round {e_i + 1}/{2} ----- ")
+        log_clause_str = ""
+        for i in range(len(ils)):
+            log_clause_str += f"\n {i + 1}/{len(ils)} (s: {ils[i].item():.2f}) Clause: {extended_nodes[i]}"
+        args.logger.debug(log_clause_str)
 
     # prune clauses
     # pruned_c = pruning.top_k_clauses(args, ils, dls, extended_nodes)
-    print(f"extend nodes num: {len(extended_nodes)}")
     extended_nodes = sorted(extended_nodes)
     lang.clauses += extended_nodes
 
@@ -218,7 +236,6 @@ def alpha(args, ocm):
     VM = valuation.get_valuation_module(args, lang)
     FC = facts_converter.FactsConverter(args, lang, VM)
     C = lang.load_init_clauses()
-    final_clauses = []
     for g_i in range(len(ocm)):
         lang.reset_lang(g_num=1)
         df_search(args, lang, C, FC, ocm[g_i:g_i + 1])

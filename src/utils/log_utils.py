@@ -2,15 +2,16 @@
 import os
 import datetime
 import wandb
+import logging
 
-def create_log_file(log_path):
+def create_log_file(logger, log_path):
     if not os.path.exists(log_path):
         os.mkdir(log_path)
     time_now = datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
     file_name = str(log_path / f"log_{time_now}.txt")
     with open(file_name, "w") as f:
         f.write(f"Log ({time_now})")
-    print(f"- log_file_path:{file_name}")
+    logger.info(f"Log file path:{file_name}")
     return str(file_name)
 
 

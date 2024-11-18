@@ -2,7 +2,7 @@ from PIL import Image, ImageDraw
 import numpy as np
 import os
 import json
-from tqdm import tqdm
+# from tqdm import tqdm
 from pathlib import Path
 
 
@@ -229,7 +229,7 @@ def genShapeOnShape(shape, n):
         else:
             raise ValueError
 
-        for (i, kf) in tqdm(enumerate(gen_fun(n))):
+        for (i, kf) in enumerate(gen_fun(n)):
             image = KandinskyUniverse.kandinskyFigureAsImage(kf, width)
             data = kf2data(kf, width)
             with open(true_path / f"{task}_{i:06d}.json", 'w') as f:
@@ -246,7 +246,7 @@ def genShapeOnShapeTask(task, total_n):
         for label in bk.task_pattern_types:
             data_path = base_path / mode / label
             os.makedirs(data_path, exist_ok=True)
-            print(f'Generating dataset {base_path}', task, mode)
+            # print(f'Generating dataset {base_path}', task, mode)
             png_num = len([f for f in Path(data_path).iterdir() if f.is_file() and f.suffix == '.png'])
             n = total_n - png_num  # only generate insufficient ones
             if task[label] == "diamondcircle":
@@ -269,7 +269,7 @@ def genShapeOnShapeTask(task, total_n):
                 gen_fun = shapeOnshapeObjects.false_kf
             else:
                 raise ValueError
-            for (i, kf) in tqdm(enumerate(gen_fun(n, rule_style=True))):
+            for (i, kf) in enumerate(gen_fun(n, rule_style=True)):
                 image = KandinskyUniverse.kandinskyFigureAsImage(kf, width)
                 data = kf2data(kf, width)
                 with open(data_path / f"{i:06d}.json", 'w') as f:

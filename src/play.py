@@ -1,5 +1,7 @@
 # Created by jing at 22.10.24
 import os
+# import logging
+import colorlog
 
 import config
 from train_nsfr import train_clauses
@@ -9,72 +11,108 @@ from utils import file_utils, args_utils
 from kandinsky_generator import generate_training_patterns, generate_task_patterns
 from src.alpha.fol import bk
 
-# load exp arguments
-args = args_utils.get_args()
-exp_setting = bk.exp_count_group
-data_folder = config.kp_dataset / args.exp_name
+# Create a color handler
+handler = colorlog.StreamHandler()
+handler.setFormatter(
+    colorlog.ColoredFormatter(
+        "%(log_color)s%(asctime)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        log_colors={
+            "DEBUG": "white",
+            "INFO": "green",
+            "WARNING": "yellow",
+            "ERROR": "red",
+            "CRITICAL": "bold_red",
+        },
+    )
+)
 
-train_folder = data_folder / "train" / "task_true_pattern"
-os.makedirs(train_folder, exist_ok=True)
-test_true_folder = data_folder / "test" / "task_true_pattern"
-os.makedirs(test_true_folder, exist_ok=True)
-test_random_folder = data_folder / "test" / "task_random_pattern"
-os.makedirs(test_random_folder, exist_ok=True)
-test_cf_folder = data_folder / "test" / "task_cf_pattern"
-os.makedirs(test_cf_folder, exist_ok=True)
+# Add the color handler to the logger
+logger = colorlog.getLogger("colorLogger")
+logger.addHandler(handler)
+# Prevent logs from propagating to the root logger
+logger.propagate = False
+logger.setLevel(colorlog.DEBUG)
 
-out_train_folder = config.output / args.exp_name / "train" / "task_true_pattern"
-os.makedirs(out_train_folder, exist_ok=True)
-out_positive_folder = config.output / args.exp_name / "test" / "task_true_pattern"
-os.makedirs(out_positive_folder, exist_ok=True)
-out_random_folder = config.output / args.exp_name / "test" / "task_random_pattern"
-os.makedirs(out_random_folder, exist_ok=True)
-out_cf_folder = config.output / args.exp_name / "test" / "task_cf_pattern"
-os.makedirs(out_cf_folder, exist_ok=True)
 
-step_counter = 0
-total_step = 8
-# Generate Training Data -- Single Group Pattern
-step_counter += 1
-generate_training_patterns.genShapeOnShape(exp_setting["bk_groups"], 500)
-print(f"Step {step_counter}/{total_step}: Generated {exp_setting['bk_groups']} training patterns")
+def init_io_folders(args, data_folder):
+    args.train_folder = data_folder / "train" / "task_true_pattern"
+    os.makedirs(args.train_folder, exist_ok=True)
+    args.test_true_folder = data_folder / "test" / "task_true_pattern"
+    os.makedirs(args.test_true_folder, exist_ok=True)
+    args.test_random_folder = data_folder / "test" / "task_random_pattern"
+    os.makedirs(args.test_random_folder, exist_ok=True)
+    args.test_cf_folder = data_folder / "test" / "task_cf_pattern"
+    os.makedirs(args.test_cf_folder, exist_ok=True)
 
-# Generate Task Data -- Multiple Group Pattern
-step_counter += 1
-generate_task_patterns.genShapeOnShapeTask(exp_setting, 10)
-print(f"Step {step_counter}/{total_step}: Generated {exp_setting['task_name']} task patterns")
+    args.out_train_folder = config.output / args.exp_name / "train" / "task_true_pattern"
+    os.makedirs(args.out_train_folder, exist_ok=True)
+    args.out_positive_folder = config.output / args.exp_name / "test" / "task_true_pattern"
+    os.makedirs(args.out_positive_folder, exist_ok=True)
+    args.out_random_folder = config.output / args.exp_name / "test" / "task_random_pattern"
+    os.makedirs(args.out_random_folder, exist_ok=True)
+    args.out_cf_folder = config.output / args.exp_name / "test" / "task_cf_pattern"
+    os.makedirs(args.out_cf_folder, exist_ok=True)
 
-# Import Generated Data
-step_counter += 1
-train_imges = file_utils.get_all_files(train_folder, "png", False)[:500]
-positive_images = file_utils.get_all_files(test_true_folder, "png", False)[:500]
-random_imges = file_utils.get_all_files(test_random_folder, "png", False)[:500]
-counterfactual_imges = file_utils.get_all_files(test_cf_folder, "png", False)[:500]
-print(f"Step {step_counter}/{total_step}: Imported training and testing data.")
 
-# Learn Clauses from Training Data
-step_counter += 1
-lang = train_clauses(args, train_imges, out_train_folder)
-print(f"Step {step_counter}/{total_step}: Reasoned {len(lang.clauses)} clauses")
+def main():
+    # load exp arguments
+    args = args_utils.get_args(logger)
+    exp_setting = bk.exp_count_group
+    data_folder = config.kp_dataset / args.exp_name
+    init_io_folders(args, data_folder)
+    step_counter = 0
+    total_step = 8
 
-rules = llama_call.natural_rule_learner(lang)
+    # Generate Training Data -- Single Group Pattern
+    step_counter += 1
+    logger.info(f"Step {step_counter}/{total_step}: "
+                f"Generating {exp_setting['bk_groups']} training patterns")
+    generate_training_patterns.genShapeOnShape(exp_setting["bk_groups"], 500)
 
-# Test Positive Patterns
-step_counter += 1
+    # Generate Task Data -- Multiple Group Pattern
+    step_counter += 1
+    logger.info(f"Step {step_counter}/{total_step}: "
+                f"Generating {exp_setting['task_name']} task patterns")
+    generate_task_patterns.genShapeOnShapeTask(exp_setting, 10)
 
-positive_acc = check_clause(args, lang, positive_images, True, out_positive_folder)
-print(f"Step {step_counter}/{total_step}: Test Positive Image Accuracy: {positive_acc.mean(dim=1)}\n"
-      f"{positive_acc}")
+    # Import Generated Data
+    step_counter += 1
+    logger.info(f"Step {step_counter}/{total_step}: "
+                f"Importing training and testing data.")
 
-# Step 6: Test counterfactual patterns
-step_counter += 1
+    train_imges = file_utils.get_all_files(args.train_folder, "png", False)[:500]
+    positive_images = file_utils.get_all_files(args.test_true_folder, "png", False)[:500]
+    random_imges = file_utils.get_all_files(args.test_random_folder, "png", False)[:500]
+    counterfactual_imges = file_utils.get_all_files(args.test_cf_folder, "png", False)[:500]
 
-cf_acc = check_clause(args, lang, counterfactual_imges, False, out_cf_folder)
-print(f"Step {step_counter}/{total_step}: Test Counterfactual Image Accuracy: \n"
-      f"{cf_acc}")
+    # Learn Clauses from Training Data
+    step_counter += 1
+    lang = train_clauses(args, train_imges, args.out_train_folder)
+    logger.info(f"Step {step_counter}/{total_step}: "
+                f"Reasoned {len(lang.llm_clauses)} LLM Rules, "
+                f"{len(lang.clauses)} Machine Clauses")
 
-# Step 7: Test random patterns
-step_counter += 1
+    # Test Positive Patterns
+    step_counter += 1
+    positive_acc = check_clause(args, lang, positive_images, True, args.out_positive_folder)
+    logger.info(f"Step {step_counter}/{total_step}: "
+                f"Test Positive Image Accuracy: {positive_acc.mean(dim=1)}\n"
+                f"{positive_acc}")
 
-random_acc = check_clause(args, lang, random_imges, False, out_random_folder)
-print(f"Step {step_counter}/{total_step}: random image accuracy: {random_acc}")
+    # Step 6: Test counterfactual patterns
+    step_counter += 1
+
+    cf_acc = check_clause(args, lang, counterfactual_imges, False, args.out_cf_folder)
+    logger.info(f"Step {step_counter}/{total_step}: Test Counterfactual Image Accuracy: \n"
+                f"{cf_acc}")
+
+    # Step 7: Test random patterns
+    step_counter += 1
+
+    random_acc = check_clause(args, lang, random_imges, False, args.out_random_folder)
+    logger.info(f"Step {step_counter}/{total_step}: random image accuracy: {random_acc}")
+
+
+if __name__ == '__main__':
+    main()

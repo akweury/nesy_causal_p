@@ -1,5 +1,5 @@
 # Created by shaji at 03/08/2024
-
+import logging
 import os
 import torch
 import torchvision.transforms as transforms
@@ -410,8 +410,8 @@ def eval_onside_conf(args, data, onsides, fm_imgs, idx, bk_shape, out_path):
     save_img_name = f'{idx}_group_conf_{bk_shape["name"]}.png'
     # cv2.imwrite(str(out_path / save_img_name), show_imgs)
 
-    print(f"- Group {bk_shape['name']}, "
-          f"#conf: [pred {group_count_conf:.2f}, th {args.group_count_conf_th}], #visual: {save_img_name} ")
+    logging.debug(f"Found group: {bk_shape['name']}, "
+          f"[conf|th  {group_count_conf:.2f}|{args.group_count_conf_th}], #visual: {save_img_name} ")
     return group_count_conf
 
 
@@ -503,8 +503,6 @@ def img2groups_flexible(args, bk, data, data_idx, img, out_path):
         in_fm = perception.extract_fm(data.unsqueeze(0), bk_shape["kernels"])
         fm_repo = bk_shape["fm_repo"]  # (#fm, #kernel, row, col)
         fm_img = bk_shape["fm_img"]  # (#fm, #channel, row, col)
-        # chart_utils.visual_np_array(in_fm[0].numpy())
-        # get top matched feature maps and its shift
         match_fm_shift, match_fm_idx, match_fm_value = get_pair(args, in_fm, fm_repo)
         if match_fm_shift is None:
             continue

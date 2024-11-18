@@ -69,8 +69,6 @@ def clause2rule(clause):
     return response
 
 
-
-
 def natural_rule_learner(lang):
     natural_rules = []
     for clause in lang.clauses:
@@ -78,67 +76,77 @@ def natural_rule_learner(lang):
         natural_rules.append(response)
     return natural_rules
 
+
 def llama_rename_predicate(sub_pred_names):
     name_str = ",".join(sub_pred_names)
-    prompt = (f"The system just invented a new predicate which refers to a high-level concept that was not exist in the system language."
-              f"The new predicate is usually invented based on multiple given predicates in the system language,"
-              f"its functionality is the combination of the functionality of the given predicates. "
-              f"For example, by combine the predicate has_shape and has_color, "
-              f"where the first predicate has_shape checks if an object has specific shape,"
-              f"the second predicate has_color checks if an object has specific color," 
-              f"the new predicate can be invented by combining both two predicates with having the functionality "
-              f"that check an object has both specific shape and specific color. "
-              f"Now the question is, how to give a proper name for the new predicate. "
-              f"If the given predicates are has_shape and has_color, it can be named as has_shape_and_color."
-              f"Given the following given predicates, return the name of the invented predicates, the predicates are splited by comma:"
-              f"{name_str}")
+    prompt = (
+        f"The system just invented a new predicate which refers to a high-level concept that was not exist in the system language."
+        f"The new predicate is usually invented based on multiple given predicates in the system language,"
+        f"its functionality is the combination of the functionality of the given predicates. "
+        f"For example, by combine the predicate has_shape and has_color, "
+        f"where the first predicate has_shape checks if an object has specific shape,"
+        f"the second predicate has_color checks if an object has specific color,"
+        f"the new predicate can be invented by combining both two predicates with having the functionality "
+        f"that check an object has both specific shape and specific color. "
+        f"Now the question is, how to give a proper name for the new predicate. "
+        f"If the given predicates are has_shape and has_color, it can be named as has_shape_and_color."
+        f"Given the following given predicates, return the name of the invented predicates, the predicates are splited by comma:"
+        f"{name_str}")
     response = llama3(prompt + f"\n Only answer with the name.")
-    if len(response)>30:
+    if len(response) > 30:
         response = llama3("Only return a name")
     return response
+
 
 def llama_rename_term(term_str):
     prompt = (f"Given two words to describe an object: {term_str}. "
               f"Now reorganise them and return a new phase that covers all the given descriptions but no other words."
               f"Only answer with the phase.")
     response = llama3(prompt)
-    if len(response)>30:
+    if len(response) > 30:
         response = llama3("Answered irrelevant words.")
     return response
 
 
-def llama_rewrite_clause(term_str):
-    prompt = (f"There are following types of objects in the group: {term_str}. "
-              f"Now use one sentence to describe what kind of objects exist in the group. "
-              f"Only answer with the sentence. ")
+def llama_rewrite_clause(term_str, group_id, group_name):
+    prompt = (f"There are following types of objects {term_str} in the group {group_id}, "
+              f"these objects form a shape of {group_name}."
+              f"Now use one sentence to include the following information"
+              f"1. the group name;"
+              f"2. what kind of shape do the objects together form;"
+              f"3. what kind of objects exist in the group {group_id} one by one, make sure all of them following same form;"
+              f"describe clearly their properties, such as color, shape, etc."
+              f"Describe it clear and simple. Only answer with the sentence. ")
     response = llama3(prompt)
     return response
 
 
-def rename_terms(merged_clauses):
-
+def rewrite_clauses(args, merged_clauses):
     # rephase the terms
     name_dict = {}
     new_terms = []
     final_clauses = []
     for merged_clause in merged_clauses:
         for obj_term in merged_clause.body[0].terms[0]:
+            if tuple(obj_term) in name_dict:
+                continue
             term_str = ",".join([t.name for t in obj_term])
             new_term = llama_rename_term(term_str)
             new_terms.append(new_term)
-            name_dict[new_term] = obj_term
-            print(f"Renaming Term: {obj_term} ---> {new_term}")
+            name_dict[tuple(obj_term)] = new_term
 
-        # rephase the whole clause
-        final_clause = llama_rewrite_clause(new_terms)
-        print(f"Final Clause: {final_clause}")
+        # rewrite the whole clause
+        final_clause = llama_rewrite_clause(new_terms, merged_clause.body[0].terms[-1], merged_clause.body[0].terms[-2][0])
         final_clauses.append(final_clause)
+
+    args.logger.debug("\n =============== LLM: Rename terms =============== " + "".join(
+        [f"\n{k} -> {v}" for k, v in name_dict.items()]))
+    args.logger.debug(f"\n =============== LLM: Clause Description =============== " + "".join(
+        [f"\n {c_i+1}/{len(final_clauses)} {final_clauses[c_i]}" for c_i in range(len(final_clauses))]))
+
     return final_clauses, name_dict
+
 
 if __name__ == "__main__":
     response = llama3("who wrote the book godfather")
     print(response)
-
-
-
-

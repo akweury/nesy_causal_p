@@ -1,3 +1,4 @@
+import logging
 import random
 import math
 from tqdm import tqdm
@@ -635,212 +636,188 @@ class ShapeOnShape(KandinskyTruthInterfce):
         return kf
 
     def cir_only(self, n=1, rule_style=False):
-        print("MAKE CIRCLE")
         kfs = []
-        for i in tqdm(range(n), desc="generating group objects"):
+        for i in range(n):
             kf = self._only(rule_style, "circle")
             kfs.append(kf)
         return kfs
 
     def cir_small_only(self, n=1, rule_style=False):
-        print("MAKE SMALL CIRCLE")
         kfs = []
-        for i in tqdm(range(n), desc="generating group objects"):
+        for i in range(n):
             kf = self._only(rule_style, "circle_small")
             kfs.append(kf)
         return kfs
 
     def cir_flex_only(self, n=1, rule_style=False):
-        print("MAKE FLEX CIRCLE")
         kfs = []
-        for i in tqdm(range(n), desc="generating group objects"):
+        for i in range(n):
             kf = self._only(rule_style, "circle_flex")
             kfs.append(kf)
         return kfs
 
     def dia_only(self, n=1, rule_style=False):
-        print("MAKE DIAMOND")
         kfs = []
-        for i in tqdm(range(n), desc="generating objects"):
+        for i in range(n):
             # print(i)
             kf = self._only(True, "diamond")
             kfs.append(kf)
         return kfs
 
     def tri_only(self, n=1, rule_style=False):
-        print("MAKE TRIANGLE")
         kfs = []
-        for i in tqdm(range(n), desc="generating objects"):
+        for i in range(n):
             kf = self._only(rule_style, "triangle")
             kfs.append(kf)
         return kfs
 
     def tri_small_only(self, n=1, rule_style=False):
-        print("MAKE TRIANGLE SMALL")
         kfs = []
-        for i in tqdm(range(n), desc="generating objects"):
+        for i in range(n):
             kf = self._only(rule_style, "triangle_small")
             kfs.append(kf)
         return kfs
 
     def trir_only(self, n=1, rule_style=False):
-        print("MAKE TRIANGLER")
         kfs = []
-        for i in tqdm(range(n), desc="generating objects"):
+        for i in range(n):
             kf = self._only(rule_style, "triangler")
             kfs.append(kf)
         return kfs
 
     def square_only(self, n=1, rule_style=False):
-        print("MAKE SQUARE")
         kfs = []
-        for i in tqdm(range(n), desc="generating objects"):
+        for i in range(n):
             # print(i)
             kf = self._only(True, "square")
             kfs.append(kf)
         return kfs
 
     def square_small_only(self, n=1, rule_style=False):
-        print("MAKE SMALL SQUARE")
         kfs = []
-        for i in tqdm(range(n), desc="generating objects"):
+        for i in range(n):
             # print(i)
             kf = self._only(True, "square_small")
             kfs.append(kf)
         return kfs
 
     def triangle_circle(self, n=1, rule_style=False):
-        print("MAKE TRIANGLE AND CIRCLE")
         kfs = []
-        for i in tqdm(range(n), desc="generating objects"):
+        for i in range(n):
             kf = self._only(rule_style, "trianglecircle")
             kfs.append(kf)
         return kfs
 
     def triangle_circle_flex(self, n=1, rule_style=False):
-        print("MAKE FLEX TRIANGLE AND CIRCLE")
         kfs = []
-        for i in tqdm(range(n), desc="generating objects"):
+        for i in range(n):
             kf = self._only(rule_style, "trianglecircle_flex")
             kfs.append(kf)
         return kfs
 
     def triangle_circle_flex_cf(self, n=1, rule_style=False):
-        print("MAKE FLEX TRIANGLE AND CIRCLE COUNTERFACT")
         kfs = []
-        for i in tqdm(range(n), desc="generating objects"):
+        for i in range(n):
             kf = self._only(False, "trianglecircle_flex")
             kfs.append(kf)
         return kfs
 
     def circle_square_count(self, n=1, rule_style=False):
-        print("MAKE CIRCLE AND SQUARE COUNT")
         kfs = []
-        for i in tqdm(range(n), desc="generating objects"):
+        for i in range(n):
             kf = self._only(rule_style, "circlesquare_count")
             kfs.append(kf)
         return kfs
 
     def circle_square_count_cf(self, n=1, rule_style=False):
-        print("MAKE CIRCLE AND SQUARE COUNT COUNTERFACT")
         kfs = []
-        for i in tqdm(range(n), desc="generating objects"):
+        for i in range(n):
             kf = self._only(False, "circlesquare_count")
             kfs.append(kf)
         return kfs
 
     def diamond_circle_cf(self, n=1, rule_style=False):
-        print("MAKE TRIANGLE AND CIRCLE (COUNTERFACTUAL)")
         kfs = []
-        for i in tqdm(range(n), desc="generating objects"):
-            # print(i)
+        for i in range(n):
+
             kf = self._only(False, "trianglecircle")
             kfs.append(kf)
         return kfs
 
     def square_circle(self, n=1, rule_style=False):
-        print("MAKE SQUARE AND CIRCLE")
         kfs = []
-        for i in tqdm(range(n), desc="generating objects"):
-            # print(i)
+        for i in range(n):
+
             kf = self._only(True, "squarecircle")
             kfs.append(kf)
         return kfs
 
     def triangle_square(self, n=1, rule_style=False):
-        print("MAKE TRIANGLE AND SQUARE")
         kfs = []
-        for i in tqdm(range(n), desc="generating objects"):
+        for i in range(n):
             # print(i)
             kf = self._only(True, "trianglesquare")
             kfs.append(kf)
         return kfs
 
     def diamond_circle(self, n=1, rule_style=False):
-        print("MAKE DIAMOND AND CIRCLE")
         kfs = []
-        for i in tqdm(range(n), desc="generating objects"):
+        for i in range(n):
             # print(i)
             kf = self._only(True, "diamondcircle")
             kfs.append(kf)
         return kfs
 
     def triangle_circle_cf(self, n=1, rule_style=False):
-        print("MAKE DIAMOND AND CIRCLE (COUNTERFACTUAL)")
         kfs = []
-        for i in tqdm(range(n), desc="generating objects"):
-            # print(i)
+        for i in range(n):
             kf = self._only(False, "trianglecircle")
             kfs.append(kf)
         return kfs
 
     def triangle_square_circle(self, n=1, rule_style=False):
-        print("MAKE TRIANGLE AND SQUARE AND CIRCLE")
+
         kfs = []
-        for i in tqdm(range(n), desc="generating objects"):
+        for i in range(n):
             # print(i)
             kf = self._only(True, "trianglesquarecircle")
             kfs.append(kf)
         return kfs
 
     def triangle_partsquare(self, n=1, rule_style=False):
-        print("MAKE TRIANGLE AND PART SQUARE")
         kfs = []
-        for i in tqdm(range(n), desc="generating objects"):
+        for i in range(n):
             # print(i)
             kf = self._only(True, "trianglepartsquare")
             kfs.append(kf)
         return kfs
 
     def parttriangle_partsquare(self, n=1, rule_style=False):
-        print("MAKE PART TRIANGLE AND PART SQUARE")
         kfs = []
-        for i in tqdm(range(n), desc="generating objects"):
+        for i in range(n):
             # print(i)
             kf = self._only(True, "parttrianglepartsquare")
             kfs.append(kf)
         return kfs
 
     def true_kf(self, n=1, rule_style=False):
-        print("MAKE TRUE")
         kfs = []
-        for i in tqdm(range(n), desc="generating objects"):
-            # print(i)
+        for i in range(n):
+
             kf = self._shapesOnShapes(True)
             kfs.append(kf)
         return kfs
 
     def almost_true_kf(self, n=1, rule_style=False):
         kfs = []
-        print("MAKE CONTRAFACTUALS")
-        for i in tqdm(range(n), desc="generating objects"):
+
+        for i in range(n):
             # print(i)
             kf = self._shapesOnShapes(False)
             kfs.append(kf)
         return kfs
 
     def false_kf(self, n=1, rule_style=False):
-        print("MAKE FALSE")
         # we are  sure that random image does not contain "shapes on shapes"
         t = self.min + self.max
         rg = Random(self.u, t, t)
