@@ -85,7 +85,7 @@ def check_clause(args, lang, image_paths, image_label, output_path):
     preds = torch.zeros((min(4, len(image_paths)), len(lang.clauses)))
     group_bk = load_bk(args, bk.group_name_extend)
 
-    for idx in tqdm(range(min(4, len(image_paths)))):
+    for idx in range(min(4, len(image_paths))):
         file_name, file_extension = image_paths[idx].split(".")
         data = file_utils.load_json(f"{file_name}.json")
 
@@ -94,6 +94,8 @@ def check_clause(args, lang, image_paths, image_label, output_path):
         if len(groups) != 0:
             group_tensors = group2ocm(data, groups)
             preds[idx] = alpha.alpha_test(args, group_tensors, lang)
+
+        args.logger.debug(f" image {idx}, machine clause scores: {preds[idx]}")
     return preds
 
 

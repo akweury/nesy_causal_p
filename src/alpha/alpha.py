@@ -30,6 +30,7 @@ def load_lang(args, lang_data):
         lang.atoms = lang_data["atoms"]
         lang.attrs = lang_data["attrs"]
         lang.llm_clauses = lang_data["llm_clauses"]
+        lang.generate_atoms()
 
         args.logger.debug(
             f"\n ================= Loaded Pretrained Language ================= " +

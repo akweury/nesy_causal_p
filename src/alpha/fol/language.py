@@ -192,8 +192,12 @@ class Language(object):
             dtypes = pred.dtypes
             consts_list = [self.get_by_dtype(dtype) for dtype in dtypes]
             args_list = list(set(itertools.product(*consts_list)))
-            for args in args_list:
-                atoms.append(Atom(pred, args))
+            if isinstance(pred, NeuralPredicate):
+                for args in args_list:
+                    atoms.append(Atom(pred, args))
+            elif isinstance(pred, InventedPredicate):
+                for args in args_list:
+                    atoms.append(InvAtom(pred, args))
 
         self.atoms = spec_atoms + sorted(atoms)  # + sorted(bk_pi_atoms) + sorted(pi_atoms)
 

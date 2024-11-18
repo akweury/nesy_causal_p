@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 from tqdm import tqdm
 
-from .fol.logic import NeuralPredicate, InventedPredicate
+from .fol.logic import NeuralPredicate, InventedPredicate, Const
 from .fol import bk
 from src.alpha import valuation
 
@@ -112,7 +112,14 @@ class FactsConverter(nn.Module):
                 atom_res = True
                 for a_i in range(len(atom.pred.sub_preds)):
                     pred_args = {}
-                    term = atom.terms[a_i]
+                    if isinstance(atom.terms[a_i], Const):
+                        term = atom.terms
+                    elif isinstance(atom.terms[a_i], list):
+                        term = atom.terms[a_i]
+                    elif isinstance(atom.terms[a_i], tuple):
+                        term = atom.terms[a_i]
+                    else:
+                        raise ValueError
                     for t in term:
                         term_name, term_data = self.ground_to_tensor(t, group)
                         pred_args[term_name] = term_data

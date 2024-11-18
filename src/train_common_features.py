@@ -409,9 +409,9 @@ def eval_onside_conf(args, data, onsides, fm_imgs, idx, bk_shape, out_path):
     # show_imgs = cv2.cvtColor(show_imgs, cv2.COLOR_BGR2RGB)
     save_img_name = f'{idx}_group_conf_{bk_shape["name"]}.png'
     # cv2.imwrite(str(out_path / save_img_name), show_imgs)
-
-    logging.debug(f"Found group: {bk_shape['name']}, "
-          f"[conf|th  {group_count_conf:.2f}|{args.group_count_conf_th}], #visual: {save_img_name} ")
+    if group_count_conf >= args.group_count_conf_th:
+        args.logger.debug(f" Found group: {bk_shape['name']}: "
+                          f"[conf|th  {group_count_conf:.2f}|{args.group_count_conf_th}], #visual: {save_img_name} ")
     return group_count_conf
 
 
@@ -538,6 +538,7 @@ def img2groups_flexible(args, bk, data, data_idx, img, out_path):
                 "count_conf": group_count_conf
             })
             group_count += 1
+
     return groups
 
 
