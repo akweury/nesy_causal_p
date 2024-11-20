@@ -224,6 +224,8 @@ class Language(object):
             term_list.append(grounded_terms)
         term_list = list(set(itertools.product(*term_list)))
         term_list = lang_utils.remove_chaos_terms(term_list)
+        term_list = tuple([tuple(lang_utils.orgnize_inv_pred_dtypes(terms)) for terms in term_list])
+
         grounded_atoms = []
         for terms in term_list:
             grounded_atoms.append(InvAtom(pred, terms))
@@ -235,6 +237,7 @@ class Language(object):
             ungrounded_terms = list(itertools.product(*assignment_list))
             ungrounded_term_list.append(ungrounded_terms)
         ungrounded_term_list = list(set(itertools.product(*ungrounded_term_list)))
+        ungrounded_term_list = [tuple(lang_utils.orgnize_inv_pred_dtypes(terms)) for terms in ungrounded_term_list]
         ungrounded_atoms = []
         for terms in ungrounded_term_list:
             ungrounded_atoms.append(InvAtom(pred, terms))
@@ -317,11 +320,11 @@ class Language(object):
             const_names = ['group']
         elif 'enum' in const_type:
             const_names = []
-            if const_data_type.name == "color":
+            if const_data_type.name == bk.const_dtypes["object_color"]:
                 const_names = bk.color_large
-            elif const_data_type.name == "shape":
+            elif const_data_type.name == bk.const_dtypes["object_shape"]:
                 const_names = bk.shape_extend
-            elif const_data_type.name == "group_label":
+            elif const_data_type.name == bk.const_dtypes["group_label"]:
                 const_names = bk.group_name_extend
             else:
                 raise ValueError
@@ -329,10 +332,7 @@ class Language(object):
             raise ValueError
         consts = []
         for c_i, name in enumerate(const_names):
-            if "feature_map" in name:
-                const = Const(name, const_data_type, values=data[c_i])
-            else:
-                const = Const(name, const_data_type)
+            const = Const(name, const_data_type)
             consts.append(const)
         return consts
 
@@ -666,19 +666,18 @@ class Language(object):
     def update_bk(self):
         self.generate_atoms()
 
-    def variable_set_id(self, var_id):
+    def variable_set_id(self, args, var_id):
         for c in self.clauses:
             for a_i in range(len(c.body)):
                 if isinstance(c.body[a_i], InvAtom):
+                    c.body[a_i].terms = list(c.body[a_i].terms)
                     for t_i in range(len(c.body[a_i].terms)):
-                        c.body[a_i].terms = list(c.body[a_i].terms)
-                        for tt_i in range(len(c.body[a_i].terms[t_i])):
-                            c.body[a_i].terms[t_i] = list(c.body[a_i].terms[t_i])
-                            if isinstance(c.body[a_i].terms[t_i][tt_i], Var):
-                                if bk.variable_symbol_group in c.body[a_i].terms[t_i][tt_i].name:
-                                    c.body[a_i].terms[t_i][tt_i] = Var(f"{bk.variable_symbol_group}_{var_id}",
-                                                                       bk.var_dtypes["group"])
-                            c.body[a_i].terms[t_i] = tuple(c.body[a_i].terms[t_i])
+                        if isinstance(c.body[a_i].terms[t_i], Var):
+                            c.body[a_i].terms = list(c.body[a_i].terms)
+                            if bk.variable_symbol_group in c.body[a_i].terms[t_i].name:
+                                c.body[a_i].terms[t_i] = Var(f"{bk.variable_symbol_group}_{var_id}",
+                                                             bk.var_dtypes["group"])
+                            c.body[a_i].terms = tuple(c.body[a_i].terms)
                         c.body[a_i].terms = tuple(c.body[a_i].terms)
 
                 else:
@@ -689,6 +688,8 @@ class Language(object):
                                 c.body[a_i].terms[t_i] = Var(f"{bk.variable_symbol_group}_{var_id}",
                                                              bk.var_dtypes["group"])
                         c.body[a_i].terms = tuple(c.body[a_i].terms)
+        args.logger.debug(f"\nAll {len(self.clauses)} Machine Clauses in Group {var_id}:" +
+                          f"".join([f"\n{str(c)}" for c in self.clauses]))
 
     def record_milestone(self):
         self.record_clauses += self.clauses
@@ -717,25 +718,24 @@ class Language(object):
                            range(self.group_variable_num)]
         self.generate_atoms()
 
-    def rephase_clauses(self, args):
+    def rewrite_clauses(self, args):
         rewritted_clauses = []
         for g_i in range(self.group_variable_num):
             predicate_list = []
             obj_term_lists = []
             group_term_lists = []
+            terms = []
             for clause in self.clauses:
-                if clause.body[0].terms[0][1].name.split("_")[-1] != str(g_i):
+                if clause.body[0].terms[-2].name.split("_")[-1] != str(g_i):
                     continue
                 for atom in clause.body:
                     if isinstance(atom, InvAtom):
                         # new term
-                        new_obj_terms, new_group_terms = lang_utils.inv_new_atom_terms(atom.pred.sub_preds, atom.terms)
-                        obj_term_lists.append(new_obj_terms)
-                        if new_group_terms not in group_term_lists:
-                            group_term_lists.append(new_group_terms)
-                        # new predicates
                         predicate_list.append(atom.pred)
-            # invent predicate for rephased clauses
+                        obj_term_lists.append(lang_utils.filter_given_type_of_terms(atom.terms, "object"))
+                        group_term_lists += lang_utils.filter_given_type_of_terms(atom.terms, "group")
+                # invent predicate for rephased clauses
+            group_term_lists = list(set(group_term_lists))
             inv_p = FinalPredicate(predicate_list, "exist", 3)
             terms = [obj_term_lists, group_term_lists, self.group_vars[g_i]]
             inv_atom = InvAtom(inv_p, terms)

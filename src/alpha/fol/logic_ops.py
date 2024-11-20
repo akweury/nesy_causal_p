@@ -32,10 +32,7 @@ def subs(exp, target_var, const):
         terms = [subs(term, target_var, const) for term in exp.terms]
         return Atom(exp.pred, terms)
     elif type(exp) == InvAtom:
-        atom_terms = []
-        for terms in exp.terms:
-            term = tuple([subs(term, target_var, const) for term in terms])
-            atom_terms.append(term)
+        atom_terms = [subs(term, target_var, const) for term in exp.terms]
         return InvAtom(exp.pred, atom_terms)
     elif type(exp) == FuncTerm:
         args = [subs(arg, target_var, const) for arg in exp.args]
@@ -67,11 +64,13 @@ def subs_list(exp, theta_list):
     elif type(exp) == InvAtom:
         term_list = exp.terms
         term_list_subs = []
-        for terms in term_list:
-            for target_var, const in theta_list:
-                terms = tuple([subs(term, target_var, const) for term in terms])
-            term_list_subs.append(terms)
-        return InvAtom(exp.pred, term_list_subs)
+        for target_var, const in theta_list:
+            term_list = tuple([subs(term, target_var, const) for term in term_list])
+        # for terms in term_list:
+        #     for target_var, const in theta_list:
+        #         terms = tuple([subs(term, target_var, const) for term in terms])
+        #     term_list_subs.append(terms)
+        return InvAtom(exp.pred, term_list)
     elif type(exp) == InventedClause:
         head = exp.head
         body = exp.body

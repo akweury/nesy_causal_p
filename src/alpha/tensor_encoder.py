@@ -363,7 +363,8 @@ class TensorEncoder(object):
         """
 
         ind = [self.get_fact_index(nf) for nf in atoms]
-        # ind = self.get_fact_index_v(atoms)
+        if sum(ind)==0:
+            raise ValueError
         return torch.tensor(ind, dtype=torch.int16).to(self.device)
 
     def get_fact_index_v(self, facts):

@@ -95,15 +95,17 @@ def main():
 
     # Test Positive Patterns
     step_counter += 1
-    positive_acc = check_clause(args, lang, positive_images, True, args.out_positive_folder)
-    logger.info(f"Step {step_counter}/{total_step}: "
-                f"Test Positive Image Accuracy: {positive_acc.mean(dim=1)}\n"
+    positive_acc = check_clause(args, lang, positive_images, "POSITIVE", args.out_positive_folder)
+    logger.info(f"\n"
+                f"Step {step_counter}/{total_step}: "
+                f"Positive Test Image Accuracy: {positive_acc.mean(dim=0)}\n"
+                f"Confidence for each image: \n"
                 f"{positive_acc}")
 
     # Step 6: Test counterfactual patterns
     step_counter += 1
 
-    cf_acc = check_clause(args, lang, counterfactual_imges, False, args.out_cf_folder)
+    cf_acc = check_clause(args, lang, counterfactual_imges, "NEGATIVE", args.out_cf_folder)
     logger.info(f"Step {step_counter}/{total_step}: Test Counterfactual Image Accuracy: \n"
                 f"{cf_acc}")
 

@@ -89,12 +89,6 @@ def node_extension(args, lang, base_nodes, extended_nodes):
                 if new_atoms[a_i] not in lang.atoms:
                     lang.atoms.append(new_atoms[a_i])
 
-    if args.show_process:
-        log_utils.add_lines(f"=============== extended clauses =================", args.log_file)
-        for ref in new_nodes:
-            log_utils.add_lines(f"{ref}", args.log_file)
-    if len(new_nodes) == 0:
-        print("No extended clauses found")
     return new_nodes
 
 
@@ -175,10 +169,8 @@ def df_search(args, lang, C, FC, objs):
     lang.generate_atoms()
     for e_i in range(2):
         extended_nodes = node_extension(args, lang, base_nodes, extended_nodes)
-        try:
-            NSFR = nsfr.get_nsfr_model(args, lang, FC, extended_nodes)
-        except ValueError:
-            raise ValueError
+
+        NSFR = nsfr.get_nsfr_model(args, lang, FC, extended_nodes)
         target_preds = list(set([c.head.pred.name for c in extended_nodes]))
         # clause evaluation
         ils, dls = evaluation(args, NSFR, target_preds, objs)
@@ -240,7 +232,7 @@ def alpha(args, ocm):
     for g_i in range(len(ocm)):
         lang.reset_lang(g_num=1)
         df_search(args, lang, C, FC, ocm[g_i:g_i + 1])
-        lang.variable_set_id(g_i)
+        lang.variable_set_id(args, g_i)
         # merged_clause = lang.rephase_clauses()
         # final_clause, name_dict = llama_call.rename_terms(merged_clause)
         lang.record_milestone()

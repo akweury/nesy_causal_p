@@ -119,7 +119,7 @@ def train_clauses(args, image_paths, out_path):
     lang.clauses = most_frequent_clauses
 
     # convert machine clause to final clause
-    merged_clauses = lang.rephase_clauses(args)
+    merged_clauses = lang.rewrite_clauses(args)
     llm_clauses, name_dict = llama_call.rewrite_clauses(args, merged_clauses)
     lang.llm_clauses = llm_clauses
 

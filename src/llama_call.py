@@ -134,9 +134,23 @@ def rewrite_clauses(args, merged_clauses):
             new_term = llama_rename_term(term_str)
             new_terms.append(new_term)
             name_dict[tuple(obj_term)] = new_term
-
+        #
+        # group_id = None
+        # group_name = None
+        # obj_terms = []
+        # for term in merged_clause.body[0].terms:
+        #     if hasattr(term, "var_type" ):
+        #         if term.var_type == "group_data":
+        #             group_id = term.name
+        #     elif hasattr(term, "dtype"):
+        #         if term.dtype == "group_label":
+        #             group_name = term.name
+        #         else:
+        #             obj_terms.append(term.name)
+        group_id = merged_clause.body[0].terms[-1]
+        group_name = merged_clause.body[0].terms[-2][0]
         # rewrite the whole clause
-        final_clause = llama_rewrite_clause(new_terms, merged_clause.body[0].terms[-1], merged_clause.body[0].terms[-2][0])
+        final_clause = llama_rewrite_clause(new_terms, group_id, group_name)
         final_clauses.append(final_clause)
 
     args.logger.debug("\n =============== LLM: Rename terms =============== " + "".join(

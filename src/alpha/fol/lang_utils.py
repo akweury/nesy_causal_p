@@ -47,6 +47,10 @@ def get_c_head(pred, arguments):
     return head_str
 
 
+def merge_term_lists(term_lists):
+    for t_i in range(len(term_lists)):
+        term_lists[t_i] = tuple(set([t for t_tuple in term_lists[t_i] for t in t_tuple]))
+    return term_lists
 def remove_chaos_terms(inv_atom_terms):
     # guarantee only one var term in each term list
     rational_terms = []
@@ -59,6 +63,9 @@ def remove_chaos_terms(inv_atom_terms):
                         var_terms.append(term.name)
         if len(var_terms) == 1:
             rational_terms.append(term_list)
+            # for t in term_list:
+            #     if t not in rational_terms:
+            #         rational_terms.append(t)
     return rational_terms
 
 
@@ -74,22 +81,25 @@ def get_var_type(var_str):
     return var_type
 
 
-def inv_new_atom_terms(preds, terms):
-    # invent exist terms
-    name_dict = {}
-    exist_p_idx = [i for i in range(len(preds)) if "exist_obj" in preds[i].name]
-    exist_ps = [preds[i] for i in exist_p_idx]
-    exist_terms = [terms[i] for i in exist_p_idx]
-    term_objs = [t[0] for t in exist_terms]
-
-
-    exist_group_p_idx = [i for i in range(len(preds)) if "exist_group" in preds[i].name]
-    exist_group_preds = [preds[i] for i in exist_group_p_idx]
-    exist_group_terms = [terms[i] for i in exist_group_p_idx]
-    term_groups = [t[0] for t in exist_group_terms]
-
-
-    return term_objs, term_groups
+# def inv_new_atom_terms(preds, terms):
+#     # invent exist terms
+#     objs_terms = []
+#
+#     for term in terms:
+#         if term.dtype.name
+#
+#     exist_p_idx = [i for i in range(len(preds)) if "exist_obj" in preds[i].name]
+#     exist_terms = [terms[i] for i in exist_p_idx]
+#     term_objs = [t[0] for t in exist_terms]
+#
+#
+#     exist_group_p_idx = [i for i in range(len(preds)) if "exist_group" in preds[i].name]
+#     exist_group_preds = [preds[i] for i in exist_group_p_idx]
+#     exist_group_terms = [terms[i] for i in exist_group_p_idx]
+#     term_groups = [t[0] for t in exist_group_terms]
+#
+#
+#     return term_objs, term_groups
 
 
 def orgnize_inv_pred_dtypes(dtypes):
@@ -99,3 +109,13 @@ def orgnize_inv_pred_dtypes(dtypes):
     reorgnized_dtypes.append(dtypes[0][1])
     reorgnized_dtypes.append(dtypes[0][2])
     return reorgnized_dtypes
+
+
+def filter_given_type_of_terms(terms, term_type):
+    type_terms = []
+    for term in terms:
+        if hasattr(term, "dtype") and term_type in term.dtype.name:
+            type_terms.append(term)
+        elif hasattr(term, "dtype") and term_type in term.dtype.name:
+            type_terms.append(term)
+    return type_terms

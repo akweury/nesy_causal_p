@@ -141,11 +141,11 @@ class FCNNValuationModule(nn.Module):
                 term_name = "group_data"
         elif term_name == "object":
             term_data = self.lang.term_index(term)
-        elif term_name in ["color", "shape", "group_label"]:
+        elif term_name in [bk.const_dtype_object_color, bk.const_dtype_object_shape, bk.const_dtype_group]:
             term_data = self.attrs[term][0]
-        elif term_name in bk.attr_names:
-            # return the standard attribute code
-            term_data = self.attrs[term]
+        # elif term_name in bk.attr_names:
+        #     # return the standard attribute code
+        #     term_data = self.attrs[term]
         elif term_name == 'pattern':
             # return the image
             term_data = data
@@ -397,10 +397,10 @@ class VFColor(nn.Module):
 
     def forward(self, args_dict):
         try:
-            color_gt = args_dict["color"]
+            color_gt = args_dict[bk.const_dtype_object_color]
         except KeyError:
-            print("")
-        group_data = args_dict["group_data"]
+            raise ValueError
+        group_data = args_dict[bk.var_dtype_group]
         if group_data is None:
             return False
         color_data = group_data[:, bk.prop_idx_dict["color"]]
@@ -417,11 +417,11 @@ class VFShape(nn.Module):
         self.name = name
 
     def forward(self, args_dict):
-        group_data = args_dict["group_data"]
+        group_data = args_dict[bk.var_dtype_group]
         if group_data is None:
             return False
 
-        shape_gt = args_dict["shape"]
+        shape_gt = args_dict[bk.const_dtype_object_shape]
         shape_data = group_data[:, bk.prop_idx_dict["shape"]]
         has_shape = (shape_gt == shape_data).sum().bool().float()
         return has_shape
@@ -436,8 +436,8 @@ class VFGShape(nn.Module):
         self.name = name
 
     def forward(self, args_dict):
-        group_data = args_dict["group_data"]
-        group_label_gt = args_dict["group_label"]
+        group_data = args_dict[bk.var_dtype_group]
+        group_label_gt = args_dict[bk.const_dtype_group]
 
         if group_data is None:
             return False

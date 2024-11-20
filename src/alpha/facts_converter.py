@@ -1,5 +1,5 @@
 # Created by shaji at 24/06/2024
-
+import logging
 
 import torch
 import torch.nn as nn
@@ -18,6 +18,7 @@ class FactsConverter(nn.Module):
     def __init__(self, args, lang, valuation_module, given_attrs=None):
         super(FactsConverter, self).__init__()
         # self.dim = args.d
+        self.args = args
         self.lang = lang
         self.vm = valuation_module  # valuation functions
         self.device = args.device
@@ -88,11 +89,11 @@ class FactsConverter(nn.Module):
                 term_name = "group_data"
         elif term_name == "object":
             term_data = self.lang.term_index(term)
-        elif term_name in ["color", "shape", "group_label"]:
+        elif term_name in [bk.const_dtype_object_color, bk.const_dtype_object_shape, bk.const_dtype_group]:
             term_data = self.attrs[term][0]
-        elif term_name in bk.attr_names:
+        # elif term_name in bk.attr_names:
             # return the standard attribute code
-            term_data = self.attrs[term]
+            # term_data = self.attrs[term]
         elif term_name == 'pattern':
             # return the image
             term_data = data
@@ -108,27 +109,38 @@ class FactsConverter(nn.Module):
             if type(atom.pred) == NeuralPredicate and i > 1:
                 V[:, i] = self.vm(group, atom)
             elif type(atom.pred) == InventedPredicate:
+
+                # collect the term data of the atom
+                pred_args = {}
+                terms = atom.terms
+                if not isinstance(terms, tuple):
+                    raise ValueError
+                for t in terms:
+                    term_name, term_data = self.ground_to_tensor(t, group)
+                    pred_args[term_name] = term_data
+
                 # collecting the data
-                atom_res = True
+                atom_conf = True
                 for a_i in range(len(atom.pred.sub_preds)):
-                    pred_args = {}
-                    if isinstance(atom.terms[a_i], Const):
-                        term = atom.terms
-                    elif isinstance(atom.terms[a_i], list):
-                        term = atom.terms[a_i]
-                    elif isinstance(atom.terms[a_i], tuple):
-                        term = atom.terms[a_i]
-                    else:
-                        raise ValueError
-                    for t in term:
-                        term_name, term_data = self.ground_to_tensor(t, group)
-                        pred_args[term_name] = term_data
+                    # if isinstance(atom.terms[a_i], Const):
+                    #     term = atom.terms
+                    # elif isinstance(atom.terms[a_i], list):
+                    #     term = atom.terms[a_i]
+                    # elif isinstance(atom.terms[a_i], tuple):
+                    #     term = atom.terms[a_i]
+                    # else:
+                    #     raise ValueError
+                    # for t in term:
+                    #     term_name, term_data = self.ground_to_tensor(t, group)
+                    #     pred_args[term_name] = term_data
                     module_name = atom.pred.sub_preds[a_i].name
                     # valuating via the predicate mechanics
                     module = valuation.valuation_modules[module_name]
                     module_res = module(pred_args)
-                    atom_res *= module_res
-                V[:, i] = atom_res
+                    atom_conf *= module_res
+                self.args.logger.debug(f"(atom) {atom_conf:.1f} {atom} ")
+                V[:, i] = atom_conf
+
             # this atom is an invented predicate
             # elif type(atom.pred) == InventedPredicate:
             #     if atom.pred.body is not None:
