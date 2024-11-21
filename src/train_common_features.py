@@ -534,7 +534,7 @@ def img2groups_flexible(args, bk, data, data_idx, img, out_path):
             groups.append({
                 "id": group_count,
                 "name": bk_shape["name"],
-                "onside": onside[-1],
+                "onside": (onside.sum(dim=0)>0).float(),
                 "count_conf": group_count_conf
             })
             group_count += 1

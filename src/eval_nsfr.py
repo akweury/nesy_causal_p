@@ -83,7 +83,7 @@ def group2ocm(data, groups):
 def check_clause(args, lang, image_paths, image_label, output_path):
     # load background knowledge
     check_size = 4
-    preds = torch.zeros((min(check_size, len(image_paths)), len(lang.clauses)))
+    clauses_conf = torch.zeros((min(check_size, len(image_paths)), len(lang.clauses)))
     group_bk = load_bk(args, bk.group_name_extend)
 
     for idx in range(min(check_size, len(image_paths))):
@@ -94,15 +94,24 @@ def check_clause(args, lang, image_paths, image_label, output_path):
         groups = train_common_features.img2groups_flexible(args, group_bk, obj_pos, idx, img, output_path)
         if len(groups) != 0:
             group_tensors = group2ocm(data, groups)
-            preds[idx] = alpha.alpha_test(args, group_tensors, lang)
+            clauses_conf[idx] = alpha.alpha_test(args, group_tensors, lang)
 
         # logger
-        args.logger.debug(f"\n {image_label} Image {idx}, machine clause scores: {preds[idx]}")
-        mean_conf = preds[idx].mean()
+        satisfied_clause_indices = torch.nonzero(clauses_conf[idx] >= args.valid_rule_th).squeeze()
+        dissatisfied_clause_indices = torch.nonzero(clauses_conf[idx] < args.valid_rule_th).squeeze()
+        satisfied_clauses = [f"({clauses_conf[idx, c_i]:.2f}) {lang.clauses[c_i]}\n" for c_i in satisfied_clause_indices]
+        dissatisfied_clauses = [f"({clauses_conf[idx, c_i]:.2f}) {lang.clauses[c_i]}\n" for c_i in dissatisfied_clause_indices]
+
+        args.logger.debug(f"\n"
+                          f"{image_label} Image {idx} Machine clauses: \n" +
+                          f"".join(satisfied_clauses) +
+                          f"".join(dissatisfied_clauses)
+                          )
+        mean_conf = clauses_conf[idx].mean()
         if image_label == "POSITIVE" and mean_conf < 0.8:
             args.logger.warning(f"\n (FALSE Negative) conf|threshold {mean_conf}|0.8")
 
-    pred_conf = preds.mean(dim=1)
+    pred_conf = clauses_conf.mean(dim=1)
     return pred_conf
 
 

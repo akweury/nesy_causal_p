@@ -93,27 +93,33 @@ def main():
                 f"Reasoned {len(lang.llm_clauses)} LLM Rules, "
                 f"{len(lang.clauses)} Machine Clauses")
 
-    # Test Positive Patterns
+    # Test Positive Patterns, statistic the accuracy, return the satisfied and dissatisfied rules for each test data.
     step_counter += 1
     positive_acc = check_clause(args, lang, positive_images, "POSITIVE", args.out_positive_folder)
     logger.info(f"\n"
                 f"Step {step_counter}/{total_step}: "
-                f"Positive Test Image Accuracy: {positive_acc.mean(dim=0)}\n"
-                f"Confidence for each image: \n"
+                f"Positive Test Image Accuracy: {positive_acc.mean(dim=0):.2f}\n"
+                f"Confidence for each image: "
                 f"{positive_acc}")
 
     # Step 6: Test counterfactual patterns
     step_counter += 1
 
     cf_acc = check_clause(args, lang, counterfactual_imges, "NEGATIVE", args.out_cf_folder)
-    logger.info(f"Step {step_counter}/{total_step}: Test Counterfactual Image Accuracy: \n"
+    logger.info(f"\n"
+                f"Step {step_counter}/{total_step}: "
+                f"Test Counterfactual Image Accuracy: {cf_acc.mean():.2f}\n"
+                f"Confidence for each image: "
                 f"{cf_acc}")
 
     # Step 7: Test random patterns
     step_counter += 1
 
-    random_acc = check_clause(args, lang, random_imges, False, args.out_random_folder)
-    logger.info(f"Step {step_counter}/{total_step}: random image accuracy: {random_acc}")
+    random_acc = check_clause(args, lang, random_imges, "NEGATIVE", args.out_random_folder)
+    logger.info(f"\n"
+                f"Step {step_counter}/{total_step}: "
+                f"Random Image accuracy: {random_acc.mean():.2f}\n"
+                f"Confidence for each image: {random_acc}")
 
 
 if __name__ == '__main__':

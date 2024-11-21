@@ -42,6 +42,8 @@ def get_args(logger):
     parser.add_argument("--max_obj_num", type=int, default=5)
     parser.add_argument("--group_count_conf_th", type=float, default=0.6)
     parser.add_argument("--fm_th", type=float, default=0.5)
+    parser.add_argument("--valid_rule_th", type=float, default=0.8)
+
 
     args = parser.parse_args()
     args.logger = logger
