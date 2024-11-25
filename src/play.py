@@ -97,10 +97,10 @@ def main():
     step_counter += 1
     positive_acc = check_clause(args, lang, positive_images, "POSITIVE", args.out_positive_folder)
     logger.info(f"\n"
-                f"Step {step_counter}/{total_step}: "
-                f"Positive Test Image Accuracy: {positive_acc.mean(dim=0):.2f}\n"
-                f"Confidence for each image: "
-                f"{positive_acc}")
+                f"Step {step_counter}/{total_step}: Test Positive Images\n"
+                f"Confidence for each image: {positive_acc}\n"
+                f"Average Accuracy: {positive_acc.mean(dim=0):.2f}\n")
+
 
     # Step 6: Test counterfactual patterns
     step_counter += 1
@@ -121,6 +121,13 @@ def main():
                 f"Random Image accuracy: {random_acc.mean():.2f}\n"
                 f"Confidence for each image: {random_acc}")
 
+    # final logger
+    logger.info(f"\n"
+                f"======================= Test Images Accuracy ============================"
+                f"[ pos|cf|rand {positive_acc.mean():.2f} | {cf_acc.mean():.2f} | {random_acc.mean():.2f} ]\n"
+                f"========================== End of the Program ====================================")
+
+    return
 
 if __name__ == '__main__':
     main()

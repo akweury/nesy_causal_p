@@ -138,7 +138,7 @@ class FactsConverter(nn.Module):
                     module = valuation.valuation_modules[module_name]
                     module_res = module(pred_args)
                     atom_conf *= module_res
-                self.args.logger.debug(f"(atom) {atom_conf:.1f} {atom} ")
+                # self.args.logger.debug(f"(atom) {atom_conf:.1f} {atom} ")
                 V[:, i] = atom_conf
 
             # this atom is an invented predicate
