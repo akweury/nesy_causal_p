@@ -1,23 +1,14 @@
 # Created by shaji at 25/07/2024
 
-import os
 import torch
-import torch.nn as nn
 import torch.nn.functional as F  # Import F for functional operations
 import numpy as np
-import matplotlib.pyplot as plt
-from skimage.transform import hough_line, hough_line_peaks
-import cv2 as cv
 import torch.optim as optim
-from sklearn.cluster import KMeans
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 import wandb
-import torchvision.transforms as transforms
 from einops import rearrange, repeat
-from einops.layers.torch import Rearrange
 from torch import nn, einsum
-import cv2
 
 import config
 from src.utils import data_utils, visual_utils, file_utils
@@ -100,6 +91,40 @@ class ShapeDataset(Dataset):
         patch = data_utils.oco2patch(data).unsqueeze(0).to(self.device)
         # label = self.labels[idx].to(self.device)
         return patch
+
+
+class ContinueShapeDataset(Dataset):
+    def __init__(self, args, transform=None):
+        self.transform = transform
+
+        self.image_paths = []
+        # self.labels = []
+        self.device = args.device
+        folder = config.kp_dataset / args.exp_name
+        imgs = file_utils.get_all_files(folder, "png", False)[:1000]
+        # labels = [self.get_label(args.exp_name) for img in imgs]
+        self.image_paths += imgs
+        # self.labels += labels
+
+    def get_label(self, img_name):
+        if 'trianglesquare' in img_name:
+            return torch.tensor([0, 0, 1], dtype=torch.float)
+        elif 'trianglecircle' in img_name:
+            return torch.tensor([0, 1, 0], dtype=torch.float)
+        elif 'triangle' in img_name:
+            return torch.tensor([1, 0, 0], dtype=torch.float)
+
+    def __len__(self):
+        return len(self.image_paths)
+
+    def __getitem__(self, idx):
+        img = data_utils.load_bw_img(self.image_paths[idx], size=64)
+        # resize
+        # file_name, file_extension = self.image_paths[idx].split(".")
+        # data = file_utils.load_json(f"{file_name}.json")
+        # patch = data_utils.oco2patch(data).unsqueeze(0).to(self.device)
+
+        return img
 
 
 class MaskOptimizer:

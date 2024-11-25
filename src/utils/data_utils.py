@@ -7,6 +7,7 @@ from torch.nn import functional as F
 import pickle
 import os
 import config
+import cv2
 
 
 def data2patch(data):
@@ -314,3 +315,15 @@ def load_pickle(file_name):
         return loaded_data
     else:
         return None
+
+
+def load_bw_img(img_path, size=None):
+    # Load an image
+    image = cv2.imread(img_path)
+    image[image == [215, 215, 215]] = 0
+    mask = (image.sum(axis=-1) > 0).astype(np.uint8)
+
+    if size is not None:
+        mask = cv2.resize(mask, (64, 64), interpolation=cv2.INTER_AREA)
+    mask = torch.from_numpy(mask)
+    return mask.unsqueeze(0)

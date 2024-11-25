@@ -208,6 +208,8 @@ def genShapeOnShape(shapes, n):
                 gen_fun = shapeOnshapeObjects.cir_flex_only
             elif shape == "triangle":
                 gen_fun = shapeOnshapeObjects.tri_only
+            elif shape =="triangle_solid":
+                gen_fun = shapeOnshapeObjects.tri_solid
             elif shape == "triangler":
                 gen_fun = shapeOnshapeObjects.trir_only
             elif shape == "diamond":
@@ -242,5 +244,5 @@ def genShapeOnShape(shapes, n):
                 image.save(base_path / f"{shape}_{(png_num+i):06d}.png")
 
 if __name__ == '__main__':
-    tasks = ["triangle_small", "square_small", "circle_small"]
+    tasks = ["triangle_solid"]
     genShapeOnShape(tasks, 1000)

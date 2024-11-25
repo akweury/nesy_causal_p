@@ -1,3 +1,6 @@
+# Created by jing at 25.11.24
+
+
 # Created by shaji at 24/07/2024
 
 import torch
@@ -16,14 +19,12 @@ from src.percept import perception
 from src.utils import args_utils, data_utils, chart_utils
 
 
-
-
-def prepare_kp_sy_data(args):
+def prepare_continue_data(args):
     transform = transforms.Compose([
         transforms.Resize((64, 64)),
         transforms.ToTensor(),
     ])
-    dataset = perception.ShapeDataset(args, transform=transform)
+    dataset = perception.ContinueShapeDataset(args, transform=transform)
     train_size = int(0.8 * len(dataset))
     val_size = len(dataset) - train_size
     train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
@@ -147,7 +148,7 @@ def train_fm_cloud(logger):
     bk_shapes = ["triangle_solid"]
     for bk_shape in bk_shapes:
         args.exp_name = bk_shape
-        train_loader, val_loader = prepare_kp_sy_data(args)
+        train_loader, val_loader = prepare_continue_data(args)
 
         os.makedirs(config.output / f"{args.exp_name}", exist_ok=True)
         kernels = []
@@ -212,4 +213,3 @@ if __name__ == "__main__":
     logger.setLevel(colorlog.DEBUG)
 
     train_fm_cloud(logger)
-    # train_fm_stack()
