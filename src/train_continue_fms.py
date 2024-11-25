@@ -1,8 +1,5 @@
 # Created by jing at 25.11.24
 
-
-# Created by shaji at 24/07/2024
-
 import torch
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader, random_split
@@ -10,7 +7,6 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image, ImageDraw
-import cv2
 import os
 import colorlog
 

@@ -6,9 +6,35 @@ import os
 import random
 import numpy as np
 import torch
+import colorlog
 
 import config
 from . import log_utils
+
+def init_logger():
+    # Create a color handler
+    handler = colorlog.StreamHandler()
+    handler.setFormatter(
+        colorlog.ColoredFormatter(
+            "%(log_color)s%(asctime)s - %(levelname)s - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+            log_colors={
+                "DEBUG": "white",
+                "INFO": "green",
+                "WARNING": "yellow",
+                "ERROR": "red",
+                "CRITICAL": "bold_red",
+            },
+        )
+    )
+
+    # Add the color handler to the logger
+    logger = colorlog.getLogger("colorLogger")
+    logger.addHandler(handler)
+    # Prevent logs from propagating to the root logger
+    logger.propagate = False
+    logger.setLevel(colorlog.DEBUG)
+    return logger
 
 
 def get_args(logger):
@@ -25,6 +51,7 @@ def get_args(logger):
     parser.add_argument("--is_visual", action="store_true")
     parser.add_argument("--is_done", action="store_true")
     parser.add_argument("--extend", action="store_true")
+    parser.add_argument("--solid_pattern", action="store_true")
     parser.add_argument("--show_process", action="store_true")
     parser.add_argument("--number_num", type=int, default=10)
     parser.add_argument("--phi_num", type=int, default=2)
@@ -55,3 +82,4 @@ def get_args(logger):
     os.makedirs(config.output / f"{args.exp_name}", exist_ok=True)
     args.batch_size = 1
     return args
+

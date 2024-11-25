@@ -4,7 +4,6 @@ import logging
 from tqdm import tqdm
 import torch
 import cv2
-import pickle
 import os
 
 import config
@@ -38,7 +37,10 @@ def load_bk(args, bk_shapes):
 def load_data(args, image_path):
     file_name, file_extension = image_path.split(".")
     data = file_utils.load_json(f"{file_name}.json")
-    patch = data_utils.oco2patch(data).unsqueeze(0).to(args.device)
+    if not args.solid_pattern:
+        patch = data_utils.oco2patch(data).unsqueeze(0).to(args.device)
+    else:
+        patch = data_utils.load_bw_img(image_path, size=64)
     img = file_utils.load_img(image_path)
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     return img, patch
@@ -97,7 +99,10 @@ def train_clauses(args, image_paths, out_path):
     # load background knowledge
     lang = None
     all_clauses = []
-    group_bk = load_bk(args, bk.group_name_extend)
+    if args.solid_pattern:
+        group_bk = load_bk(args, bk.group_name_solid)
+    else:
+        group_bk = load_bk(args, bk.group_name_extend)
     for idx in range(min(2, len(image_paths))):
         args.logger.debug(f"\n =========== Analysis Image {idx + 1}/{min(2, len(image_paths))} ==============")
         file_name, file_extension = image_paths[idx].split(".")
@@ -138,8 +143,8 @@ def train_clauses(args, image_paths, out_path):
 
 
 if __name__ == "__main__":
-    args = args_utils.get_args()
-    # image_paths = file_utils.get_all_files(config.kp_dataset / args.exp_name / "train" / "true", "png", False)[:500]
+    logger = args_utils.init_logger()
+    args = args_utils.get_args(logger)
     image_paths = file_utils.get_all_files(config.kp_dataset / args.exp_name, "png", False)[:500]
     out_path = config.output / args.exp_name
     train_clauses(args, image_paths, out_path)

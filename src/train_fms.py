@@ -7,13 +7,12 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image, ImageDraw
-import cv2
 import os
 import colorlog
 
 import config
 from src.percept import perception
-from src.utils import args_utils, data_utils, chart_utils
+from src.utils import args_utils, data_utils
 
 
 
@@ -175,16 +174,6 @@ def train_fm_cloud(logger):
         print(f"#FM: {len(data_all)}. #Data: {len(train_loader)}, ratio: {len(data_all) / len(train_loader):.2f}")
         torch.save(data_all, config.output / f"{args.exp_name}" / f"fms.pt")
         print(f"feature maps have been saved to {config.output / f'{args.exp_name}' / 'fms.pt'}")
-        # for fm_i in range(10):
-        #     compare_imgs = []
-        #     compare_imgs.append(chart_utils.color_mapping(kernels[fm_i].squeeze(), 1, f"K {fm_i}"))
-        #     for img_i in range(10):
-        #         compare_imgs.append(chart_utils.color_mapping(fm_all[img_i][fm_i].squeeze(), 1, f"IMG{img_i} FM{fm_i}"))
-        #     compare_imgs.append(chart_utils.color_mapping(fm_all[:, fm_i].squeeze().sum(dim=0), 1, f"IMG SUM"))
-        #
-        #     compare_imgs = chart_utils.concat_imgs(compare_imgs)
-        #     compare_imgs = cv2.cvtColor(compare_imgs, cv2.COLOR_BGR2RGB)
-        #     cv2.imwrite(str(config.output / f"{args.exp_name}" / f"FM_{fm_i}.png"), compare_imgs)
 
 
 if __name__ == "__main__":
@@ -212,4 +201,3 @@ if __name__ == "__main__":
     logger.setLevel(colorlog.DEBUG)
 
     train_fm_cloud(logger)
-    # train_fm_stack()
