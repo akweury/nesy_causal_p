@@ -125,7 +125,7 @@ def train_fm_stack():
         fm_all = []
         data_shift_all = []
         for data in tqdm(train_loader):
-            fms = perception.extract_fm(data, kernels)
+            fms = perception.one_layer_conv(data, kernels)
             fms, rs, cs = data_utils.shift_content_to_top_left(fms)
             data_shift, _, _ = data_utils.shift_content_to_top_left(data, rs, cs)
             fm_all.append(fms)
@@ -162,7 +162,7 @@ def train_fm_cloud(logger):
         fm_all = []
         data_shift_all = []
         for data in tqdm(train_loader, desc="Calculating FMs"):
-            fms = perception.extract_fm(data, kernels)
+            fms = perception.one_layer_conv(data, kernels)
             fms, row_shift, col_shift = data_utils.shift_content_to_top_left(fms)
             data_shift, _, _ = data_utils.shift_content_to_top_left(data, row_shift, col_shift)
             fm_all.append(fms)

@@ -198,7 +198,7 @@ def kandinskyFigureAsImagePIL(shapes, width=600, subsampling=4):
 def kandinskyFigureAsImage(shapes, width=600, subsampling=4):
     w = subsampling * width
     img = np.zeros((w, w, 3), np.uint8)
-    img[:, :] = [215, 215, 215]
+    img[:, :] = matplotlib_colors["lightgray"]
 
     for s in shapes:
         # not sure if this is the right color for openCV

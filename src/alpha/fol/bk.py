@@ -133,7 +133,7 @@ color_matplotlib.pop("black")
 color_large = [k for k, v in list(color_matplotlib.items())]
 
 shape_extend = ["circle", "square", "triangle", "diamond"]
-group_name_extend = ["none", "circle_small", "square_small", "triangle_small"]
+group_name_extend = ["none", "circle_small", "square_small", "triangle_small", "triangle_solid"]
 group_name_solid = ["none", "triangle_solid"]
 # group_name_extend = ["none", "circle_flex"]
 

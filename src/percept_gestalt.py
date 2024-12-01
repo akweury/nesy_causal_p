@@ -1,4 +1,5 @@
-# Created by jing at 17.06.24
+# Created by jing at 26.11.24
+
 import logging
 
 from tqdm import tqdm
@@ -18,26 +19,26 @@ def load_bk(args, bk_shapes):
     # load background knowledge
     bk = []
     for bk_shape in bk_shapes:
-        if bk_shape == "none":
-            continue
-        kernels = torch.load(config.output / bk_shape / f"kernels.pt").to(args.device)
-        fm_data = torch.load(config.output / bk_shape / f"fms.pt").to(args.device)
-        fm_img = fm_data[:, 0:1]
-        fm_repo = fm_data[:, 1:]
-        bk.append({
-            "name": bk_shape,
-            "kernels": kernels,
-            "fm_img": fm_img,
-            "fm_repo": fm_repo
-        })
+        for kernel_size in [5]:
+            if bk_shape == "none":
+                continue
+            kernels = torch.load(config.output / bk_shape / f"kernel_patches_{kernel_size}.pt").to(args.device)
+            fm_data = torch.load(config.output / bk_shape / f"fms_patches_{kernel_size}.pt").to(args.device)
+            fm_img = fm_data[:, 0:1]
+            fm_repo = fm_data[:, 1:]
+            bk.append({
+                "name": bk_shape,
+                "kernel_size": kernel_size,
+                "kernels": kernels,
+                "fm_img": fm_img,
+                "fm_repo": fm_repo
+            })
 
     return bk
 
 
 def load_data(args, image_path):
-    file_name, file_extension = image_path.split(".")
-    data = file_utils.load_json(f"{file_name}.json")
-    patch = data_utils.oco2patch(data).unsqueeze(0).to(args.device)
+    patch = data_utils.load_bw_img(image_path, size=64)
     img = file_utils.load_img(image_path)
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     return img, patch
@@ -84,59 +85,18 @@ def group2ocm(data, groups):
     return group_ocms
 
 
-def train_clauses(args, image_paths, out_path):
-    save_file = config.output / args.exp_name / f'learned_lang.pkl'
-    if os.path.exists(save_file):
-        lang_data = torch.load(save_file)
-        if lang_data is not None:
-            lang = alpha.load_lang(args, lang_data)
-            if lang is not None:
-                return lang
-
-    # load background knowledge
-    lang = None
-    all_clauses = []
-    if args.solid_pattern:
-        group_bk = load_bk(args, bk.group_name_solid)
-    else:
-        group_bk = load_bk(args, bk.group_name_extend)
+def percept_gestalt_pattern(args, image_paths, out_path):
+    group_bk = load_bk(args, bk.group_name_solid)
     for idx in range(min(2, len(image_paths))):
         args.logger.debug(f"\n =========== Analysis Image {idx + 1}/{min(2, len(image_paths))} ==============")
         file_name, file_extension = image_paths[idx].split(".")
         data = file_utils.load_json(f"{file_name}.json")
-        img, obj_pos = load_data(args, image_paths[idx])
-        groups = train_common_features.img2groups_flexible(args, group_bk, obj_pos, idx, img, out_path)
-        group_tensors = group2ocm(data, groups)
-        lang = alpha.alpha(args, group_tensors)
-        # rename predicates
-        # update clauses
-        all_clauses += lang.clauses
-    # remove the less occurred clauses
-
-    frequency = {}
-    for item in all_clauses:
-        frequency[item] = frequency.get(item, 0) + 1
-    most_frequency_value = max(frequency.values())
-    most_frequent_clauses = [key for key, value in frequency.items() if value == most_frequency_value]
-    lang.clauses = most_frequent_clauses
-
-    # convert machine clause to final clause
-    merged_clauses = lang.rewrite_clauses(args)
-    llm_clauses, name_dict = llama_call.rewrite_clauses(args, merged_clauses)
-    lang.llm_clauses = llm_clauses
-
-    lang_dict = {
-        "atoms": lang.atoms,
-        "clauses": lang.clauses,
-        "consts": lang.consts,
-        "preds": lang.predicates,
-        "g_num": lang.group_variable_num,
-        "attrs": lang.attrs,
-        "llm_clauses": llm_clauses,
-        "name_dict": name_dict
-    }
-    torch.save(lang_dict, save_file)
-    return lang
+        img, img_resized = load_data(args, image_paths[idx])
+        # img_resized = 1-img_resized
+        pixel_groups = train_common_features.percept_pixel_groups(args, group_bk, img_resized, idx, img, out_path)
+        pixel_groups_2nd = train_common_features.percept_2nd_pixel_groups(args, pixel_groups, group_bk, img_resized,
+                                                                          idx, img, out_path)
+        group_tensors = group2ocm(data, pixel_groups_2nd)
 
 
 if __name__ == "__main__":
@@ -144,4 +104,4 @@ if __name__ == "__main__":
     args = args_utils.get_args(logger)
     image_paths = file_utils.get_all_files(config.kp_dataset / args.exp_name, "png", False)[:500]
     out_path = config.output / args.exp_name
-    train_clauses(args, image_paths, out_path)
+    percept_gestalt_pattern(args, image_paths, out_path)

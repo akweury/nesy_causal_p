@@ -319,11 +319,10 @@ def load_pickle(file_name):
 
 def load_bw_img(img_path, size=None):
     # Load an image
-    image = cv2.imread(img_path)
-    image[image == [215, 215, 215]] = 0
-    mask = (image.sum(axis=-1) > 0).astype(np.uint8)
+    image = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+    image[image != 211] = 1
+    image[image == 211] = 0
+    img_resized = cv2.resize(image, (64, 64), interpolation=cv2.INTER_AREA)
+    img_resized = torch.from_numpy(img_resized).unsqueeze(0)
 
-    if size is not None:
-        mask = cv2.resize(mask, (64, 64), interpolation=cv2.INTER_AREA)
-    mask = torch.from_numpy(mask)
-    return mask.unsqueeze(0)
+    return img_resized

@@ -176,11 +176,10 @@ class ShapeOnShape(KandinskyTruthInterfce):
         kf = kf[:int(len(kf) * random_percent)]
         return kf
 
-
     def _triangleSolid(self, so, t, min_percent=1.0, max_percent=1.0):
         kf = []
-        x = 0.5 # + random.random() * 0.8
-        y = 0.7 # + random.random() * 0.8
+        x = 0.5  # + random.random() * 0.8
+        y = 0.7  # + random.random() * 0.8
         r = 0.3 - min(abs(0.5 - x), abs(0.5 - y)) * 0.5
 
         xs = x
@@ -196,11 +195,87 @@ class ShapeOnShape(KandinskyTruthInterfce):
         o.y = ys
         kf.append(o)
 
+        random_percent = random.uniform(min_percent, max_percent)
+        kf = kf[:int(len(kf) * random_percent)]
+        return kf
+
+    def _triangleSolidBig(self, so, t, min_percent=1.0, max_percent=1.0):
+        kf = []
+        x = 0.5  # + random.random() * 0.8
+        y = 0.7  # + random.random() * 0.8
+        r = 0.3 - min(abs(0.5 - x), abs(0.5 - y)) * 0.5
+
+        xs = x
+        ys = y - r
+
+        so = 0.5 + random.random() * 0.3
+
+        o = KandinskyUniverse.kandinskyShape()
+        o.color = random.choice(KandinskyUniverse.matplotlib_colors_list)
+        o.shape = "triangle"
+        o.size = so
+        o.x = xs
+        o.y = ys
+        kf.append(o)
 
         random_percent = random.uniform(min_percent, max_percent)
         kf = kf[:int(len(kf) * random_percent)]
         return kf
 
+    def _gestaltTriangle(self, so, t, min_percent=1.0, max_percent=1.0):
+        kf = []
+        x = 0.5  # + random.random() * 0.8
+        y = 0.7  # + random.random() * 0.8
+        r = 0.3 - min(abs(0.5 - x), abs(0.5 - y)) * 0.5
+        xs = x
+        ys = y - r
+
+        so = 0.1 + random.random() * 0.5
+        cir_so = so * 0.3
+
+        # correct the size to  the same area as an square
+
+        s = 0.7 * math.sqrt(3) * so / 3
+        dx = s * math.cos(math.radians(30))
+        dy = s * math.sin(math.radians(30))
+        # draw circles
+        o = KandinskyUniverse.kandinskyShape()
+        o.color = random.choice(["blue", "green", "yellow"])
+        o.shape = "circle"
+        o.size = cir_so
+        # (cx - s / 2, cy - s / 2), (cx + s / 2, cy + s / 2)
+        o.x = xs
+        o.y = ys - s
+        kf.append(o)
+
+        o = KandinskyUniverse.kandinskyShape()
+        o.color = random.choice(["blue", "green", "yellow"])
+        o.shape = "circle"
+        o.size = cir_so
+        o.x = xs + dx
+        o.y = ys + dy
+        kf.append(o)
+
+        o = KandinskyUniverse.kandinskyShape()
+        o.color = random.choice(["blue", "green", "yellow"])
+        o.shape = "circle"
+        o.size = cir_so
+        o.x = xs - dx
+        o.y = ys + dy
+        kf.append(o)
+
+        # draw triangle
+        o = KandinskyUniverse.kandinskyShape()
+        o.color = "lightgray"
+        o.shape = "triangle"
+        o.size = so
+        o.x = xs
+        o.y = ys
+        kf.append(o)
+
+        random_percent = random.uniform(min_percent, max_percent)
+        kf = kf[:int(len(kf) * random_percent)]
+        return kf
 
     def _smallTriangle(self, so, t, min_percent=1.0, max_percent=1.0):
         kf = []
@@ -623,6 +698,10 @@ class ShapeOnShape(KandinskyTruthInterfce):
             g = lambda so, truth: self._bigTriangler(so, truth)
         elif shape == "triangle_solid":
             g = lambda so, truth: self._triangleSolid(so, truth)
+        elif shape == "triangle_solid_big":
+            g = lambda so, truth: self._triangleSolidBig(so, truth)
+        elif shape == "gestalt_triangle":
+            g = lambda so, truth: self._gestaltTriangle(so, truth)
         elif shape == "square":
             g = lambda so, truth: self._bigSquare(so, truth)
         elif shape == "square_small":
@@ -654,13 +733,13 @@ class ShapeOnShape(KandinskyTruthInterfce):
         t = 0
         tt = 0
         maxtry = 1000
-        while (KandinskyUniverse.overlaps(kf) or KandinskyUniverse.overflow(kf)) and (t < maxtry):
-            kf = g(so, truth)
-            if tt > 10:
-                tt = 0
-                so = so * 0.90
-            tt = tt + 1
-            t = t + 1
+        # while (KandinskyUniverse.overlaps(kf) or KandinskyUniverse.overflow(kf)) and (t < maxtry):
+        #     kf = g(so, truth)
+        #     if tt > 10:
+        #         tt = 0
+        #         so = so * 0.90
+        #     tt = tt + 1
+        #     t = t + 1
         return kf
 
     def cir_only(self, n=1, rule_style=False):
@@ -703,6 +782,20 @@ class ShapeOnShape(KandinskyTruthInterfce):
         kfs = []
         for i in range(n):
             kf = self._only(rule_style, "triangle_solid")
+            kfs.append(kf)
+        return kfs
+
+    def tri_solid_big(self, n=1, rule_style=False):
+        kfs = []
+        for i in range(n):
+            kf = self._only(rule_style, "triangle_solid_big")
+            kfs.append(kf)
+        return kfs
+
+    def gestalt_triangle(self, n=1, rule_style=False):
+        kfs = []
+        for i in range(n):
+            kf = self._only(rule_style, "gestalt_triangle")
             kfs.append(kf)
         return kfs
 
@@ -774,7 +867,6 @@ class ShapeOnShape(KandinskyTruthInterfce):
     def diamond_circle_cf(self, n=1, rule_style=False):
         kfs = []
         for i in range(n):
-
             kf = self._only(False, "trianglecircle")
             kfs.append(kf)
         return kfs
@@ -782,7 +874,6 @@ class ShapeOnShape(KandinskyTruthInterfce):
     def square_circle(self, n=1, rule_style=False):
         kfs = []
         for i in range(n):
-
             kf = self._only(True, "squarecircle")
             kfs.append(kf)
         return kfs
@@ -838,7 +929,6 @@ class ShapeOnShape(KandinskyTruthInterfce):
     def true_kf(self, n=1, rule_style=False):
         kfs = []
         for i in range(n):
-
             kf = self._shapesOnShapes(True)
             kfs.append(kf)
         return kfs

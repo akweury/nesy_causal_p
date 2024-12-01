@@ -1,4 +1,4 @@
-# Created by jing at 25.11.24
+# Created by jing at 28.11.24
 
 import torch
 import torchvision.transforms as transforms
@@ -11,11 +11,11 @@ import os
 import colorlog
 
 import config
-from src.percept import perception
-from src.utils import args_utils, data_utils, chart_utils
+from src.percept import perception, group
+from src.utils import args_utils, data_utils
 
 
-def prepare_continue_data(args):
+def prepare_data(args):
     transform = transforms.Compose([
         transforms.Resize((64, 64)),
         transforms.ToTensor(),
@@ -138,28 +138,31 @@ def train_fm_stack():
         print(f"feature maps have been saved to {config.output / f'{args.exp_name}' / 'fms.pt'}")
 
 
-def train_fm_cloud(logger):
+def train_fm_cloud(logger, bk_shape):
     args = args_utils.get_args(logger)
-    patch_size = 3
-    bk_shapes = ["triangle_solid"]
-    for bk_shape in bk_shapes:
-        args.exp_name = bk_shape
-        train_loader, val_loader = prepare_continue_data(args)
+    args.exp_name = bk_shape
+    os.makedirs(config.output / f"{args.exp_name}", exist_ok=True)
 
-        os.makedirs(config.output / f"{args.exp_name}", exist_ok=True)
+    train_loader, val_loader = prepare_data(args)
+
+    patch_sizes = [5]
+    for patch_size in patch_sizes:
         kernels = []
-        for data in tqdm(train_loader, "Calculating Kernels"):
+        for data in tqdm(train_loader, f"Calculating Kernels (size: {patch_size})"):
             patches = data.unfold(2, patch_size, 1).unfold(3, patch_size, 1)
             patches = patches.reshape(-1, patch_size, patch_size).unique(dim=0)
             patches = patches[~torch.all(patches == 0, dim=(1, 2))]
             kernels.append(patches)
         kernels = torch.cat(kernels, dim=0).unique(dim=0).unsqueeze(1)
-        print(f"#Kernels: {len(kernels)}, #Data: {len(train_loader)}, ratio: {len(kernels) / len(train_loader):.2f}")
-        torch.save(kernels, config.output / f"{args.exp_name}" / f"kernels.pt")
+        print(f"#Kernel Patches: {len(kernels)}, "
+              f"#Data: {len(train_loader)}, "
+              f"Ratio: {len(kernels) / len(train_loader):.2f}")
+
+        torch.save(kernels, config.output / f"{args.exp_name}" / f"kernel_patches_{patch_size}.pt")
 
         fm_all = []
         data_shift_all = []
-        for data in tqdm(train_loader, desc="Calculating FMs"):
+        for data in tqdm(train_loader, desc=f"Calculating FMs (size: {patch_size})"):
             fms = perception.one_layer_conv(data, kernels)
             fms, row_shift, col_shift = data_utils.shift_content_to_top_left(fms)
             data_shift, _, _ = data_utils.shift_content_to_top_left(data, row_shift, col_shift)
@@ -170,42 +173,14 @@ def train_fm_cloud(logger):
         data_all = torch.cat((data_shift_all, fm_all), dim=1).unique(dim=0)
 
         print(f"#FM: {len(data_all)}. #Data: {len(train_loader)}, ratio: {len(data_all) / len(train_loader):.2f}")
-        torch.save(data_all, config.output / f"{args.exp_name}" / f"fms.pt")
-        print(f"feature maps have been saved to {config.output / f'{args.exp_name}' / 'fms.pt'}")
-        # for fm_i in range(10):
-        #     compare_imgs = []
-        #     compare_imgs.append(chart_utils.color_mapping(kernels[fm_i].squeeze(), 1, f"K {fm_i}"))
-        #     for img_i in range(10):
-        #         compare_imgs.append(chart_utils.color_mapping(fm_all[img_i][fm_i].squeeze(), 1, f"IMG{img_i} FM{fm_i}"))
-        #     compare_imgs.append(chart_utils.color_mapping(fm_all[:, fm_i].squeeze().sum(dim=0), 1, f"IMG SUM"))
-        #
-        #     compare_imgs = chart_utils.concat_imgs(compare_imgs)
-        #     compare_imgs = cv2.cvtColor(compare_imgs, cv2.COLOR_BGR2RGB)
-        #     cv2.imwrite(str(config.output / f"{args.exp_name}" / f"FM_{fm_i}.png"), compare_imgs)
+        torch.save(data_all, config.output / f"{args.exp_name}" / f'fms_patches_{patch_size}.pt')
+        print(f"feature maps have been saved to {config.output / f'{args.exp_name}' / f'fms_patches_{patch_size}.pt'}")
 
 
 if __name__ == "__main__":
     # Create a color handler
-    handler = colorlog.StreamHandler()
-    handler.setFormatter(
-        colorlog.ColoredFormatter(
-            "%(log_color)s%(asctime)s - %(levelname)s - %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S",
-            log_colors={
-                "DEBUG": "white",
-                "INFO": "green",
-                "WARNING": "yellow",
-                "ERROR": "red",
-                "CRITICAL": "bold_red",
-            },
-        )
-    )
+    logger = args_utils.init_logger()
+    bk_shapes = ["triangle_solid"]
 
-    # Add the color handler to the logger
-    logger = colorlog.getLogger("colorLogger")
-    logger.addHandler(handler)
-    # Prevent logs from propagating to the root logger
-    logger.propagate = False
-    logger.setLevel(colorlog.DEBUG)
-
-    train_fm_cloud(logger)
+    for bk_shape in bk_shapes:
+        train_fm_cloud(logger, bk_shape)

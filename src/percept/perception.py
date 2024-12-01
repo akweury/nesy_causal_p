@@ -11,7 +11,7 @@ from einops import rearrange, repeat
 from torch import nn, einsum
 
 import config
-from src.utils import data_utils, visual_utils, file_utils
+from src.utils import data_utils, visual_utils, file_utils, chart_utils
 
 
 class FCN(nn.Module):
@@ -380,13 +380,17 @@ def kmeans_common_features(args, model, train_loader, val_loader):
     return common_features
 
 
-def extract_fm(data, kernels):
-    if kernels.shape[-1]==5:
-        padding = 2
-    elif kernels.shape[-1]==3:
+def one_layer_conv(data, kernels):
+    if kernels.shape[-1] == 3:
         padding = 1
+    elif kernels.shape[-1] == 5:
+        padding = 2
+    elif kernels.shape[-1] == 7:
+        padding = 3
+    elif kernels.shape[-1] == 9:
+        padding = 4
     else:
-        raise ValueError("kernels has to be 5 or 3 dimensional")
+        raise ValueError("kernels has to be 3/5/7/9 dimensional")
     output = F.conv2d(data, kernels, stride=1, padding=padding)
     max_value = kernels.sum(dim=[1, 2, 3])
     max_value = max_value.unsqueeze(1).unsqueeze(2).unsqueeze(0)
@@ -394,3 +398,76 @@ def extract_fm(data, kernels):
     max_value = torch.repeat_interleave(max_value, output.shape[3], dim=-1)
     mask = (max_value == output).to(torch.float32)
     return mask
+
+
+def detect_edge(matrices):
+    """
+    Detect edges in a batch of binary matrices.
+
+    Args:
+        matrices (torch.Tensor): A batch of binary matrices of shape (N, 1, H, W), where N is the batch size.
+
+    Returns:
+        torch.Tensor: A batch of edge-detected matrices of shape (N, 1, H, W), where edges are marked as 1 and others as 0.
+    """
+
+    # Define the edge-detection kernel
+    edge_kernel = torch.tensor([[-1, -1, -1],
+                                [-1, 8, -1],
+                                [-1, -1, -1]], dtype=torch.float32).unsqueeze(0).unsqueeze(0)
+
+    # Expand the kernel to apply it separately to each channel
+    edge_kernel_repeated = edge_kernel.repeat(matrices.size(1), 1, 1, 1)
+
+    # Apply convolution across the batch
+    edges = F.conv2d(matrices, edge_kernel_repeated, groups=matrices.size(1), padding=1)
+
+    # Convert to binary (edge pixels as 1, others as 0)
+    edges_binary = (edges > 0).float()
+    edges_binary[:, :, 0] = 0
+    edges_binary[:, :, -2:] = 0
+    edges_binary[:, :, :, :2] = 0
+    edges_binary[:, :, :, -2:] = 0
+    # Remove the channel dimension to return a batch of (N, H, W)
+    return edges_binary
+
+
+def matrix_similarity(mat1, mat2):
+    # Flatten the matrices from (N, W, H) to (N*W*H)
+    g1_flat = mat1.view(mat1.size(0), -1)  # Shape: (N1, 192 * 64 * 64)
+    g2_flat = mat2.view(mat2.size(0), -1)  # Shape: (N2, 192 * 64 * 64)
+    # Compute cosine similarity between all pairs (N1 x N2 matrix)
+    similarity_matrix = torch.mm(g1_flat, g2_flat.t()) / g2_flat.sum(dim=1).unsqueeze(0)  # Shape: (N1, N2)
+    return similarity_matrix
+
+
+def matrix_equality(matrix1, matrix2):
+    """
+    Calculate the normalized equal item count between two matrices.
+
+    Parameters:
+    - matrix1: np.ndarray, first matrix.
+    - matrix2: np.ndarray, second matrix.
+
+    Returns:
+    - float: Normalized equal item count in the range [0, 1].
+    """
+    # Ensure input matrices have the same number of columns
+    matrix1_flatten = matrix1.sum(dim=1).view(matrix1.size(0), -1)
+    matrix2_flatten = matrix2.sum(dim=1).view(matrix2.size(0), -1)
+    num_features = matrix2.sum(dim=[1, 2, 3])
+
+    batch_size = 128
+    similarity_matrix = torch.zeros((matrix1.shape[0], matrix2.shape[0]))
+    for i in tqdm(range(0, matrix1.shape[0], batch_size)):
+        end_i = min(i + batch_size, matrix1.shape[0])
+        batch1 = matrix1_flatten[i:end_i].unsqueeze(1).bool()
+        batch2 = matrix2_flatten.unsqueeze(0).bool()
+
+        # Sum over the feature dimension to count matches
+        equal_counts = (batch1 * batch2).sum(dim=2)  # Shape: (4096, 197)
+
+        # Normalize by the number of features to get similarity in range [0, 1]
+        similarity_matrix[i:end_i] = equal_counts / (num_features + 1e-20)
+
+    return similarity_matrix
