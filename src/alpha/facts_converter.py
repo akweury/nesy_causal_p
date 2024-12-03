@@ -77,16 +77,13 @@ class FactsConverter(nn.Module):
             vs.append(self.convert_i(zs, G))
         return torch.stack(vs)
 
-    def ground_to_tensor(self, term, data):
+    def ground_to_tensor(self, term, group_data):
         term_name = term.dtype.name
         term_data = None
         if term_name == "group_data":
-            group_idx = self.lang.term_index(term)
-            if group_idx < data.shape[0]:
-                group_data = data[group_idx]
-                self.group_indices = group_data[:, bk.prop_idx_dict["group_name"]] > 0
-                term_data = group_data[self.group_indices]
-                term_name = "group_data"
+            self.group_indices = group_data[:, bk.prop_idx_dict["group_name"]] > 0
+            term_data = group_data[self.group_indices]
+            term_name = "group_data"
         elif term_name == "object":
             term_data = self.lang.term_index(term)
         elif term_name in [bk.const_dtype_object_color, bk.const_dtype_object_shape, bk.const_dtype_group]:
@@ -96,7 +93,7 @@ class FactsConverter(nn.Module):
             # term_data = self.attrs[term]
         elif term_name == 'pattern':
             # return the image
-            term_data = data
+            term_data = group_data
         else:
             raise ValueError("Invalid datatype of the given term: " + str(term) + ':' + term.dtype.name)
         return term_name, term_data

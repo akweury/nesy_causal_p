@@ -12,7 +12,7 @@ import config
 from .fol import bk
 from src.percept.perception import FCN
 from src.utils import data_utils
-
+from src.percept.group import Group
 
 class FCNNValuationModule(nn.Module):
     """A module to call valuation functions.
@@ -91,12 +91,12 @@ class FCNNValuationModule(nn.Module):
         else:
             return torch.zeros(1).to(self.device)
 
-    def ground_to_tensor(self, term, data):
+    def ground_to_tensor(self, term, group_data):
         """Ground terms into tensor representations.
 
             Args:
                 term (term): The term to be grounded.
-                data (tensor): The object-centric representation.
+                group_data (tensor): The object-centric representation.
 
             Return:
                 The tensor representation of the input term.
@@ -133,12 +133,12 @@ class FCNNValuationModule(nn.Module):
         term_data = None
         self.group_indices = None
         if term_name == "group_data":
-            group_idx = self.lang.term_index(term)
-            if group_idx < data.shape[0]:
-                group_data = data[group_idx]
-                self.group_indices = group_data[:, bk.prop_idx_dict["group_name"]] > 0
-                term_data = group_data[self.group_indices]
-                term_name = "group_data"
+            # group_idx = self.lang.term_index(term)
+            # if group_idx < group_data.shape[0]:
+            # group_data = group_data[group_idx]
+            self.group_indices = group_data[:, bk.prop_idx_dict["group_name"]] > 0
+            term_data = group_data[self.group_indices]
+            term_name = "group_data"
         elif term_name == "object":
             term_data = self.lang.term_index(term)
         elif term_name in [bk.const_dtype_object_color, bk.const_dtype_object_shape, bk.const_dtype_group]:
@@ -148,7 +148,7 @@ class FCNNValuationModule(nn.Module):
         #     term_data = self.attrs[term]
         elif term_name == 'pattern':
             # return the image
-            term_data = data
+            term_data = group_data
         else:
             raise ValueError("Invalid datatype of the given term: " + str(term) + ':' + term.dtype.name)
         return term_name, term_data

@@ -309,9 +309,9 @@ def get_match_detail(fm_target, fm_predicted):
 
 
 def get_siding(data, match_fm_img):
-    data_mask = data.squeeze() != 0
-    data_onside = torch.stack([(match_fm_img[i].squeeze() * data_mask) for i in range(len(match_fm_img))])
-    data_offside = torch.stack([((match_fm_img[i].squeeze() == 0) * data_mask) for i in range(len(match_fm_img))])
+    # data_mask = data.squeeze() != 0
+    data_onside = torch.stack([(match_fm_img[i].squeeze()) for i in range(len(match_fm_img))])
+    data_offside = torch.stack([((match_fm_img[i].squeeze() == 0)) for i in range(len(match_fm_img))])
     # data_onside.append((match_fm_img.squeeze().sum(dim=0).float() * data_mask))
     # data_onside = torch.stack(data_onside)
     # data_onside_uncertain = [(match_diff[i] * data_mask) for i in range(len(match_diff))]
@@ -648,9 +648,7 @@ def percept_pixel_groups(args, data, bk, core_image, data_idx, img, out_path):
 def percept_2nd_pixel_groups(args, input_groups, bk, core_image, data_idx, img, out_path):
     output_groups = []
     group_count = 0
-
     for i in range(len(input_groups)):
-        bk_groups = []
         type_groups = input_groups[i]
         # merge images in the type groups into one image
         onside_mask = torch.cat([g.onside.unsqueeze(0) for g in type_groups], dim=0)
@@ -686,13 +684,13 @@ def percept_2nd_pixel_groups(args, input_groups, bk, core_image, data_idx, img, 
                               memory_signal=shift_mfm_img,
                               parents=type_groups,
                               name=bk[i]["name"],
-                              conf=group_count_conf
+                              conf=1
                               )
             new_group.generate_tensor()
-            bk_groups.append(new_group)
+            output_groups.append(new_group)
             group_count += 1
 
-        output_groups.append(bk_groups)
+
     return output_groups
 
 

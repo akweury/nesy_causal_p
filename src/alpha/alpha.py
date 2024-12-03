@@ -153,13 +153,13 @@ def beam_search(args, lang, C, FC, objs):
     return clauses
 
 
-def df_search(args, lang, C, FC, objs):
+def df_search(args, lang, C, FC, group):
     # node evaluation
     atom_C = extension(args, lang, C)
     NSFR = nsfr.get_nsfr_model(args, lang, FC, atom_C)
     target_preds = list(set([c.head.pred.name for c in atom_C]))
     # clause evaluation
-    ils, dls = evaluation(args, NSFR, target_preds, objs)
+    ils, dls = evaluation(args, NSFR, target_preds, group.ocm)
     # node extension (DFS)
     base_nodes = [atom_C[s_i] for s_i in range(len(ils)) if ils[s_i] > 0.6]
     extended_nodes = [atom_C[s_i] for s_i in range(len(ils)) if ils[s_i] > 0.6]
@@ -167,22 +167,22 @@ def df_search(args, lang, C, FC, objs):
     lang.update_consts(base_nodes)
 
     lang.generate_atoms()
-    for e_i in range(2):
-        extended_nodes = node_extension(args, lang, base_nodes, extended_nodes)
 
-        NSFR = nsfr.get_nsfr_model(args, lang, FC, extended_nodes)
-        target_preds = list(set([c.head.pred.name for c in extended_nodes]))
-        # clause evaluation
-        ils, dls = evaluation(args, NSFR, target_preds, objs)
-        pass_indices = [s_i for s_i in range(len(ils)) if ils[s_i] > 0.8]
-        extended_nodes = [extended_nodes[s_i] for s_i in range(len(ils)) if ils[s_i] > 0.6]
-        ils = ils[pass_indices]
+    extended_nodes = node_extension(args, lang, base_nodes, extended_nodes)
 
-        args.logger.debug(f" ----- Rule Searching Round {e_i + 1}/{2} ----- ")
-        log_clause_str = ""
-        for i in range(len(ils)):
-            log_clause_str += f"\n {i + 1}/{len(ils)} (s: {ils[i].item():.2f}) Clause: {extended_nodes[i]}"
-        args.logger.debug(log_clause_str)
+    NSFR = nsfr.get_nsfr_model(args, lang, FC, extended_nodes)
+    target_preds = list(set([c.head.pred.name for c in extended_nodes]))
+    # clause evaluation
+    ils, dls = evaluation(args, NSFR, target_preds, group.ocm)
+    pass_indices = [s_i for s_i in range(len(ils)) if ils[s_i] > 0.8]
+    extended_nodes = [extended_nodes[s_i] for s_i in range(len(ils)) if ils[s_i] > 0.6]
+    ils = ils[pass_indices]
+
+
+    log_clause_str = ""
+    for i in range(len(ils)):
+        log_clause_str += f"\n {i + 1}/{len(ils)} (s: {ils[i].item():.2f}) Clause: {extended_nodes[i]}"
+    args.logger.debug(log_clause_str)
 
     # prune clauses
     # pruned_c = pruning.top_k_clauses(args, ils, dls, extended_nodes)
@@ -222,16 +222,16 @@ def remove_trivial_atoms(args, lang, FC, clauses, objs, data):
     return non_trivial_atoms
 
 
-def alpha(args, ocm):
+def alpha(args, groups):
     obj_num = 1
     lang = init_ilp(args, obj_num)
     lang.reset_lang(g_num=1)
     VM = valuation.get_valuation_module(args, lang)
     FC = facts_converter.FactsConverter(args, lang, VM)
     C = lang.load_init_clauses()
-    for g_i in range(len(ocm)):
+    for g_i in range(len(groups)):
         lang.reset_lang(g_num=1)
-        df_search(args, lang, C, FC, ocm[g_i:g_i + 1])
+        df_search(args, lang, C, FC, groups[g_i])
         lang.variable_set_id(args, g_i)
         # merged_clause = lang.rephase_clauses()
         # final_clause, name_dict = llama_call.rename_terms(merged_clause)
