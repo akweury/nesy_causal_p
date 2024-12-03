@@ -140,8 +140,8 @@ def train_fm_stack():
 
 def train_fm_cloud(logger):
     args = args_utils.get_args(logger)
-    patch_size = 3
-    bk_shapes = ["triangle_solid"]
+    patch_size = 5
+    bk_shapes = ["circle_solid"]
     for bk_shape in bk_shapes:
         args.exp_name = bk_shape
         train_loader, val_loader = prepare_continue_data(args)
@@ -186,26 +186,5 @@ def train_fm_cloud(logger):
 
 if __name__ == "__main__":
     # Create a color handler
-    handler = colorlog.StreamHandler()
-    handler.setFormatter(
-        colorlog.ColoredFormatter(
-            "%(log_color)s%(asctime)s - %(levelname)s - %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S",
-            log_colors={
-                "DEBUG": "white",
-                "INFO": "green",
-                "WARNING": "yellow",
-                "ERROR": "red",
-                "CRITICAL": "bold_red",
-            },
-        )
-    )
-
-    # Add the color handler to the logger
-    logger = colorlog.getLogger("colorLogger")
-    logger.addHandler(handler)
-    # Prevent logs from propagating to the root logger
-    logger.propagate = False
-    logger.setLevel(colorlog.DEBUG)
-
+    logger = args_utils.init_logger()
     train_fm_cloud(logger)

@@ -45,6 +45,7 @@ const_dtype_object_color = const_dtypes["object_color"]
 const_dtype_object_shape = const_dtypes["object_shape"]
 const_dtype_group = const_dtypes["group_label"]
 
+
 def create_predicate_config(name, term_list):
     config_str = pred_names[name] + ":" + str(len(term_list)) + ":" + "".join([f"{t};" for t in term_list])[:-1]
     return config_str
@@ -78,7 +79,7 @@ predicate_configs["predicate_shape"] = create_predicate_config("has_shape", [
     f"{var_dtype_group},+",
     f"{var_dtype_pattern},+",
 ])
-predicate_configs["predicate_g_shape"] = create_predicate_config("group_shape",[
+predicate_configs["predicate_g_shape"] = create_predicate_config("group_shape", [
     f"{const_dtype_group},#",
     f"{var_dtype_group},+",
     f"{var_dtype_pattern},+",
@@ -130,11 +131,13 @@ neighbor_8 = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 
 color_matplotlib = {k: tuple(int(v[i:i + 2], 16) for i in (1, 3, 5)) for k, v in
                     list(matplotlib.colors.cnames.items())}
 color_matplotlib.pop("black")
+no_color = "none"
+color_matplotlib[no_color] = (0, 0, 0)
 color_large = [k for k, v in list(color_matplotlib.items())]
 
-shape_extend = ["circle", "square", "triangle", "diamond"]
-group_name_extend = ["none", "circle_small", "square_small", "triangle_small", "triangle_solid"]
-group_name_solid = ["none", "triangle_solid"]
+shape_extend = ["circle_solid", "square", "triangle_solid", "diamond"]
+group_name_extend = ["none", "circle_solid", "square_small", "triangle_small", "triangle_solid"]
+group_name_solid = ["none", "triangle_solid", "circle_solid"]
 # group_name_extend = ["none", "circle_flex"]
 
 # exp setting

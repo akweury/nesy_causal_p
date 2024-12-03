@@ -19,7 +19,7 @@ def load_bk(args, bk_shapes):
     # load background knowledge
     bk = []
     for bk_shape in bk_shapes:
-        for kernel_size in [5]:
+        for kernel_size in [3]:
             if bk_shape == "none":
                 continue
             kernels = torch.load(config.output / bk_shape / f"kernel_patches_{kernel_size}.pt").to(args.device)
@@ -87,16 +87,19 @@ def group2ocm(data, groups):
 
 def percept_gestalt_pattern(args, image_paths, out_path):
     group_bk = load_bk(args, bk.group_name_solid)
+
     for idx in range(min(2, len(image_paths))):
         args.logger.debug(f"\n =========== Analysis Image {idx + 1}/{min(2, len(image_paths))} ==============")
         file_name, file_extension = image_paths[idx].split(".")
         data = file_utils.load_json(f"{file_name}.json")
         img, img_resized = load_data(args, image_paths[idx])
         # img_resized = 1-img_resized
-        pixel_groups = train_common_features.percept_pixel_groups(args, group_bk, img_resized, idx, img, out_path)
+        pixel_groups = train_common_features.percept_pixel_groups(args,data, group_bk, img_resized, idx, img, out_path)
         pixel_groups_2nd = train_common_features.percept_2nd_pixel_groups(args, pixel_groups, group_bk, img_resized,
                                                                           idx, img, out_path)
-        group_tensors = group2ocm(data, pixel_groups_2nd)
+        lang = alpha.alpha(args, pixel_groups_2nd)
+
+
 
 
 if __name__ == "__main__":

@@ -40,6 +40,30 @@ class ShapeOnShape(KandinskyTruthInterfce):
             kf.append(o)
         return kf
 
+    def _circleSolid(self, so, t, min_percent=1.0, max_percent=1.0):
+        kf = []
+        x = 0.5  # + random.random() * 0.8
+        y = 0.7  # + random.random() * 0.8
+        r = 0.3 - min(abs(0.5 - x), abs(0.5 - y)) * 0.5
+
+        xs = x
+        ys = y - r
+
+        so = 0.03 + random.random() * 0.5
+
+        o = KandinskyUniverse.kandinskyShape()
+        o.color = random.choice(KandinskyUniverse.matplotlib_colors_list)
+        o.shape = "circle"
+        o.size = so
+        o.x = xs
+        o.y = ys
+        kf.append(o)
+
+        random_percent = random.uniform(min_percent, max_percent)
+        kf = kf[:int(len(kf) * random_percent)]
+
+        return kf
+
     def _smallCircleFlex(self, so, t):
         kf = []
         # x, y in range [0.1, 0.1 + 0.8]
@@ -686,6 +710,8 @@ class ShapeOnShape(KandinskyTruthInterfce):
             g = lambda so, truth: self._bigCircle(so, truth)
         elif shape == "circle_small":
             g = lambda so, truth: self._smallCircleFlex(so, truth)
+        elif shape == "circle_solid":
+            g = lambda so, truth: self._circleSolid(so, truth)
         elif shape == "circle_flex":
             g = lambda so, truth: self._bigCircleFlex(so, truth)
         elif shape == "diamond":
@@ -748,7 +774,12 @@ class ShapeOnShape(KandinskyTruthInterfce):
             kf = self._only(rule_style, "circle")
             kfs.append(kf)
         return kfs
-
+    def cir_solid_only(self, n=1, rule_style=False):
+        kfs = []
+        for i in range(n):
+            kf = self._only(rule_style, "circle_solid")
+            kfs.append(kf)
+        return kfs
     def cir_small_only(self, n=1, rule_style=False):
         kfs = []
         for i in range(n):

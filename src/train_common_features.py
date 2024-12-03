@@ -586,7 +586,7 @@ def fit_group_fm_to_mem_fm(args, shifted_fms, mem_fms):
     return best_shift_idx, best_fm_idx, top_values
 
 
-def percept_pixel_groups(args, bk, core_image, data_idx, img, out_path):
+def percept_pixel_groups(args, data, bk, core_image, data_idx, img, out_path):
     groups = []
     group_count = 0
 
@@ -631,10 +631,12 @@ def percept_pixel_groups(args, bk, core_image, data_idx, img, out_path):
 
             # instantiate detected group
             new_group = Group(id=group_count, name=bk_shape["name"],
-                              input_signal=(onside.sum(dim=0) > 0),
+                              input_signal=img,
+                              onside_signal=(onside.sum(dim=0) > 0),
                               memory_signal=clustered_tensors,
                               parents=None,
                               conf=group_count_conf)
+            new_group.generate_tensor()
             bk_groups.append(new_group)
 
             group_count += 1
@@ -651,7 +653,7 @@ def percept_2nd_pixel_groups(args, input_groups, bk, core_image, data_idx, img, 
         bk_groups = []
         type_groups = input_groups[i]
         # merge images in the type groups into one image
-        onside_mask = torch.cat([g.input.unsqueeze(0) for g in type_groups], dim=0)
+        onside_mask = torch.cat([g.onside.unsqueeze(0) for g in type_groups], dim=0)
         onside_mask = onside_mask.sum(dim=0, keepdim=True).bool()
 
         onside_img = torch.zeros_like(core_image)
@@ -679,12 +681,14 @@ def percept_2nd_pixel_groups(args, input_groups, bk, core_image, data_idx, img, 
                        match_diff, onside, offside)
 
             new_group = Group(id=group_count,
-                              input_signal=(onside.sum(dim=0) > 0),
+                              onside_signal=(onside.sum(dim=0) > 0),
+                              input_signal=img,
                               memory_signal=shift_mfm_img,
                               parents=type_groups,
                               name=bk[i]["name"],
                               conf=group_count_conf
                               )
+            new_group.generate_tensor()
             bk_groups.append(new_group)
             group_count += 1
 

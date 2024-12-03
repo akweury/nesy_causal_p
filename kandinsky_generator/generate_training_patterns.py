@@ -200,6 +200,8 @@ def genShapeOnShape(shapes, n):
         for mode in ['train']:
             if shape == "circle":
                 gen_fun = shapeOnshapeObjects.cir_only
+            elif shape == "circle_solid":
+                gen_fun = shapeOnshapeObjects.cir_solid_only
             elif shape == "circle_small":
                 gen_fun = shapeOnshapeObjects.cir_small_only
             elif shape == "triangle_small":
@@ -248,5 +250,5 @@ def genShapeOnShape(shapes, n):
                 image.save(base_path / f"{shape}_{(png_num+i):06d}.png")
 
 if __name__ == '__main__':
-    tasks = ["gestalt_triangle"]
-    genShapeOnShape(tasks, 10)
+    tasks = ["circle_solid"]
+    genShapeOnShape(tasks, 1000)

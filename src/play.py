@@ -11,29 +11,8 @@ from utils import file_utils, args_utils
 from kandinsky_generator import generate_training_patterns, generate_task_patterns
 from src.alpha.fol import bk
 
-# Create a color handler
-handler = colorlog.StreamHandler()
-handler.setFormatter(
-    colorlog.ColoredFormatter(
-        "%(log_color)s%(asctime)s - %(levelname)s - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-        log_colors={
-            "DEBUG": "white",
-            "INFO": "green",
-            "WARNING": "yellow",
-            "ERROR": "red",
-            "CRITICAL": "bold_red",
-        },
-    )
-)
 
-# Add the color handler to the logger
-logger = colorlog.getLogger("colorLogger")
-logger.addHandler(handler)
-# Prevent logs from propagating to the root logger
-logger.propagate = False
-logger.setLevel(colorlog.DEBUG)
-
+logger = args_utils.init_logger()
 
 def init_io_folders(args, data_folder):
     args.train_folder = data_folder / "train" / "task_true_pattern"

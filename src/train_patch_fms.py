@@ -145,7 +145,7 @@ def train_fm_cloud(logger, bk_shape):
 
     train_loader, val_loader = prepare_data(args)
 
-    patch_sizes = [5]
+    patch_sizes = [3]
     for patch_size in patch_sizes:
         kernels = []
         for data in tqdm(train_loader, f"Calculating Kernels (size: {patch_size})"):
@@ -180,7 +180,7 @@ def train_fm_cloud(logger, bk_shape):
 if __name__ == "__main__":
     # Create a color handler
     logger = args_utils.init_logger()
-    bk_shapes = ["triangle_solid"]
+    bk_shapes = ["circle_solid"]
 
     for bk_shape in bk_shapes:
         train_fm_cloud(logger, bk_shape)
