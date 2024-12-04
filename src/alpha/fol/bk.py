@@ -157,3 +157,10 @@ exp_count_group = {
     "task_random_pattern": "random",
     "task_cf_pattern": "circlesquare_count_cf"
 }
+exp_gestalt_triangle = {
+    "bk_groups": ["circle_solid", "triangle_solid"],
+    "task_name": "gestalt_triangle",
+    "task_true_pattern": "gestalt_triangle",
+    "task_random_pattern": "random",
+    "task_cf_pattern": "gestalt_triangle"
+}

@@ -49,7 +49,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
         xs = x
         ys = y - r
 
-        so = 0.03 + random.random() * 0.5
+        so = 0.03 + random.random() * 0.9
 
         o = KandinskyUniverse.kandinskyShape()
         o.color = random.choice(KandinskyUniverse.matplotlib_colors_list)
@@ -203,13 +203,13 @@ class ShapeOnShape(KandinskyTruthInterfce):
     def _triangleSolid(self, so, t, min_percent=1.0, max_percent=1.0):
         kf = []
         x = 0.5  # + random.random() * 0.8
-        y = 0.7  # + random.random() * 0.8
+        y = 0.8  # + random.random() * 0.8
         r = 0.3 - min(abs(0.5 - x), abs(0.5 - y)) * 0.5
 
         xs = x
         ys = y - r
 
-        so = 0.1 + random.random() * 0.5
+        so = 0.03 + random.random() * 0.8
 
         o = KandinskyUniverse.kandinskyShape()
         o.color = random.choice(KandinskyUniverse.matplotlib_colors_list)

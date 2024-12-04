@@ -326,3 +326,32 @@ def load_bw_img(img_path, size=None):
     img_resized = torch.from_numpy(img_resized).unsqueeze(0)
 
     return img_resized
+
+def rgb2bw(rgb, resize=None):
+
+    gray = cv2.cvtColor(rgb, cv2.COLOR_BGR2GRAY)
+    gray[gray != 211] = 1
+    gray[gray == 211] = 0
+    if resize is not None:
+        gray = cv2.resize(gray, (64, 64), interpolation=cv2.INTER_AREA)
+        gray = torch.from_numpy(gray).unsqueeze(0)
+    return gray
+
+
+def find_valid_radius(matrix):
+    # Find indices of valid elements (nonzero items)
+    valid_indices = torch.nonzero(matrix, as_tuple=False).float()  # Convert to float for calculations
+
+    if valid_indices.numel() == 0:
+        # No valid elements in the tensor.
+        return 0
+    else:
+        # Compute the centroid of valid elements
+        centroid = valid_indices.mean(dim=0)  # Mean along rows gives (y, x)
+
+        # Calculate distances from the centroid to each valid point
+        distances = torch.sqrt((valid_indices[:, 0] - centroid[0]) ** 2 + (valid_indices[:, 1] - centroid[1]) ** 2)
+
+        # Measure the radius: Maximum distance from the centroid
+        radius = distances.max().item()
+        return radius

@@ -265,6 +265,8 @@ def genShapeOnShapeTask(task, total_n):
                 gen_fun = shapeOnshapeObjects.circle_square_count_cf
             elif task[label] == "trianglecircle_cf":
                 gen_fun = shapeOnshapeObjects.triangle_circle_cf
+            elif task[label] == "gestalt_triangle":
+                gen_fun = shapeOnshapeObjects.gestalt_triangle
             elif task[label] == "random":
                 gen_fun = shapeOnshapeObjects.false_kf
             else:

@@ -37,7 +37,7 @@ def init_io_folders(args, data_folder):
 def main():
     # load exp arguments
     args = args_utils.get_args(logger)
-    exp_setting = bk.exp_count_group
+    exp_setting = bk.exp_gestalt_triangle
     data_folder = config.kp_dataset / args.exp_name
     init_io_folders(args, data_folder)
     step_counter = 0

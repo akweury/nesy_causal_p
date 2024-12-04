@@ -18,18 +18,20 @@ def load_bk(args, bk_shapes):
     # load background knowledge
     bk = []
     for bk_shape in bk_shapes:
-        if bk_shape == "none":
-            continue
-        kernels = torch.load(config.output / bk_shape / f"kernels.pt").to(args.device)
-        fm_data = torch.load(config.output / bk_shape / f"fms.pt").to(args.device)
-        fm_img = fm_data[:, 0:1]
-        fm_repo = fm_data[:, 1:]
-        bk.append({
-            "name": bk_shape,
-            "kernels": kernels,
-            "fm_img": fm_img,
-            "fm_repo": fm_repo
-        })
+        for kernel_size in [3]:
+            if bk_shape == "none":
+                continue
+            kernels = torch.load(config.output / bk_shape / f"kernel_patches_{kernel_size}.pt").to(args.device)
+            fm_data = torch.load(config.output / bk_shape / f"fms_patches_{kernel_size}.pt").to(args.device)
+            fm_img = fm_data[:, 0:1]
+            fm_repo = fm_data[:, 1:]
+            bk.append({
+                "name": bk_shape,
+                "kernel_size": kernel_size,
+                "kernels": kernels,
+                "fm_img": fm_img,
+                "fm_repo": fm_repo
+            })
 
     return bk
 
@@ -60,28 +62,34 @@ def obj2tensor(shape, color, pos, group_name, group_count_conf):
     return obj_tensor
 
 
-def group2ocm(data, groups):
-    """ return the object centric matrix of the groups """
-    group_max_num = 25
-    group_ocms = []
-    positions = data_utils.data2positions(data)
-    for g_i, group in enumerate(groups):
-        # group
-        group_ocm = torch.zeros(group_max_num, len(bk.obj_ohc))
-        group_name = group["name"]
-        group_obj_positions = group["onside"]
-        group_count_conf = group["count_conf"]
-        pos_count = 0
-        for p_i, pos in enumerate(positions):
-            if group_obj_positions[pos[1].item(), pos[0].item()] > 0:
-                shape = data[p_i]["shape"]
-                color = data[p_i]["color_name"]
-                obj_tensor = obj2tensor(shape, color, pos, group_name, group_count_conf)
-                group_ocm[pos_count] = obj_tensor
-                pos_count += 1
-        group_ocms.append(group_ocm)
-    group_ocms = torch.stack(group_ocms, dim=0)
-    return group_ocms
+# def group2ocm(data, groups):
+#     """ return the object centric matrix of the groups """
+#     group_max_num = 25
+#     group_ocms = []
+#     positions = data_utils.data2positions(data)
+#     for g_i, group in enumerate(groups):
+#         # group
+#         group_ocm = torch.zeros(group_max_num, len(bk.obj_ohc))
+#         group_name = group["name"]
+#         group_obj_positions = group["onside"]
+#         group_count_conf = group["count_conf"]
+#         pos_count = 0
+#         for p_i, pos in enumerate(positions):
+#             if group_obj_positions[pos[1].item(), pos[0].item()] > 0:
+#                 shape = data[p_i]["shape"]
+#                 color = data[p_i]["color_name"]
+#                 obj_tensor = obj2tensor(shape, color, pos, group_name, group_count_conf)
+#                 group_ocm[pos_count] = obj_tensor
+#                 pos_count += 1
+#         group_ocms.append(group_ocm)
+#     group_ocms = torch.stack(group_ocms, dim=0)
+#     return group_ocms
+
+def percept_gestalt_groups(args, group_bk, img, output_file_prefix):
+    pixel_groups = train_common_features.percept_pixel_groups(args, group_bk, img, output_file_prefix)
+    pixel_groups_2nd = train_common_features.percept_2nd_pixel_groups(args, pixel_groups, group_bk, img,
+                                                                      output_file_prefix)
+    return pixel_groups_2nd
 
 
 def train_clauses(args, image_paths, out_path):
@@ -96,18 +104,16 @@ def train_clauses(args, image_paths, out_path):
     # load background knowledge
     lang = None
     all_clauses = []
-    if args.solid_pattern:
-        group_bk = load_bk(args, bk.group_name_solid)
-    else:
-        group_bk = load_bk(args, bk.group_name_extend)
+    group_bk = load_bk(args, bk.group_name_solid)
     for idx in range(min(2, len(image_paths))):
         args.logger.debug(f"\n =========== Analysis Image {idx + 1}/{min(2, len(image_paths))} ==============")
         file_name, file_extension = image_paths[idx].split(".")
         data = file_utils.load_json(f"{file_name}.json")
-        img, obj_pos = load_data(args, image_paths[idx])
-        groups = train_common_features.img2groups_flexible(args, group_bk, obj_pos, idx, img, out_path)
-        group_tensors = group2ocm(data, groups)
-        lang = alpha.alpha(args, group_tensors)
+        img, img_resized = load_data(args, image_paths[idx])
+
+        output_file_prefix = str(out_path / f'img_{idx}')
+        groups = percept_gestalt_groups(args, group_bk, img, output_file_prefix)
+        lang = alpha.alpha(args, groups)
         # rename predicates
         # update clauses
         all_clauses += lang.clauses

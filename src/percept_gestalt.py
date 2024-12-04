@@ -99,15 +99,13 @@ def percept_gestalt_pattern(args, image_paths, out_path):
         if os.path.exists(group_saved_file):
             pixel_groups_2nd = torch.load(group_saved_file)
         else:
-            pixel_groups = train_common_features.percept_pixel_groups(args,data, group_bk, img_resized, idx, img, out_path)
-            pixel_groups_2nd = train_common_features.percept_2nd_pixel_groups(args, pixel_groups, group_bk, img_resized,
-                                                                              idx, img, out_path)
+            output_file_prefix = str(out_path / f'img_{idx}')
+            pixel_groups = train_common_features.percept_pixel_groups(args, group_bk, img, output_file_prefix)
+            pixel_groups_2nd = train_common_features.percept_2nd_pixel_groups(args, pixel_groups, group_bk, img,
+                                                                              output_file_prefix)
             torch.save(pixel_groups_2nd, group_saved_file)
 
-
         lang = alpha.alpha(args, pixel_groups_2nd)
-
-
 
 
 if __name__ == "__main__":
