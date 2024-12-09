@@ -180,7 +180,7 @@ def train_fm_cloud(logger, bk_shape):
 if __name__ == "__main__":
     # Create a color handler
     logger = args_utils.init_logger()
-    bk_shapes = ["circle_solid"]
+    bk_shapes = ["circle_solid", "triangle_solid"]
 
     for bk_shape in bk_shapes:
         train_fm_cloud(logger, bk_shape)

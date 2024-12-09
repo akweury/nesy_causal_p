@@ -9,9 +9,10 @@ from tqdm import tqdm
 import wandb
 from einops import rearrange, repeat
 from torch import nn, einsum
-
+from scipy import ndimage
 import config
 from src.utils import data_utils, visual_utils, file_utils, chart_utils
+from src.alpha.fol import bk
 
 
 class FCN(nn.Module):
@@ -397,7 +398,7 @@ def one_layer_conv(data, kernels):
     max_value = torch.repeat_interleave(max_value, output.shape[2], dim=-2)
     max_value = torch.repeat_interleave(max_value, output.shape[3], dim=-1)
     mask = (max_value == output).to(torch.float32)
-    return mask
+    return output
 
 
 def detect_edge(matrices):
@@ -437,7 +438,7 @@ def matrix_similarity(mat1, mat2):
     g1_flat = mat1.view(mat1.size(0), -1)  # Shape: (N1, 192 * 64 * 64)
     g2_flat = mat2.view(mat2.size(0), -1)  # Shape: (N2, 192 * 64 * 64)
     # Compute cosine similarity between all pairs (N1 x N2 matrix)
-    similarity_matrix = torch.mm(g1_flat, g2_flat.t()) / (g2_flat.sum(dim=1).unsqueeze(0)+1e-20)  # Shape: (N1, N2)
+    similarity_matrix = torch.mm(g1_flat, g2_flat.t()) / (g2_flat.sum(dim=1).unsqueeze(0) + 1e-20)  # Shape: (N1, N2)
     return similarity_matrix
 
 
@@ -471,3 +472,43 @@ def matrix_equality(matrix1, matrix2):
         similarity_matrix[i:end_i] = equal_counts / (num_features + 1e-20)
 
     return similarity_matrix
+
+
+def matrix_scale_similarity(img_edge, repo_edge):
+    img_scales = torch.tensor([data_utils.find_valid_radius(img_edge[i, 0]) for i in range(img_edge.shape[0])])
+    repo_scales = torch.tensor([data_utils.find_valid_radius(repo_edge[i, 0]) for i in range(repo_edge.shape[0])])
+    similarity = torch.zeros((len(img_scales), len(repo_scales)))
+    for i in range(img_edge.shape[0]):
+        similarity[i, :] = img_scales[i] / (repo_scales + 1e-20)
+
+    return similarity
+
+
+def detect_connected_regions(input_array, pixel_num=100):
+    # Find unique colors
+    unique_colors, inverse = np.unique(input_array.reshape(-1, 3), axis=0, return_inverse=True)
+
+    labeled_regions = []
+
+    for color_idx, color in enumerate(unique_colors):
+        if np.equal(color, np.array(bk.color_matplotlib["lightgray"], dtype=np.uint8)).all():
+            continue
+        # Create a mask for the current color
+        mask = (inverse == color_idx).reshape(512, 512)
+
+        # Label connected components in the mask
+        labeled_mask, num_features = ndimage.label(mask)
+
+        for region_id in range(1, num_features + 1):
+            # Isolate a single region
+            region_mask = (labeled_mask == region_id)
+            if region_mask.sum() > pixel_num:
+                # Add the region to the labeled regions
+                region_tensor = np.zeros((3, 512, 512), dtype=np.float32)
+                for channel in range(3):
+                    region_tensor[channel] = region_mask * color[channel]
+                labeled_regions.append(region_tensor)
+
+    # Stack all labeled regions into a single tensor
+    output_tensor = torch.tensor(np.stack(labeled_regions), dtype=torch.float32)
+    return output_tensor

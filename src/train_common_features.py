@@ -296,15 +296,15 @@ def visual_all(group_img_name, img, data, data_fm_shifted, fm_best, max_value, f
     cv2.imwrite(group_img_name, compare_imgs)
 
 
-def get_match_detail(fm_target, fm_predicted):
-    mask_target = fm_target != 0
-    same_fm = ((fm_target == fm_predicted) * mask_target).sum(dim=1).to(torch.float32)
-    mask_full_match = torch.all(fm_target == fm_predicted, dim=1) * torch.any(mask_target, dim=1)
-    mask_any_mismatch = torch.any((fm_target == fm_predicted) * mask_target, dim=1) * torch.any(
-        mask_target, dim=1) * ~mask_full_match
+def get_match_detail(mem_fm, visual_fm):
+    mask_mem = mem_fm != 0
+    same_fm = ((mem_fm == visual_fm) * mask_mem).sum(dim=1).to(torch.float32)
+    mask_full_match = torch.all(mem_fm == visual_fm, dim=1) * torch.any(mask_mem, dim=1)
+    mask_any_mismatch = torch.any((mem_fm == visual_fm) * mask_mem, dim=1) * torch.any(
+        mask_mem, dim=1) * ~mask_full_match
     all_same_fm = same_fm * mask_full_match
     any_diff_fm = same_fm * mask_any_mismatch
-    same_percent = mask_full_match.sum(dim=[1, 2]) / (fm_target.sum(dim=1).bool().sum(dim=[1, 2]) + 1e-20)
+    same_percent = mask_full_match.sum(dim=[1, 2]) / (mem_fm.sum(dim=1).bool().sum(dim=[1, 2]) + 1e-20)
     return all_same_fm, any_diff_fm, same_percent
 
 
@@ -393,7 +393,10 @@ def eval_onside_conf(args, data, onsides, fm_imgs, bk_shape):
     same[~onside_mask] = False
     group_count_conf = torch.zeros(len(onside_mask))
     for i in range(len(onside_mask)):
-        group_count_conf[i] = tensor_similarity(onside_mask.to(torch.float)[i], fm_imgs[i])
+        onside_matrix = onside_mask.to(torch.float)[i].unsqueeze(0).unsqueeze(0)
+        fm_matrix = fm_imgs[i].unsqueeze(0).unsqueeze(0)
+        group_count_conf[i] = perception.matrix_equality(onside_matrix, fm_matrix)
+        # group_count_conf[i] = tensor_similarity(onside_mask.to(torch.float)[i], fm_imgs[i])
     group_count_conf = torch.mean(group_count_conf)
 
     show_imgs = []
@@ -401,9 +404,6 @@ def eval_onside_conf(args, data, onsides, fm_imgs, bk_shape):
         show_imgs.append(chart_utils.color_mapping(same[i].squeeze(), 1, f"TOP FM {i}"))
     show_imgs.append(chart_utils.color_mapping(onside_img.squeeze(), 1, f"Conf:{group_count_conf:.2f}"))
 
-    if group_count_conf >= args.group_count_conf_th:
-        args.logger.debug(
-            f" Found group: {bk_shape['name']}: [conf|th  {group_count_conf:.2f}|{args.group_count_conf_th}]")
     return group_count_conf
 
 
@@ -475,7 +475,7 @@ def get_individual_groups(shift_mfm_imgs):
         for j in range(i + 1, len(centers)):
             radius_sum = data_utils.find_valid_radius(shift_mfm_imgs[i, 0]) + data_utils.find_valid_radius(
                 shift_mfm_imgs[j, 0])
-            if j not in visited and distances[i, j] < radius_sum:
+            if j not in visited and distances[i, j] < radius_sum * 1.5:
                 cluster.append(j)
                 visited.add(j)
 
@@ -534,25 +534,32 @@ def img2groups_flexible(args, bk, data, data_idx, img, out_path):
     return groups
 
 
-def find_memory_fms(args, shifted_fms, mem_fms, shifted_imgs, mem_imgs):
-    # edge fm
+def recall_mem_fms(args, in_fm, mem_fms, core_img, mem_imgs):
+    shifted_fms = get_shifted_matrics(in_fm)
+    shifted_imgs = get_shifted_matrics(core_img.unsqueeze(0))
+
+    # edge similarity
     img_edge = perception.detect_edge(shifted_imgs.float())
     repo_edge = perception.detect_edge(mem_imgs.float())
+    similarity_edge_fms = perception.matrix_equality(repo_edge, img_edge)
 
-    similarity_edge_fms = perception.matrix_equality(img_edge, repo_edge)
-    similarity_fms = perception.matrix_similarity(shifted_fms, mem_fms)
+    # fm similarity
+    similarity_fms = perception.matrix_equality(mem_fms, shifted_fms)
 
-    similarity_matrix = similarity_edge_fms + similarity_fms * similarity_edge_fms.max()
+    similarity_matrix = (similarity_edge_fms + similarity_fms * similarity_edge_fms.max()).permute(1, 0)
+    # similarity_scale = perception.matrix_scale_similarity(img_edge, repo_edge)
+    # similarity_matrix[similarity_scale > 1.5] = 0
+    # similarity_matrix[similarity_scale < 0.5] = 0
     # args.fm_th = 0.1
     # torch.sort(similarity_matrix.flatten(), descending=True)
     # top_values, top_indices = torch.topk(similarity_matrix.flatten(), args.top_fm_k)
     top_values, top_indices = torch.sort(similarity_matrix.flatten(), descending=True)
     # Filter out values below the threshold
-    mask = top_values >= args.fm_th
-    top_values = top_values[mask]
-    top_indices = top_indices[mask]
+    # mask = top_values >= args.fm_th
+    top_values = top_values[:5]
+    top_indices = top_indices[:5]
     if len(top_values) == 0:
-        return None, None, None
+        return None
     # top_indices_2d: (best_shift_idx_1d, best_fm_idx)
     top_indices_2d = torch.stack(torch.unravel_index(top_indices, similarity_matrix.shape)).t()
     # best shift idx 2d
@@ -560,7 +567,8 @@ def find_memory_fms(args, shifted_fms, mem_fms, shifted_imgs, mem_imgs):
     # best fm idx
     best_fm_idx = top_indices_2d[:, 1]
 
-    return best_shift_idx, best_fm_idx, top_values
+    args.logger.debug(f"recall {len(top_values)} possible fms, highest conf: {top_values[0]:.2f}")
+    return best_fm_idx, best_shift_idx, top_values
 
 
 def fit_group_fm_to_mem_fm(args, shifted_fms, mem_fms, shifted_imgs, mem_imgs):
@@ -575,7 +583,6 @@ def fit_group_fm_to_mem_fm(args, shifted_fms, mem_fms, shifted_imgs, mem_imgs):
     top_values, top_indices = torch.sort(similarity_matrix.flatten(), descending=True)
     # top_values, top_indices = torch.topk(similarity_fms.flatten(), args.top_fm_k)
     # Filter out values below the threshold
-
 
     mask = top_values >= args.fm_th * 0.8
     top_values = top_values[mask][:10]
@@ -598,116 +605,176 @@ def fit_group_fm_to_mem_fm(args, shifted_fms, mem_fms, shifted_imgs, mem_imgs):
 #     return pixel_groups_2nd
 
 
-def percept_pixel_groups(args, bk, img, output_file_prefix):
+def fit_groups(args, b_i, img, core_image, mem_fm_data, output_file_prefix, fms, bk, parent_groups=None):
+    mem_fm_idx, mem_fm_shift, mem_fm_conf = mem_fm_data
+    mem_fms = bk["fm_repo"][mem_fm_idx]
+    mem_imgs = bk["fm_img"][mem_fm_idx]
+    mem_fms = torch.stack(
+        [torch.roll(mem_fms[i], shifts=tuple(mem_fm_shift[i]), dims=(-2, -1)) for i in range(len(mem_fm_conf))])
+    mem_imgs = torch.stack(
+        [torch.roll(mem_imgs[i], shifts=tuple(mem_fm_shift[i]), dims=(-2, -1)) for i in range(len(mem_fm_conf))])
+
+    match_same, match_diff, same_percent = get_match_detail(mem_fms, fms.squeeze())
+
+    onside, offside = get_siding(core_image, mem_imgs)
+    group_img_name = output_file_prefix + str(f'_group_{bk["name"]}.png')
+    group_count_conf = eval_onside_conf(args, core_image, onside, mem_imgs, bk)
+
+    visual_all(group_img_name, img, core_image, fms, mem_fms, same_percent, match_same,
+               match_diff, onside, offside)
+    # instantiate detected group
+    onside_coverage = calc_onside_coverage(core_image.squeeze(), onside.squeeze())
+    group = Group(id=b_i, name=bk["name"],
+                  input_signal=img,
+                  onside_signal=(onside.sum(dim=0) > 0),
+                  memory_signal=mem_imgs,
+                  parents=parent_groups,
+                  onside_conf=group_count_conf,
+                  coverage=onside_coverage)
+    args.logger.debug(
+        f" Found group: {bk['name']}: [conf|th  {group_count_conf:.2f}|{args.group_count_conf_th}]"
+        f" [coverage: {group.onside_coverage:.2f}]")
+
+    # individual_indices = get_individual_groups(mem_imgs)
+    # groups = []
+    # for i, indices in enumerate(individual_indices):
+    #     clustered_tensors = mem_imgs[indices]
+    #     clustered_fm = mem_fms[indices]
+    #     clustered_same_percent = same_percent[indices]
+    #     clustered_fm_same = match_same[indices]
+    #     clustered_fm_diff = match_diff[indices]
+    #     onside, offside = get_siding(core_image, clustered_tensors)
+    #     group_img_name = output_file_prefix + str(f'_group_{i}_{bk["name"]}.png')
+    #     group_count_conf = eval_onside_conf(args, core_image, onside, clustered_tensors, bk)
+    #     onside_coverage = calc_onside_coverage(core_image.squeeze(), onside.squeeze())
+    #     if group_count_conf >= args.group_count_conf_th:
+    #         visual_all(group_img_name, img, core_image, fms, clustered_fm,
+    #                    clustered_same_percent, clustered_fm_same, clustered_fm_diff, onside, offside)
+    #         # instantiate detected group
+    #         groups.append(Group(id=i, name=bk["name"],
+    #                             input_signal=img,
+    #                             onside_signal=(onside.sum(dim=0) > 0),
+    #                             memory_signal=clustered_tensors,
+    #                             parents=None,
+    #                             onside_conf=group_count_conf,
+    #                             coverage=onside_coverage))
+    #         args.logger.debug(
+    #             f" Found group: {bk['name']}: [conf|th  {group_count_conf:.2f}|{args.group_count_conf_th}]"
+    #             f" [coverage: {groups[-1].onside_coverage:.2f}]")
+    # args.logger.debug(f"clustering fms to {len(groups)} groups")
+    return group
+
+
+def calc_onside_coverage(core_image, onside):
+    onside_mask = onside.sum(dim=0).bool()
+    onside_coverage = core_image[onside_mask].bool().sum() / core_image.bool().sum()
+    return onside_coverage
+
+
+def percept_feature_groups(args, bk, img, output_file_prefix):
     groups = []
-    group_count = 0
-    core_image = data_utils.rgb2bw(img, resize=64)
+    # segment the scene into separate parts
+    segments = perception.detect_connected_regions(img)
+    # convert to fms
+    for segment in segments:
+        segment_groups = []
+        for b_i, bk_shape in enumerate(bk):
+            core_image = data_utils.rgb2bw(segment.permute(1, 2, 0).numpy(), resize=64)
+            fms = perception.one_layer_conv(core_image.unsqueeze(0), bk_shape["kernels"].float())
+            # recall the memory
+            mem_fms_data = recall_mem_fms(args, fms, bk_shape["fm_repo"], core_image, bk_shape["fm_img"])
 
-    for bk_shape in bk:
-        bk_groups = []
-        in_fm = perception.one_layer_conv(core_image.unsqueeze(0), bk_shape["kernels"])
-        fm_repo = bk_shape["fm_repo"]  # (#fm, #kernel, row, col)
-        fm_img = bk_shape["fm_img"]  # (#fm, #channel, row, col)
-
-        img_fm_shifts = get_shifted_matrics(in_fm)
-        img_shifts = get_shifted_matrics(core_image.unsqueeze(0))
-
-        match_fm_shift, match_fm_idx, match_fm_value = find_memory_fms(args, img_fm_shifts, fm_repo, img_shifts, fm_img)
-        if match_fm_shift is None:
-            continue
-        match_fm = fm_repo[match_fm_idx]
-        match_fm_img = fm_img[match_fm_idx]
-        shift_mfm = torch.stack([torch.roll(match_fm[i], shifts=tuple(match_fm_shift[i]), dims=(-2, -1)) for i in
-                                 range(len(match_fm_value))])
-        shift_mfm_img = torch.stack(
-            [torch.roll(match_fm_img[i], shifts=tuple(match_fm_shift[i]), dims=(-2, -1)) for i in
-             range(len(match_fm_value))])
-        match_same, match_diff, same_percent = get_match_detail(shift_mfm, in_fm.squeeze())
-
-        # check number of groups
-        individual_indices = get_individual_groups(shift_mfm_img)
-        for indices in individual_indices:
-            clustered_tensors = shift_mfm_img[indices]
-            clustered_fm = shift_mfm[indices]
-            clustered_same_percent = same_percent[indices]
-            clustered_fm_same = match_same[indices]
-            clustered_fm_diff = match_diff[indices]
-            onside, offside = get_siding(core_image, clustered_tensors)
-            group_img_name = output_file_prefix + str(f'_group_{group_count}_{bk_shape["name"]}.png')
-            group_count_conf = eval_onside_conf(args, core_image, onside, clustered_tensors, bk_shape)
-
-            # if group_count_conf < args.group_count_conf_th:
-            #     continue
-            visual_all(group_img_name, img, core_image, in_fm, clustered_fm, clustered_same_percent, clustered_fm_same,
-                       clustered_fm_diff, onside, offside)
-
-            # instantiate detected group
-            new_group = Group(id=group_count, name=bk_shape["name"],
-                              input_signal=img,
-                              onside_signal=(onside.sum(dim=0) > 0),
-                              memory_signal=clustered_tensors,
-                              parents=None,
-                              conf=group_count_conf)
-            new_group.generate_tensor()
-            bk_groups.append(new_group)
-
-            group_count += 1
-
-        groups.append(bk_groups)
+            if mem_fms_data is not None:
+                # check number of groups
+                bk_group = fit_groups(args, b_i, img, core_image, mem_fms_data, output_file_prefix, fms, bk_shape)
+                segment_groups.append(bk_group)
+                # grouping the memory to new groups
+        best_idx = torch.tensor([g.conf for g in segment_groups]).argmax()
+        groups.append(segment_groups[best_idx])
     return groups
 
 
-def percept_2nd_pixel_groups(args, input_groups, bk, img, output_file_prefix):
+def percept_objects(args, input_groups, bk, img, output_file_prefix):
+    """clustering feature groups together based on its position
+        if the common area of two groups still related to one memory fm, then merge these two groups as one
+    """
+    output_groups = []
+    for i in range(len(input_groups)):
+        base_groups = input_groups[i]
+
+        pass
+    pass
+
+
+def percept_object_groups(args, input_groups, bk, img, output_file_prefix):
+    """ group objects as a high level group """
     output_groups = []
     group_count = 0
-    core_image = data_utils.rgb2bw(img, resize=64)
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY).astype(np.int32)
+    gray = cv2.resize(gray.astype(np.float32), (64, 64), interpolation=cv2.INTER_AREA)
+    gray[gray == 211] = 0
+    core_image = torch.from_numpy(gray).unsqueeze(0)
 
-    for i in range(len(input_groups)):
-        type_groups = input_groups[i]
-        # merge images in the type groups into one image
-        onside_mask = torch.cat([g.onside.unsqueeze(0) for g in type_groups], dim=0)
-        onside_mask = onside_mask.sum(dim=0, keepdim=True).bool()
+    # merge images in the type groups into one image
+    onside_mask = torch.cat([g.onside.unsqueeze(0) for g in input_groups], dim=0)
+    onside_mask = onside_mask.sum(dim=0, keepdim=True).bool()
 
-        onside_img = torch.zeros_like(core_image)
-        onside_img[onside_mask] = core_image[onside_mask]
-        in_fm = perception.one_layer_conv(onside_img.unsqueeze(0), bk[i]["kernels"])
-        fm_repo = bk[i]["fm_repo"]  # (#fm, #kernel, row, col)
-        fm_img = bk[i]["fm_img"]  # (#fm, #channel, row, col)
-        img_fm_shifts = get_shifted_matrics(in_fm)
-        img_shifts = get_shifted_matrics(core_image.unsqueeze(0))
+    for b_i, bk_shape in enumerate(bk):
+        fms = perception.one_layer_conv(onside_mask.unsqueeze(0).to(torch.float32), bk_shape["kernels"].float())
+        # recall the memory
+        mem_fms_data = recall_mem_fms(args, fms, bk_shape["fm_repo"], core_image, bk_shape["fm_img"])
+        if mem_fms_data is not None:
+            # check number of groups
+            bk_group = fit_groups(args, b_i, img, core_image, mem_fms_data, output_file_prefix, fms, bk_shape,
+                                  parent_groups=input_groups)
+            output_groups.append(bk_group)
+            # grouping the memory to new groups
+    best_idx = torch.tensor([g.conf for g in output_groups]).argmax()
+    best_group = output_groups[best_idx]
 
-        match_fm_shift, match_fm_idx, match_fm_value = fit_group_fm_to_mem_fm(args, img_fm_shifts, fm_repo, img_shifts,
-                                                                              fm_img)
-        if match_fm_shift is not None:
-            match_fm = fm_repo[match_fm_idx]
-            match_fm_img = fm_img[match_fm_idx]
-            shift_mfm = torch.stack([torch.roll(match_fm[i], shifts=tuple(match_fm_shift[i]), dims=(-2, -1)) for i in
-                                     range(len(match_fm_value))])
-            shift_mfm_img = torch.stack(
-                [torch.roll(match_fm_img[i], shifts=tuple(match_fm_shift[i]), dims=(-2, -1)) for i in
-                 range(len(match_fm_value))])
-            match_same, match_diff, same_percent = get_match_detail(in_fm, shift_mfm)
+    # onside_img = torch.zeros_like(core_image)
+    # onside_img[onside_mask] = core_image[onside_mask]
+    # in_fm = perception.one_layer_conv(onside_img.unsqueeze(0), bk[i]["kernels"])
+    # fm_repo = bk[i]["fm_repo"]  # (#fm, #kernel, row, col)
+    # fm_img = bk[i]["fm_img"]  # (#fm, #channel, row, col)
+    # img_fm_shifts = get_shifted_matrics(in_fm)
+    # img_shifts = get_shifted_matrics(core_image.unsqueeze(0))
 
-            onside, offside = get_siding(core_image, shift_mfm_img)
-            group_img_name = output_file_prefix + str(f'2nd_group_{group_count}_{bk[i]["name"]}.png')
-            group_count_conf = eval_onside_conf(args, core_image, onside, shift_mfm_img, bk[i])
+    # match_fm_shift, match_fm_idx, match_fm_value = fit_group_fm_to_mem_fm(args, img_fm_shifts, fm_repo, img_shifts,
+    #                                                                       fm_img)
+    # if match_fm_shift is not None:
+    #     match_fm = fm_repo[match_fm_idx]
+    #     match_fm_img = fm_img[match_fm_idx]
+    #     shift_mfm = torch.stack([torch.roll(match_fm[i], shifts=tuple(match_fm_shift[i]), dims=(-2, -1)) for i in
+    #                              range(len(match_fm_value))])
+    #     shift_mfm_img = torch.stack(
+    #         [torch.roll(match_fm_img[i], shifts=tuple(match_fm_shift[i]), dims=(-2, -1)) for i in
+    #          range(len(match_fm_value))])
+    #     match_same, match_diff, same_percent = get_match_detail(in_fm, shift_mfm)
+    #
+    #     onside, offside = get_siding(core_image, shift_mfm_img)
+    #     group_img_name = output_file_prefix + str(f'2nd_group_{group_count}_{bk[i]["name"]}.png')
+    #     group_count_conf = eval_onside_conf(args, core_image, onside, shift_mfm_img, bk[i])
+    #
+    #     visual_all(group_img_name, img, core_image, in_fm, shift_mfm, same_percent, match_same,
+    #                match_diff, onside, offside)
+    #     onside_coverage = calc_onside_coverage(core_image.squeeze(), onside.squeeze())
+    #
+    #     new_group = Group(id=group_count,
+    #                       onside_signal=(onside.sum(dim=0) > 0),
+    #                       input_signal=img,
+    #                       memory_signal=shift_mfm_img,
+    #                       parents=input_groups,
+    #                       name=bk[i]["name"],
+    #                       onside_conf=1,
+    #                       coverage=onside_coverage
+    #                       )
+    #
+    #     new_group.generate_tensor()
+    #     output_groups.append(new_group)
+    #     group_count += 1
 
-            visual_all(group_img_name, img, core_image, in_fm, shift_mfm, same_percent, match_same,
-                       match_diff, onside, offside)
-
-            new_group = Group(id=group_count,
-                              onside_signal=(onside.sum(dim=0) > 0),
-                              input_signal=img,
-                              memory_signal=shift_mfm_img,
-                              parents=type_groups,
-                              name=bk[i]["name"],
-                              conf=1
-                              )
-            new_group.generate_tensor()
-            output_groups.append(new_group)
-            group_count += 1
-
-    return output_groups
+    return best_group
 
 
 def main():

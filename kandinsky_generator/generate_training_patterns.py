@@ -191,7 +191,7 @@ def kf2data(kf, width):
 def genShapeOnShape(shapes, n):
     width = 512
     for shape in shapes:
-        base_path = config.kp_dataset / f"{shape}"
+        base_path = config.kp_base_dataset / f"{shape}"
         os.makedirs(base_path, exist_ok=True)
         png_num = len([f for f in Path(base_path).iterdir() if f.is_file() and f.suffix == '.png'])
         n = n - png_num  # only generate insufficient ones
@@ -200,28 +200,20 @@ def genShapeOnShape(shapes, n):
         for mode in ['train']:
             if shape == "circle":
                 gen_fun = shapeOnshapeObjects.cir_only
-            elif shape == "circle_solid":
-                gen_fun = shapeOnshapeObjects.cir_solid_only
-            elif shape == "circle_small":
-                gen_fun = shapeOnshapeObjects.cir_small_only
+            elif shape == "triangle":
+                gen_fun = shapeOnshapeObjects.tri_only
+            elif shape == "square":
+                gen_fun = shapeOnshapeObjects.square_only
             elif shape == "triangle_small":
                 gen_fun = shapeOnshapeObjects.tri_small_only
             elif shape == "circle_flex":
                 gen_fun = shapeOnshapeObjects.cir_flex_only
-            elif shape == "triangle":
-                gen_fun = shapeOnshapeObjects.tri_only
-            elif shape =="triangle_solid":
-                gen_fun = shapeOnshapeObjects.tri_solid
-            elif shape =="triangle_solid_big":
-                gen_fun = shapeOnshapeObjects.tri_solid_big
             elif shape =="gestalt_triangle":
                 gen_fun = shapeOnshapeObjects.gestalt_triangle
             elif shape == "triangler":
                 gen_fun = shapeOnshapeObjects.trir_only
             elif shape == "diamond":
                 gen_fun = shapeOnshapeObjects.dia_only
-            elif shape == "square":
-                gen_fun = shapeOnshapeObjects.square_only
             elif shape == "square_small":
                 gen_fun = shapeOnshapeObjects.square_small_only
             elif shape == "trianglecircle":
@@ -250,5 +242,5 @@ def genShapeOnShape(shapes, n):
                 image.save(base_path / f"{shape}_{(png_num+i):06d}.png")
 
 if __name__ == '__main__':
-    tasks = ["circle_solid"]
-    genShapeOnShape(tasks, 1000)
+    tasks = ["circle"]
+    genShapeOnShape(tasks, 100)

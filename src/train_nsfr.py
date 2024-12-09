@@ -85,11 +85,32 @@ def obj2tensor(shape, color, pos, group_name, group_count_conf):
 #     group_ocms = torch.stack(group_ocms, dim=0)
 #     return group_ocms
 
+def has_found_global_group(groups):
+    has_found = False
+    for group in groups:
+        if group.onside_coverage > 0.9:
+            has_found = True
+    return has_found
+
+
 def percept_gestalt_groups(args, group_bk, img, output_file_prefix):
-    pixel_groups = train_common_features.percept_pixel_groups(args, group_bk, img, output_file_prefix)
-    pixel_groups_2nd = train_common_features.percept_2nd_pixel_groups(args, pixel_groups, group_bk, img,
-                                                                      output_file_prefix)
-    return pixel_groups_2nd
+    group_file = output_file_prefix + f"_feature_groups.pt"
+    if os.path.exists(group_file):
+        groups = torch.load(group_file)
+    else:
+        groups = train_common_features.percept_feature_groups(args, group_bk, img, output_file_prefix)
+        torch.save(groups, group_file)
+
+
+    global_group_file = output_file_prefix + f"_global_groups.pt"
+    if os.path.exists(global_group_file):
+        groups = torch.load(global_group_file)
+    else:
+        groups = train_common_features.percept_object_groups(args, groups, group_bk, img, output_file_prefix)
+        torch.save(groups, global_group_file)
+
+    groups.ocm[0, -1] = 1
+    return [groups]
 
 
 def train_clauses(args, image_paths, out_path):

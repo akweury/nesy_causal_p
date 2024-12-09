@@ -8,21 +8,23 @@ from src.utils import data_utils
 
 
 class Group():
-    def __init__(self, id, name, input_signal, onside_signal, memory_signal, parents, conf):
+    def __init__(self, id, name, input_signal, onside_signal, memory_signal, parents, onside_conf, coverage):
         self.id = id
         self.name = name
         self.input = torch.from_numpy(input_signal)
         self.onside = onside_signal
         self.memory = memory_signal
         self.parents = parents
-        self.conf = conf
+        self.conf = onside_conf
         self.color = self.search_color(input_signal, onside_signal)
         self.ocm = None
         self.pos = None
+        self.onside_coverage = coverage
+        self.generate_tensor()
 
     def __str__(self):
         # return self.name
-        return self.name + "_" + str(self.id)
+        return self.name # + "_" + str(self.id)
 
     def __hash__(self):
         return hash(self.__str__())

@@ -46,7 +46,7 @@ color_tiles = [
     (211, 73, 160),  # 9
     (255, 255, 255),  # 10
 ]
-kp_dataset = storage / "dataset" / "kandinsky-pattern-2019"
+kp_base_dataset = storage / "dataset" / "basic"
 
 data_file_train_cha = storage / "dataset" / "arc-prize-2024" / "arc-agi_training_challenges.json"
 data_file_train_sol = storage / "dataset" / "arc-prize-2024" / "arc-agi_training_solutions.json"

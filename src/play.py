@@ -44,6 +44,8 @@ def main():
     total_step = 8
 
     # Generate Training Data -- Single Group Pattern
+
+
     step_counter += 1
     logger.info(f"Step {step_counter}/{total_step}: "
                 f"Generating {exp_setting['bk_groups']} training patterns")

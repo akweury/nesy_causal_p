@@ -329,11 +329,10 @@ def load_bw_img(img_path, size=None):
 
 def rgb2bw(rgb, resize=None):
 
-    gray = cv2.cvtColor(rgb, cv2.COLOR_BGR2GRAY)
-    gray[gray != 211] = 1
-    gray[gray == 211] = 0
+    gray = cv2.cvtColor(rgb, cv2.COLOR_BGR2GRAY).astype(np.int32)
+    gray[gray != 0] = 1
     if resize is not None:
-        gray = cv2.resize(gray, (64, 64), interpolation=cv2.INTER_AREA)
+        gray = cv2.resize(gray.astype(np.float32), (64, 64), interpolation=cv2.INTER_AREA)
         gray = torch.from_numpy(gray).unsqueeze(0)
     return gray
 

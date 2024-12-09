@@ -40,7 +40,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
             kf.append(o)
         return kf
 
-    def _circleSolid(self, so, t, min_percent=1.0, max_percent=1.0):
+    def _circle(self, so, t, min_percent=1.0, max_percent=1.0):
         kf = []
         x = 0.5  # + random.random() * 0.8
         y = 0.7  # + random.random() * 0.8
@@ -49,10 +49,10 @@ class ShapeOnShape(KandinskyTruthInterfce):
         xs = x
         ys = y - r
 
-        so = 0.03 + random.random() * 0.9
+        so = 0.1 + random.random() * 0.8
 
         o = KandinskyUniverse.kandinskyShape()
-        o.color = random.choice(KandinskyUniverse.matplotlib_colors_list)
+        o.color = "lightblue"
         o.shape = "circle"
         o.size = so
         o.x = xs
@@ -62,6 +62,52 @@ class ShapeOnShape(KandinskyTruthInterfce):
         random_percent = random.uniform(min_percent, max_percent)
         kf = kf[:int(len(kf) * random_percent)]
 
+        return kf
+
+    def _square(self, so, t, min_percent=1.0, max_percent=1.0):
+        kf = []
+        x = 0.5  # + random.random() * 0.8
+        y = 0.8  # + random.random() * 0.8
+        r = 0.3 - min(abs(0.5 - x), abs(0.5 - y)) * 0.5
+
+        xs = x
+        ys = y - r
+
+        so = 0.1 + random.random() * 0.8
+
+        o = KandinskyUniverse.kandinskyShape()
+        o.color = "darkblue"
+        o.shape = "square"
+        o.size = so
+        o.x = xs
+        o.y = ys
+        kf.append(o)
+
+        random_percent = random.uniform(min_percent, max_percent)
+        kf = kf[:int(len(kf) * random_percent)]
+        return kf
+
+    def _triangle(self, so, t, min_percent=1.0, max_percent=1.0):
+        kf = []
+        x = 0.5  # + random.random() * 0.8
+        y = 0.8  # + random.random() * 0.8
+        r = 0.3 - min(abs(0.5 - x), abs(0.5 - y)) * 0.5
+
+        xs = x
+        ys = y - r
+
+        so = 0.1 + random.random() * 0.8
+
+        o = KandinskyUniverse.kandinskyShape()
+        o.color = "darkblue"
+        o.shape = "triangle"
+        o.size = so
+        o.x = xs
+        o.y = ys
+        kf.append(o)
+
+        random_percent = random.uniform(min_percent, max_percent)
+        kf = kf[:int(len(kf) * random_percent)]
         return kf
 
     def _smallCircleFlex(self, so, t):
@@ -195,29 +241,6 @@ class ShapeOnShape(KandinskyTruthInterfce):
             o.x = xs + (i + 1) * dxi
             o.y = ys + (i + 1) * dyi
             kf.append(o)
-
-        random_percent = random.uniform(min_percent, max_percent)
-        kf = kf[:int(len(kf) * random_percent)]
-        return kf
-
-    def _triangleSolid(self, so, t, min_percent=1.0, max_percent=1.0):
-        kf = []
-        x = 0.5  # + random.random() * 0.8
-        y = 0.8  # + random.random() * 0.8
-        r = 0.3 - min(abs(0.5 - x), abs(0.5 - y)) * 0.5
-
-        xs = x
-        ys = y - r
-
-        so = 0.03 + random.random() * 0.8
-
-        o = KandinskyUniverse.kandinskyShape()
-        o.color = random.choice(KandinskyUniverse.matplotlib_colors_list)
-        o.shape = "triangle"
-        o.size = so
-        o.x = xs
-        o.y = ys
-        kf.append(o)
 
         random_percent = random.uniform(min_percent, max_percent)
         kf = kf[:int(len(kf) * random_percent)]
@@ -706,32 +729,28 @@ class ShapeOnShape(KandinskyTruthInterfce):
 
     def _only(self, truth, shape):
         so = 0.04
+
+        # bk basic patterns
         if shape == "circle":
+            g = lambda so, truth: self._circle(so, truth)
+        elif shape == "circle_group":
             g = lambda so, truth: self._bigCircle(so, truth)
-        elif shape == "circle_small":
-            g = lambda so, truth: self._smallCircleFlex(so, truth)
-        elif shape == "circle_solid":
-            g = lambda so, truth: self._circleSolid(so, truth)
-        elif shape == "circle_flex":
-            g = lambda so, truth: self._bigCircleFlex(so, truth)
+        elif shape == "triangle":
+            g = lambda so, truth: self._triangle(so, truth)
+        elif shape == "triangle_group":
+            g = lambda so, truth: self._bigTriangle(so, truth)
+        elif shape == "square":
+            g = lambda so, truth: self._square(so, truth)
+        elif shape == "square_group":
+            g = lambda so, truth: self._bigSquare(so, truth)
+
         elif shape == "diamond":
             g = lambda so, truth: self._bigDiamond(so, truth)
-        elif shape == "triangle":
-            g = lambda so, truth: self._bigTriangle(so, truth)
-        elif shape == "triangle_small":
-            g = lambda so, truth: self._smallTriangle(so, truth)
-        elif shape == "triangler":
-            g = lambda so, truth: self._bigTriangler(so, truth)
-        elif shape == "triangle_solid":
-            g = lambda so, truth: self._triangleSolid(so, truth)
-        elif shape == "triangle_solid_big":
-            g = lambda so, truth: self._triangleSolidBig(so, truth)
+
+        # challenge patterns
         elif shape == "gestalt_triangle":
             g = lambda so, truth: self._gestaltTriangle(so, truth)
-        elif shape == "square":
-            g = lambda so, truth: self._bigSquare(so, truth)
-        elif shape == "square_small":
-            g = lambda so, truth: self._smallSquare(so, truth)
+
         elif shape == "diamondcircle":
             g = lambda so, truth: self._bigDiamond(so, truth) + self._bigCircle(so, truth)
         elif shape == "trianglecircle":
@@ -774,12 +793,14 @@ class ShapeOnShape(KandinskyTruthInterfce):
             kf = self._only(rule_style, "circle")
             kfs.append(kf)
         return kfs
+
     def cir_solid_only(self, n=1, rule_style=False):
         kfs = []
         for i in range(n):
             kf = self._only(rule_style, "circle_solid")
             kfs.append(kf)
         return kfs
+
     def cir_small_only(self, n=1, rule_style=False):
         kfs = []
         for i in range(n):
