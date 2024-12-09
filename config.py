@@ -47,7 +47,7 @@ color_tiles = [
     (255, 255, 255),  # 10
 ]
 kp_base_dataset = storage / "dataset" / "basic"
-
+kp_challenge_dataset = storage / "dataset" / "challenge"
 data_file_train_cha = storage / "dataset" / "arc-prize-2024" / "arc-agi_training_challenges.json"
 data_file_train_sol = storage / "dataset" / "arc-prize-2024" / "arc-agi_training_solutions.json"
 data_file_test_cha = storage / "dataset" / "arc-prize-2024" / "arc-agi_test_challenges.json"

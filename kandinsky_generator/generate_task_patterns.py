@@ -240,7 +240,7 @@ def genShapeOnShape(shape, n):
 def genShapeOnShapeTask(task, total_n):
     width = 512
     shapeOnshapeObjects = ShapeOnShape(u, 20, 40)
-    base_path = config.kp_dataset / f"{task['task_name']}"
+    base_path = config.kp_challenge_dataset / f"{task['task_name']}"
     os.makedirs(base_path, exist_ok=True)
     for mode in ['train', "test"]:
         for label in bk.task_pattern_types:
@@ -249,29 +249,19 @@ def genShapeOnShapeTask(task, total_n):
             # print(f'Generating dataset {base_path}', task, mode)
             png_num = len([f for f in Path(data_path).iterdir() if f.is_file() and f.suffix == '.png'])
             n = total_n - png_num  # only generate insufficient ones
-            if task[label] == "diamondcircle":
-                gen_fun = shapeOnshapeObjects.diamond_circle
-            elif task[label] == "diamondcircle_cf":
-                gen_fun = shapeOnshapeObjects.diamond_circle_cf
-            elif task[label] == "trianglecircle":
-                gen_fun = shapeOnshapeObjects.triangle_circle
-            elif task[label] == "trianglecircle_flex":
-                gen_fun = shapeOnshapeObjects.triangle_circle_flex
-            elif task[label] == "trianglecircle_flex_cf":
-                gen_fun = shapeOnshapeObjects.triangle_circle_flex_cf
-            elif task[label] == "circlesquare_count":
-                gen_fun = shapeOnshapeObjects.circle_square_count
-            elif task[label] == "circlesquare_count_cf":
-                gen_fun = shapeOnshapeObjects.circle_square_count_cf
-            elif task[label] == "trianglecircle_cf":
-                gen_fun = shapeOnshapeObjects.triangle_circle_cf
-            elif task[label] == "gestalt_triangle":
+            if task[label] == "gestalt_triangle":
                 gen_fun = shapeOnshapeObjects.gestalt_triangle
+            elif task[label] == "triangle_group":
+                gen_fun = shapeOnshapeObjects.tri_only
+            elif task[label] == "square_group":
+                gen_fun = shapeOnshapeObjects.square_only
+            elif task[label] == "circle_group":
+                gen_fun = shapeOnshapeObjects.cir_only
             elif task[label] == "random":
                 gen_fun = shapeOnshapeObjects.false_kf
             else:
                 raise ValueError
-            for (i, kf) in enumerate(gen_fun(n, rule_style=True)):
+            for (i, kf) in enumerate(gen_fun(n, True)):
                 image = KandinskyUniverse.kandinskyFigureAsImage(kf, width)
                 data = kf2data(kf, width)
                 with open(data_path / f"{i:06d}.json", 'w') as f:
@@ -280,4 +270,8 @@ def genShapeOnShapeTask(task, total_n):
 
 
 if __name__ == '__main__':
-    genShapeOnShapeTask(bk.exp_count_group, 10)
+
+    # genShapeOnShapeTask(bk.exp_gestalt_triangle, 10)
+    # genShapeOnShapeTask(bk.exp_triangle_group, 10)
+    # genShapeOnShapeTask(bk.exp_square_group, 10)
+    genShapeOnShapeTask(bk.exp_circle_group, 10)

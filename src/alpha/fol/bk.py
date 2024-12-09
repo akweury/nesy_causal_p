@@ -159,8 +159,32 @@ exp_count_group = {
 }
 exp_gestalt_triangle = {
     "bk_groups": ["circle_solid", "triangle_solid"],
-    "task_name": "gestalt_triangle",
+    "task_name": "01_gestalt_triangle",
     "task_true_pattern": "gestalt_triangle",
     "task_random_pattern": "random",
     "task_cf_pattern": "gestalt_triangle"
+}
+
+exp_triangle_group = {
+    "bk_groups": ["circle", "square", "triangle"],
+    "task_name": "02_triangle_group",
+    "task_true_pattern": "triangle_group",
+    "task_random_pattern": "random",
+    "task_cf_pattern": "random"
+}
+
+exp_square_group = {
+    "bk_groups": ["circle", "square", "triangle"],
+    "task_name": "03_square_group",
+    "task_true_pattern": "square_group",
+    "task_random_pattern": "random",
+    "task_cf_pattern": "random"
+}
+
+exp_circle_group = {
+    "bk_groups": ["circle", "square", "triangle"],
+    "task_name": "04_circle_group",
+    "task_true_pattern": "circle_group",
+    "task_random_pattern": "random",
+    "task_cf_pattern": "random"
 }
