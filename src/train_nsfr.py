@@ -125,7 +125,7 @@ def train_clauses(args, image_paths, out_path):
     # load background knowledge
     lang = None
     all_clauses = []
-    group_bk = load_bk(args, bk.group_name_solid)
+    group_bk = load_bk(args, bk.bk_shapes)
     for idx in range(min(2, len(image_paths))):
         args.logger.debug(f"\n =========== Analysis Image {idx + 1}/{min(2, len(image_paths))} ==============")
         file_name, file_extension = image_paths[idx].split(".")

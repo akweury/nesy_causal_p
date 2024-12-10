@@ -37,8 +37,8 @@ def init_io_folders(args, data_folder):
 def main():
     # load exp arguments
     args = args_utils.get_args(logger)
-    exp_setting = bk.exp_gestalt_triangle
-    data_folder = config.kp_dataset / args.exp_name
+    exp_setting = bk.exp_triangle_group
+    data_folder = config.kp_challenge_dataset / args.exp_name
     init_io_folders(args, data_folder)
     step_counter = 0
     total_step = 8
@@ -49,7 +49,7 @@ def main():
     step_counter += 1
     logger.info(f"Step {step_counter}/{total_step}: "
                 f"Generating {exp_setting['bk_groups']} training patterns")
-    generate_training_patterns.genShapeOnShape(exp_setting["bk_groups"], 500)
+    generate_training_patterns.genShapeOnShape(exp_setting["bk_groups"], 100)
 
     # Generate Task Data -- Multiple Group Pattern
     step_counter += 1

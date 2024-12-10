@@ -101,7 +101,7 @@ class ContinueShapeDataset(Dataset):
         self.image_paths = []
         # self.labels = []
         self.device = args.device
-        folder = config.kp_dataset / args.exp_name
+        folder = config.kp_base_dataset / args.exp_name
         imgs = file_utils.get_all_files(folder, "png", False)[:1000]
         # labels = [self.get_label(args.exp_name) for img in imgs]
         self.image_paths += imgs
