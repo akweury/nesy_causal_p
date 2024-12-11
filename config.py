@@ -69,3 +69,7 @@ model_group_kp_circle = storage / "output" / "kp_sy_circle" / "circle_detector_m
 model_group_kp_triangle = storage / "output" / "kp_sy_triangle" / "triangle_detector_model.pth"
 
 model_group_kp_triangle_only = storage / "output" / "kp_sy_triangle_only" / "triangle_only_detector_model.pth"
+
+
+# nn settings
+kernel_size = 3

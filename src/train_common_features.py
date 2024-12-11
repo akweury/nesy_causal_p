@@ -1,5 +1,4 @@
 # Created by shaji at 03/08/2024
-import logging
 import os
 import torch
 import torchvision.transforms as transforms
@@ -11,6 +10,7 @@ from PIL import Image, ImageDraw
 from scipy.spatial.distance import cdist
 
 import config
+import src.percept.percept_utils
 from src.percept.group import Group
 from src.percept import perception
 from src.utils import args_utils, data_utils, chart_utils, file_utils
@@ -395,7 +395,7 @@ def eval_onside_conf(args, data, onsides, fm_imgs, bk_shape):
     for i in range(len(onside_mask)):
         onside_matrix = onside_mask.to(torch.float)[i].unsqueeze(0).unsqueeze(0)
         fm_matrix = fm_imgs[i].unsqueeze(0).unsqueeze(0)
-        group_count_conf[i] = perception.matrix_equality(onside_matrix, fm_matrix)
+        group_count_conf[i] = src.percept.percept_utils.matrix_equality(onside_matrix, fm_matrix)
         # group_count_conf[i] = tensor_similarity(onside_mask.to(torch.float)[i], fm_imgs[i])
     group_count_conf = torch.mean(group_count_conf)
 
@@ -541,10 +541,10 @@ def recall_mem_fms(args, in_fm, mem_fms, core_img, mem_imgs):
     # edge similarity
     img_edge = perception.detect_edge(shifted_imgs.float())
     repo_edge = perception.detect_edge(mem_imgs.float())
-    similarity_edge_fms = perception.matrix_equality(repo_edge, img_edge)
+    similarity_edge_fms = src.percept.percept_utils.matrix_equality(repo_edge, img_edge)
 
     # fm similarity
-    similarity_fms = perception.matrix_equality(mem_fms, shifted_fms)
+    similarity_fms = src.percept.percept_utils.matrix_equality(mem_fms, shifted_fms)
 
     similarity_matrix = (similarity_edge_fms + similarity_fms * similarity_edge_fms.max()).permute(1, 0)
     # similarity_scale = perception.matrix_scale_similarity(img_edge, repo_edge)
@@ -575,8 +575,8 @@ def fit_group_fm_to_mem_fm(args, shifted_fms, mem_fms, shifted_imgs, mem_imgs):
     # edge fm
     img_edge = perception.detect_edge(shifted_imgs.float())
     repo_edge = perception.detect_edge(mem_imgs.float())
-    similarity_edge_fms = perception.matrix_equality(repo_edge, img_edge).permute(1, 0)
-    similarity_fms = perception.matrix_similarity(mem_fms, shifted_fms).permute(1, 0)
+    similarity_edge_fms = src.percept.percept_utils.matrix_equality(repo_edge, img_edge).permute(1, 0)
+    similarity_fms = src.percept.percept_utils.matrix_similarity(mem_fms, shifted_fms).permute(1, 0)
     similarity_matrix = similarity_edge_fms + similarity_fms * similarity_edge_fms.max()
 
     # args.fm_th = 0.1
@@ -673,9 +673,11 @@ def calc_onside_coverage(core_image, onside):
 
 def percept_feature_groups(args, bk, img, output_file_prefix):
     groups = []
+
     # segment the scene into separate parts
     segments = perception.detect_connected_regions(img)
-    # convert to fms
+
+    # recall memory
     for segment in segments:
         segment_groups = []
         for b_i, bk_shape in enumerate(bk):
@@ -689,7 +691,7 @@ def percept_feature_groups(args, bk, img, output_file_prefix):
                 bk_group = fit_groups(args, b_i, img, core_image, mem_fms_data, output_file_prefix, fms, bk_shape)
                 segment_groups.append(bk_group)
                 # grouping the memory to new groups
-        best_idx = torch.tensor([g.conf for g in segment_groups]).argmax()
+        best_idx = torch.tensor([g.onside_coverage for g in segment_groups]).argmax()
         groups.append(segment_groups[best_idx])
     return groups
 

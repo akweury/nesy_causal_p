@@ -1,12 +1,11 @@
 # Created by shaji at 24/06/2024
-import logging
 
 import torch
 import torch.nn as nn
 from tqdm import tqdm
 
-from .fol.logic import NeuralPredicate, InventedPredicate, Const
-from .fol import bk
+from .fol.logic import NeuralPredicate, InventedPredicate
+from .. import bk
 from src.alpha import valuation
 
 

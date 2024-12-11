@@ -1,5 +1,4 @@
 # Created by shaji at 27/10/2024
-from tqdm import tqdm
 import cv2
 import torch
 
@@ -7,7 +6,7 @@ import config
 from utils import file_utils, args_utils, data_utils
 import train_common_features
 from src.alpha import alpha
-from src.alpha.fol import bk
+from src import bk
 
 
 def load_data(args, image_path):

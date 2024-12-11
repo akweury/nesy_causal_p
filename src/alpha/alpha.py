@@ -1,14 +1,11 @@
 # Created by shaji at 24/06/2024
 import itertools
 
-import torch
-
 from src.utils import log_utils
 from . import valuation, facts_converter, nsfr, pruning, clause_op
 from .fol import language
 from .fol import refinement
-from .fol import bk
-from src import llama_call
+from .. import bk
 
 
 def init_ilp(args, obj_num):
@@ -19,29 +16,6 @@ def init_ilp(args, obj_num):
     return lang
 
 
-def load_lang(args, lang_data):
-    try:
-        lang = init_ilp(args, 1)
-        lang.reset_lang(lang_data["g_num"])
-        lang.clauses = lang_data["clauses"]
-        lang.predicates = lang_data["preds"]
-
-        lang.consts = lang_data["consts"]
-        lang.atoms = lang_data["atoms"]
-        lang.attrs = lang_data["attrs"]
-        lang.llm_clauses = lang_data["llm_clauses"]
-        lang.generate_atoms()
-
-        args.logger.debug(
-            f"\n ================= Loaded Pretrained Language ================= " +
-            f"\n ==== Machine Clauses: " +
-            "".join([f"\n{c_i+1}/{len(lang.clauses)} {lang.clauses[c_i]}" for c_i in range(len(lang.clauses))]) +
-            f"\n ==== LLM Description: " +
-            "".join([f"\n{c_i+1}/{len(lang.llm_clauses)} {lang.llm_clauses[c_i]}" for c_i in range(len(lang.llm_clauses))])
-        )
-    except Exception:
-        return None
-    return lang
 
 
 def extension(args, lang, clauses):
@@ -245,3 +219,13 @@ def alpha_test(args, ocm, lang):
     FC = facts_converter.FactsConverter(args, lang, VM, given_attrs=lang.attrs)
     pred = eval_task(args, lang, FC, ocm).squeeze()
     return pred
+
+
+def filter_infrequent_clauses(all_clauses, lang):
+    frequency = {}
+    for item in all_clauses:
+        frequency[item] = frequency.get(item, 0) + 1
+    most_frequency_value = max(frequency.values())
+    most_frequent_clauses = [key for key, value in frequency.items() if value == most_frequency_value]
+    lang.clauses = most_frequent_clauses
+    return lang

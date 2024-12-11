@@ -1,8 +1,5 @@
 # Created by jing at 26.11.24
 
-import logging
-
-from tqdm import tqdm
 import torch
 import cv2
 import os
@@ -11,8 +8,7 @@ import config
 import train_common_features
 from utils import file_utils, args_utils, data_utils
 from src.alpha import alpha
-from src.alpha.fol import bk
-from src import llama_call
+from src import bk
 
 
 def load_bk(args, bk_shapes):

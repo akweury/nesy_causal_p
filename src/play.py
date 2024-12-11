@@ -1,18 +1,17 @@
 # Created by jing at 22.10.24
 import os
-# import logging
-import colorlog
 
 import config
-from train_nsfr import train_clauses
+import train_nsfr
 from eval_nsfr import check_clause
-import llama_call
-from utils import file_utils, args_utils
 from kandinsky_generator import generate_training_patterns, generate_task_patterns
-from src.alpha.fol import bk
-
+from utils import args_utils
+from src import dataset, bk
+from src.neural import models
+from src.percept import perception
 
 logger = args_utils.init_logger()
+
 
 def init_io_folders(args, data_folder):
     args.train_folder = data_folder / "train" / "task_true_pattern"
@@ -40,53 +39,46 @@ def main():
     exp_setting = bk.exp_triangle_group
     data_folder = config.kp_challenge_dataset / args.exp_name
     init_io_folders(args, data_folder)
-    step_counter = 0
-    total_step = 8
+    args.step_counter = 0
+    args.total_step = 8
 
     # Generate Training Data -- Single Group Pattern
-
-
-    step_counter += 1
-    logger.info(f"Step {step_counter}/{total_step}: "
-                f"Generating {exp_setting['bk_groups']} training patterns")
-    generate_training_patterns.genShapeOnShape(exp_setting["bk_groups"], 100)
+    generate_training_patterns.genShapeOnShape(args, exp_setting["bk_groups"], 100)
 
     # Generate Task Data -- Multiple Group Pattern
-    step_counter += 1
-    logger.info(f"Step {step_counter}/{total_step}: "
-                f"Generating {exp_setting['task_name']} task patterns")
-    generate_task_patterns.genShapeOnShapeTask(exp_setting, 10)
+    generate_task_patterns.genShapeOnShapeTask(args, exp_setting, 10)
+
+    # Identify feature maps
+    perception.collect_fms(args, exp_setting["bk_groups"])
+
+    # Train autoencoder
+    ate = models.train_autoencoder(args, exp_setting["bk_groups"])
 
     # Import Generated Data
-    step_counter += 1
-    logger.info(f"Step {step_counter}/{total_step}: "
-                f"Importing training and testing data.")
-
-    train_imges = file_utils.get_all_files(args.train_folder, "png", False)[:500]
-    positive_images = file_utils.get_all_files(args.test_true_folder, "png", False)[:500]
-    random_imges = file_utils.get_all_files(args.test_random_folder, "png", False)[:500]
-    counterfactual_imges = file_utils.get_all_files(args.test_cf_folder, "png", False)[:500]
+    train_dl, test_pos_dl, test_rand_dl, test_cf_dl = dataset.load_dataset(args)
 
     # Learn Clauses from Training Data
-    step_counter += 1
-    lang = train_clauses(args, train_imges, args.out_train_folder)
-    logger.info(f"Step {step_counter}/{total_step}: "
+    args.step_counter += 1
+    lang = train_nsfr.load_lang(args)
+    if lang is None:
+        lang = train_nsfr.train_clauses(args, train_dl)
+    logger.info(f"Step {args.step_counter}/{args.total_step}: "
                 f"Reasoned {len(lang.llm_clauses)} LLM Rules, "
                 f"{len(lang.clauses)} Machine Clauses")
 
     # Test Positive Patterns, statistic the accuracy, return the satisfied and dissatisfied rules for each test data.
     step_counter += 1
-    positive_acc = check_clause(args, lang, positive_images, "POSITIVE", args.out_positive_folder)
+    positive_acc = check_clause(args, lang, test_pos_dl, "POSITIVE",
+                                args.out_positive_folder)
     logger.info(f"\n"
                 f"Step {step_counter}/{total_step}: Test Positive Images\n"
                 f"Confidence for each image: {positive_acc}\n"
                 f"Average Accuracy: {positive_acc.mean(dim=0):.2f}\n")
 
-
     # Step 6: Test counterfactual patterns
     step_counter += 1
 
-    cf_acc = check_clause(args, lang, counterfactual_imges, "NEGATIVE", args.out_cf_folder)
+    cf_acc = check_clause(args, lang, test_cf_dl, "NEGATIVE", args.out_cf_folder)
     logger.info(f"\n"
                 f"Step {step_counter}/{total_step}: "
                 f"Test Counterfactual Image Accuracy: {cf_acc.mean():.2f}\n"
@@ -96,7 +88,8 @@ def main():
     # Step 7: Test random patterns
     step_counter += 1
 
-    random_acc = check_clause(args, lang, random_imges, "NEGATIVE", args.out_random_folder)
+    random_acc = check_clause(args, lang, test_rand_dl, "NEGATIVE",
+                              args.out_random_folder)
     logger.info(f"\n"
                 f"Step {step_counter}/{total_step}: "
                 f"Random Image accuracy: {random_acc.mean():.2f}\n"
@@ -109,6 +102,7 @@ def main():
                 f"========================== End of the Program ====================================")
 
     return
+
 
 if __name__ == '__main__':
     main()

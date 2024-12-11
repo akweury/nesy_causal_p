@@ -3,7 +3,8 @@ import numpy as np
 
 import itertools
 from .logic import Atom, Clause, Var
-from . import bk, lang_utils
+from . import lang_utils
+from ... import bk
 
 
 # TODOL refine_from_modeb, generate_by_refinement

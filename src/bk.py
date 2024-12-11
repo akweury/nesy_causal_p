@@ -47,7 +47,8 @@ const_dtype_group = const_dtypes["group_label"]
 
 
 def create_predicate_config(name, term_list):
-    config_str = pred_names[name] + ":" + str(len(term_list)) + ":" + "".join([f"{t};" for t in term_list])[:-1]
+    config_str = pred_names[name] + ":" + str(len(term_list)) + ":" + "".join(
+        [f"{t};" for t in term_list])[:-1]
     return config_str
 
 
@@ -135,7 +136,7 @@ no_color = "none"
 color_matplotlib[no_color] = (0, 0, 0)
 color_large = [k for k, v in list(color_matplotlib.items())]
 
-bk_shapes = ["circle", "square", "triangle"]
+bk_shapes = ["none", "circle", "square", "triangle"]
 # group_name_extend = ["none", "circle_solid", "square_small", "triangle_small", "triangle_solid"]
 # group_name_solid = ["none", "triangle_solid", "circle_solid"]
 # group_name_extend = ["none", "circle_flex"]

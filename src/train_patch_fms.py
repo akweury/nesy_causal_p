@@ -8,11 +8,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image, ImageDraw
 import os
-import colorlog
 
 import config
-from src.percept import perception, group
+from src.percept import perception
 from src.utils import args_utils, data_utils
+from src import dataset
 
 
 def prepare_data(args):
@@ -20,12 +20,14 @@ def prepare_data(args):
         transforms.Resize((64, 64)),
         transforms.ToTensor(),
     ])
-    dataset = perception.ContinueShapeDataset(args, transform=transform)
-    train_size = int(0.8 * len(dataset))
-    val_size = len(dataset) - train_size
-    train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
+    continue_shape_dataset = dataset.BasicShapeDataset(args, transform=transform)
+    train_size = int(0.8 * len(continue_shape_dataset))
+    val_size = len(continue_shape_dataset) - train_size
+    train_dataset, val_dataset = random_split(continue_shape_dataset,
+                                              [train_size, val_size])
 
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_size,
+                              shuffle=False)
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True)
 
     return train_loader, val_loader
@@ -40,11 +42,13 @@ def prepare_mnist_data(args):
         transforms.Normalize((0.5,), (0.5,))
     ])
 
-    minst_dataset = datasets.MNIST(root='./data', train=True, transform=transform, download=True)
+    minst_dataset = datasets.MNIST(root='./data', train=True, transform=transform,
+                                   download=True)
     train_size = int(0.8 * len(minst_dataset))
     val_size = len(minst_dataset) - train_size
     train_dataset, val_dataset = random_split(minst_dataset, [train_size, val_size])
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
+    train_loader = DataLoader(train_dataset, batch_size=args.batch_size,
+                              shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True)
     return train_loader, val_loader
 
@@ -80,7 +84,8 @@ def draw_angle():
     ls_left = [(2, 2), (0, 2)]
     ls_topleft = [(2, 2), (0, 0)]
 
-    directions = [ls_up, ls_upright, ls_right, ls_downright, ls_down, ls_downleft, ls_left, ls_topleft]
+    directions = [ls_up, ls_upright, ls_right, ls_downright, ls_down, ls_downleft,
+                  ls_left, ls_topleft]
 
     angle_imgs = []
     for d_i in range(len(directions) - 1):
@@ -91,8 +96,10 @@ def draw_angle():
             image = Image.fromarray(tensor.numpy())
 
             draw = ImageDraw.Draw(image)
-            draw.line((directions[d_i][0], directions[d_i][1]), fill="white", width=1)
-            draw.line((directions[d_j][0], directions[d_j][1]), fill="white", width=1)
+            draw.line((directions[d_i][0], directions[d_i][1]), fill="white",
+                      width=1)
+            draw.line((directions[d_j][0], directions[d_j][1]), fill="white",
+                      width=1)
             # Convert PIL image back to tensor
             img = torch.from_numpy(np.array(image))
             img = img.to(torch.bool).to(torch.uint8)
@@ -135,46 +142,57 @@ def train_fm_stack():
 
         print(f"#FM: {len(data_all)}. #Data: {len(train_loader)}")
         torch.save(data_all, config.output / f"{args.exp_name}" / f"fms.pt")
-        print(f"feature maps have been saved to {config.output / f'{args.exp_name}' / 'fms.pt'}")
+        print(
+            f"feature maps have been saved to {config.output / f'{args.exp_name}' / 'fms.pt'}")
 
 
 def train_fm_cloud(logger, bk_shape):
     args = args_utils.get_args(logger)
     args.exp_name = bk_shape
-    os.makedirs(config.output / f"{args.exp_name}", exist_ok=True)
+
+    save_path = config.output / f"{args.exp_name}"
+    os.makedirs(save_path, exist_ok=True)
 
     train_loader, val_loader = prepare_data(args)
 
-    patch_sizes = [3]
-    for patch_size in patch_sizes:
-        kernels = []
-        for data in tqdm(train_loader, f"Calculating Kernels (size: {patch_size})"):
-            patches = data.unfold(2, patch_size, 1).unfold(3, patch_size, 1)
-            patches = patches.reshape(-1, patch_size, patch_size).unique(dim=0)
-            patches = patches[~torch.all(patches == 0, dim=(1, 2))]
-            kernels.append(patches)
-        kernels = torch.cat(kernels, dim=0).unique(dim=0).unsqueeze(1)
-        print(f"#Kernel Patches: {len(kernels)}, "
-              f"#Data: {len(train_loader)}, "
-              f"Ratio: {len(kernels) / len(train_loader):.2f}")
+    # kernel size
+    k_size = config.kernel_size
+    # find kernels
+    kernels = []
+    for (rgb_img, bw_img) in tqdm(train_loader, f"Calc. Kernels (k={k_size})"):
+        patches = bw_img.unfold(2, k_size, 1).unfold(3, k_size, 1)
+        patches = patches.reshape(-1, k_size, k_size).unique(dim=0)
+        patches = patches[~torch.all(patches == 0, dim=(1, 2))]
+        kernels.append(patches)
+    kernels = torch.cat(kernels, dim=0).unique(dim=0).unsqueeze(1)
+    logger.debug(f"#Kernels: {len(kernels)}, "
+                 f"#Data: {len(train_loader)}, "
+                 f"Ratio: {len(kernels) / len(train_loader):.2f}")
+    torch.save(kernels, save_path / f"kernel_patches_{k_size}.pt")
 
-        torch.save(kernels, config.output / f"{args.exp_name}" / f"kernel_patches_{patch_size}.pt")
+    # calculate fms
+    fm_all = []
+    data_shift_all = []
+    for (rgb_img, bw_img) in tqdm(train_loader, desc=f"Calc. FMs (k={k_size})"):
+        fms = perception.one_layer_conv(bw_img, kernels)
+        fms, row_shift, col_shift = data_utils.shift_content_to_top_left(fms)
 
-        fm_all = []
-        data_shift_all = []
-        for data in tqdm(train_loader, desc=f"Calculating FMs (size: {patch_size})"):
-            fms = perception.one_layer_conv(data, kernels)
-            fms, row_shift, col_shift = data_utils.shift_content_to_top_left(fms)
-            data_shift, _, _ = data_utils.shift_content_to_top_left(data, row_shift, col_shift)
-            fm_all.append(fms)
-            data_shift_all.append(data_shift)
-        fm_all = torch.cat(fm_all, dim=0)
-        data_shift_all = torch.cat(data_shift_all, dim=0)
-        data_all = torch.cat((data_shift_all, fm_all), dim=1).unique(dim=0)
+        data_shift, _, _ = data_utils.shift_content_to_top_left(bw_img,
+                                                                row_shift,
+                                                                col_shift)
+        fm_all.append(fms)
+        data_shift_all.append(data_shift)
 
-        print(f"#FM: {len(data_all)}. #Data: {len(train_loader)}, ratio: {len(data_all) / len(train_loader):.2f}")
-        torch.save(data_all, config.output / f"{args.exp_name}" / f'fms_patches_{patch_size}.pt')
-        print(f"feature maps have been saved to {config.output / f'{args.exp_name}' / f'fms_patches_{patch_size}.pt'}")
+    fm_all = torch.cat(fm_all, dim=0)
+    data_shift_all = torch.cat(data_shift_all, dim=0)
+    data_all = torch.cat((data_shift_all, fm_all), dim=1).unique(dim=0)
+    torch.save(data_all, save_path / f'fms_patches_{k_size}.pt')
+    logger.debug(
+        f"#FM: {len(data_all)}. "
+        f"#Data: {len(train_loader)}, "
+        f"ratio: {len(data_all) / len(train_loader):.2f} "
+        f"feature maps have been saved to "
+        f"{save_path}/f'fms_patches_{k_size}.pt'")
 
 
 if __name__ == "__main__":

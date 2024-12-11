@@ -8,6 +8,7 @@ import pickle
 import os
 import config
 import cv2
+from tqdm import tqdm
 
 
 def data2patch(data):
@@ -354,3 +355,37 @@ def find_valid_radius(matrix):
         # Measure the radius: Maximum distance from the centroid
         radius = distances.max().item()
         return radius
+
+
+def matrix_equality(matrix1, matrix2):
+    """
+    Calculate the normalized equal item count between two matrices.
+
+    Parameters:
+    - matrix1: np.ndarray, first matrix.
+    - matrix2: np.ndarray, second matrix.
+
+    Returns:
+    - float: Normalized equal item count in the range [0, 1].
+    """
+    # Ensure input matrices have the same number of columns
+    matrix1_flatten = matrix1.sum(dim=1).view(matrix1.size(0), -1)
+    matrix2_flatten = matrix2.sum(dim=1).view(matrix2.size(0), -1)
+    num_features = matrix2.sum(dim=[1, 2, 3])
+
+    batch_size = 128
+    similarity_matrix = torch.zeros((matrix1.shape[0], matrix2.shape[0]))
+    for i in tqdm(range(0, matrix1.shape[0], batch_size),
+                  desc="Calculating Equality"):
+        end_i = min(i + batch_size, matrix1.shape[0])
+        batch1 = matrix1_flatten[i:end_i].unsqueeze(1).bool()
+        batch2 = matrix2_flatten.unsqueeze(0).bool()
+
+        # Sum over the feature dimension to count matches
+        equal_counts = (batch1 * batch2).sum(dim=2)  # Shape: (4096, 197)
+
+        # Normalize by the number of features to get similarity in range [0, 1]
+        similarity_matrix[i:end_i] = equal_counts / (num_features + 1e-20)
+
+    return similarity_matrix
+

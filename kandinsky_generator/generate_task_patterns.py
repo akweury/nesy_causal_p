@@ -1,5 +1,3 @@
-from PIL import Image, ImageDraw
-import numpy as np
 import os
 import json
 # from tqdm import tqdm
@@ -11,7 +9,8 @@ import config
 from kandinsky_generator.src.kp import KandinskyUniverse
 from kandinsky_generator.ShapeOnShapes import ShapeOnShape
 from kandinsky_generator.src.kp.KandinskyUniverse import matplotlib_colors
-from src.alpha.fol import bk
+from src import bk
+
 u = KandinskyUniverse.SimpleUniverse()
 
 
@@ -237,7 +236,11 @@ def genShapeOnShape(shape, n):
             image.save(true_path / f"{task}_{i:06d}.png")
 
 
-def genShapeOnShapeTask(task, total_n):
+def genShapeOnShapeTask(args, task, total_n):
+    args.step_counter += 1
+    args.logger.info(f"Step {args.step_counter}/{args.total_step}: "
+                f"Generating {task['task_name']} task patterns")
+
     width = 512
     shapeOnshapeObjects = ShapeOnShape(u, 20, 40)
     base_path = config.kp_challenge_dataset / f"{task['task_name']}"
@@ -269,9 +272,4 @@ def genShapeOnShapeTask(task, total_n):
                 image.save(data_path / f"{i:06d}.png")
 
 
-if __name__ == '__main__':
 
-    # genShapeOnShapeTask(bk.exp_gestalt_triangle, 10)
-    # genShapeOnShapeTask(bk.exp_triangle_group, 10)
-    # genShapeOnShapeTask(bk.exp_square_group, 10)
-    genShapeOnShapeTask(bk.exp_circle_group, 10)

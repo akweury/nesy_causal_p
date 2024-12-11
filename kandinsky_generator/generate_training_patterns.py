@@ -188,7 +188,10 @@ def kf2data(kf, width):
     return data
 
 
-def genShapeOnShape(shapes, n):
+def genShapeOnShape(args, shapes, n):
+    args.step_counter += 1
+    args.logger.info(f"Step {args.step_counter}/{args.total_step}: "
+                f"Generating {shapes} training patterns")
     width = 512
     for shape in shapes:
         base_path = config.kp_base_dataset / f"{shape}"
@@ -241,6 +244,3 @@ def genShapeOnShape(shapes, n):
                     json.dump(data, f)
                 image.save(base_path / f"{shape}_{(png_num+i):06d}.png")
 
-if __name__ == '__main__':
-    tasks = ["circle"]
-    genShapeOnShape(tasks, 100)

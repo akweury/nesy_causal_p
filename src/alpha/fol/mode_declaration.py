@@ -1,7 +1,7 @@
 # Created by jing at 25.06.24
-import config
 from .logic import *
-from . import bk
+from ... import bk
+
 
 class ModeDeclaration(object):
     """from https://www.cs.ox.ac.uk/activities/programinduction/Aleph/aleph.html

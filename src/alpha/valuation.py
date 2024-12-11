@@ -1,18 +1,9 @@
 # Created by shaji at 24/06/2024
 import torch
 from torch import nn as nn
-from torch.nn import functional as F
-import numpy as np
-from numpy.lib.stride_tricks import sliding_window_view
-from collections import defaultdict
-from skimage.transform import hough_line, hough_line_peaks
-import math
 
-import config
-from .fol import bk
-from src.percept.perception import FCN
-from src.utils import data_utils
-from src.percept.group import Group
+from .. import bk
+
 
 class FCNNValuationModule(nn.Module):
     """A module to call valuation functions.

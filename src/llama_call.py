@@ -1,7 +1,6 @@
 # Created by jing at 16.07.24
 import requests
-import json
-from src.alpha.fol.logic import InvAtom, InventedPredicate
+from src.alpha.fol.logic import InvAtom
 
 url = "http://localhost:11434/api/chat"
 
@@ -164,3 +163,10 @@ def rewrite_clauses(args, merged_clauses):
 if __name__ == "__main__":
     response = llama3("who wrote the book godfather")
     print(response)
+
+
+def convert_to_final_clauses(args, lang):
+    merged_clauses = lang.rewrite_clauses(args)
+    llm_clauses, name_dict = rewrite_clauses(args, merged_clauses)
+    lang.llm_clauses = llm_clauses
+    lang.name_dict = name_dict
