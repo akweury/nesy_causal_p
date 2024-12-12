@@ -27,7 +27,6 @@ def load_bk(args, bk_shapes):
         fm_img = fm_data[:, 0:1]
         fm_repo = fm_data[:, 1:]
 
-
         bk.append({
             "name": bk_shape,
             "kernel_size": kernel_size,
@@ -65,14 +64,12 @@ def load_lang(args):
             args.logger.debug(
                 f"\n ================= Loaded Pretrained Language ================= " +
                 f"\n ==== Machine Clauses: " +
-                "".join(
-                    [f"\n{c_i + 1}/{len(lang.clauses)} {lang.clauses[c_i]}" for c_i
-                     in range(len(lang.clauses))]) +
+                "".join([f"\n{c_i + 1}/{len(lang.clauses)} {lang.clauses[c_i]}"
+                         for c_i in range(len(lang.clauses))]) +
                 f"\n ==== LLM Description: " +
                 "".join(
                     [f"\n{c_i + 1}/{len(lang.llm_clauses)} {lang.llm_clauses[c_i]}"
-                     for c_i in
-                     range(len(lang.llm_clauses))]))
+                     for c_i in range(len(lang.llm_clauses))]))
             return lang
     return None
 
@@ -161,30 +158,36 @@ def save_lang(lang):
 
 
 def train_clauses(args, data_loader):
-    # load background knowledge
-    lang = None
-    all_clauses = []
-    group_bk = load_bk(args, bk.bk_shapes)
+    args.step_counter += 1
+    lang = load_lang(args)
 
-    for idx, (image, data) in enumerate(data_loader):
-        image = image.squeeze()
-        args.output_file_prefix = str(args.out_train_folder / f'img_{idx}')
-        # percepting groups
-        groups = perception.percept_gestalt_groups(args, idx, group_bk, image)
+    if lang is None:
+        # load background knowledge
+        lang = None
+        all_clauses = []
+        group_bk = load_bk(args, bk.bk_shapes)
 
-        # reasoning clauses
-        lang = alpha.alpha(args, groups)
-        all_clauses += lang.clauses
+        for idx, (image, data) in enumerate(data_loader):
+            image = image.squeeze()
+            args.output_file_prefix = str(args.out_train_folder / f'img_{idx}')
+            # percepting groups
+            groups = perception.percept_gestalt_groups(args, idx, group_bk, image)
 
-    # remove infrequent clauses
-    lang = alpha.filter_infrequent_clauses(all_clauses, lang)
+            # reasoning clauses
+            lang = alpha.alpha(args, groups)
+            all_clauses += lang.clauses
 
-    # convert machine clause to final clause
-    lang = llama_call.convert_to_final_clauses(args, lang)
+        # remove infrequent clauses
+        lang = alpha.filter_infrequent_clauses(all_clauses, lang)
 
-    # save language
-    save_lang(lang)
+        # convert machine clause to final clause
+        lang = llama_call.convert_to_final_clauses(args, lang)
 
+        # save language
+        save_lang(lang)
+    args.logger.info(f"Step {args.step_counter}/{args.total_step}: "
+                     f"Reasoned {len(lang.llm_clauses)} LLM Rules, "
+                     f"{len(lang.clauses)} Machine Clauses")
     return lang
 
 

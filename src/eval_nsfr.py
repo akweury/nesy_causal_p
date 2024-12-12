@@ -24,7 +24,8 @@ def load_bk(args, bk_shapes):
     for bk_shape in bk_shapes:
         if bk_shape == "none":
             continue
-        kernels = torch.load(config.output / bk_shape / f"kernels.pt").to(args.device)
+        kernels = torch.load(config.output / bk_shape / f"kernels.pt").to(
+            args.device)
         fm_data = torch.load(config.output / bk_shape / f"fms.pt").to(args.device)
         fm_img = fm_data[:, 0:1]
         fm_repo = fm_data[:, 1:]
@@ -51,7 +52,8 @@ def obj2tensor(shape, color, pos, group_name, group_count_conf):
     i += 1
     obj_tensor[i] = bk.group_name_extend.index(group_name)  # group label
     i += 1
-    obj_tensor[i] = group_count_conf  # group confidence according to the count of objects
+    obj_tensor[
+        i] = group_count_conf  # group confidence according to the count of objects
     return obj_tensor
 
 
@@ -71,7 +73,8 @@ def group2ocm(data, groups):
             if group_obj_positions[pos[1].item(), pos[0].item()] > 0:
                 shape = data[p_i]["shape"]
                 color = data[p_i]["color_name"]
-                obj_tensor = obj2tensor(shape, color, pos, group_name, group_count_conf)
+                obj_tensor = obj2tensor(shape, color, pos, group_name,
+                                        group_count_conf)
                 group_ocm[pos_count] = obj_tensor
                 pos_count += 1
         group_ocms.append(group_ocm)
@@ -80,26 +83,35 @@ def group2ocm(data, groups):
 
 
 def check_clause(args, lang, image_paths, image_label, output_path):
+    args.step_counter += 1
+
     # load background knowledge
     check_size = 4
-    clauses_conf = torch.zeros((min(check_size, len(image_paths)), len(lang.clauses)))
-    group_bk = load_bk(args, bk.group_name_extend)
+    clauses_conf = torch.zeros(
+        (min(check_size, len(image_paths)), len(lang.clauses)))
+    group_bk = load_bk(args, bk.bk_shapes)
 
     for idx in range(min(check_size, len(image_paths))):
         file_name, file_extension = image_paths[idx].split(".")
         data = file_utils.load_json(f"{file_name}.json")
 
         img, obj_pos = load_data(args, image_paths[idx])
-        groups = train_common_features.img2groups_flexible(args, group_bk, obj_pos, idx, img, output_path)
+        groups = train_common_features.img2groups_flexible(args, group_bk, obj_pos,
+                                                           idx, img, output_path)
         if len(groups) != 0:
             group_tensors = group2ocm(data, groups)
             clauses_conf[idx] = alpha.alpha_test(args, group_tensors, lang)
 
         # logger
-        satisfied_clause_indices = torch.nonzero(clauses_conf[idx] >= args.valid_rule_th).squeeze()
-        dissatisfied_clause_indices = torch.nonzero(clauses_conf[idx] < args.valid_rule_th).squeeze()
-        satisfied_clauses = [f"({clauses_conf[idx, c_i]:.2f}) {lang.clauses[c_i]}\n" for c_i in satisfied_clause_indices]
-        dissatisfied_clauses = [f"({clauses_conf[idx, c_i]:.2f}) {lang.clauses[c_i]}\n" for c_i in dissatisfied_clause_indices]
+        satisfied_clause_indices = torch.nonzero(
+            clauses_conf[idx] >= args.valid_rule_th).squeeze()
+        dissatisfied_clause_indices = torch.nonzero(
+            clauses_conf[idx] < args.valid_rule_th).squeeze()
+        satisfied_clauses = [f"({clauses_conf[idx, c_i]:.2f}) {lang.clauses[c_i]}\n"
+                             for c_i in satisfied_clause_indices]
+        dissatisfied_clauses = [
+            f"({clauses_conf[idx, c_i]:.2f}) {lang.clauses[c_i]}\n" for c_i in
+            dissatisfied_clause_indices]
 
         args.logger.debug(f"\n"
                           f"{image_label} Image {idx} Machine clauses: \n" +
@@ -108,16 +120,26 @@ def check_clause(args, lang, image_paths, image_label, output_path):
                           )
         mean_conf = clauses_conf[idx].mean()
         if image_label == "POSITIVE" and mean_conf < 0.8:
-            args.logger.warning(f"\n (FALSE Negative) conf|threshold {mean_conf}|0.8")
+            args.logger.warning(
+                f"\n (FALSE Negative) conf|threshold {mean_conf}|0.8")
 
     pred_conf = clauses_conf.mean(dim=1)
-    return pred_conf
+
+    args.logger.info(f"\n"
+                     f"Step {args.step_counter}/{args.total_step}: "
+                     f"Test {image_label} Images\n"
+                     f"Confidence for each image: {pred_conf}\n"
+                     f"Average Accuracy: {pred_conf.mean(dim=0):.2f}\n")
+
+    return pred_conf.mean()
 
 
 if __name__ == "__main__":
     args = args_utils.get_args()
 
-    image_paths = file_utils.get_all_files(config.kp_dataset / args.exp_name / "train" / "true", "png", False)[:500]
+    image_paths = file_utils.get_all_files(
+        config.kp_dataset / args.exp_name / "train" / "true", "png", False)[:500]
     lang = None
     raise NotImplementedError
-    check_clause(args, lang, image_paths, True, output_path=config.kp_dataset / args.exp_name / "train" / "true")
+    check_clause(args, lang, image_paths, True,
+                 output_path=config.kp_dataset / args.exp_name / "train" / "true")

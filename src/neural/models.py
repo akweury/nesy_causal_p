@@ -5,36 +5,47 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F  # Import F for functional operations
+import matplotlib.pyplot as plt
 
 from torch.utils.data import DataLoader, TensorDataset
 from src.neural.neural_utils import *
 
 import config
 
+
 # Define the Autoencoder
 class Autoencoder(nn.Module):
-    def __init__(self):
+    def __init__(self, in_channels):
         super(Autoencoder, self).__init__()
         # Encoder
         self.encoder = nn.Sequential(
-            nn.Conv2d(91, 64, kernel_size=3, stride=2, padding=1),  # (91, 64, 64) -> (64, 32, 32)
+            # (in, 64, 64) -> (32, 32, 32)
+            nn.Conv2d(in_channels, 32, kernel_size=3, stride=2, padding=1),
             nn.ReLU(),
-            nn.Conv2d(64, 32, kernel_size=3, stride=2, padding=1),  # (64, 32, 32) -> (32, 16, 16)
+            # (32, 32, 32) -> (16, 16, 16)
+            nn.Conv2d(32, 16, kernel_size=3, stride=2, padding=1),
             nn.ReLU(),
-            nn.Conv2d(32, 16, kernel_size=3, stride=2, padding=1),  # (32, 16, 16) -> (16, 8, 8)
+            # (16, 16, 16) -> (8, 8, 8)
+            nn.Conv2d(16, 8, kernel_size=3, stride=2, padding=1),
             nn.ReLU()
         )
         # Latent space
-        self.latent = nn.Linear(16 * 8 * 8, 128)  # Example latent size: 128
+        self.latent = nn.Linear(8 * 8 * 8, 128)  # Example latent size: 128
 
         # Decoder
-        self.decoder_fc = nn.Linear(128, 16 * 8 * 8)
+        self.decoder_fc = nn.Linear(128, 8 * 8 * 8)
         self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(16, 32, kernel_size=3, stride=2, padding=1, output_padding=1),  # (16, 8, 8) -> (32, 16, 16)
+            # (16, 8, 8) -> (32, 16, 16)
+            nn.ConvTranspose2d(8, 16,
+                               kernel_size=3, stride=2, padding=1, output_padding=1),
             nn.ReLU(),
-            nn.ConvTranspose2d(32, 64, kernel_size=3, stride=2, padding=1, output_padding=1),  # (32, 16, 16) -> (64, 32, 32)
+            # (32, 16, 16) -> (64, 32, 32)
+            nn.ConvTranspose2d(16, 32,
+                               kernel_size=3, stride=2, padding=1, output_padding=1),
             nn.ReLU(),
-            nn.ConvTranspose2d(64, 91, kernel_size=3, stride=2, padding=1, output_padding=1),  # (64, 32, 32) -> (91, 64, 64)
+            # (64, 32, 32) -> (in, 64, 64)
+            nn.ConvTranspose2d(32, in_channels,
+                               kernel_size=3, stride=2, padding=1, output_padding=1),
             nn.Sigmoid()
         )
 
@@ -46,53 +57,71 @@ class Autoencoder(nn.Module):
 
         # Decoder
         x = self.decoder_fc(x)
-        x = x.view(x.size(0), 16, 8, 8)
+        x = x.view(x.size(0), 8, 8, 8)
         x = self.decoder(x)
         return x
-
 
 
 def train_autoencoder(args, bk_shapes):
     args.step_counter += 1
     args.logger.info(f"Step {args.step_counter}/{args.total_step}: "
-                f"Training Autoencoder for patterns {bk_shapes}.")
+                     f"Training Autoencoder for patterns {bk_shapes}.")
 
     for bk_shape in bk_shapes:
         save_path = config.output / f"{bk_shape}"
         os.makedirs(save_path, exist_ok=True)
-        train_loader, val_loader = prepare_data(args)
+        model_path = save_path / "fm_ae.pth"
+        if os.path.exists(model_path):
+            continue
+
+        train_loader, fm_channels = prepare_fm_data(args)
 
         # Initialize the model, loss, and optimizer
-        model = Autoencoder()
+        model = Autoencoder(fm_channels)
         criterion = nn.MSELoss()
         optimizer = optim.Adam(model.parameters(), lr=0.001)
 
         # Training loop
         epochs = 20
+        loss_history = []
         for epoch in range(epochs):
-            for batch in train_loader:
-                inputs = batch[0]  # Extract the data from the dataset
-                inputs = inputs.permute(0, 2, 3, 1)  # Rearrange to (batch, channels, height, width)
-
+            epoch_loss = 0
+            for batch, in train_loader:
                 # Zero the parameter gradients
                 optimizer.zero_grad()
 
                 # Forward pass
-                outputs = model(inputs)
+                outputs = model(batch)
 
                 # Compute the loss
-                loss = criterion(outputs, inputs)
+                loss = criterion(outputs, batch)
 
                 # Backward pass and optimize
                 loss.backward()
                 optimizer.step()
 
-            print(f"Epoch [{epoch + 1}/{epochs}], Loss: {loss.item():.4f}")
+                epoch_loss += loss.item()
+            avg_loss = epoch_loss / len(train_loader)
+            loss_history.append(avg_loss)
+            args.logger.debug(f"Epoch [{epoch + 1}/{epochs}], "
+                              f"Loss: {avg_loss:.4f}")
 
-    print("Training completed!")
+        # Save the trained model
+        torch.save(model.state_dict(), save_path / "fm_ae.pth")
+        args.logger.info("Feature map autoencoder is saved as 'fm_ae.pth'")
 
+        # Visualize the training history
+        plt.figure(figsize=(10, 6))
+        plt.plot(range(1, epochs + 1), loss_history, marker='o',
+                 label='Training Loss')
+        plt.xlabel('Epochs')
+        plt.ylabel('Loss')
+        plt.title('Training Loss History')
+        plt.legend()
+        plt.grid(True)
+        plt.savefig(save_path / f"loss_history.png")
 
-
+        args.logger.debug(f"Training {bk_shape} autoencoder completed!")
 
 def one_layer_conv(data, kernels):
     if kernels.shape[-1] == 3:

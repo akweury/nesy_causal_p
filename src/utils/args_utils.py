@@ -11,6 +11,7 @@ import colorlog
 import config
 from . import log_utils
 
+
 def init_logger():
     # Create a color handler
     handler = colorlog.StreamHandler()
@@ -37,7 +38,7 @@ def init_logger():
     return logger
 
 
-def get_args(logger):
+def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--device", help="cpu or cuda", default="cpu", type=str)
     parser.add_argument("--exp_name", type=str, default=None)
@@ -71,15 +72,15 @@ def get_args(logger):
     parser.add_argument("--fm_th", type=float, default=1.5)
     parser.add_argument("--valid_rule_th", type=float, default=0.8)
 
-
     args = parser.parse_args()
-    args.logger = logger
+    args.logger = init_logger()
     if args.device != "cpu":
         args.device = int(args.device)
-    args.log_file = log_utils.create_log_file(logger, config.output / "logs")
+    args.log_file = log_utils.create_log_file(args.logger, config.output / "logs")
     args.lark_path = str(config.lark_file)
 
     os.makedirs(config.output / f"{args.exp_name}", exist_ok=True)
     args.batch_size = 1
-    return args
 
+
+    return args

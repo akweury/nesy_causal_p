@@ -4,7 +4,7 @@ import torch
 from torch.utils.data import DataLoader, TensorDataset
 
 
-def prepare_data(args):
+def prepare_fm_data(args):
 
     # Sample data
     fm_file = args.save_path / f'fms_patches_{args.k_size}.pt'
@@ -17,5 +17,6 @@ def prepare_data(args):
     dataset = TensorDataset(data)
     dataloader = DataLoader(dataset, batch_size=16, shuffle=True)
 
-    return dataloader
+    fm_channels = data.shape[1]
+    return dataloader,  fm_channels
 
