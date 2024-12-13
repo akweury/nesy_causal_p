@@ -202,13 +202,13 @@ def genShapeOnShape(shape, n):
         os.makedirs(false_path, exist_ok=True)
         os.makedirs(cf_path, exist_ok=True)
         if shape == "circle":
-            gen_fun = shapeOnshapeObjects.cir_only
+            gen_fun = shapeOnshapeObjects.cir_group
         elif shape == "diamond":
             gen_fun = shapeOnshapeObjects.dia_only
         elif shape == "triangle":
-            gen_fun = shapeOnshapeObjects.tri_only
+            gen_fun = shapeOnshapeObjects.tri_group
         elif shape == "square":
-            gen_fun = shapeOnshapeObjects.square_only
+            gen_fun = shapeOnshapeObjects.square_group
         elif shape == "trianglecircle":
             gen_fun = shapeOnshapeObjects.triangle_circle
         elif shape == "squarecircle":
@@ -255,11 +255,11 @@ def genShapeOnShapeTask(args, task, total_n):
             if task[label] == "gestalt_triangle":
                 gen_fun = shapeOnshapeObjects.gestalt_triangle
             elif task[label] == "triangle_group":
-                gen_fun = shapeOnshapeObjects.tri_only
+                gen_fun = shapeOnshapeObjects.tri_group
             elif task[label] == "square_group":
-                gen_fun = shapeOnshapeObjects.square_only
+                gen_fun = shapeOnshapeObjects.square_group
             elif task[label] == "circle_group":
-                gen_fun = shapeOnshapeObjects.cir_only
+                gen_fun = shapeOnshapeObjects.cir_group
             elif task[label] == "random":
                 gen_fun = shapeOnshapeObjects.false_kf
             else:

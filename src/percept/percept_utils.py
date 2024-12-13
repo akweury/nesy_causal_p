@@ -45,11 +45,6 @@ def get_siding(data, match_fm_img):
     return data_onside, data_offside
 
 
-def bw_layer(segment):
-    bw_img = data_utils.rgb2bw(segment.permute(1, 2, 0).numpy(), resize=64)
-    bw_img = bw_img.unsqueeze_(0)
-    return bw_img
-
 
 def prepare_data(args):
     transform = transforms.Compose([
@@ -67,3 +62,52 @@ def prepare_data(args):
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True)
 
     return train_loader, val_loader
+
+def visual_all(group_img_name, img, bw_img, data_fm_shifted, fm_best, max_value,
+               fm_best_same, fm_best_diff, data_onside, data_offside):
+    in_fm_img = data_fm_shifted.squeeze().sum(dim=0)
+    mask_img = chart_utils.color_mapping(bw_img, 1, "IN")
+    norm_factor = max([in_fm_img.max(), fm_best.sum(dim=1).max()])
+    in_fm_norm_img = chart_utils.color_mapping(in_fm_img, norm_factor, "IN_FM")
+    blank_img = chart_utils.color_mapping(torch.zeros_like(bw_img), norm_factor,
+                                          "")
+    compare_imgs = []
+
+    for i in range(min(10, len(fm_best))):
+        best_fm_img = fm_best[i].sum(dim=0)
+        # norm_factor = max([in_fm_img.max(), best_fm_img.max()])
+        match_percent = f"{int(max_value[i].item() * 100)}%"
+
+        repo_fm_img = chart_utils.color_mapping(best_fm_img, norm_factor,
+                                                "RECALL_FM")
+        repo_fm_best_same = chart_utils.color_mapping(fm_best_same[i],
+                                                      norm_factor,
+                                                      f"SAME FM {match_percent}")
+        repo_fm_best_diff = chart_utils.color_mapping(fm_best_diff[i],
+                                                      norm_factor,
+                                                      "DIFF FM")
+        data_onside_img = chart_utils.color_mapping(data_onside[i], 1,
+                                                    "Onside Objs")
+        data_offside_img = chart_utils.color_mapping(data_offside[i], 1,
+                                                     "Offside Objs")
+
+        compare_imgs.append(chart_utils.hconcat_imgs(
+            [img, mask_img, in_fm_norm_img, repo_fm_img, repo_fm_best_same,
+             repo_fm_best_diff, data_onside_img,
+             data_offside_img]))
+    # last row: combined result
+    data_mask = bw_img != 0
+    onside_comb = (data_onside.sum(dim=0).float() * data_mask)
+    onside_comb_img = chart_utils.color_mapping(onside_comb, 1, "Onside Comb.")
+
+    offside_comb = (data_offside.sum(dim=0).float() * data_mask)
+    offside_comb_img = chart_utils.color_mapping(offside_comb, 1,
+                                                 "Offside Comb.")
+
+    compare_imgs.append(chart_utils.hconcat_imgs(
+        [img, mask_img, in_fm_norm_img, blank_img, blank_img, blank_img,
+         onside_comb_img, offside_comb_img]))
+    compare_imgs = chart_utils.vconcat_imgs(compare_imgs)
+    compare_imgs = cv2.cvtColor(compare_imgs, cv2.COLOR_BGR2RGB)
+
+    cv2.imwrite(group_img_name, compare_imgs)

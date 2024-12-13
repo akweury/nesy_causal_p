@@ -278,7 +278,7 @@ def visual_all(group_img_name, img, data, data_fm_shifted, fm_best, max_value, f
         data_onside_img = chart_utils.color_mapping(data_onside[i], 1, "Onside Objs")
         data_offside_img = chart_utils.color_mapping(data_offside[i], 1, "Offside Objs")
 
-        compare_imgs.append(chart_utils.concat_imgs(
+        compare_imgs.append(chart_utils.hconcat_imgs(
             [img, mask_img, in_fm_norm_img, repo_fm_img, repo_fm_best_same, repo_fm_best_diff, data_onside_img,
              data_offside_img]))
     # last row: combined result
@@ -289,7 +289,7 @@ def visual_all(group_img_name, img, data, data_fm_shifted, fm_best, max_value, f
     offside_comb = (data_offside.sum(dim=0).float() * data_mask)
     offside_comb_img = chart_utils.color_mapping(offside_comb, 1, "Offside Comb.")
 
-    compare_imgs.append(chart_utils.concat_imgs(
+    compare_imgs.append(chart_utils.hconcat_imgs(
         [img, mask_img, in_fm_norm_img, blank_img, blank_img, blank_img, onside_comb_img, offside_comb_img]))
     compare_imgs = chart_utils.vconcat_imgs(compare_imgs)
     compare_imgs = cv2.cvtColor(compare_imgs, cv2.COLOR_BGR2RGB)

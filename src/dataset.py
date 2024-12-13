@@ -22,9 +22,9 @@ class BasicShapeDataset(Dataset):
         return len(self.image_paths)
 
     def __getitem__(self, idx):
-        rgb_img = cv2.imread(self.image_paths[idx], cv2.IMREAD_GRAYSCALE)
-        bw_img = data_utils.load_bw_img(self.image_paths[idx], size=64)
-        return rgb_img, bw_img
+        rgb_image = cv2.imread(self.image_paths[idx])
+        bw_img = data_utils.rgb2bw(rgb_image, crop=True)
+        return bw_img
 
 
 class GestaltDataset(Dataset):

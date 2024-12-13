@@ -9,6 +9,7 @@ import os
 import config
 import cv2
 from tqdm import tqdm
+from src.utils import chart_utils
 
 
 def data2patch(data):
@@ -28,9 +29,13 @@ def patch2line_patches(patch):
     col_patches = []
     for col in range(cols):
         if col == 0:
-            data = np.concatenate((np.zeros_like(patch[:, col:col + 1]) + 10, patch[:, col:col + 2]), axis=1)
+            data = np.concatenate(
+                (np.zeros_like(patch[:, col:col + 1]) + 10, patch[:, col:col + 2]),
+                axis=1)
         elif col == cols - 1:
-            data = np.concatenate((patch[:, col - 1:], np.zeros_like(patch[:, col:col + 1]) + 10), axis=1)
+            data = np.concatenate(
+                (patch[:, col - 1:], np.zeros_like(patch[:, col:col + 1]) + 10),
+                axis=1)
         else:
             data = patch[:, col - 1:col + 2]
         data = data.T
@@ -38,9 +43,13 @@ def patch2line_patches(patch):
 
     for row in range(rows):
         if row == 0:
-            data = np.concatenate((np.zeros_like(patch[row:row + 1, :]) + 10, patch[row:row + 2, :]), axis=0)
+            data = np.concatenate(
+                (np.zeros_like(patch[row:row + 1, :]) + 10, patch[row:row + 2, :]),
+                axis=0)
         elif row == rows - 1:
-            data = np.concatenate((patch[row - 1:, :], np.zeros_like(patch[row:(row + 1), :]) + 10), axis=0)
+            data = np.concatenate(
+                (patch[row - 1:, :], np.zeros_like(patch[row:(row + 1), :]) + 10),
+                axis=0)
         else:
             data = patch[(row - 1):(row + 2), :]
         row_patches.append(data)
@@ -168,7 +177,8 @@ def create_identity_kernel(n):
 
 def find_submatrix(matrix_64x64, kernel_size):
     # Unfold the 64x64 matrix into non-overlapping 3x3 patches
-    patches = F.unfold(matrix_64x64.unsqueeze(0).unsqueeze(0), kernel_size=(kernel_size, kernel_size),
+    patches = F.unfold(matrix_64x64.unsqueeze(0).unsqueeze(0),
+                       kernel_size=(kernel_size, kernel_size),
                        stride=kernel_size)
 
     # Reshape the patches to (number_of_patches, 3, 3)
@@ -178,7 +188,8 @@ def find_submatrix(matrix_64x64, kernel_size):
     num_patches_x = matrix_64x64.size(0) // kernel_size
     num_patches_y = matrix_64x64.size(1) // kernel_size
     positions = torch.stack(torch.meshgrid(torch.arange(num_patches_x),
-                                           torch.arange(num_patches_y)), dim=-1).reshape(-1, 2)
+                                           torch.arange(num_patches_y)),
+                            dim=-1).reshape(-1, 2)
     # Filter out zero patches
     non_zero_mask = patches.sum(dim=(1, 2)) != 0
     non_zero_patches = patches[non_zero_mask]
@@ -257,14 +268,16 @@ def value_to_matrix(value):
     binary_str = bin(value_int)[2:].zfill(64 * 64)
 
     # Convert the binary string to a 1D tensor and reshape it into a 64x64 matrix
-    matrix = torch.tensor([int(b) for b in binary_str], dtype=torch.float32).view(64, 64)
+    matrix = torch.tensor([int(b) for b in binary_str], dtype=torch.float32).view(64,
+                                                                                  64)
 
     return matrix
 
 
 def shift_up(matrix):
     shift_count = 0
-    while matrix.sum() > 0 and torch.all(matrix[:, 0] == 0):  # Check if the top row is full of zeros
+    while matrix.sum() > 0 and torch.all(
+            matrix[:, 0] == 0):  # Check if the top row is full of zeros
         matrix = torch.roll(matrix, shifts=-1, dims=1)  # Shift all rows up
         matrix[:, -1] = 0  # Fill the last row with zeros after the shift
         shift_count += 1
@@ -274,8 +287,10 @@ def shift_up(matrix):
 # Function to shift the matrix left if the leftmost column is all zeros
 def shift_left(matrix):
     shift_count = 0
-    while matrix.sum() > 0 and torch.all(matrix[:, :, 0] == 0):  # Check if the leftmost column is full of zeros
-        matrix = torch.roll(matrix, shifts=-1, dims=2)  # Shift all columns to the left
+    while matrix.sum() > 0 and torch.all(
+            matrix[:, :, 0] == 0):  # Check if the leftmost column is full of zeros
+        matrix = torch.roll(matrix, shifts=-1,
+                            dims=2)  # Shift all columns to the left
         matrix[:, :, -1] = 0  # Fill the last column with zeros after the shift
         shift_count += 1
     return matrix, shift_count
@@ -289,13 +304,15 @@ def shift_content_to_top_left(batch_matrices, given_rs=None, given_cs=None):
     for i in range(batch_matrices.shape[0]):
         matrix = batch_matrices[i]
         if given_rs is not None:
-            matrix = torch.roll(matrix, shifts=int(-given_rs[i].item()), dims=1)  # Shift all rows up
+            matrix = torch.roll(matrix, shifts=int(-given_rs[i].item()),
+                                dims=1)  # Shift all rows up
         else:
             matrix, shift_row = shift_up(matrix)  # Apply upward shift
             rs[i] = shift_row
 
         if given_cs is not None:
-            matrix = torch.roll(matrix, shifts=int(-given_cs[i].item()), dims=2)  # Shift all rows up
+            matrix = torch.roll(matrix, shifts=int(-given_cs[i].item()),
+                                dims=2)  # Shift all rows up
         else:
             matrix, shift_col = shift_left(matrix)  # Apply leftward shift
             cs[i] = shift_col
@@ -318,29 +335,30 @@ def load_pickle(file_name):
         return None
 
 
-def load_bw_img(img_path, size=None):
+def to_bw_img(image):
     # Load an image
-    image = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
-    image[image != 211] = 1
-    image[image == 211] = 0
-    img_resized = cv2.resize(image, (64, 64), interpolation=cv2.INTER_AREA)
-    img_resized = torch.from_numpy(img_resized).unsqueeze(0)
 
-    return img_resized
+    return image
 
-def rgb2bw(rgb, resize=None):
 
-    gray = cv2.cvtColor(rgb, cv2.COLOR_BGR2GRAY).astype(np.int32)
-    gray[gray != 0] = 1
-    if resize is not None:
-        gray = cv2.resize(gray.astype(np.float32), (64, 64), interpolation=cv2.INTER_AREA)
-        gray = torch.from_numpy(gray).unsqueeze(0)
-    return gray
+def rgb2bw(rgb, crop=False):
+    bw_img = cv2.cvtColor(rgb, cv2.COLOR_BGR2GRAY)
+    bw_img[bw_img != 211] = 1
+    bw_img[bw_img == 211] = 0
+
+    if crop:
+        # bw image to cropped bw image
+        bw_img = crop_img(torch.from_numpy(bw_img).squeeze(), resize=True)
+
+    bw_img = bw_img
+
+    return bw_img
 
 
 def find_valid_radius(matrix):
     # Find indices of valid elements (nonzero items)
-    valid_indices = torch.nonzero(matrix, as_tuple=False).float()  # Convert to float for calculations
+    valid_indices = torch.nonzero(matrix,
+                                  as_tuple=False).float()  # Convert to float for calculations
 
     if valid_indices.numel() == 0:
         # No valid elements in the tensor.
@@ -350,7 +368,8 @@ def find_valid_radius(matrix):
         centroid = valid_indices.mean(dim=0)  # Mean along rows gives (y, x)
 
         # Calculate distances from the centroid to each valid point
-        distances = torch.sqrt((valid_indices[:, 0] - centroid[0]) ** 2 + (valid_indices[:, 1] - centroid[1]) ** 2)
+        distances = torch.sqrt((valid_indices[:, 0] - centroid[0]) ** 2 + (
+                valid_indices[:, 1] - centroid[1]) ** 2)
 
         # Measure the radius: Maximum distance from the centroid
         radius = distances.max().item()
@@ -369,23 +388,59 @@ def matrix_equality(matrix1, matrix2):
     - float: Normalized equal item count in the range [0, 1].
     """
     # Ensure input matrices have the same number of columns
-    matrix1_flatten = matrix1.sum(dim=1).view(matrix1.size(0), -1)
-    matrix2_flatten = matrix2.sum(dim=1).view(matrix2.size(0), -1)
-    num_features = matrix2.sum(dim=[1, 2, 3])
+    matrix1_flatten = matrix1.view(matrix1.size(0), -1)
+    matrix2_flatten = matrix2.view(matrix2.size(0), -1)
+    # num_features = matrix2.sum(dim=[1, 2, 3])
 
     batch_size = 128
     similarity_matrix = torch.zeros((matrix1.shape[0], matrix2.shape[0]))
     for i in tqdm(range(0, matrix1.shape[0], batch_size),
                   desc="Calculating Equality"):
         end_i = min(i + batch_size, matrix1.shape[0])
-        batch1 = matrix1_flatten[i:end_i].unsqueeze(1).bool()
-        batch2 = matrix2_flatten.unsqueeze(0).bool()
+        batch1 = matrix1_flatten[i:end_i].unsqueeze(1)
+        batch2 = matrix2_flatten.unsqueeze(0)
 
         # Sum over the feature dimension to count matches
-        equal_counts = (batch1 * batch2).sum(dim=2)  # Shape: (4096, 197)
+        equal_counts = (batch1 == batch2)  # Shape: (4096, 197)
 
         # Normalize by the number of features to get similarity in range [0, 1]
-        similarity_matrix[i:end_i] = equal_counts / (num_features + 1e-20)
+        similarity_matrix[i:end_i] = equal_counts.sum(dim=-1) / equal_counts.shape[
+            -1]
 
     return similarity_matrix
 
+
+def crop_img(image, resize=False):
+    image = image.squeeze()
+    height, width = image.shape[-2], image.shape[-1]
+    # Find the bounding box of the nonzero values
+    nonzero_coords = torch.nonzero(image)
+    if nonzero_coords.numel() == 0:  # Handle completely empty images
+        return image
+
+    min_y, min_x = nonzero_coords.min(dim=0).values
+    max_y, max_x = nonzero_coords.max(dim=0).values
+
+    # Compute the side length of the square
+    side_length = max(max_y - min_y + 1, max_x - min_x + 1)
+
+    # Adjust the bounding box to make it square
+    center_y = (min_y + max_y) // 2
+    center_x = (min_x + max_x) // 2
+    half_side = side_length // 2
+
+    # Compute the new square bounding box
+    new_min_y = max(center_y - half_side, 0)
+    new_max_y = min(center_y + half_side + 1, height)
+    new_min_x = max(center_x - half_side, 0)
+    new_max_x = min(center_x + half_side + 1, width)
+
+    # Crop the image
+    cropped_image = image[new_min_y:new_max_y, new_min_x:new_max_x]
+
+    if resize:
+        cropped_image = cv2.resize(cropped_image.numpy(), (8, 8),
+                                   interpolation=cv2.INTER_AREA)
+        cropped_image = torch.from_numpy(cropped_image)
+    cropped_image = cropped_image.unsqueeze(0)
+    return cropped_image

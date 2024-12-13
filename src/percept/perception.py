@@ -47,13 +47,17 @@ def percept_feature_groups(args, bk_shapes, segment, img):
     feature_groups = []
 
     # rgb segment to resized bw image
-    bw_img = bw_layer(segment)
+    seg_np = segment.permute(1, 2, 0).numpy().astype(np.uint8)
+    bw_img = data_utils.rgb2bw(seg_np, crop=True).unsqueeze(0)
     seg_color = get_most_frequent_color(segment)
     for b_i, bk_shape in enumerate(bk_shapes):
+        args.save_path = config.output / bk_shape["name"]
         # recall the memory
-        fms_rc = recall.recall_fms(args, bk_shape, bw_img)
+        shifted_fms, rc_fms = recall.recall_fms(args, bk_shape, bw_img)
+
         # reasoning recalled groups
-        group_data = reason.reason_fms(args, fms_rc, bk_shape, img, fms, bw_img)
+        group_data = reason.reason_fms(args, segment, rc_fms, bk_shape, img,
+                                       bw_img)
 
         group = Group(id=b_i,
                       name=bk_shape["name"],
@@ -65,6 +69,7 @@ def percept_feature_groups(args, bk_shapes, segment, img):
                       color=seg_color)
         feature_groups.append(group)
 
+        # log
         args.logger.debug(
             f" Found group: {bk_shape['name']}: "
             f" [coverage: {group.onside_coverage:.2f}]")
@@ -136,8 +141,10 @@ def detect_connected_regions(input_array, pixel_num=100):
             if region_mask.sum() > pixel_num:
                 # Add the region to the labeled regions
                 region_tensor = np.zeros((3, 512, 512), dtype=np.float32)
+                region_tensor += np.array(
+                    (bk.color_matplotlib["lightgray"])).reshape(3, 1, 1)
                 for channel in range(3):
-                    region_tensor[channel] = region_mask * color[channel]
+                    region_tensor[channel][region_mask] = color[channel]
                 labeled_regions.append(region_tensor)
 
     # Stack all labeled regions into a single tensor
@@ -183,7 +190,7 @@ def percept_gestalt_groups(args, idx, group_bk, img):
 def identify_kernels(args, train_loader):
     k_size = args.k_size
     kernels = []
-    for (rgb_img, bw_img) in tqdm(train_loader, f"Idf. Kernels (k = {k_size})"):
+    for (bw_img) in tqdm(train_loader, f"Idf. Kernels (k = {k_size})"):
         patches = bw_img.unfold(2, k_size, 1).unfold(3, k_size, 1)
         patches = patches.reshape(-1, k_size, k_size).unique(dim=0)
         patches = patches[~torch.all(patches == 0, dim=(1, 2))]
@@ -197,19 +204,24 @@ def identify_fms(args, train_loader, kernels):
     k_size = args.k_size
     fm_all = []
     data_shift_all = []
-    for (rgb_img, bw_img) in tqdm(train_loader, desc=f"Calc. FMs (k={k_size})"):
+    for (bw_img) in tqdm(train_loader, desc=f"Calc. FMs (k={k_size})"):
         fms = models.one_layer_conv(bw_img, kernels)
         fms, row_shift, col_shift = data_utils.shift_content_to_top_left(fms)
 
         bw_img, _, _ = data_utils.shift_content_to_top_left(bw_img,
-                                                                row_shift,
-                                                                col_shift)
+                                                            row_shift,
+                                                            col_shift)
         fm_all.append(fms)
         data_shift_all.append(bw_img)
 
     fm_all = torch.cat(fm_all, dim=0)
     data_shift_all = torch.cat(data_shift_all, dim=0)
     data_all = torch.cat((data_shift_all, fm_all), dim=1).unique(dim=0)
+
+    # visual memory fms
+    fm_np_array = data_all[:, 1:].sum(dim=1, keepdims=True)
+    fm_np_array = fm_np_array.permute(0, 2, 3, 1).numpy().astype(np.uint8)
+    chart_utils.visual_batch_imgs(fm_np_array, args.save_path, "memory_fms.png")
 
     return data_all
 

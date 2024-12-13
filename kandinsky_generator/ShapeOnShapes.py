@@ -40,7 +40,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
             kf.append(o)
         return kf
 
-    def _circle(self, so, t, min_percent=1.0, max_percent=1.0):
+    def _circle(self, min_so, t, min_percent=1.0, max_percent=1.0):
         kf = []
         x = 0.5  # + random.random() * 0.8
         y = 0.7  # + random.random() * 0.8
@@ -49,7 +49,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
         xs = x
         ys = y - r
 
-        so = 0.1 + random.random() * 0.8
+        so = min_so + random.random() * 0.8
 
         o = KandinskyUniverse.kandinskyShape()
         o.color = "lightblue"
@@ -64,7 +64,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
 
         return kf
 
-    def _square(self, so, t, min_percent=1.0, max_percent=1.0):
+    def _square(self, min_so, t, min_percent=1.0, max_percent=1.0):
         kf = []
         x = 0.5  # + random.random() * 0.8
         y = 0.8  # + random.random() * 0.8
@@ -73,7 +73,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
         xs = x
         ys = y - r
 
-        so = 0.1 + random.random() * 0.8
+        so = min_so + random.random() * 0.8
 
         o = KandinskyUniverse.kandinskyShape()
         o.color = "darkblue"
@@ -169,7 +169,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
 
         return kf
 
-    def _triangle(self, so, t, min_percent=1.0, max_percent=1.0):
+    def _triangle(self, min_so, t, min_percent=1.0, max_percent=1.0):
         kf = []
         x = 0.5  # + random.random() * 0.8
         y = 0.8  # + random.random() * 0.8
@@ -178,7 +178,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
         xs = x
         ys = y - r
 
-        so = 0.1 + random.random() * 0.8
+        so = min_so + random.random() * 0.8
 
         o = KandinskyUniverse.kandinskyShape()
         o.color = "darkblue"
@@ -730,7 +730,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
         return kf
 
     def _only(self, truth, shape):
-        so = 0.04
+        so = 0.05
 
         # bk basic patterns
         if shape == "circle":
@@ -792,10 +792,15 @@ class ShapeOnShape(KandinskyTruthInterfce):
     def tri_only(self, n=1, rule_style=False):
         kfs = []
         for i in range(n):
+            kf = self._only(rule_style, "triangle")
+            kfs.append(kf)
+        return kfs
+    def tri_group(self, n=1, rule_style=False):
+        kfs = []
+        for i in range(n):
             kf = self._only(rule_style, "triangle_group")
             kfs.append(kf)
         return kfs
-
     def gestalt_triangle(self, n=1, rule_style=False):
         kfs = []
         for i in range(n):
@@ -806,10 +811,15 @@ class ShapeOnShape(KandinskyTruthInterfce):
     def cir_only(self, n=1, rule_style=False):
         kfs = []
         for i in range(n):
+            kf = self._only(rule_style, "circle")
+            kfs.append(kf)
+        return kfs
+    def cir_group(self, n=1, rule_style=False):
+        kfs = []
+        for i in range(n):
             kf = self._only(rule_style, "circle_group")
             kfs.append(kf)
         return kfs
-
     def dia_only(self, n=1, rule_style=False):
         kfs = []
         for i in range(n):
@@ -822,11 +832,17 @@ class ShapeOnShape(KandinskyTruthInterfce):
         kfs = []
         for i in range(n):
             # print(i)
-            kf = self._only(True, "square_group")
+            kf = self._only(True, "square")
             kfs.append(kf)
         return kfs
 
-
+    def square_group(self, n=1, rule_style=False):
+        kfs = []
+        for i in range(n):
+            # print(i)
+            kf = self._only(True, "square_group")
+            kfs.append(kf)
+        return kfs
     def triangle_circle(self, n=1, rule_style=False):
         kfs = []
         for i in range(n):

@@ -4,7 +4,6 @@
 import matplotlib.pyplot as plt
 import cv2
 import numpy as np
-from matplotlib import cm
 
 
 def zoom_matrix_to_image_cv(matrix, zoom_factor=8, colormap='plasma', padding=True):
@@ -37,7 +36,8 @@ def zoom_matrix_to_image_cv(matrix, zoom_factor=8, colormap='plasma', padding=Tr
         only_matching_region[only_matching_region != 1] = 0
         zoomed_image[-1] += only_matching_region
     zoomed_image /= zoomed_image.max()
-    zoomed_image = cv2.resize(cmap(zoomed_image[-1])[:, :, :3], (512, 512), interpolation=cv2.INTER_NEAREST)
+    zoomed_image = cv2.resize(cmap(zoomed_image[-1])[:, :, :3], (512, 512),
+                              interpolation=cv2.INTER_NEAREST)
     return ((zoomed_image) * 255).astype(np.uint8)
 
 
@@ -59,7 +59,8 @@ def zoom_img(matrix, zoom_factor=8, add_border=True):
         raise ValueError("Input matrix must be of size 64x64.")
 
     # Resize (zoom) the matrix using nearest neighbor interpolation to keep pixels sharp
-    zoomed_matrix = cv2.resize(matrix, (matrix.shape[1] * zoom_factor, matrix.shape[0] * zoom_factor),
+    zoomed_matrix = cv2.resize(matrix, (
+        matrix.shape[1] * zoom_factor, matrix.shape[0] * zoom_factor),
                                interpolation=cv2.INTER_NEAREST)
     rgb_image = np.stack((zoomed_matrix,) * 3, axis=-1)
 
@@ -71,33 +72,57 @@ def zoom_img(matrix, zoom_factor=8, add_border=True):
 def color_mapping(matrix, norm_factor, text=None):
     # Choose a colormap, e.g., 'viridis'
     cmap = plt.get_cmap('viridis')
-    zoomed_image = cv2.resize(cmap(matrix / norm_factor)[:, :, :3], (512, 512), interpolation=cv2.INTER_NEAREST)
+    zoomed_image = cv2.resize(cmap(matrix / norm_factor)[:, :, :3], (512, 512),
+                              interpolation=cv2.INTER_NEAREST)
     zoomed_image = (zoomed_image * 255).astype(np.uint8)
 
     if text is not None:
         position = (zoomed_image.shape[0] - 250, zoomed_image.shape[1] - 50)
         cv2.putText(zoomed_image, text=text, org=position, color=(255, 255, 255),
-                    fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, thickness=2, lineType=cv2.LINE_AA)
+                    fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, thickness=2,
+                    lineType=cv2.LINE_AA)
     return zoomed_image
 
 
-def concat_imgs(img_list):
+def add_text(text, img):
+    img = cv2.resize(img, (512, 512), interpolation=cv2.INTER_NEAREST)
+    if text is not None:
+        position = (img.shape[0] - 250, img.shape[1] - 50)
+        cv2.putText(img, text=text, org=position, color=(255, 255, 255),
+                    fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, thickness=2,
+                    lineType=cv2.LINE_AA)
+    return img
+
+
+def hconcat_imgs(img_list):
     padding_imgs = []
     for img in img_list:
-        pad_width = 2
-        pad_img = np.pad(img, pad_width=((pad_width, pad_width), (pad_width, pad_width), (0, 0)), constant_values=255)
-        padding_imgs.append(pad_img)
+        padding_imgs.append(img_padding(img))
     img = np.hstack(padding_imgs).astype(np.uint8)
 
     return img
 
 
+def img_padding(img, pad_width=2):
+    if img.ndim == 3:
+        pad_img = np.pad(img, pad_width=(
+            (pad_width, pad_width), (pad_width, pad_width), (0, 0)),
+                         constant_values=255)
+    elif img.ndim == 2:
+        pad_img = np.pad(img, pad_width=(
+            (pad_width, pad_width), (pad_width, pad_width)),
+                         constant_values=255)
+
+    else:
+        raise ValueError()
+
+    return pad_img
+
+
 def vconcat_imgs(img_list):
     padding_imgs = []
     for img in img_list:
-        pad_width = 2
-        pad_img = np.pad(img, pad_width=((pad_width, pad_width), (pad_width, pad_width), (0, 0)), constant_values=255)
-        padding_imgs.append(pad_img)
+        padding_imgs.append(img_padding(img))
     img = np.vstack(padding_imgs).astype(np.uint8)
 
     return img
@@ -107,3 +132,37 @@ def visual_np_array(array):
     plt.imshow(array)
     plt.axis('off')
     plt.show()
+
+
+def get_black_img():
+    black_img = np.zeros((512, 512)).astype(np.uint8)
+    return black_img
+
+
+def array2img(array):
+    img = cv2.resize(array, (512, 512), interpolation=cv2.INTER_NEAREST)
+    return img
+
+
+def save_img(img, file_name):
+    cv2.imwrite(str(file_name), img)
+
+
+def visual_batch_imgs(batch_imgs, path, name):
+    if len(batch_imgs) > 10:
+        row_num = len(batch_imgs) // 10
+        col_num = 10
+    else:
+        row_num = 1
+        col_num = len(batch_imgs)
+    batch_imgs = [array2img(img) for img in batch_imgs]
+    row_imgs = []
+    for i in range(row_num):
+        row_img = batch_imgs[i * col_num:(i + 1) * col_num]
+        if len(row_img) < col_num:
+            row_img += [get_black_img()] * (col_num - len(row_img))
+
+        row_img = hconcat_imgs(row_img)
+        row_imgs.append(row_img)
+    col_imgs = vconcat_imgs(row_imgs)
+    save_img(col_imgs, path / name)

@@ -9,7 +9,7 @@ from utils import file_utils, args_utils, data_utils
 from src.alpha import alpha
 from src import llama_call, bk
 from percept import perception
-
+from src.neural import models
 
 def load_bk(args, bk_shapes):
     # load background knowledge
@@ -27,12 +27,20 @@ def load_bk(args, bk_shapes):
         fm_img = fm_data[:, 0:1]
         fm_repo = fm_data[:, 1:]
 
+        # load pretrained autoencoder
+        # ae = models.Autoencoder(fm_repo.shape[1])
+        # ae.load_state_dict(torch.load(bk_path / "fm_ae.pth"))
+        # # load the dimension reduced feature maps
+        # ae_fm = torch.load(bk_path / "ae_fms.pt").to(args.device)
+
         bk.append({
             "name": bk_shape,
             "kernel_size": kernel_size,
             "kernels": kernels,
             "fm_img": fm_img,
-            "fm_repo": fm_repo
+            "fm_repo": fm_repo,
+            # "ae": ae,
+            # "ae_fm": ae_fm,
         })
     return bk
 

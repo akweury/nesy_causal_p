@@ -50,7 +50,7 @@ def main():
     perception.collect_fms(args, exp_setting["bk_groups"])
 
     # Train autoencoder
-    models.train_autoencoder(args, exp_setting["bk_groups"])
+    # models.train_autoencoder(args, exp_setting["bk_groups"])
 
     # Import Generated Data
     train_dl, test_pos_dl, test_rand_dl, test_cf_dl = dataset.load_dataset(args)

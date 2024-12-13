@@ -1,5 +1,6 @@
 # Created by shaji at 25/07/2024
 from src.reasoning.reason_utils import *
+from src.neural import models
 
 
 def fm_registration(fm_mem, bw_img_mem, fms_rc):
@@ -15,7 +16,7 @@ def fm_registration(fm_mem, bw_img_mem, fms_rc):
     return mem_fm, mem_bw_img
 
 
-def reason_fms(args, rc_fms, bk_shape, img, fms, bw_img):
+def reason_fms(args, segment, rc_fms, bk_shape, img, bw_img):
     bw_img = bw_img.squeeze()
     mem_fm_idx, mem_fm_shift, mem_fm_conf = rc_fms
     mem_fm = bk_shape["fm_repo"][mem_fm_idx]
@@ -27,14 +28,11 @@ def reason_fms(args, rc_fms, bk_shape, img, fms, bw_img):
     # image matching
     onside, offside = img_matching(mem_bw_img)
 
-
-
     # visualization
-    match_same, match_diff, same_percent = get_match_detail(mem_fm, fms.squeeze())
-    visual_img_name = args.output_file_prefix + str(f'_group_{bk_shape["name"]}.png')
-    visual_all(visual_img_name, img, bw_img, fms, mem_fm, same_percent, match_same,
-               match_diff, onside, offside)
+    # fms = models.one_layer_conv(shifted_imgs, bk_shape["kernels"].float())
+    # match_same, match_diff, same_percent = get_match_detail(mem_fm, fms.squeeze())
 
+    visual_all(args, rc_fms, segment, mem_bw_img, bk_shape, img, bw_img, onside, offside)
     onside = (onside.sum(dim=0) > 0).squeeze()
     # recall confidence
     onside_coverage = bw_img[onside].bool().sum() / bw_img.bool().sum()
