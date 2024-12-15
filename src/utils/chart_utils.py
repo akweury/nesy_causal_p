@@ -70,6 +70,7 @@ def zoom_img(matrix, zoom_factor=8, add_border=True):
 
 
 def color_mapping(matrix, norm_factor, text=None):
+
     # Choose a colormap, e.g., 'viridis'
     cmap = plt.get_cmap('viridis')
     zoomed_image = cv2.resize(cmap(matrix / norm_factor)[:, :, :3], (512, 512),
@@ -141,6 +142,8 @@ def get_black_img():
 
 def array2img(array):
     img = cv2.resize(array, (512, 512), interpolation=cv2.INTER_NEAREST)
+    img = color_mapping(img, 1, "BW")
+    img= cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     return img
 
 
@@ -166,3 +169,8 @@ def visual_batch_imgs(batch_imgs, path, name):
         row_imgs.append(row_img)
     col_imgs = vconcat_imgs(row_imgs)
     save_img(col_imgs, path / name)
+
+
+def resize_img(img, new_size):
+    resized_img = cv2.resize(img, (new_size, new_size), interpolation=cv2.INTER_NEAREST)
+    return resized_img

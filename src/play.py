@@ -41,7 +41,7 @@ def main():
     args.total_step = 8
 
     # Generate Training Data -- Single Group Pattern
-    generate_training_patterns.genShapeOnShape(args, exp_setting["bk_groups"], 100)
+    generate_training_patterns.genShapeOnShape(args, exp_setting["bk_groups"])
 
     # Generate Task Data -- Multiple Group Pattern
     generate_task_patterns.genShapeOnShapeTask(args, exp_setting, 10)

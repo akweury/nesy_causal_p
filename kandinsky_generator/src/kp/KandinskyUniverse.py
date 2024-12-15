@@ -8,11 +8,12 @@ from PIL import Image, ImageDraw, ImageColor
 
 class kandinskyShape:
     def __init__(self):
-        self.shape = "circle"
-        self.color = "red"
+        self.shape = ""
+        self.color = ""
         self.x = 0.5
         self.y = 0.5
         self.size = 0.5
+        self.line_width = 1.0
 
     def __str__(self):
         return self.color + " " + self.shape + " (" + \
@@ -127,8 +128,10 @@ def draw_star(image, center, size, color, thickness=-1):
 
     # Star points relative to (0, 0) and then scaled by `size`
     star_points = np.array([
-        [0, -size], [size * 0.2, -size * 0.2], [size, -size * 0.2], [size * 0.4, size * 0.2],
-        [size * 0.6, size], [0, size * 0.5], [-size * 0.6, size], [-size * 0.4, size * 0.2],
+        [0, -size], [size * 0.2, -size * 0.2], [size, -size * 0.2],
+        [size * 0.4, size * 0.2],
+        [size * 0.6, size], [0, size * 0.5], [-size * 0.6, size],
+        [-size * 0.4, size * 0.2],
         [-size, -size * 0.2], [-size * 0.2, -size * 0.2]
     ], np.int32)
 
@@ -168,7 +171,8 @@ def draw_diamond(image, center, size, color, thickness=-1):
     if thickness == -1:
         cv2.fillPoly(image, [diamond_points], color)
     else:
-        cv2.polylines(image, [diamond_points], isClosed=True, color=color, thickness=thickness)
+        cv2.polylines(image, [diamond_points], isClosed=True, color=color,
+                      thickness=thickness)
 
 
 def kandinskyFigureAsImagePIL(shapes, width=600, subsampling=4):
@@ -208,13 +212,20 @@ def kandinskyFigureAsImage(shapes, width=600, subsampling=4):
 
         if s.shape == "circle":
             size = 0.5 * 0.6 * math.sqrt(4 * w * s.size * w * s.size / math.pi)
+
+            line_width = int(size * s.line_width)
             cx = round(w * s.x)
             cy = round(w * s.y)
-            cv2.circle(img, (cx, cy), round(size), rgbcolorvalue, -1)
+            cv2.circle(img, (cx, cy), round(size), rgbcolorvalue,
+                       thickness=line_width)
 
         elif s.shape == "triangle":
+            if s.line_width >= 1:
+                return None
             r = math.radians(30)
             size = 0.7 * math.sqrt(3) * w * s.size / 3
+
+            # base shape
             dx = size * math.cos(r)
             dy = size * math.sin(r)
             p1 = (round(w * s.x), round(w * s.y - size))
@@ -223,13 +234,43 @@ def kandinskyFigureAsImage(shapes, width=600, subsampling=4):
             points = np.array([p1, p2, p3])
             cv2.fillConvexPoly(img, points, rgbcolorvalue, 1)
 
+            # top shape
+            line_x_width = int(dx * s.line_width)
+            line_y_width = int(dy * s.line_width)
+            p1 = (round(w * s.x),
+                  round(w * s.y - size + int(size * s.line_width)))  # top point
+            p2 = (round(w * s.x + dx - line_x_width),
+                  round(w * s.y + dy - line_y_width))  # right point
+            p3 = (round(w * s.x - dx + line_x_width),
+                  round(w * s.y + dy - line_y_width))  # left point
+            points = np.array([p1, p2, p3])
+
+            cv2.fillConvexPoly(img, points, matplotlib_colors["lightgray"], 1)
+
+
+
+
+
         elif s.shape == "square":
             size = 0.5 * 0.6 * w * s.size
+            line_width = int(size * s.line_width)
+
+            # draw base square
             xs = round(w * s.x - size)
             ys = round(w * s.y - size)
             xe = round(w * s.x + size)
             ye = round(w * s.y + size)
-            cv2.rectangle(img, (xs, ys), (xe, ye), rgbcolorvalue, -1)
+            cv2.rectangle(img, (xs, ys), (xe, ye), rgbcolorvalue,
+                          thickness=-1)
+
+            # draw top square
+            xs = round(w * s.x - size + line_width)
+            ys = round(w * s.y - size + line_width)
+            xe = round(w * s.x + size - line_width)
+            ye = round(w * s.y + size - line_width)
+            cv2.rectangle(img, (xs, ys), (xe, ye), matplotlib_colors["lightgray"],
+                          thickness=-1)
+
         elif s.shape == "star":
             size = 0.7 * math.sqrt(3) * w * s.size / 3
             draw_star(img, (s.x, s.y), size, rgbcolorvalue)
@@ -246,7 +287,8 @@ def kandinskyFigureAsImage(shapes, width=600, subsampling=4):
     return image
 
 
-def kandinskyFigureAsAnnotation(shapes, image_id, category_ids, width=128, subsampling=1):
+def kandinskyFigureAsAnnotation(shapes, image_id, category_ids, width=128,
+                                subsampling=1):
     annotations = []
 
     w = subsampling * width
@@ -319,7 +361,8 @@ def kandinskyFigureAsAnnotation(shapes, image_id, category_ids, width=128, subsa
     return annotations
 
 
-def kandinskyFigureAsYOLOText(shapes, image_id, category_ids, width=128, subsampling=1):
+def kandinskyFigureAsYOLOText(shapes, image_id, category_ids, width=128,
+                              subsampling=1):
     annotations = []
     label_texts = []
 
@@ -397,7 +440,8 @@ def kandinskyFigureAsYOLOText(shapes, image_id, category_ids, width=128, subsamp
     return label_texts
 
 
-def __kandinskyFigureAsYOLOText(shapes, image_id, category_ids, width=128, subsampling=1):
+def __kandinskyFigureAsYOLOText(shapes, image_id, category_ids, width=128,
+                                subsampling=1):
     annotations = []
     label_texts = []
     w = subsampling * width

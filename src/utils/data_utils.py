@@ -341,17 +341,15 @@ def to_bw_img(image):
     return image
 
 
-def rgb2bw(rgb, crop=False):
+def rgb2bw(rgb, crop=False, resize=None):
     bw_img = cv2.cvtColor(rgb, cv2.COLOR_BGR2GRAY)
     bw_img[bw_img != 211] = 1
     bw_img[bw_img == 211] = 0
-
     if crop:
         # bw image to cropped bw image
-        bw_img = crop_img(torch.from_numpy(bw_img).squeeze(), resize=True)
-
-    bw_img = bw_img
-
+        bw_img = crop_img(torch.from_numpy(bw_img).squeeze(), resize=resize)
+    else:
+        bw_img = torch.from_numpy(bw_img)
     return bw_img
 
 
@@ -394,8 +392,7 @@ def matrix_equality(matrix1, matrix2):
 
     batch_size = 128
     similarity_matrix = torch.zeros((matrix1.shape[0], matrix2.shape[0]))
-    for i in tqdm(range(0, matrix1.shape[0], batch_size),
-                  desc="Calculating Equality"):
+    for i in range(0, matrix1.shape[0], batch_size):
         end_i = min(i + batch_size, matrix1.shape[0])
         batch1 = matrix1_flatten[i:end_i].unsqueeze(1)
         batch2 = matrix2_flatten.unsqueeze(0)
@@ -410,7 +407,7 @@ def matrix_equality(matrix1, matrix2):
     return similarity_matrix
 
 
-def crop_img(image, resize=False):
+def crop_img(image, resize=None):
     image = image.squeeze()
     height, width = image.shape[-2], image.shape[-1]
     # Find the bounding box of the nonzero values
@@ -438,8 +435,8 @@ def crop_img(image, resize=False):
     # Crop the image
     cropped_image = image[new_min_y:new_max_y, new_min_x:new_max_x]
 
-    if resize:
-        cropped_image = cv2.resize(cropped_image.numpy(), (8, 8),
+    if resize is not None:
+        cropped_image = cv2.resize(cropped_image.numpy(), (resize, resize),
                                    interpolation=cv2.INTER_AREA)
         cropped_image = torch.from_numpy(cropped_image)
     cropped_image = cropped_image.unsqueeze(0)

@@ -23,7 +23,7 @@ def get_most_frequent_color(img):
     color_counts = img.reshape(3, -1).permute(1, 0).unique(return_counts=True, dim=0)
     color_sorted = sorted(zip(color_counts[0], color_counts[1]),
                           key=lambda x: x[1], reverse=True)
-    if torch.all(color_sorted[0][0] == torch.tensor([0, 0, 0])):
+    if torch.all(color_sorted[0][0] == torch.tensor([211, 211, 211])):
         most_frequent = color_sorted[1][0]
     else:
         most_frequent = color_sorted[0][0]
@@ -31,10 +31,10 @@ def get_most_frequent_color(img):
     # Find the closest color in the dictionary
     closest_color_name = bk.no_color
     smallest_distance = float('inf')
-
+    distances = []
     for color_name, color_rgb in bk.color_matplotlib.items():
-        distance = torch.sqrt(sum((c1 - c2) ** 2 for c1, c2 in
-                                  zip(most_frequent, torch.tensor(color_rgb))))
+        distance = torch.sqrt(sum((most_frequent - torch.tensor(color_rgb)) ** 2))
+        distances.append(distance)
         if distance < smallest_distance:
             smallest_distance = distance
             closest_color_name = color_name
@@ -48,7 +48,7 @@ def percept_feature_groups(args, bk_shapes, segment, img):
 
     # rgb segment to resized bw image
     seg_np = segment.permute(1, 2, 0).numpy().astype(np.uint8)
-    bw_img = data_utils.rgb2bw(seg_np, crop=True).unsqueeze(0)
+    bw_img = data_utils.rgb2bw(seg_np, crop=True, resize=8).unsqueeze(0)
     seg_color = get_most_frequent_color(segment)
     for b_i, bk_shape in enumerate(bk_shapes):
         args.save_path = config.output / bk_shape["name"]
@@ -70,9 +70,9 @@ def percept_feature_groups(args, bk_shapes, segment, img):
         feature_groups.append(group)
 
         # log
-        args.logger.debug(
-            f" Found group: {bk_shape['name']}: "
-            f" [coverage: {group.onside_coverage:.2f}]")
+        # args.logger.debug(
+        #     f" Found group: {bk_shape['name']}: "
+        #     f" [coverage: {group.onside_coverage:.2f}]")
 
     best_idx = torch.tensor([g.onside_coverage for g in feature_groups]).argmax()
     best_group = feature_groups[best_idx]
@@ -83,25 +83,17 @@ def percept_object_groups(args, input_groups, bk_shapes, img):
     """ group objects as a high level group """
 
     # convert rgb image to black-white image
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY).astype(np.int32)
-    gray = cv2.resize(gray.astype(np.float32), (64, 64),
-                      interpolation=cv2.INTER_AREA)
-    gray[gray == 211] = 0
-    bw_img = torch.from_numpy(gray).unsqueeze(0)
+    bw_img = data_utils.rgb2bw(img.numpy(), crop=True, resize=64)
 
-    # merge images in the type groups into one image
-    onside_mask = torch.cat([g.onside.unsqueeze(0) for g in input_groups], dim=0)
-    onside_mask = onside_mask.sum(dim=0, keepdim=True).bool()
-    onside_mask = onside_mask.unsqueeze(0).to(torch.float32)
+    segment = img.permute(2, 0, 1)
 
     obj_groups = []
-    for b_i, bk_shape in enumerate(bk_shapes):
-        # convolutional layer
-        fms = one_layer_conv(onside_mask, bk_shape["kernels"].float())
+    for b_i, bk_shape in tqdm(enumerate(bk_shapes), desc="grouping objects"):
         # recall the memory
-        fms_rc = recall.recall_fms(args, fms, bk_shape, bw_img)
+        shifted_fms, rc_fms = recall.recall_fms(args, bk_shape, bw_img, reshape=64)
         # reasoning recalled fms to group
-        group_data = reason.reason_fms(args, fms_rc, bk_shape, img, fms, bw_img)
+        group_data = reason.reason_fms(args, segment, rc_fms, bk_shape, img, bw_img,
+                                       reshape=64)
         # convert data to group object
         group = Group(id=b_i,
                       name=bk_shape["name"],
@@ -158,7 +150,7 @@ def detect_local_features(args, segments, group_bk, img):
         groups = torch.load(group_file)
     else:
         groups = []
-        for segment in segments:
+        for segment in tqdm(segments, desc="local features detection"):
             group = percept_feature_groups(args, group_bk, segment, img)
             groups.append(group)
         torch.save(groups, group_file)

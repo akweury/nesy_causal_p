@@ -40,7 +40,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
             kf.append(o)
         return kf
 
-    def _circle(self, min_so, t, min_percent=1.0, max_percent=1.0):
+    def _circle(self, so, lw, min_percent=1.0, max_percent=1.0):
         kf = []
         x = 0.5  # + random.random() * 0.8
         y = 0.7  # + random.random() * 0.8
@@ -49,11 +49,12 @@ class ShapeOnShape(KandinskyTruthInterfce):
         xs = x
         ys = y - r
 
-        so = min_so + random.random() * 0.8
+        # so = min_so + random.random() * 0.8
 
         o = KandinskyUniverse.kandinskyShape()
         o.color = "lightblue"
         o.shape = "circle"
+        o.line_width = lw
         o.size = so
         o.x = xs
         o.y = ys
@@ -64,7 +65,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
 
         return kf
 
-    def _square(self, min_so, t, min_percent=1.0, max_percent=1.0):
+    def _square(self, so, lw, min_percent=1.0, max_percent=1.0):
         kf = []
         x = 0.5  # + random.random() * 0.8
         y = 0.8  # + random.random() * 0.8
@@ -73,11 +74,10 @@ class ShapeOnShape(KandinskyTruthInterfce):
         xs = x
         ys = y - r
 
-        so = min_so + random.random() * 0.8
-
         o = KandinskyUniverse.kandinskyShape()
         o.color = "darkblue"
         o.shape = "square"
+        o.line_width = lw
         o.size = so
         o.x = xs
         o.y = ys
@@ -169,7 +169,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
 
         return kf
 
-    def _triangle(self, min_so, t, min_percent=1.0, max_percent=1.0):
+    def _triangle(self, so, lw, min_percent=1.0, max_percent=1.0):
         kf = []
         x = 0.5  # + random.random() * 0.8
         y = 0.8  # + random.random() * 0.8
@@ -178,12 +178,11 @@ class ShapeOnShape(KandinskyTruthInterfce):
         xs = x
         ys = y - r
 
-        so = min_so + random.random() * 0.8
-
         o = KandinskyUniverse.kandinskyShape()
         o.color = "darkblue"
         o.shape = "triangle"
         o.size = so
+        o.line_width = lw
         o.x = xs
         o.y = ys
         kf.append(o)
@@ -680,13 +679,17 @@ class ShapeOnShape(KandinskyTruthInterfce):
             return np.linspace(start, end, num_points, endpoint=False)
 
         # Generate points for each edge
-        top_right = interpolate(top, right, points_per_edge + (1 if remainder > 0 else 0))
+        top_right = interpolate(top, right,
+                                points_per_edge + (1 if remainder > 0 else 0))
         remainder -= 1
-        right_bottom = interpolate(right, bottom, points_per_edge + (1 if remainder > 0 else 0))
+        right_bottom = interpolate(right, bottom,
+                                   points_per_edge + (1 if remainder > 0 else 0))
         remainder -= 1
-        bottom_left = interpolate(bottom, left, points_per_edge + (1 if remainder > 0 else 0))
+        bottom_left = interpolate(bottom, left,
+                                  points_per_edge + (1 if remainder > 0 else 0))
         remainder -= 1
-        left_top = interpolate(left, top, points_per_edge + (1 if remainder > 0 else 0))
+        left_top = interpolate(left, top,
+                               points_per_edge + (1 if remainder > 0 else 0))
 
         # Combine all the points into a single array
         diamond_points = np.vstack((top_right, right_bottom, bottom_left, left_top))
@@ -712,9 +715,15 @@ class ShapeOnShape(KandinskyTruthInterfce):
         so = 0.04
 
         combis = random.randint(0, 2)
-        if combis == 0:  g = lambda so, truth: self._bigCircle(so, truth) + self._bigSquare(so, truth)
-        if combis == 1:  g = lambda so, truth: self._bigCircle(so, truth) + self._bigTriangle(so, truth)
-        if combis == 2:  g = lambda so, truth: self._bigSquare(so, truth) + self._bigTriangle(so, truth)
+        if combis == 0:  g = lambda so, truth: self._bigCircle(so,
+                                                               truth) + self._bigSquare(
+            so, truth)
+        if combis == 1:  g = lambda so, truth: self._bigCircle(so,
+                                                               truth) + self._bigTriangle(
+            so, truth)
+        if combis == 2:  g = lambda so, truth: self._bigSquare(so,
+                                                               truth) + self._bigTriangle(
+            so, truth)
 
         kf = g(so, truth)
         t = 0
@@ -729,20 +738,20 @@ class ShapeOnShape(KandinskyTruthInterfce):
             t = t + 1
         return kf
 
-    def _only(self, truth, shape):
+    def _only(self, truth, shape, size=None, lw=None):
         so = 0.05
 
         # bk basic patterns
         if shape == "circle":
-            g = lambda so, truth: self._circle(so, truth)
+            g = lambda so, truth: self._circle(size, lw)
         elif shape == "circle_group":
             g = lambda so, truth: self._bigCircle(so, truth)
         elif shape == "triangle":
-            g = lambda so, truth: self._triangle(so, truth)
+            g = lambda so, truth: self._triangle(size, lw)
         elif shape == "triangle_group":
             g = lambda so, truth: self._bigTriangle(so, truth)
         elif shape == "square":
-            g = lambda so, truth: self._square(so, truth)
+            g = lambda so, truth: self._square(size, lw)
         elif shape == "square_group":
             g = lambda so, truth: self._bigSquare(so, truth)
 
@@ -754,26 +763,40 @@ class ShapeOnShape(KandinskyTruthInterfce):
             g = lambda so, truth: self._gestaltTriangle(so, truth)
 
         elif shape == "diamondcircle":
-            g = lambda so, truth: self._bigDiamond(so, truth) + self._bigCircle(so, truth)
+            g = lambda so, truth: self._bigDiamond(so, truth) + self._bigCircle(so,
+                                                                                truth)
         elif shape == "trianglecircle":
-            g = lambda so, truth: self._bigCircle(so, truth) + self._bigTriangle(so, truth)
+            g = lambda so, truth: self._bigCircle(so, truth) + self._bigTriangle(so,
+                                                                                 truth)
         elif shape == "trianglecircle_flex":
-            g = lambda so, truth: self._bigCircleFlex(so, truth) + self._bigTriangler(so, truth)
+            g = lambda so, truth: self._bigCircleFlex(so,
+                                                      truth) + self._bigTriangler(so,
+                                                                                  truth)
         elif shape == 'trianglesquare':
-            g = lambda so, truth: self._bigSquare(so, truth) + self._bigTriangle(so, truth)
+            g = lambda so, truth: self._bigSquare(so, truth) + self._bigTriangle(so,
+                                                                                 truth)
         elif shape == "squarecircle":
-            g = lambda so, truth: self._bigSquare(so, truth) + self._bigCircle(so, truth)
+            g = lambda so, truth: self._bigSquare(so, truth) + self._bigCircle(so,
+                                                                               truth)
         elif shape == "circlesquare_count":
             g = lambda so, truth: self._smallCircleFlex(
-                so, truth) + self._smallSquare(so, truth) + self._smallCircleFlex(so, truth)
+                so, truth) + self._smallSquare(so, truth) + self._smallCircleFlex(so,
+                                                                                  truth)
         elif shape == "trianglesquarecircle":
-            g = lambda so, truth: self._bigSquare(so, truth) + self._bigCircle(so, truth) + self._bigTriangle(so, truth)
+            g = lambda so, truth: self._bigSquare(so, truth) + self._bigCircle(so,
+                                                                               truth) + self._bigTriangle(
+                so, truth)
         elif shape == "trianglepartsquare":
-            g = lambda so, truth: self._bigSquare(so, truth, min_percent=0, max_percent=1) + self._bigTriangle(so,
-                                                                                                               truth)
+            g = lambda so, truth: self._bigSquare(so, truth, min_percent=0,
+                                                  max_percent=1) + self._bigTriangle(
+                so,
+                truth)
         elif shape == "parttrianglepartsquare":
             g = lambda so, truth: self._bigSquare(
-                so, truth, min_percent=0, max_percent=1) + self._bigTriangle(so, truth, min_percent=0, max_percent=0.8)
+                so, truth, min_percent=0, max_percent=1) + self._bigTriangle(so,
+                                                                             truth,
+                                                                             min_percent=0,
+                                                                             max_percent=0.8)
         else:
             raise ValueError("Shape does not support.")
         kf = g(so, truth)
@@ -789,18 +812,21 @@ class ShapeOnShape(KandinskyTruthInterfce):
         #     t = t + 1
         return kf
 
-    def tri_only(self, n=1, rule_style=False):
+    def tri_only(self, n=1, rule_style=False, size_lw = None):
         kfs = []
-        for i in range(n):
-            kf = self._only(rule_style, "triangle")
-            kfs.append(kf)
+        if n > 0:
+            for size, lw in size_lw:
+                kf = self._only(rule_style, "triangle", size, lw)
+                kfs.append(kf)
         return kfs
+
     def tri_group(self, n=1, rule_style=False):
         kfs = []
         for i in range(n):
             kf = self._only(rule_style, "triangle_group")
             kfs.append(kf)
         return kfs
+
     def gestalt_triangle(self, n=1, rule_style=False):
         kfs = []
         for i in range(n):
@@ -808,18 +834,22 @@ class ShapeOnShape(KandinskyTruthInterfce):
             kfs.append(kf)
         return kfs
 
-    def cir_only(self, n=1, rule_style=False):
+    def cir_only(self, n=1, rule_style=False, size_lw=None):
         kfs = []
-        for i in range(n):
-            kf = self._only(rule_style, "circle")
-            kfs.append(kf)
+        if n>0:
+            for size, lw in size_lw:
+                kf = self._only(rule_style, "circle", size, lw)
+                kfs.append(kf)
         return kfs
+
+
     def cir_group(self, n=1, rule_style=False):
         kfs = []
         for i in range(n):
             kf = self._only(rule_style, "circle_group")
             kfs.append(kf)
         return kfs
+
     def dia_only(self, n=1, rule_style=False):
         kfs = []
         for i in range(n):
@@ -828,12 +858,13 @@ class ShapeOnShape(KandinskyTruthInterfce):
             kfs.append(kf)
         return kfs
 
-    def square_only(self, n=1, rule_style=False):
+    def square_only(self, n=1, rule_style=False, size_lw = None):
         kfs = []
-        for i in range(n):
-            # print(i)
-            kf = self._only(True, "square")
-            kfs.append(kf)
+        if n > 0:
+            for size, lw in size_lw:
+                # print(i)
+                kf = self._only(True, "square", size, lw)
+                kfs.append(kf)
         return kfs
 
     def square_group(self, n=1, rule_style=False):
@@ -843,6 +874,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
             kf = self._only(True, "square_group")
             kfs.append(kf)
         return kfs
+
     def triangle_circle(self, n=1, rule_style=False):
         kfs = []
         for i in range(n):

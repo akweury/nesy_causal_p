@@ -23,7 +23,7 @@ class BasicShapeDataset(Dataset):
 
     def __getitem__(self, idx):
         rgb_image = cv2.imread(self.image_paths[idx])
-        bw_img = data_utils.rgb2bw(rgb_image, crop=True)
+        bw_img = data_utils.rgb2bw(rgb_image, crop=True, resize=8)
         return bw_img
 
 

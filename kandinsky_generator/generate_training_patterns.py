@@ -188,16 +188,20 @@ def kf2data(kf, width):
     return data
 
 
-def genShapeOnShape(args, shapes, n):
+def genShapeOnShape(args, shapes):
     args.step_counter += 1
     args.logger.info(f"Step {args.step_counter}/{args.total_step}: "
                 f"Generating {shapes} training patterns")
     width = 512
+    size_list = np.arange(0.05, 0.90, 0.05)
+    line_width_list = np.arange(0.05, 2, 0.05)
+    size_lw = [(x, y) for x in size_list for y in line_width_list]
+
     for shape in shapes:
         base_path = config.kp_base_dataset / f"{shape}"
         os.makedirs(base_path, exist_ok=True)
         png_num = len([f for f in Path(base_path).iterdir() if f.is_file() and f.suffix == '.png'])
-        n = n - png_num  # only generate insufficient ones
+        n = len(size_lw) - png_num  # only generate insufficient ones
 
         shapeOnshapeObjects = ShapeOnShape(u, 20, 40)
         for mode in ['train']:
@@ -207,18 +211,10 @@ def genShapeOnShape(args, shapes, n):
                 gen_fun = shapeOnshapeObjects.tri_only
             elif shape == "square":
                 gen_fun = shapeOnshapeObjects.square_only
-            elif shape == "triangle_small":
-                gen_fun = shapeOnshapeObjects.tri_small_only
-            elif shape == "circle_flex":
-                gen_fun = shapeOnshapeObjects.cir_flex_only
             elif shape =="gestalt_triangle":
                 gen_fun = shapeOnshapeObjects.gestalt_triangle
-            elif shape == "triangler":
-                gen_fun = shapeOnshapeObjects.trir_only
             elif shape == "diamond":
                 gen_fun = shapeOnshapeObjects.dia_only
-            elif shape == "square_small":
-                gen_fun = shapeOnshapeObjects.square_small_only
             elif shape == "trianglecircle":
                 gen_fun = shapeOnshapeObjects.triangle_circle
             elif shape == "squarecircle":
@@ -237,8 +233,10 @@ def genShapeOnShape(args, shapes, n):
                 gen_fun = shapeOnshapeObjects.false_kf
             else:
                 raise ValueError
-            for (i, kf) in enumerate(gen_fun(n, rule_style=False)):
+            for (i, kf) in enumerate(gen_fun(n, rule_style=False, size_lw = size_lw)):
                 image = KandinskyUniverse.kandinskyFigureAsImage(kf, width)
+                if image is None:
+                    continue
                 data = kf2data(kf, width)
                 with open(base_path / f"{shape}_{(png_num+i):06d}.json", 'w') as f:
                     json.dump(data, f)
