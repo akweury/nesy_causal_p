@@ -191,7 +191,7 @@ def kf2data(kf, width):
 def genShapeOnShape(args, shapes):
     args.step_counter += 1
     args.logger.info(f"Step {args.step_counter}/{args.total_step}: "
-                f"Generating {shapes} training patterns")
+                     f"Generating {shapes} training patterns")
     width = 512
     size_list = np.arange(0.05, 0.90, 0.05)
     line_width_list = np.arange(0.05, 2, 0.05)
@@ -200,9 +200,11 @@ def genShapeOnShape(args, shapes):
     for shape in shapes:
         base_path = config.kp_base_dataset / f"{shape}"
         os.makedirs(base_path, exist_ok=True)
-        png_num = len([f for f in Path(base_path).iterdir() if f.is_file() and f.suffix == '.png'])
+        png_num = len([f for f in Path(base_path).iterdir() if
+                       f.is_file() and f.suffix == '.png'])
         n = len(size_lw) - png_num  # only generate insufficient ones
-
+        if n <= 0:
+            continue
         shapeOnshapeObjects = ShapeOnShape(u, 20, 40)
         for mode in ['train']:
             if shape == "circle":
@@ -211,7 +213,7 @@ def genShapeOnShape(args, shapes):
                 gen_fun = shapeOnshapeObjects.tri_only
             elif shape == "square":
                 gen_fun = shapeOnshapeObjects.square_only
-            elif shape =="gestalt_triangle":
+            elif shape == "gestalt_triangle":
                 gen_fun = shapeOnshapeObjects.gestalt_triangle
             elif shape == "diamond":
                 gen_fun = shapeOnshapeObjects.dia_only
@@ -233,12 +235,11 @@ def genShapeOnShape(args, shapes):
                 gen_fun = shapeOnshapeObjects.false_kf
             else:
                 raise ValueError
-            for (i, kf) in enumerate(gen_fun(n, rule_style=False, size_lw = size_lw)):
+            for (i, kf) in enumerate(gen_fun(n, rule_style=False, size_lw=size_lw)):
                 image = KandinskyUniverse.kandinskyFigureAsImage(kf, width)
                 if image is None:
                     continue
                 data = kf2data(kf, width)
-                with open(base_path / f"{shape}_{(png_num+i):06d}.json", 'w') as f:
+                with open(base_path / f"{shape}_{(png_num + i):06d}.json", 'w') as f:
                     json.dump(data, f)
-                image.save(base_path / f"{shape}_{(png_num+i):06d}.png")
-
+                image.save(base_path / f"{shape}_{(png_num + i):06d}.png")

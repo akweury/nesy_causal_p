@@ -390,16 +390,16 @@ def matrix_equality(matrix1, matrix2):
     matrix2_flatten = matrix2.view(matrix2.size(0), -1)
     # num_features = matrix2.sum(dim=[1, 2, 3])
 
-    batch_size = 128
+    batch_size = 16
     similarity_matrix = torch.zeros((matrix1.shape[0], matrix2.shape[0]))
-    for i in range(0, matrix1.shape[0], batch_size):
+    for i in tqdm(range(0, matrix1.shape[0], batch_size), desc="Matrix equality"):
         end_i = min(i + batch_size, matrix1.shape[0])
         batch1 = matrix1_flatten[i:end_i].unsqueeze(1)
         batch2 = matrix2_flatten.unsqueeze(0)
-
+        mask = (batch2 == 0).squeeze()
         # Sum over the feature dimension to count matches
         equal_counts = (batch1 == batch2)  # Shape: (4096, 197)
-
+        equal_counts[:,:, mask] = 0
         # Normalize by the number of features to get similarity in range [0, 1]
         similarity_matrix[i:end_i] = equal_counts.sum(dim=-1) / equal_counts.shape[
             -1]

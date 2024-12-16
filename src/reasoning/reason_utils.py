@@ -22,14 +22,16 @@ def get_match_detail(mem_fm, visual_fm):
     return all_same_fm, any_diff_fm, same_percent
 
 
-def img_matching(match_fm_img, bw_img):
-    onside_mask = (match_fm_img > 0).squeeze()
-    bw_img_reshaped = bw_img.unsqueeze(0).unsqueeze(0)
+def img_matching(mem_fm, in_fm):
+    onside_mask = (in_fm > 0).squeeze() * (mem_fm > 0).squeeze()
+    bw_img_reshaped = in_fm.unsqueeze(0).unsqueeze(0)
 
-    data_onside = (match_fm_img == bw_img_reshaped).to(torch.float32).squeeze()
+    data_onside = 1 - torch.abs(mem_fm - bw_img_reshaped).to(
+        torch.float32).squeeze()
     data_onside[~onside_mask] = 0
 
-    data_offside = (match_fm_img != bw_img_reshaped).to(torch.float32).squeeze()
+    data_offside = torch.abs(mem_fm - bw_img_reshaped).to(
+        torch.float32).squeeze()
     data_offside[~onside_mask] = 0
 
     return data_onside, data_offside
@@ -62,17 +64,19 @@ def eval_onside_conf(args, data, onsides, fm_imgs, bk_shape):
     return group_count_conf
 
 
-def visual_all(args, rc_fms, segment, mem_bw_img, bk_shape, img, bw_img, onside,
-               offside):
+def visual_all(args, in_fms, rc_fms, segment, mem_bw_img, bk_shape, img, bw_img,
+               onside, offside):
     group_img_name = args.save_path / str(f'_group_{bk_shape["name"]}.png')
 
-    in_fms = models.one_layer_conv(bw_img.unsqueeze(0).unsqueeze(0),
-                                   bk_shape["kernels"].float())
     # norm_factor = max([bw_img.max(), in_fms.sum(dim=1).max()])
     segment_np = segment.permute(1, 2, 0).numpy().astype(np.uint8)
     segment_np = chart_utils.add_text("SEG", segment_np)
 
-    seg_fm_img = chart_utils.color_mapping(bw_img, 1, "IN_BW")
+    # in_fms = models.one_layer_conv(bw_img.unsqueeze(0).unsqueeze(0),
+    #                                bk_shape["kernels"].float())
+    # in_fms = in_fms.sum(dim=1).squeeze()
+    # in_fms = (in_fms - in_fms.min()) / (in_fms.max() - in_fms.min())
+    seg_fm_img = chart_utils.color_mapping(in_fms, 1, "IN_BW")
     blank_img = chart_utils.color_mapping(torch.zeros_like(bw_img), 1, "")
     compare_imgs = []
     for i in range(min(10, len(onside))):
@@ -95,14 +99,20 @@ def visual_all(args, rc_fms, segment, mem_bw_img, bk_shape, img, bw_img, onside,
                     data_onside_img, data_offside_img]
         compare_imgs.append(chart_utils.hconcat_imgs(img_list))
     # last row: combined result
-    data_mask = bw_img != 0
-    onside_comb = (onside.sum(dim=0).float() * data_mask)
+    data_mask = ((in_fms > 0) * (mem_bw_img > 0)).squeeze() > 0
+
+    onside_comb = 1 - torch.abs(mem_bw_img - in_fms).to(torch.float32).squeeze()
+    onside_comb[~data_mask] = 0
+    onside_comb = onside_comb.mean(dim=0)
+
     match_percent = rc_fms[2].mean() * 100
     onside_comb_img = chart_utils.color_mapping(onside_comb,
                                                 1,
                                                 f"Onside {match_percent:.2f}%")
 
-    offside_comb = (offside.sum(dim=0).float() * data_mask)
+    offside_comb = torch.abs(mem_bw_img - in_fms).to(torch.float32).squeeze()
+    offside_comb[~data_mask] = 0
+    offside_comb = offside_comb.mean(dim=0)
     offside_comb_img = chart_utils.color_mapping(offside_comb, 1,
                                                  "Offside Comb.")
 

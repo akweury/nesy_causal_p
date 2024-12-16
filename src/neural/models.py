@@ -152,4 +152,5 @@ def one_layer_conv(data, kernels):
     # max_value = torch.repeat_interleave(max_value, output.shape[2], dim=-2)
     # max_value = torch.repeat_interleave(max_value, output.shape[3], dim=-1)
     # mask = (max_value == output).to(torch.float32)
+    output = output / 9
     return output

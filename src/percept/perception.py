@@ -83,17 +83,20 @@ def percept_object_groups(args, input_groups, bk_shapes, img):
     """ group objects as a high level group """
 
     # convert rgb image to black-white image
-    bw_img = data_utils.rgb2bw(img.numpy(), crop=True, resize=64)
+    args.obj_fm_size = 32
+    bw_img = data_utils.rgb2bw(img.numpy(), crop=True,
+                               resize=args.obj_fm_size).unsqueeze(0)
 
     segment = img.permute(2, 0, 1)
 
     obj_groups = []
     for b_i, bk_shape in tqdm(enumerate(bk_shapes), desc="grouping objects"):
         # recall the memory
-        shifted_fms, rc_fms = recall.recall_fms(args, bk_shape, bw_img, reshape=64)
+        shifted_fms, rc_fms = recall.recall_fms(args, bk_shape, bw_img,
+                                                reshape=args.obj_fm_size)
         # reasoning recalled fms to group
         group_data = reason.reason_fms(args, segment, rc_fms, bk_shape, img, bw_img,
-                                       reshape=64)
+                                       reshape=args.obj_fm_size)
         # convert data to group object
         group = Group(id=b_i,
                       name=bk_shape["name"],
@@ -207,12 +210,16 @@ def identify_fms(args, train_loader, kernels):
         data_shift_all.append(bw_img)
 
     fm_all = torch.cat(fm_all, dim=0)
+
     data_shift_all = torch.cat(data_shift_all, dim=0)
     data_all = torch.cat((data_shift_all, fm_all), dim=1).unique(dim=0)
 
     # visual memory fms
     fm_np_array = data_all[:, 1:].sum(dim=1, keepdims=True)
-    fm_np_array = fm_np_array.permute(0, 2, 3, 1).numpy().astype(np.uint8)
+    fm_np_array = (fm_np_array - fm_np_array.min()) / (
+            fm_np_array.max() - fm_np_array.min())
+    fm_np_array = fm_np_array.permute(0, 2, 3, 1).numpy()
+
     chart_utils.visual_batch_imgs(fm_np_array, args.save_path, "memory_fms.png")
 
     return data_all

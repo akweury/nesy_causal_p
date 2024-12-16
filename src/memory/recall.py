@@ -7,27 +7,29 @@ from src.neural import models
 
 def recall_fms(args, bk_shape, bw_img, reshape=None):
     # shift fm and images
-    shifted_imgs = get_shifted_matrics(bw_img.unsqueeze(0))
+    # shifted_imgs = get_shifted_matrics(bw_img)
 
     # convolutional layer
-    shifted_fms = models.one_layer_conv(shifted_imgs, bk_shape["kernels"].float())
+    shifted_fms = models.one_layer_conv(bw_img, bk_shape["kernels"].float())
 
     # visual input fms
     shifted_fm_img = shifted_fms.sum(dim=1, keepdim=True).permute(0, 2, 3, 1)
-    shifted_fm_img = shifted_fm_img.numpy().astype(np.uint8)
+    shifted_fm_img = (shifted_fm_img - shifted_fm_img.min()) / (
+            shifted_fm_img.max() - shifted_fm_img.min())
+    shifted_fm_img = shifted_fm_img.numpy()
 
     chart_utils.visual_batch_imgs(shifted_fm_img[:30], args.save_path,
-                                  "input_fms.png")
+                                  "in_fm_shifts.png")
     if reshape is not None:
-        bk_fm_img = F.interpolate(bk_shape["fm_img"], size=(64, 64), mode='bilinear',
-                                  align_corners=False)
-        bk_fms = F.interpolate(bk_shape["fm_repo"], size=(64, 64), mode='bilinear',
-                               align_corners=False)
+        bk_fm_img = F.interpolate(bk_shape["fm_img"], size=(reshape, reshape),
+                                  mode='bilinear', align_corners=False)
+        bk_fms = F.interpolate(bk_shape["fm_repo"], size=(reshape, reshape),
+                               mode='bilinear', align_corners=False)
     else:
         bk_fm_img = bk_shape["fm_img"]
         bk_fms = bk_shape["fm_repo"]
     # edge similarity
-    img_edge = detect_edge(shifted_imgs.float())
+    img_edge = detect_edge(bw_img.float())
     repo_edge = detect_edge(bk_fm_img)
     sim_edge = data_utils.matrix_equality(repo_edge, img_edge)
 
