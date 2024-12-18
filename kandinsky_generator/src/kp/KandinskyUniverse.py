@@ -220,8 +220,8 @@ def kandinskyFigureAsImage(shapes, width=600, subsampling=4):
                        thickness=line_width)
 
         elif s.shape == "triangle":
-            if s.line_width >= 1:
-                return None
+            # if s.line_width >= 1:
+            #     return None
             r = math.radians(30)
             size = 0.7 * math.sqrt(3) * w * s.size / 3
 
@@ -246,10 +246,6 @@ def kandinskyFigureAsImage(shapes, width=600, subsampling=4):
             points = np.array([p1, p2, p3])
 
             cv2.fillConvexPoly(img, points, matplotlib_colors["lightgray"], 1)
-
-
-
-
 
         elif s.shape == "square":
             size = 0.5 * 0.6 * w * s.size

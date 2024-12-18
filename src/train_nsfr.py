@@ -82,7 +82,7 @@ def load_lang(args):
     return None
 
 
-def save_lang(lang):
+def save_lang(args, lang):
     lang_dict = {
         "atoms": lang.atoms,
         "clauses": lang.clauses,
@@ -171,7 +171,7 @@ def train_clauses(args, data_loader):
 
     if lang is None:
         # load background knowledge
-        lang = None
+        # lang = None
         all_clauses = []
         group_bk = load_bk(args, bk.bk_shapes)
 
@@ -192,7 +192,7 @@ def train_clauses(args, data_loader):
         lang = llama_call.convert_to_final_clauses(args, lang)
 
         # save language
-        save_lang(lang)
+        save_lang(args, lang)
     args.logger.info(f"Step {args.step_counter}/{args.total_step}: "
                      f"Reasoned {len(lang.llm_clauses)} LLM Rules, "
                      f"{len(lang.clauses)} Machine Clauses")

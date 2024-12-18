@@ -55,7 +55,7 @@ class GestaltDataset(Dataset):
 
     def __getitem__(self, idx):
         self.args.logger.debug(
-            f"\n =========== Analysis Image {idx + 1}/{min(2, len(self.imgs))} ==============")
+            f"\n =========== Analysis Image {idx + 1}/{len(self.imgs)} ==============")
         img, data = self.load_data(idx)
         return img, data
         # img = data_utils.load_bw_img(self.image_paths[idx], size=64)

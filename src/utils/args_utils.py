@@ -1,15 +1,12 @@
 # Created by jing at 19.06.24
 
 import argparse
-import json
 import os
-import random
-import numpy as np
-import torch
 import colorlog
 
 import config
 from . import log_utils
+from src import bk
 
 
 def init_logger():
@@ -82,5 +79,5 @@ def get_args():
     os.makedirs(config.output / f"{args.exp_name}", exist_ok=True)
     args.batch_size = 1
 
-
+    args.exp_setting = eval(f"bk.{args.exp_name}")
     return args

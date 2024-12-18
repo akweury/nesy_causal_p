@@ -4,7 +4,7 @@ import torch
 
 import config
 from utils import file_utils, args_utils, data_utils
-import train_common_features
+from percept import perception
 from src.alpha import alpha
 from src import bk
 
@@ -24,9 +24,10 @@ def load_bk(args, bk_shapes):
     for bk_shape in bk_shapes:
         if bk_shape == "none":
             continue
-        kernels = torch.load(config.output / bk_shape / f"kernels.pt").to(
+        kernels = torch.load(config.output / bk_shape / f"kernel_patches_3.pt").to(
             args.device)
-        fm_data = torch.load(config.output / bk_shape / f"fms.pt").to(args.device)
+        fm_data = torch.load(config.output / bk_shape / f"fms_patches_3.pt").to(
+            args.device)
         fm_img = fm_data[:, 0:1]
         fm_repo = fm_data[:, 1:]
         bk.append({
@@ -82,29 +83,26 @@ def group2ocm(data, groups):
     return group_ocms
 
 
-def check_clause(args, lang, image_paths, image_label, output_path):
+def check_clause(args, lang, data_loader, image_label, output_path):
     args.step_counter += 1
 
     # load background knowledge
     check_size = 4
-    clauses_conf = torch.zeros(
-        (min(check_size, len(image_paths)), len(lang.clauses)))
+    clauses_conf = torch.zeros((len(data_loader), len(lang.clauses)))
     group_bk = load_bk(args, bk.bk_shapes)
 
-    for idx in range(min(check_size, len(image_paths))):
-        file_name, file_extension = image_paths[idx].split(".")
-        data = file_utils.load_json(f"{file_name}.json")
+    for idx, (image, data) in enumerate(data_loader):
+        image = image.squeeze()
+        args.output_file_prefix = str(output_path / f'img_{idx}')
+        # percepting groups
+        groups = perception.percept_gestalt_groups(args, idx, group_bk, image)
 
-        img, obj_pos = load_data(args, image_paths[idx])
-        groups = train_common_features.img2groups_flexible(args, group_bk, obj_pos,
-                                                           idx, img, output_path)
         if len(groups) != 0:
-            group_tensors = group2ocm(data, groups)
-            clauses_conf[idx] = alpha.alpha_test(args, group_tensors, lang)
+            clauses_conf[idx] = alpha.alpha_test(args, groups, lang)
 
         # logger
         satisfied_clause_indices = torch.nonzero(
-            clauses_conf[idx] >= args.valid_rule_th).squeeze()
+            clauses_conf[idx] >= args.valid_rule_th).reshape(-1)
         dissatisfied_clause_indices = torch.nonzero(
             clauses_conf[idx] < args.valid_rule_th).squeeze()
         satisfied_clauses = [f"({clauses_conf[idx, c_i]:.2f}) {lang.clauses[c_i]}\n"
@@ -136,10 +134,3 @@ def check_clause(args, lang, image_paths, image_label, output_path):
 
 if __name__ == "__main__":
     args = args_utils.get_args()
-
-    image_paths = file_utils.get_all_files(
-        config.kp_dataset / args.exp_name / "train" / "true", "png", False)[:500]
-    lang = None
-    raise NotImplementedError
-    check_clause(args, lang, image_paths, True,
-                 output_path=config.kp_dataset / args.exp_name / "train" / "true")

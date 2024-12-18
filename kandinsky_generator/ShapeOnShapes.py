@@ -278,7 +278,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
         xs = x
         ys = y - r
 
-        so = 0.1 + random.random() * 0.5
+        so = 0.4 + random.random() * 0.6
         cir_so = so * 0.3
 
         # correct the size to  the same area as an square
@@ -761,6 +761,8 @@ class ShapeOnShape(KandinskyTruthInterfce):
         # challenge patterns
         elif shape == "gestalt_triangle":
             g = lambda so, truth: self._gestaltTriangle(so, truth)
+        elif shape == "proximity_square":
+            g = lambda so, truth: self._proximity_square(so, truth)
 
         elif shape == "diamondcircle":
             g = lambda so, truth: self._bigDiamond(so, truth) + self._bigCircle(so,
@@ -812,7 +814,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
         #     t = t + 1
         return kf
 
-    def tri_only(self, n=1, rule_style=False, size_lw = None):
+    def tri_only(self, n=1, rule_style=False, size_lw=None):
         kfs = []
         if n > 0:
             for size, lw in size_lw:
@@ -834,14 +836,20 @@ class ShapeOnShape(KandinskyTruthInterfce):
             kfs.append(kf)
         return kfs
 
+    def proximity_square(self, n=1, rule_style=False):
+        kfs = []
+        for i in range(n):
+            kf = self._only(rule_style, "proximity_square")
+            kfs.append(kf)
+        return kfs
+
     def cir_only(self, n=1, rule_style=False, size_lw=None):
         kfs = []
-        if n>0:
+        if n > 0:
             for size, lw in size_lw:
                 kf = self._only(rule_style, "circle", size, lw)
                 kfs.append(kf)
         return kfs
-
 
     def cir_group(self, n=1, rule_style=False):
         kfs = []
@@ -858,7 +866,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
             kfs.append(kf)
         return kfs
 
-    def square_only(self, n=1, rule_style=False, size_lw = None):
+    def square_only(self, n=1, rule_style=False, size_lw=None):
         kfs = []
         if n > 0:
             for size, lw in size_lw:

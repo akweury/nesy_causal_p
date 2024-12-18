@@ -236,7 +236,8 @@ def genShapeOnShape(shape, n):
             image.save(true_path / f"{task}_{i:06d}.png")
 
 
-def genShapeOnShapeTask(args, task, total_n):
+def genShapeOnShapeTask(args, total_n):
+    task = args.exp_setting
     args.step_counter += 1
     args.logger.info(f"Step {args.step_counter}/{args.total_step}: "
                 f"Generating {task['task_name']} task patterns")

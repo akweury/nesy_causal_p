@@ -21,36 +21,34 @@ def init_io_folders(args, data_folder):
     args.test_cf_folder = data_folder / "test" / "task_cf_pattern"
     os.makedirs(args.test_cf_folder, exist_ok=True)
 
-    args.out_train_folder = config.output / args.exp_name / "train" / "task_true_pattern"
+    exp_name = args.exp_setting["task_name"]
+    args.out_train_folder = config.output / exp_name / "train" / "task_true_pattern"
     os.makedirs(args.out_train_folder, exist_ok=True)
-    args.out_positive_folder = config.output / args.exp_name / "test" / "task_true_pattern"
+    args.out_positive_folder = config.output / exp_name / "test" / "task_true_pattern"
     os.makedirs(args.out_positive_folder, exist_ok=True)
-    args.out_random_folder = config.output / args.exp_name / "test" / "task_random_pattern"
+    args.out_random_folder = config.output / exp_name / "test" / "task_random_pattern"
     os.makedirs(args.out_random_folder, exist_ok=True)
-    args.out_cf_folder = config.output / args.exp_name / "test" / "task_cf_pattern"
+    args.out_cf_folder = config.output / exp_name / "test" / "task_cf_pattern"
     os.makedirs(args.out_cf_folder, exist_ok=True)
 
 
 def main():
     # load exp arguments
     args = args_utils.get_args()
-    exp_setting = bk.exp_triangle_group
-    data_folder = config.kp_challenge_dataset / args.exp_name
+
+    data_folder = config.kp_challenge_dataset / args.exp_setting["task_name"]
     init_io_folders(args, data_folder)
     args.step_counter = 0
     args.total_step = 8
 
     # Generate Training Data -- Single Group Pattern
-    generate_training_patterns.genShapeOnShape(args, exp_setting["bk_groups"])
+    generate_training_patterns.genShapeOnShape(args)
 
     # Generate Task Data -- Multiple Group Pattern
-    generate_task_patterns.genShapeOnShapeTask(args, exp_setting, 10)
+    generate_task_patterns.genShapeOnShapeTask(args, 10)
 
     # Identify feature maps
-    perception.collect_fms(args, exp_setting["bk_groups"])
-
-    # Train autoencoder
-    # models.train_autoencoder(args, exp_setting["bk_groups"])
+    perception.collect_fms(args)
 
     # Import Generated Data
     train_dl, test_pos_dl, test_rand_dl, test_cf_dl = dataset.load_dataset(args)

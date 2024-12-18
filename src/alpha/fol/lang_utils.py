@@ -117,6 +117,6 @@ def filter_given_type_of_terms(terms, term_type):
     for term in terms:
         if hasattr(term, "dtype") and term_type in term.dtype.name:
             type_terms.append(term)
-        elif hasattr(term, "dtype") and term_type in term.dtype.name:
+        elif hasattr(term, "var_type") and term_type in term.var_type:
             type_terms.append(term)
     return type_terms

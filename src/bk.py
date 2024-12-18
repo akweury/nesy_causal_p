@@ -86,15 +86,6 @@ predicate_configs["predicate_g_shape"] = create_predicate_config("group_shape", 
     f"{var_dtype_pattern},+",
 ])
 
-#
-# "predicate_target": f"{pred_names['target']}:1:{var_dtype_pattern},+",
-# "predicate_in_pattern": f"{pred_names['in_pattern']}:2:{var_dtypes['group_data']},-;{var_dtypes['pattern']},+",
-# "predicate_in_group": f"{pred_names['in_group']}:3:{object},-;group_data,+;pattern,+",
-# "predicate_color": f"{pred_names['has_color']}:3:object_color,#;group_data,+;pattern,+",
-# "predicate_shape": f"{pred_names['has_shape']}:3:object_shape,#;group_data,+;pattern,+",
-# "predicate_g_shape": f"{pred_names['group_shape']}:3:group_label,#;group_data,+;pattern,+",
-
-
 const_dict = {
     f'{var_dtypes["pattern"]},+': "pattern",
     f'{var_dtypes["group"]},+': 'amount_group',
@@ -137,9 +128,6 @@ color_matplotlib[no_color] = (0, 0, 0)
 color_large = [k for k, v in list(color_matplotlib.items())]
 
 bk_shapes = ["none", "circle", "square", "triangle"]
-# group_name_extend = ["none", "circle_solid", "square_small", "triangle_small", "triangle_solid"]
-# group_name_solid = ["none", "triangle_solid", "circle_solid"]
-# group_name_extend = ["none", "circle_flex"]
 
 # exp setting
 task_pattern_types = ["task_true_pattern", "task_random_pattern", "task_cf_pattern"]
@@ -159,7 +147,7 @@ exp_count_group = {
     "task_cf_pattern": "circlesquare_count_cf"
 }
 exp_gestalt_triangle = {
-    "bk_groups": ["circle_solid", "triangle_solid"],
+    "bk_groups": ["circle", "triangle"],
     "task_name": "01_gestalt_triangle",
     "task_true_pattern": "gestalt_triangle",
     "task_random_pattern": "random",

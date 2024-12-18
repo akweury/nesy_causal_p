@@ -1,5 +1,6 @@
 # Created by shaji at 24/06/2024
 import itertools
+import torch
 
 from src.utils import log_utils
 from . import valuation, facts_converter, nsfr, pruning, clause_op
@@ -11,11 +12,10 @@ from .. import bk
 def init_ilp(args, obj_num):
     args.variable_group_symbol = bk.variable_symbol_group
     args.variable_obj_symbol = bk.variable_symbol_obj
-    lang = language.Language(obj_num, args.variable_group_symbol, args.variable_obj_symbol, args.lark_path,
+    lang = language.Language(obj_num, args.variable_group_symbol,
+                             args.variable_obj_symbol, args.lark_path,
                              args.phi_num, args.rho_num)
     return lang
-
-
 
 
 def extension(args, lang, clauses):
@@ -39,7 +39,8 @@ def extension(args, lang, clauses):
     #     args.is_done = True
 
     if args.show_process:
-        log_utils.add_lines(f"=============== extended clauses =================", args.log_file)
+        log_utils.add_lines(f"=============== extended clauses =================",
+                            args.log_file)
         for ref in refs:
             log_utils.add_lines(f"{ref}", args.log_file)
     if len(refs) == 0:
@@ -149,9 +150,9 @@ def df_search(args, lang, C, FC, group):
     # clause evaluation
     ils, dls = evaluation(args, NSFR, target_preds, group.ocm)
     pass_indices = [s_i for s_i in range(len(ils)) if ils[s_i] > 0.8]
-    extended_nodes = [extended_nodes[s_i] for s_i in range(len(ils)) if ils[s_i] > 0.6]
+    extended_nodes = [extended_nodes[s_i] for s_i in range(len(ils)) if
+                      ils[s_i] > 0.6]
     ils = ils[pass_indices]
-
 
     log_clause_str = ""
     for i in range(len(ils)):
@@ -164,12 +165,16 @@ def df_search(args, lang, C, FC, group):
     lang.clauses += extended_nodes
 
 
-def eval_task(args, lang, FC, objs):
+def eval_task(args, lang, FC, groups):
     NSFR = nsfr.get_nsfr_model(args, lang, FC, lang.clauses)
     target_preds = list(set([c.head.pred.name for c in lang.clauses]))
     # clause evaluation
-    ils, dls = evaluation(args, NSFR, target_preds, objs)
-    return ils
+    group_conf = torch.zeros(len(groups))
+
+    for g_i, group in enumerate(groups):
+        ils, dls = evaluation(args, NSFR, target_preds, group.ocm)
+        group_conf[g_i] = ils.squeeze()
+    return group_conf
 
 
 def remove_trivial_atoms(args, lang, FC, clauses, objs, data):
@@ -180,7 +185,8 @@ def remove_trivial_atoms(args, lang, FC, clauses, objs, data):
     target_preds = list(set([c.head.pred.name for c in clauses]))
     # clause evaluation
     img_scores, clause_scores = evaluation(args, NSFR, target_preds, objs, data)
-    trivial_c = [clauses[i] for i in range(len(clause_scores)) if clause_scores[i] < args.th_inv_nc]
+    trivial_c = [clauses[i] for i in range(len(clause_scores)) if
+                 clause_scores[i] < args.th_inv_nc]
     trivial_atom_terms = []
     for c in trivial_c:
         trivial_atom_terms.append(c.body[0].terms[:-1])
@@ -214,10 +220,10 @@ def alpha(args, groups):
     return lang
 
 
-def alpha_test(args, ocm, lang):
+def alpha_test(args, groups, lang):
     VM = valuation.get_valuation_module(args, lang)
     FC = facts_converter.FactsConverter(args, lang, VM, given_attrs=lang.attrs)
-    pred = eval_task(args, lang, FC, ocm).squeeze()
+    pred = eval_task(args, lang, FC, groups)
     return pred
 
 
@@ -226,6 +232,7 @@ def filter_infrequent_clauses(all_clauses, lang):
     for item in all_clauses:
         frequency[item] = frequency.get(item, 0) + 1
     most_frequency_value = max(frequency.values())
-    most_frequent_clauses = [key for key, value in frequency.items() if value == most_frequency_value]
+    most_frequent_clauses = [key for key, value in frequency.items() if
+                             value == most_frequency_value]
     lang.clauses = most_frequent_clauses
     return lang

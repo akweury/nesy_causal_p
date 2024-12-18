@@ -28,7 +28,8 @@ def get_unused_args(c):
 
 def sub_lists(lst):
     # Generate all non-empty sublists
-    sublists = [lst[i:j] for i in range(len(lst)) for j in range(i + 1, len(lst) + 1)]
+    sublists = [lst[i:j] for i in range(len(lst)) for j in
+                range(i + 1, len(lst) + 1)]
     return sublists
 
 
@@ -48,8 +49,10 @@ class Language(object):
         consts (List[Const]): A set of constants.
     """
 
-    def __init__(self, obj_num, variable_group_symbol, variable_obj_symbol, lark_path, phi_num, rho_num):
-        self.obj_vars = [Var(f"{variable_obj_symbol}_{v_i}", bk.var_dtypes["object"]) for v_i in range(obj_num)]
+    def __init__(self, obj_num, variable_group_symbol, variable_obj_symbol,
+                 lark_path, phi_num, rho_num):
+        self.obj_vars = [Var(f"{variable_obj_symbol}_{v_i}", bk.var_dtypes["object"])
+                         for v_i in range(obj_num)]
         self.obj_variable_num = obj_num
         self.variable_group_symbol = variable_group_symbol
         self.phi_num = phi_num
@@ -94,19 +97,23 @@ class Language(object):
         return predicates
 
     def reset_lang(self, g_num):
-        self.consts, self.min_consts = self.load_consts(1, self.phi_num, self.rho_num, 1)
-        self.group_vars = [Var(f"{self.variable_group_symbol}_{v_i}", bk.var_dtypes["group"]) for v_i in range(g_num)]
+        self.consts, self.min_consts = self.load_consts(1, self.phi_num,
+                                                        self.rho_num, 1)
+        self.group_vars = [
+            Var(f"{self.variable_group_symbol}_{v_i}", bk.var_dtypes["group"]) for
+            v_i in range(g_num)]
         self.group_variable_num = g_num
         # update predicates
         self.predicates = self.load_preds()
         self.clauses = []
         self.generate_atoms()
         # update language
-        self.mode_declarations = mode_declaration.get_mode_declarations(self.predicates)
+        self.mode_declarations = mode_declaration.get_mode_declarations(
+            self.predicates)
 
     def __str__(self):
         s = "===Predicates===\n"
-        for pred in self.preds:
+        for pred in self.predicates:
             s += pred.__str__() + '\n'
         s += "===Function Symbols===\n"
         for func in self.funcs:
@@ -143,7 +150,8 @@ class Language(object):
         atoms = []
         for pred in self.preds:
             dtypes = pred.dtypes
-            consts_list = [self.get_by_dtype(dtype, with_inv=True) for dtype in dtypes]
+            consts_list = [self.get_by_dtype(dtype, with_inv=True) for dtype in
+                           dtypes]
             if pred.pi_type == "clu_pred":
                 consts_list = [[atom.terms[0]] for atom in pred.body[0]]
             args_list = list(set(itertools.product(*consts_list)))
@@ -169,7 +177,8 @@ class Language(object):
         bk_pi_atoms = []
         for pred in self.bk_inv_preds:
             dtypes = pred.dtypes
-            consts_list = [self.get_by_dtype(dtype, with_inv=True) for dtype in dtypes]
+            consts_list = [self.get_by_dtype(dtype, with_inv=True) for dtype in
+                           dtypes]
             args_list = list(set(itertools.product(*consts_list)))
             for args in args_list:
                 # check if args and pred correspond are in the same area
@@ -178,7 +187,8 @@ class Language(object):
                         continue
                 if len(args) == 1 or len(set(args)) == len(args):
                     pi_atoms.append(Atom(pred, args))
-        self.atoms = spec_atoms + sorted(atoms) + sorted(bk_pi_atoms) + sorted(pi_atoms)
+        self.atoms = spec_atoms + sorted(atoms) + sorted(bk_pi_atoms) + sorted(
+            pi_atoms)
 
     def generate_atoms(self):
         p_ = Predicate('.', 1, [DataType('spec,?')])
@@ -198,7 +208,8 @@ class Language(object):
                 for args in args_list:
                     atoms.append(InvAtom(pred, args))
 
-        self.atoms = spec_atoms + sorted(atoms)  # + sorted(bk_pi_atoms) + sorted(pi_atoms)
+        self.atoms = spec_atoms + sorted(
+            atoms)  # + sorted(bk_pi_atoms) + sorted(pi_atoms)
 
     def assign_terms(self, mode, dtype, vars):
         if mode == "#":
@@ -223,7 +234,9 @@ class Language(object):
             term_list.append(grounded_terms)
         term_list = list(set(itertools.product(*term_list)))
         term_list = lang_utils.remove_chaos_terms(term_list)
-        term_list = tuple([tuple(lang_utils.orgnize_inv_pred_dtypes(terms)) for terms in term_list])
+        term_list = tuple(
+            [tuple(lang_utils.orgnize_inv_pred_dtypes(terms)) for terms in
+             term_list])
 
         grounded_atoms = []
         for terms in term_list:
@@ -232,11 +245,13 @@ class Language(object):
         ungrounded_term_list = []
         for sub_pred in pred.sub_preds:
             dtypes = sub_pred.dtypes
-            assignment_list = [self.assign_terms(dtype.data[1], dtype, vars) for dtype in dtypes]
+            assignment_list = [self.assign_terms(dtype.data[1], dtype, vars) for
+                               dtype in dtypes]
             ungrounded_terms = list(itertools.product(*assignment_list))
             ungrounded_term_list.append(ungrounded_terms)
         ungrounded_term_list = list(set(itertools.product(*ungrounded_term_list)))
-        ungrounded_term_list = [tuple(lang_utils.orgnize_inv_pred_dtypes(terms)) for terms in ungrounded_term_list]
+        ungrounded_term_list = [tuple(lang_utils.orgnize_inv_pred_dtypes(terms)) for
+                                terms in ungrounded_term_list]
         ungrounded_atoms = []
         for terms in ungrounded_term_list:
             ungrounded_atoms.append(InvAtom(pred, terms))
@@ -322,9 +337,9 @@ class Language(object):
             if const_data_type.name == bk.const_dtypes["object_color"]:
                 const_names = bk.color_large
             elif const_data_type.name == bk.const_dtypes["object_shape"]:
-                const_names = bk.shape_extend
+                const_names = bk.bk_shapes
             elif const_data_type.name == bk.const_dtypes["group_label"]:
-                const_names = bk.group_name_extend
+                const_names = bk.bk_shapes
             else:
                 raise ValueError
         else:
@@ -339,8 +354,11 @@ class Language(object):
         consts = []
         min_consts = []
         for const_name, const_type in bk.const_dict.items():
-            min_consts.extend(self.parse_min_const(g_num, obj_num, const_name, const_type))
-            consts.extend(self.parse_const(g_num, phi_num, rho_num, obj_num, const_name, const_type))
+            min_consts.extend(
+                self.parse_min_const(g_num, obj_num, const_name, const_type))
+            consts.extend(
+                self.parse_const(g_num, phi_num, rho_num, obj_num, const_name,
+                                 const_type))
         return consts, min_consts
 
     def rename_bk_preds_in_clause(self, bk_prefix, line):
@@ -369,7 +387,8 @@ class Language(object):
 
         # pred_with_id = pred + f"_{i}"
         pred_with_id = head.split("(")[0]
-        invented_pred = InventedPredicate(pred_with_id, int(arity), dtypes, args=None, pi_type=None)
+        invented_pred = InventedPredicate(pred_with_id, int(arity), dtypes,
+                                          args=None, pi_type=None)
 
         return invented_pred
 
@@ -461,7 +480,8 @@ class Language(object):
         t2_tenosor[t2_norm] = 0.1
         # Compute dot product
         dot_product = torch.dot(t1_tenosor, t2_tenosor)
-        total = min(torch.dot(t2_tenosor, t2_tenosor), torch.dot(t1_tenosor, t1_tenosor))
+        total = min(torch.dot(t2_tenosor, t2_tenosor),
+                    torch.dot(t1_tenosor, t1_tenosor))
         res = dot_product / total
         return res
 
@@ -476,7 +496,8 @@ class Language(object):
                 similarity = self.cosine_similarity(const.values, new_const.values)
                 if similarity > 0.9:
                     # integrate range
-                    const.values = torch.cat((const.values, new_const.values), dim=0).unique()
+                    const.values = torch.cat((const.values, new_const.values),
+                                             dim=0).unique()
                     const_exists = True
                     break
         if not const_exists:
@@ -631,7 +652,8 @@ class Language(object):
 
         pred_with_id = prefix + str(id)
 
-        new_predicate = InventedPredicate(pred_with_id, int(arity), pi_dtypes, p_args, pi_type=pi_type)
+        new_predicate = InventedPredicate(pred_with_id, int(arity), pi_dtypes,
+                                          p_args, pi_type=pi_type)
         # self.invented_preds.append(new_predicate)
 
         return new_predicate
@@ -673,9 +695,11 @@ class Language(object):
                     for t_i in range(len(c.body[a_i].terms)):
                         if isinstance(c.body[a_i].terms[t_i], Var):
                             c.body[a_i].terms = list(c.body[a_i].terms)
-                            if bk.variable_symbol_group in c.body[a_i].terms[t_i].name:
-                                c.body[a_i].terms[t_i] = Var(f"{bk.variable_symbol_group}_{var_id}",
-                                                             bk.var_dtypes["group"])
+                            if bk.variable_symbol_group in c.body[a_i].terms[
+                                t_i].name:
+                                c.body[a_i].terms[t_i] = Var(
+                                    f"{bk.variable_symbol_group}_{var_id}",
+                                    bk.var_dtypes["group"])
                             c.body[a_i].terms = tuple(c.body[a_i].terms)
                         c.body[a_i].terms = tuple(c.body[a_i].terms)
 
@@ -683,12 +707,15 @@ class Language(object):
                     for t_i in range(len(c.body[a_i].terms)):
                         c.body[a_i].terms = list(c.body[a_i].terms)
                         if isinstance(c.body[a_i].terms[t_i], Var):
-                            if bk.variable_symbol_group in c.body[a_i].terms[t_i].name:
-                                c.body[a_i].terms[t_i] = Var(f"{bk.variable_symbol_group}_{var_id}",
-                                                             bk.var_dtypes["group"])
+                            if bk.variable_symbol_group in c.body[a_i].terms[
+                                t_i].name:
+                                c.body[a_i].terms[t_i] = Var(
+                                    f"{bk.variable_symbol_group}_{var_id}",
+                                    bk.var_dtypes["group"])
                         c.body[a_i].terms = tuple(c.body[a_i].terms)
-        args.logger.debug(f"\nAll {len(self.clauses)} Machine Clauses in Group {var_id}:" +
-                          f"".join([f"\n{str(c)}" for c in self.clauses]))
+        args.logger.debug(
+            f"\nAll {len(self.clauses)} Machine Clauses in Group {var_id}:" +
+            f"".join([f"\n{str(c)}" for c in self.clauses]))
 
     def record_milestone(self):
         self.record_clauses += self.clauses
@@ -709,12 +736,15 @@ class Language(object):
         self.predicates = list(set(self.record_predicates))
         self.group_variable_num = self.record_group_variable_num
 
-        _, self.min_consts = self.load_consts(self.group_variable_num, self.phi_num, self.rho_num, 1)
+        _, self.min_consts = self.load_consts(self.group_variable_num, self.phi_num,
+                                              self.rho_num, 1)
         for min_const in self.min_consts:
             if min_const not in self.consts:
                 self.consts.append(min_const)
-        self.group_vars = [Var(f"{self.variable_group_symbol}_{v_i}", bk.var_dtypes["group"]) for v_i in
-                           range(self.group_variable_num)]
+        self.group_vars = [
+            Var(f"{self.variable_group_symbol}_{v_i}", bk.var_dtypes["group"]) for
+            v_i in
+            range(self.group_variable_num)]
         self.generate_atoms()
 
     def rewrite_clauses(self, args):
@@ -723,6 +753,7 @@ class Language(object):
             predicate_list = []
             obj_term_lists = []
             group_term_lists = []
+            pattern_term_lists = []
             terms = []
             for clause in self.clauses:
                 if clause.body[0].terms[-2].name.split("_")[-1] != str(g_i):
@@ -731,21 +762,28 @@ class Language(object):
                     if isinstance(atom, InvAtom):
                         # new term
                         predicate_list.append(atom.pred)
-                        obj_term_lists.append(lang_utils.filter_given_type_of_terms(atom.terms, "object"))
-                        group_term_lists += lang_utils.filter_given_type_of_terms(atom.terms, "group")
+                        obj_term_lists.append(
+                            lang_utils.filter_given_type_of_terms(atom.terms,
+                                                                  "object"))
+                        group_term_lists += lang_utils.filter_given_type_of_terms(
+                            atom.terms, "group")
                 # invent predicate for rephased clauses
             group_term_lists = list(set(group_term_lists))
             inv_p = FinalPredicate(predicate_list, "exist", 3)
-            terms = [obj_term_lists, group_term_lists, self.group_vars[g_i]]
+            terms = [obj_term_lists, group_term_lists, clause.head.terms]
             inv_atom = InvAtom(inv_p, terms)
             body = [inv_atom]
             rewritted_clauses.append(Clause(self.clauses[0].head, body))
 
-        args.logger.debug(f" \n =============== Learned Machine Clauses =================" + "".join(
-            [f"\n{c_i + 1}/{len(self.clauses)} {self.clauses[c_i]}" for c_i in range(len(self.clauses))]))
+        args.logger.debug(
+            f" \n =============== Learned Machine Clauses =================" + "".join(
+                [f"\n{c_i + 1}/{len(self.clauses)} {self.clauses[c_i]}" for c_i in
+                 range(len(self.clauses))]))
 
-        args.logger.debug(f" \n =============== Rewrote and Merged Clauses =================" + "".join(
-            [f"\n{c_i + 1}/{len(rewritted_clauses)} {rewritted_clauses[c_i]}" for c_i in
-             range(len(rewritted_clauses))]))
+        args.logger.debug(
+            f" \n =============== Rewrote and Merged Clauses =================" + "".join(
+                [f"\n{c_i + 1}/{len(rewritted_clauses)} {rewritted_clauses[c_i]}" for
+                 c_i in
+                 range(len(rewritted_clauses))]))
 
         return rewritted_clauses

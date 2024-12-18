@@ -103,7 +103,7 @@ def percept_object_groups(args, input_groups, bk_shapes, img):
                       input_signal=img,
                       onside_signal=group_data["onside"],
                       memory_signal=group_data['recalled_bw_img'],
-                      parents=input_groups[0].parents,
+                      parents=input_groups,
                       coverage=group_data["onside_percent"],
                       color=None)
         obj_groups.append(group)
@@ -143,6 +143,8 @@ def detect_connected_regions(input_array, pixel_num=100):
                 labeled_regions.append(region_tensor)
 
     # Stack all labeled regions into a single tensor
+    if len(labeled_regions)==0:
+        print('')
     output_tensor = torch.tensor(np.stack(labeled_regions), dtype=torch.float32)
     return output_tensor
 
@@ -168,7 +170,7 @@ def detect_global_features(args, loc_groups, bk, img):
         groups = percept_object_groups(args, loc_groups, bk, img)
         torch.save(groups, global_group_file)
 
-    return groups
+    return [groups]
 
 
 def percept_gestalt_groups(args, idx, group_bk, img):
@@ -225,7 +227,8 @@ def identify_fms(args, train_loader, kernels):
     return data_all
 
 
-def collect_fms(args, bk_shapes):
+def collect_fms(args):
+    bk_shapes =  args.exp_setting["bk_groups"]
     args.step_counter += 1
     args.logger.info(f"Step {args.step_counter}/{args.total_step}: "
                      f"Collecting FMs for patterns {bk_shapes}.")

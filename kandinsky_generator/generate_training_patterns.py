@@ -188,7 +188,8 @@ def kf2data(kf, width):
     return data
 
 
-def genShapeOnShape(args, shapes):
+def genShapeOnShape(args):
+    shapes = args.exp_setting["bk_groups"]
     args.step_counter += 1
     args.logger.info(f"Step {args.step_counter}/{args.total_step}: "
                      f"Generating {shapes} training patterns")
@@ -215,6 +216,8 @@ def genShapeOnShape(args, shapes):
                 gen_fun = shapeOnshapeObjects.square_only
             elif shape == "gestalt_triangle":
                 gen_fun = shapeOnshapeObjects.gestalt_triangle
+            elif shape == "proximity_square":
+                gen_fun = shapeOnshapeObjects.proximity_square
             elif shape == "diamond":
                 gen_fun = shapeOnshapeObjects.dia_only
             elif shape == "trianglecircle":
