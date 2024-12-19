@@ -92,6 +92,7 @@ def percept_object_groups(args, input_groups, bk_shapes, img):
     obj_groups = []
     for b_i, bk_shape in tqdm(enumerate(bk_shapes), desc="grouping objects"):
         # recall the memory
+        args.save_path = config.output / bk_shape["name"]
         shifted_fms, rc_fms = recall.recall_fms(args, bk_shape, bw_img,
                                                 reshape=args.obj_fm_size)
         # reasoning recalled fms to group
@@ -113,7 +114,7 @@ def percept_object_groups(args, input_groups, bk_shapes, img):
     return best_group
 
 
-def detect_connected_regions(input_array, pixel_num=100):
+def detect_connected_regions(input_array, pixel_num=50):
     # Find unique colors
     unique_colors, inverse = np.unique(input_array.reshape(-1, 3), axis=0,
                                        return_inverse=True)

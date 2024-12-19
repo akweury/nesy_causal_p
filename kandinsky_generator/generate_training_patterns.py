@@ -8,7 +8,7 @@ import config
 from tqdm import tqdm
 from kandinsky_generator.src.kp import KandinskyUniverse
 from kandinsky_generator.ShapeOnShapes import ShapeOnShape
-from kandinsky_generator.src.kp.KandinskyUniverse import matplotlib_colors
+from src import bk
 
 u = KandinskyUniverse.SimpleUniverse()
 
@@ -179,9 +179,9 @@ def kf2data(kf, width):
                      "y": obj.y,
                      "size": obj.size,
                      "color_name": obj.color,
-                     "color_r": matplotlib_colors[obj.color][0],
-                     "color_g": matplotlib_colors[obj.color][1],
-                     "color_b": matplotlib_colors[obj.color][2],
+                     "color_r": bk.matplotlib_colors[obj.color][0],
+                     "color_g": bk.matplotlib_colors[obj.color][1],
+                     "color_b": bk.matplotlib_colors[obj.color][2],
                      "shape": obj.shape,
                      "width": width
                      })
@@ -216,8 +216,7 @@ def genShapeOnShape(args):
                 gen_fun = shapeOnshapeObjects.square_only
             elif shape == "gestalt_triangle":
                 gen_fun = shapeOnshapeObjects.gestalt_triangle
-            elif shape == "proximity_square":
-                gen_fun = shapeOnshapeObjects.proximity_square
+
             elif shape == "diamond":
                 gen_fun = shapeOnshapeObjects.dia_only
             elif shape == "trianglecircle":

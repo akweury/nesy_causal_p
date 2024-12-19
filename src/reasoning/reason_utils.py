@@ -66,7 +66,7 @@ def eval_onside_conf(args, data, onsides, fm_imgs, bk_shape):
 
 def visual_all(args, in_fms, rc_fms, segment, mem_bw_img, bk_shape, img, bw_img,
                onside, offside):
-    group_img_name = args.save_path / str(f'_group_{bk_shape["name"]}.png')
+    group_img_name = args.save_path / str(f'group_{bk_shape["name"]}.png')
 
     # norm_factor = max([bw_img.max(), in_fms.sum(dim=1).max()])
     segment_np = segment.permute(1, 2, 0).numpy().astype(np.uint8)

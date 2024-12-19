@@ -49,12 +49,14 @@ def reason_fms(args, segment, rc_fms, bk_shape, img, bw_img, reshape=None):
 
     # image matching
     onside, offside = img_matching(mem_fm, in_fms)
-
+    return onside.max(dim=0)
     # visualization
     # fms = models.one_layer_conv(shifted_imgs, bk_shape["kernels"].float())
     # match_same, match_diff, same_percent = get_match_detail(mem_fm, fms.squeeze())
     visual_all(args, in_fms, rc_fms, segment, mem_bw_img, bk_shape, img, bw_img,
                onside, offside)
+
+
     # recall confidence
     fm_diff = torch.abs(mem_fm - in_fms)
     fm_diff[fm_diff > 1] = 0

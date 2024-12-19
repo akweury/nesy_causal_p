@@ -131,13 +131,8 @@ bk_shapes = ["none", "circle", "square", "triangle"]
 
 # exp setting
 task_pattern_types = ["task_true_pattern", "task_random_pattern", "task_cf_pattern"]
-exp_demo = {
-    "bk_groups": ["triangler", "circle_flex"],
-    "task_name": "trianglecircle_flex",
-    "task_true_pattern": "trianglecircle_flex",
-    "task_random_pattern": "random",
-    "task_cf_pattern": "trianglecircle_flex_cf"
-}
+
+
 
 exp_count_group = {
     "bk_groups": ["circle_small", "square_small"],
@@ -146,6 +141,7 @@ exp_count_group = {
     "task_random_pattern": "random",
     "task_cf_pattern": "circlesquare_count_cf"
 }
+
 exp_gestalt_triangle = {
     "bk_groups": ["circle", "triangle"],
     "task_name": "01_gestalt_triangle",
@@ -162,10 +158,10 @@ exp_triangle_group = {
     "task_cf_pattern": "random"
 }
 
-exp_square_group = {
+exp_square_circle_group = {
     "bk_groups": ["circle", "square", "triangle"],
-    "task_name": "03_square_group",
-    "task_true_pattern": "square_group",
+    "task_name": "03_square_circle_group",
+    "task_true_pattern": "square_circle_group",
     "task_random_pattern": "random",
     "task_cf_pattern": "random"
 }
@@ -174,6 +170,14 @@ exp_circle_group = {
     "bk_groups": ["circle", "square", "triangle"],
     "task_name": "04_circle_group",
     "task_true_pattern": "circle_group",
+    "task_random_pattern": "random",
+    "task_cf_pattern": "random"
+}
+
+exp_proximity_square = {
+    "bk_groups": ["circle", "square", "triangle"],
+    "task_name": "05_proximity_square",
+    "task_true_pattern": "proximity_square",
     "task_random_pattern": "random",
     "task_cf_pattern": "random"
 }

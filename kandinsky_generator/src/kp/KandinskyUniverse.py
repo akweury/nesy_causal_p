@@ -5,15 +5,19 @@ import numpy as np
 import cv2
 from PIL import Image, ImageDraw, ImageColor
 
+from src import bk
+
 
 class kandinskyShape:
-    def __init__(self):
-        self.shape = ""
-        self.color = ""
-        self.x = 0.5
-        self.y = 0.5
-        self.size = 0.5
-        self.line_width = 1.0
+    def __init__(self, shape="", color="", x=0.5, y=0.5, size=0.5, line_width=1.0,
+                 solid=False):
+        self.shape = shape
+        self.color = color
+        self.x = x
+        self.y = y
+        self.size = size
+        self.line_width = line_width
+        self.solid = solid
 
     def __str__(self):
         return self.color + " " + self.shape + " (" + \
@@ -202,26 +206,26 @@ def kandinskyFigureAsImagePIL(shapes, width=600, subsampling=4):
 def kandinskyFigureAsImage(shapes, width=600, subsampling=4):
     w = subsampling * width
     img = np.zeros((w, w, 3), np.uint8)
-    img[:, :] = matplotlib_colors["lightgray"]
+    img[:, :] = bk.color_matplotlib["lightgray"]
 
     for s in shapes:
         # not sure if this is the right color for openCV
         # rgbcolorvalue = ImageColor.getrgb(s.color)
         # use pastel colors
-        rgbcolorvalue = matplotlib_colors[s.color]
+        rgbcolorvalue = bk.color_matplotlib[s.color]
 
         if s.shape == "circle":
             size = 0.5 * 0.6 * math.sqrt(4 * w * s.size * w * s.size / math.pi)
-
-            line_width = int(size * s.line_width)
+            if s.solid:
+                line_width = -1
+            else:
+                line_width = int(size * s.line_width)
             cx = round(w * s.x)
             cy = round(w * s.y)
             cv2.circle(img, (cx, cy), round(size), rgbcolorvalue,
                        thickness=line_width)
 
         elif s.shape == "triangle":
-            # if s.line_width >= 1:
-            #     return None
             r = math.radians(30)
             size = 0.7 * math.sqrt(3) * w * s.size / 3
 
@@ -235,17 +239,18 @@ def kandinskyFigureAsImage(shapes, width=600, subsampling=4):
             cv2.fillConvexPoly(img, points, rgbcolorvalue, 1)
 
             # top shape
-            line_x_width = int(dx * s.line_width)
-            line_y_width = int(dy * s.line_width)
-            p1 = (round(w * s.x),
-                  round(w * s.y - size + int(size * s.line_width)))  # top point
-            p2 = (round(w * s.x + dx - line_x_width),
-                  round(w * s.y + dy - line_y_width))  # right point
-            p3 = (round(w * s.x - dx + line_x_width),
-                  round(w * s.y + dy - line_y_width))  # left point
-            points = np.array([p1, p2, p3])
+            if not s.solid:
+                line_x_width = int(dx * s.line_width)
+                line_y_width = int(dy * s.line_width)
+                p1 = (round(w * s.x),
+                      round(w * s.y - size + int(size * s.line_width)))  # top point
+                p2 = (round(w * s.x + dx - line_x_width),
+                      round(w * s.y + dy - line_y_width))  # right point
+                p3 = (round(w * s.x - dx + line_x_width),
+                      round(w * s.y + dy - line_y_width))  # left point
+                points = np.array([p1, p2, p3])
 
-            cv2.fillConvexPoly(img, points, matplotlib_colors["lightgray"], 1)
+                cv2.fillConvexPoly(img, points, bk.color_matplotlib["lightgray"], 1)
 
         elif s.shape == "square":
             size = 0.5 * 0.6 * w * s.size
@@ -260,12 +265,14 @@ def kandinskyFigureAsImage(shapes, width=600, subsampling=4):
                           thickness=-1)
 
             # draw top square
-            xs = round(w * s.x - size + line_width)
-            ys = round(w * s.y - size + line_width)
-            xe = round(w * s.x + size - line_width)
-            ye = round(w * s.y + size - line_width)
-            cv2.rectangle(img, (xs, ys), (xe, ye), matplotlib_colors["lightgray"],
-                          thickness=-1)
+            if not s.solid:
+                xs = round(w * s.x - size + line_width)
+                ys = round(w * s.y - size + line_width)
+                xe = round(w * s.x + size - line_width)
+                ye = round(w * s.y + size - line_width)
+                cv2.rectangle(img, (xs, ys), (xe, ye),
+                              bk.color_matplotlib["lightgray"],
+                              thickness=-1)
 
         elif s.shape == "star":
             size = 0.7 * math.sqrt(3) * w * s.size / 3
@@ -524,9 +531,9 @@ def overflow(shapes):
     return False
 
 
-matplotlib_colors = {k: tuple(int(v[i:i + 2], 16) for i in (1, 3, 5)) for k, v in
-                     list(matplotlib.colors.cnames.items())}
-matplotlib_colors.pop("black")
-matplotlib_colors_list = [k for k, v in matplotlib_colors.items()]
-
+# matplotlib_colors = {k: tuple(int(v[i:i + 2], 16) for i in (1, 3, 5)) for k, v in
+#                      list(matplotlib.colors.cnames.items())}
+# matplotlib_colors.pop("black")
+# matplotlib_colors_list = [k for k, v in matplotlib_colors.items()]
+#
 kandinsky_shapes = ['square', 'circle', 'triangle']

@@ -8,7 +8,7 @@ import config
 
 from kandinsky_generator.src.kp import KandinskyUniverse
 from kandinsky_generator.ShapeOnShapes import ShapeOnShape
-from kandinsky_generator.src.kp.KandinskyUniverse import matplotlib_colors
+
 from src import bk
 
 u = KandinskyUniverse.SimpleUniverse()
@@ -180,9 +180,9 @@ def kf2data(kf, width):
                      "y": obj.y,
                      "size": obj.size,
                      "color_name": obj.color,
-                     "color_r": matplotlib_colors[obj.color][0],
-                     "color_g": matplotlib_colors[obj.color][1],
-                     "color_b": matplotlib_colors[obj.color][2],
+                     "color_r": bk.color_matplotlib[obj.color][0],
+                     "color_g": bk.color_matplotlib[obj.color][1],
+                     "color_b": bk.color_matplotlib[obj.color][2],
                      "shape": obj.shape,
                      "width": width
                      })
@@ -259,8 +259,12 @@ def genShapeOnShapeTask(args, total_n):
                 gen_fun = shapeOnshapeObjects.tri_group
             elif task[label] == "square_group":
                 gen_fun = shapeOnshapeObjects.square_group
+            elif task[label] == "proximity_square":
+                gen_fun = shapeOnshapeObjects.proximity_square
             elif task[label] == "circle_group":
                 gen_fun = shapeOnshapeObjects.cir_group
+            elif task[label] == "square_circle_group":
+                gen_fun = shapeOnshapeObjects.square_circle
             elif task[label] == "random":
                 gen_fun = shapeOnshapeObjects.false_kf
             else:
