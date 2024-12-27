@@ -55,7 +55,7 @@ def load_data(args, image_path):
 
 
 def load_lang(args):
-    lang_file = config.output / args.exp_name / f'learned_lang.pkl'
+    lang_file = config.output / args.exp_setting["task_name"] / f'learned_lang.pkl'
     if os.path.exists(lang_file):
         lang_data = torch.load(lang_file)
         if lang_data is not None:

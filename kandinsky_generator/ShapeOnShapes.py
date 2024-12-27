@@ -276,7 +276,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
     def _gestaltTriangle(self, so, t, min_percent=1.0, max_percent=1.0):
         kf = []
         x = 0.5  # + random.random() * 0.8
-        y = 0.7  # + random.random() * 0.8
+        y = 0.8  # + random.random() * 0.8
         r = 0.3 - min(abs(0.5 - x), abs(0.5 - y)) * 0.5
         xs = x
         ys = y - r
@@ -294,6 +294,8 @@ class ShapeOnShape(KandinskyTruthInterfce):
         o.color = random.choice(["blue", "green", "yellow"])
         o.shape = "circle"
         o.size = cir_so
+        o.solid = True
+        o.line_width = -1
         # (cx - s / 2, cy - s / 2), (cx + s / 2, cy + s / 2)
         o.x = xs
         o.y = ys - s
@@ -305,6 +307,8 @@ class ShapeOnShape(KandinskyTruthInterfce):
         o.size = cir_so
         o.x = xs + dx
         o.y = ys + dy
+        o.solid = True
+        o.line_width = -1
         kf.append(o)
 
         o = KandinskyUniverse.kandinskyShape()
@@ -313,6 +317,8 @@ class ShapeOnShape(KandinskyTruthInterfce):
         o.size = cir_so
         o.x = xs - dx
         o.y = ys + dy
+        o.solid = True
+        o.line_width = -1
         kf.append(o)
 
         # draw triangle
@@ -322,6 +328,48 @@ class ShapeOnShape(KandinskyTruthInterfce):
         o.size = so
         o.x = xs
         o.y = ys
+        kf.append(o)
+
+        random_percent = random.uniform(min_percent, max_percent)
+        kf = kf[:int(len(kf) * random_percent)]
+        return kf
+
+    def _gestaltCircleTriangle(self, so, t, min_percent=1.0, max_percent=1.0):
+        so = so * 3
+        # draw big circle
+        kf = []
+        x = 0.4 + random.random() * 0.2
+        y = 0.4 + random.random() * 0.2
+        r = 0.3 - min(abs(0.5 - x), abs(0.5 - y))
+        n = 7
+
+        # if n < self.min:   n = self.min
+        # if n > self.max:   n = self.max
+
+        for i in range(n):
+            o = KandinskyUniverse.kandinskyShape()
+            d = i * 2 * math.pi / n
+            if t:
+                o.color = random.choice(["blue", "yellow"])
+                o.shape = random.choice(["square", "triangle"])
+            else:
+                o.color = random.choice(bk.color_large)
+                o.shape = random.choice(KandinskyUniverse.kandinsky_shapes)
+
+            o.size = so
+            o.x = x + r * math.cos(d)
+            o.y = y + r * math.sin(d)
+            o.solid = True
+            o.line_width = -1
+            kf.append(o)
+
+        # draw triangle
+        o = KandinskyUniverse.kandinskyShape()
+        o.color = "green"
+        o.shape = "triangle"
+        o.size = 2 * r * 1.4
+        o.x = x
+        o.y = y
         kf.append(o)
 
         random_percent = random.uniform(min_percent, max_percent)
@@ -386,6 +434,42 @@ class ShapeOnShape(KandinskyTruthInterfce):
         # o.x = xs - dx
         # o.y = ys + dy
         # objs.append(o)
+
+        return objs
+
+    def _similarity_triangle_circle(self):
+        color = random.choice(bk.color_large)
+
+        objs = []
+        so = 0.1
+        row_num = random.randint(3, 6)
+        col_num = random.randint(3, 6)
+        diff_row_id = random.randint(0, row_num-1)
+        diff_col_id = random.randint(0, col_num-1)
+        row_space = 1 / (row_num + 1)
+        col_space = 1 / (col_num + 1)
+        for x in range(row_num):
+            for y in range(col_num):
+                if x != diff_row_id and y != diff_col_id:
+                    # draw triangle
+                    objs.append(KandinskyUniverse.kandinskyShape(
+                        color=color,
+                        shape="triangle",
+                        size=so,
+                        x=(x + 1) * row_space,
+                        y=(y + 1) * col_space,
+                        line_width=-1,
+                        solid=True))
+                else:
+                    # draw circle
+                    objs.append(KandinskyUniverse.kandinskyShape(
+                        color=color,
+                        shape="circle",
+                        size=so,
+                        x=(x + 1) * row_space,
+                        y=(y + 1) * col_space,
+                        line_width=-1,
+                        solid=True))
 
         return objs
 
@@ -826,8 +910,12 @@ class ShapeOnShape(KandinskyTruthInterfce):
         # challenge patterns
         elif shape == "gestalt_triangle":
             g = lambda so, truth: self._gestaltTriangle(so, truth)
+        elif shape == "gestalt_circle_triangle":
+            g = lambda so, truth: self._gestaltCircleTriangle(so, truth)
         elif shape == "proximity_square":
             g = lambda so, truth: self._proximity_square(so, truth)
+        elif shape == "similarity_triangle_circle":
+            g = lambda so, truth: self._similarity_triangle_circle()
         elif shape == "squarecircle":
             g = lambda so, truth: self._bigSquare(so, truth) + self._bigCircle(so,
                                                                                truth)
@@ -872,13 +960,14 @@ class ShapeOnShape(KandinskyTruthInterfce):
         t = 0
         tt = 0
         maxtry = 1000
-        while (KandinskyUniverse.overlaps(kf) or KandinskyUniverse.overflow(kf)) and (t < maxtry):
-            kf = g(so, truth)
-            if tt > 10:
-                tt = 0
-                so = so * 0.90
-            tt = tt + 1
-            t = t + 1
+        # while (KandinskyUniverse.overlaps(kf) or KandinskyUniverse.overflow(
+        #         kf)) and (t < maxtry):
+        #     kf = g(so, truth)
+        #     if tt > 10:
+        #         tt = 0
+        #         so = so * 0.90
+        #     tt = tt + 1
+        #     t = t + 1
         return kf
 
     def tri_only(self, n=1, rule_style=False, size_lw=None):
@@ -903,10 +992,24 @@ class ShapeOnShape(KandinskyTruthInterfce):
             kfs.append(kf)
         return kfs
 
+    def gestalt_circle_triangle(self, n=1, rule_style=False):
+        kfs = []
+        for i in range(n):
+            kf = self._only(rule_style, "gestalt_circle_triangle")
+            kfs.append(kf)
+        return kfs
+
     def proximity_square(self, n=1, rule_style=False):
         kfs = []
         for i in range(n):
             kf = self._only(rule_style, "proximity_square")
+            kfs.append(kf)
+        return kfs
+
+    def similarity_triangle_circle(self, n=1, rule_style=False):
+        kfs = []
+        for i in range(n):
+            kf = self._only(rule_style, "similarity_triangle_circle")
             kfs.append(kf)
         return kfs
 

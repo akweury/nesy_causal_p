@@ -50,6 +50,7 @@ def get_args():
     parser.add_argument("--is_done", action="store_true")
     parser.add_argument("--extend", action="store_true")
     parser.add_argument("--solid_pattern", action="store_true")
+    parser.add_argument("--rewrite_data", action="store_true")
     parser.add_argument("--show_process", action="store_true")
     parser.add_argument("--number_num", type=int, default=10)
     parser.add_argument("--phi_num", type=int, default=2)

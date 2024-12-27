@@ -181,3 +181,19 @@ exp_proximity_square = {
     "task_random_pattern": "random",
     "task_cf_pattern": "random"
 }
+
+exp_similarity_triangle_circle = {
+    "bk_groups": ["circle", "triangle"],
+    "task_name": "06_similarity_triangle_circle",
+    "task_true_pattern": "similarity_triangle_circle",
+    "task_random_pattern": "random",
+    "task_cf_pattern": "random"
+}
+
+exp_closure_circle_triangle = {
+    "bk_groups": ["circle", "triangle"],
+    "task_name": "07_gestalt_circle_triangle",
+    "task_true_pattern": "gestalt_circle_triangle",
+    "task_random_pattern": "random",
+    "task_cf_pattern": "random"
+}

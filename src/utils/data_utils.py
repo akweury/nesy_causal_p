@@ -349,7 +349,12 @@ def rgb2bw(rgb, crop=False, resize=None):
         # bw image to cropped bw image
         bw_img = crop_img(torch.from_numpy(bw_img).squeeze(), resize=resize)
     else:
-        bw_img = torch.from_numpy(bw_img)
+        if resize:
+            bw_img = cv2.resize(bw_img, (resize, resize),
+                                interpolation=cv2.INTER_AREA)
+            bw_img = torch.from_numpy(bw_img).unsqueeze(0)
+        else:
+            bw_img = torch.from_numpy(bw_img).unsqueeze(0)
     return bw_img
 
 
@@ -399,7 +404,7 @@ def matrix_equality(matrix1, matrix2):
         mask = (batch2 == 0).squeeze()
         # Sum over the feature dimension to count matches
         equal_counts = (batch1 == batch2)  # Shape: (4096, 197)
-        equal_counts[:,:, mask] = 0
+        equal_counts[:, :, mask] = 0
         # Normalize by the number of features to get similarity in range [0, 1]
         similarity_matrix[i:end_i] = equal_counts.sum(dim=-1) / equal_counts.shape[
             -1]

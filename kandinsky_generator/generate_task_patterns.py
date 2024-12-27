@@ -3,7 +3,6 @@ import json
 # from tqdm import tqdm
 from pathlib import Path
 
-
 import config
 
 from kandinsky_generator.src.kp import KandinskyUniverse
@@ -240,7 +239,7 @@ def genShapeOnShapeTask(args, total_n):
     task = args.exp_setting
     args.step_counter += 1
     args.logger.info(f"Step {args.step_counter}/{args.total_step}: "
-                f"Generating {task['task_name']} task patterns")
+                     f"Generating {task['task_name']} task patterns")
 
     width = 512
     shapeOnshapeObjects = ShapeOnShape(u, 20, 40)
@@ -251,16 +250,27 @@ def genShapeOnShapeTask(args, total_n):
             data_path = base_path / mode / label
             os.makedirs(data_path, exist_ok=True)
             # print(f'Generating dataset {base_path}', task, mode)
-            png_num = len([f for f in Path(data_path).iterdir() if f.is_file() and f.suffix == '.png'])
+            if args.rewrite_data:
+                png_num = 0
+            else:
+                png_num = len([f for f in Path(data_path).iterdir() if
+                               f.is_file() and f.suffix == '.png'])
             n = total_n - png_num  # only generate insufficient ones
             if task[label] == "gestalt_triangle":
                 gen_fun = shapeOnshapeObjects.gestalt_triangle
+            elif task[label] == "gestalt_circle_triangle":
+                gen_fun = shapeOnshapeObjects.gestalt_circle_triangle
+
             elif task[label] == "triangle_group":
                 gen_fun = shapeOnshapeObjects.tri_group
             elif task[label] == "square_group":
                 gen_fun = shapeOnshapeObjects.square_group
             elif task[label] == "proximity_square":
                 gen_fun = shapeOnshapeObjects.proximity_square
+            elif task[label] == "similarity_triangle_circle":
+                gen_fun = shapeOnshapeObjects.similarity_triangle_circle
+            elif task[label] == "connection_objects":
+                gen_fun = shapeOnshapeObjects.similarity_triangle_circle
             elif task[label] == "circle_group":
                 gen_fun = shapeOnshapeObjects.cir_group
             elif task[label] == "square_circle_group":
@@ -275,6 +285,3 @@ def genShapeOnShapeTask(args, total_n):
                 with open(data_path / f"{i:06d}.json", 'w') as f:
                     json.dump(data, f)
                 image.save(data_path / f"{i:06d}.png")
-
-
-

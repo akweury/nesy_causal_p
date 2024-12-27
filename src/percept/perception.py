@@ -1,5 +1,6 @@
 # Created by shaji at 25/07/2024
 import numpy as np
+import torch
 from scipy import ndimage
 
 from src import bk
@@ -84,12 +85,13 @@ def percept_object_groups(args, input_groups, bk_shapes, img):
 
     # convert rgb image to black-white image
     args.obj_fm_size = 32
-    bw_img = data_utils.rgb2bw(img.numpy(), crop=True,
+    bw_img = data_utils.rgb2bw(img.numpy(), crop=False,
                                resize=args.obj_fm_size).unsqueeze(0)
 
     segment = img.permute(2, 0, 1)
 
     obj_groups = []
+    onside_shapes = []
     for b_i, bk_shape in tqdm(enumerate(bk_shapes), desc="grouping objects"):
         # recall the memory
         args.save_path = config.output / bk_shape["name"]
@@ -97,8 +99,33 @@ def percept_object_groups(args, input_groups, bk_shapes, img):
                                                 reshape=args.obj_fm_size)
         # reasoning recalled fms to group
         group_data = reason.reason_fms(args, segment, rc_fms, bk_shape, img, bw_img,
-                                       reshape=args.obj_fm_size)
-        # convert data to group object
+                                   reshape=args.obj_fm_size)
+
+
+        onside_shapes.append(group_data["onside"])
+
+    onside_shapes = torch.stack(onside_shapes, dim=0)
+    onside_argsmax = onside_shapes.float().argmax(dim=0)
+
+    for b_i, bk_shape in enumerate(bk_shapes):
+        onside_mask = onside_argsmax == b_i
+        shape_mask = torch.zeros_like(onside_argsmax)
+        for loc_group in input_groups:
+            input_seg = loc_group.input
+            seg_np = input_seg.numpy().astype(np.uint8)
+            seg_img = data_utils.rgb2bw(seg_np, crop=False,
+                                        resize=args.obj_fm_size).unsqueeze(0)
+            seg_mask = seg_img > 0
+            shape_mask += onside_mask * seg_mask.squeeze()
+
+        group_data = {
+            "onside": shape_mask,
+            "recalled_bw_img": shape_mask.unsqueeze(0).unsqueeze(0),
+            "parents": None,
+            "onside_percent": 0,
+        }
+
+        # # convert data to group object
         group = Group(id=b_i,
                       name=bk_shape["name"],
                       input_signal=img,
@@ -144,7 +171,7 @@ def detect_connected_regions(input_array, pixel_num=50):
                 labeled_regions.append(region_tensor)
 
     # Stack all labeled regions into a single tensor
-    if len(labeled_regions)==0:
+    if len(labeled_regions) == 0:
         print('')
     output_tensor = torch.tensor(np.stack(labeled_regions), dtype=torch.float32)
     return output_tensor
@@ -229,7 +256,7 @@ def identify_fms(args, train_loader, kernels):
 
 
 def collect_fms(args):
-    bk_shapes =  args.exp_setting["bk_groups"]
+    bk_shapes = args.exp_setting["bk_groups"]
     args.step_counter += 1
     args.logger.info(f"Step {args.step_counter}/{args.total_step}: "
                      f"Collecting FMs for patterns {bk_shapes}.")
