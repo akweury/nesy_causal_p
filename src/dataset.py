@@ -49,14 +49,16 @@ class GestaltDataset(Dataset):
         data = file_utils.load_json(f"{file_name}.json")
         img = file_utils.load_img(self.imgs[idx])
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        return img, data
+
+        return img, data, file_name.split("/")[-4:]
 
         # patch = data_utils.oco2patch(data).unsqueeze(0).to(self.args.device)
 
     def __getitem__(self, idx):
+        img, data, file_name = self.load_data(idx)
         self.args.logger.debug(
-            f"\n =========== Analysis Image {idx + 1}/{len(self.imgs)} ==============")
-        img, data = self.load_data(idx)
+            f"\n =========== Analysis Image {file_name} {idx + 1}/{len(self.imgs)} ==============")
+
         return img, data
         # img = data_utils.load_bw_img(self.image_paths[idx], size=64)
         # resize
@@ -66,6 +68,27 @@ class GestaltDataset(Dataset):
 
         # return img
 
+
+
+class GSDataset(Dataset):
+    def __init__(self):
+        self.data = torch.load(config.kp_gestalt_dataset/"train"/"train.pt")
+
+    def __len__(self):
+        return len(self.data)
+    # def load_data(self, idx):
+    #     file_name, file_extension = self.imgs[idx].split(".")
+    #     data = file_utils.load_json(f"{file_name}.json")
+    #     img = file_utils.load_img(self.imgs[idx])
+    #     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    #     return img, data, file_name.split("/")[-4:]
+    def load_data(self, idx):
+        return self.data[idx]
+    def __getitem__(self, idx):
+        # img, data, file_name = self.load_data(idx)
+        # self.args.logger.debug(
+        #     f"\n =========== Analysis Image {file_name} {idx + 1}/{len(self.imgs)} ==============")
+        return self.data[idx]
 
 def load_dataset(args):
     args.step_counter += 1

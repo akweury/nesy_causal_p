@@ -438,14 +438,17 @@ class ShapeOnShape(KandinskyTruthInterfce):
         return objs
 
     def _similarity_triangle_circle(self):
+
         color = random.choice(bk.color_large)
+        while color == "lightgray":
+            color = random.choice(bk.color_large)
 
         objs = []
         so = 0.1
         row_num = random.randint(3, 6)
         col_num = random.randint(3, 6)
-        diff_row_id = random.randint(0, row_num-1)
-        diff_col_id = random.randint(0, col_num-1)
+        diff_row_id = random.randint(0, row_num - 1)
+        diff_col_id = random.randint(0, col_num - 1)
         row_space = 1 / (row_num + 1)
         col_space = 1 / (col_num + 1)
         for x in range(row_num):

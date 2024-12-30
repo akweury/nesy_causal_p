@@ -1,7 +1,7 @@
 # Created by jing at 01.12.24
 import torch
 import cv2
-
+import numpy as np
 from src import bk
 
 
@@ -41,7 +41,7 @@ class Group():
 
     def search_color(self, input_signal, onside_signal, color):
         if color is not None:
-            return color
+            return bk.color_large.index(color)
         mask = onside_signal > 0
         input_tensor = input_signal.numpy()
         zoomed_image = cv2.resize(input_tensor, onside_signal.size(),
@@ -51,7 +51,7 @@ class Group():
 
         # Find the most frequent color in the list
         if len(valid_pixels) == 0:
-            return bk.no_color  # Handle empty list
+            return bk.color_large.index(bk.no_color)  # Handle empty list
 
         color_counts = valid_pixels.unique(return_counts=True, dim=0)
         color_sorted = sorted(zip(color_counts[0], color_counts[1]),
@@ -68,14 +68,16 @@ class Group():
             if distance < smallest_distance:
                 smallest_distance = distance
                 closest_color_name = color_name
-        return closest_color_name
+
+        color_id = bk.color_large.index(closest_color_name)
+        return color_id
 
     def obj2tensor(self, shape, color, pos, group_count_conf):
         obj_tensor = torch.zeros(len(bk.obj_ohc))
         i = 0
-        obj_tensor[i] = bk.color_large.index(color)  # color
+        obj_tensor[i] = color  # color
         i += 1
-        obj_tensor[i] = bk.bk_shapes.index(shape)  # shape
+        obj_tensor[i] = shape  # shape
         i += 1
         obj_tensor[i] = pos[0]  # x position
         i += 1
@@ -90,8 +92,8 @@ class Group():
             [self.obj2tensor(self.name, self.color, self.pos, self.onside_coverage)])
 
     def find_center(self):
-        matrix = self.memory.sum(dim=0)
-
+        matrix = torch.from_numpy(self.input.sum(axis=-1).astype(np.float32))
+        matrix[matrix == 633] = 0
         # Get the indices of all nonzero elements
         nonzero_indices = torch.argwhere(matrix != 0).float()
 

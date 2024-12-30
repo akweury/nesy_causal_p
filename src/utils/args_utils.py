@@ -80,5 +80,5 @@ def get_args():
     os.makedirs(config.output / f"{args.exp_name}", exist_ok=True)
     args.batch_size = 1
 
-    args.exp_setting = eval(f"bk.{args.exp_name}")
+    # args.exp_setting = eval(f"bk.{args.exp_name}")
     return args

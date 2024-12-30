@@ -3,6 +3,7 @@ import torch
 import numpy as np
 import cv2
 
+from src import bk
 from src.utils import data_utils, chart_utils
 from src.neural import models
 
@@ -66,7 +67,8 @@ def eval_onside_conf(args, data, onsides, fm_imgs, bk_shape):
 
 def visual_all(args, in_fms, rc_fms, segment, mem_bw_img, bk_shape, img, bw_img,
                onside, offside):
-    group_img_name = args.save_path / str(f'group_{bk_shape["name"]}.png')
+    shape_str = bk.bk_shapes[bk_shape["shape"]]
+    group_img_name = args.save_path / str(f'group_{shape_str}.png')
 
     # norm_factor = max([bw_img.max(), in_fms.sum(dim=1).max()])
     segment_np = segment.permute(1, 2, 0).numpy().astype(np.uint8)

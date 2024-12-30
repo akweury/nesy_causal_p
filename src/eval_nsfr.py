@@ -95,7 +95,7 @@ def check_clause(args, lang, data_loader, image_label, output_path):
         image = image.squeeze()
         args.output_file_prefix = str(output_path / f'img_{idx}')
         # percepting groups
-        groups = perception.percept_gestalt_groups(args, idx, group_bk, image)
+        groups = perception.percept_groups(args, idx, group_bk, image)
 
         if len(groups) != 0:
             clauses_conf[idx] = alpha.alpha_test(args, groups, lang)

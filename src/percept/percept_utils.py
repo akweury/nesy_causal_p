@@ -1,6 +1,7 @@
 # Created by jing at 10.12.24
 import os
 import cv2
+import numpy as np
 import torch
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader, random_split
@@ -18,7 +19,7 @@ def matrix_similarity(mat1, mat2):
     g2_flat = mat2.view(mat2.size(0), -1)  # Shape: (N2, 192 * 64 * 64)
     # Compute cosine similarity between all pairs (N1 x N2 matrix)
     similarity_matrix = torch.mm(g1_flat, g2_flat.t()) / (
-                g2_flat.sum(dim=1).unsqueeze(0) + 1e-20)  # Shape: (N1, N2)
+            g2_flat.sum(dim=1).unsqueeze(0) + 1e-20)  # Shape: (N1, N2)
     return similarity_matrix
 
 
@@ -33,7 +34,7 @@ def get_match_detail(mem_fm, visual_fm):
     all_same_fm = same_fm * mask_full_match
     any_diff_fm = same_fm * mask_any_mismatch
     same_percent = mask_full_match.sum(dim=[1, 2]) / (
-                mem_fm.sum(dim=1).bool().sum(dim=[1, 2]) + 1e-20)
+            mem_fm.sum(dim=1).bool().sum(dim=[1, 2]) + 1e-20)
     return all_same_fm, any_diff_fm, same_percent
 
 
@@ -43,7 +44,6 @@ def get_siding(data, match_fm_img):
     data_offside = torch.stack(
         [((match_fm_img[i].squeeze() == 0)) for i in range(len(match_fm_img))])
     return data_onside, data_offside
-
 
 
 def prepare_data(args):
@@ -62,6 +62,7 @@ def prepare_data(args):
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True)
 
     return train_loader, val_loader
+
 
 def visual_all(group_img_name, img, bw_img, data_fm_shifted, fm_best, max_value,
                fm_best_same, fm_best_diff, data_onside, data_offside):
@@ -111,3 +112,27 @@ def visual_all(group_img_name, img, bw_img, data_fm_shifted, fm_best, max_value,
     compare_imgs = cv2.cvtColor(compare_imgs, cv2.COLOR_BGR2RGB)
 
     cv2.imwrite(group_img_name, compare_imgs)
+
+
+def groups2positions(groups):
+    positions = torch.zeros((len(groups), 2))
+    for g_i, group in enumerate(groups):
+        positions[g_i] = group.pos
+
+    return positions
+
+
+def groups2labels(groups, label_type):
+    labels = torch.zeros((len(groups), 1))
+    for g_i, group in enumerate(groups):
+        if label_type == "color":
+            labels[g_i] = group.color
+        elif label_type == "shape":
+            labels[g_i] = group.name
+        else:
+            raise ValueError(f"Unknown label type: {label_type}")
+    return labels
+
+
+def distance(u, v):
+    return np.linalg.norm(u - v)

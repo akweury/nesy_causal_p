@@ -3,12 +3,14 @@ import numpy as np
 import os
 import json
 from pathlib import Path
+import torch
 
 import config
 from tqdm import tqdm
 from kandinsky_generator.src.kp import KandinskyUniverse
 from kandinsky_generator.ShapeOnShapes import ShapeOnShape
 from src import bk
+from src.utils import chart_utils
 
 u = KandinskyUniverse.SimpleUniverse()
 
@@ -178,14 +180,28 @@ def kf2data(kf, width):
         data.append({"x": obj.x,
                      "y": obj.y,
                      "size": obj.size,
-                     "color_name": obj.color,
-                     "color_r": bk.matplotlib_colors[obj.color][0],
-                     "color_g": bk.matplotlib_colors[obj.color][1],
-                     "color_b": bk.matplotlib_colors[obj.color][2],
-                     "shape": obj.shape,
+                     "color_name": bk.color_large.index(obj.color),
+                     "color_r": bk.color_matplotlib[obj.color][0],
+                     "color_g": bk.color_matplotlib[obj.color][1],
+                     "color_b": bk.color_matplotlib[obj.color][2],
+                     "shape": bk.bk_shapes.index(obj.shape),
                      "width": width
                      })
     return data
+
+
+def kf2tensor(kf, width):
+    tensors = []
+    for obj in kf:
+        shape = [0] * len(bk.bk_shapes)
+        shape[bk.bk_shapes.index(obj.shape)] = 1.0
+        color = list(bk.color_matplotlib[obj.color])
+        others = [obj.x, obj.y, obj.size]
+        tensor = torch.tensor(others + color + shape)
+        tensor[3:6] /= 255
+        tensors.append(tensor)
+    tensors = torch.stack(tensors)
+    return tensors
 
 
 def genShapeOnShape(args):
@@ -216,7 +232,6 @@ def genShapeOnShape(args):
                 gen_fun = shapeOnshapeObjects.square_only
             elif shape == "gestalt_triangle":
                 gen_fun = shapeOnshapeObjects.gestalt_triangle
-
             elif shape == "diamond":
                 gen_fun = shapeOnshapeObjects.dia_only
             elif shape == "trianglecircle":
@@ -245,3 +260,53 @@ def genShapeOnShape(args):
                 with open(base_path / f"{shape}_{(png_num + i):06d}.json", 'w') as f:
                     json.dump(data, f)
                 image.save(base_path / f"{shape}_{(png_num + i):06d}.png")
+
+
+def gen_and_save(kfs, path, data_counter, width):
+    tensors = []
+    data = []
+    images = []
+    for kf in kfs:
+        images.append(
+            np.asarray(KandinskyUniverse.kandinskyFigureAsImage(kf, width)))
+        data.append(kf2data(kf, width))
+        tensors.append(kf2tensor(kf, width))
+
+    tensors = torch.stack(tensors)
+    images = chart_utils.hconcat_imgs(images)
+    with open(path / f"{data_counter:06d}.json", 'w') as f:
+        json.dump(data, f)
+    Image.fromarray(images).save(path / f"{data_counter:06d}.png")
+    return tensors
+
+
+def genGestaltTraining(args):
+    width = 512
+    shapeOnshapeObjects = ShapeOnShape(u, 20, 40)
+    base_path = config.kp_gestalt_dataset
+    os.makedirs(base_path, exist_ok=True)
+
+    gen_funs = [
+        shapeOnshapeObjects.gestalt_triangle,
+        shapeOnshapeObjects.tri_group,
+        shapeOnshapeObjects.square_group,
+        shapeOnshapeObjects.proximity_square,
+        shapeOnshapeObjects.similarity_triangle_circle,
+        shapeOnshapeObjects.cir_group
+    ]
+
+    for mode in ['train', "test"]:
+        data_counter = 0
+        data_tensors = []
+        data_path = base_path / mode
+        os.makedirs(data_path, exist_ok=True)
+        tensor_file = data_path / f"{mode}.pt"
+        if os.path.exists(tensor_file):
+            continue
+        for gen_fun in gen_funs:
+            kfs = gen_fun(rule_style=True, n=3)
+            tensors = gen_and_save(kfs, data_path, data_counter, width)
+            data_tensors.append(tensors)
+            data_counter += 1
+
+        torch.save(data_tensors, tensor_file)

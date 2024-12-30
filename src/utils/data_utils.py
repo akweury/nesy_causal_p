@@ -397,7 +397,7 @@ def matrix_equality(matrix1, matrix2):
 
     batch_size = 16
     similarity_matrix = torch.zeros((matrix1.shape[0], matrix2.shape[0]))
-    for i in tqdm(range(0, matrix1.shape[0], batch_size), desc="Matrix equality"):
+    for i in range(0, matrix1.shape[0], batch_size):
         end_i = min(i + batch_size, matrix1.shape[0])
         batch1 = matrix1_flatten[i:end_i].unsqueeze(1)
         batch2 = matrix2_flatten.unsqueeze(0)

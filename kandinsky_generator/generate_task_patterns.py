@@ -285,3 +285,9 @@ def genShapeOnShapeTask(args, total_n):
                 with open(data_path / f"{i:06d}.json", 'w') as f:
                     json.dump(data, f)
                 image.save(data_path / f"{i:06d}.png")
+
+
+
+
+
+

@@ -8,10 +8,13 @@ root = Path(__file__).parents[0]
 storage = root / 'storage'
 output = storage / 'output'
 lark_file = root / "src" / "alpha" / "exp.lark"
+models = storage / "models"
 if not os.path.exists(storage):
     os.mkdir(storage)
 if not os.path.exists(output):
     os.mkdir(output)
+if not os.path.exists(models):
+    os.mkdir(models)
 
 code_group_relation = {
     "a_eq_b": 0,
@@ -48,6 +51,8 @@ color_tiles = [
 ]
 kp_base_dataset = storage / "dataset" / "basic"
 kp_challenge_dataset = storage / "dataset" / "challenge"
+kp_gestalt_dataset = storage / "dataset" / "gestalt"
+
 data_file_train_cha = storage / "dataset" / "arc-prize-2024" / "arc-agi_training_challenges.json"
 data_file_train_sol = storage / "dataset" / "arc-prize-2024" / "arc-agi_training_solutions.json"
 data_file_test_cha = storage / "dataset" / "arc-prize-2024" / "arc-agi_test_challenges.json"
@@ -63,6 +68,8 @@ alpha_mode = {
 }
 
 ##############
+model_gestalt = models / "gestalt_rl"
+
 model_group_kp_line = storage / "output" / "kp_sy_line" / "line_detector_model.pth"
 model_group_kp_square = storage / "output" / "kp_sy_square" / "square_detector_model.pth"
 model_group_kp_circle = storage / "output" / "kp_sy_circle" / "circle_detector_model.pth"
@@ -70,6 +77,7 @@ model_group_kp_triangle = storage / "output" / "kp_sy_triangle" / "triangle_dete
 
 model_group_kp_triangle_only = storage / "output" / "kp_sy_triangle_only" / "triangle_only_detector_model.pth"
 
-
 # nn settings
 kernel_size = 3
+
+gestalt_action = ["proximity", "similarity", "closure"]

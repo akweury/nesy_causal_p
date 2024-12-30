@@ -15,7 +15,7 @@ def load_bk(args, bk_shapes):
     # load background knowledge
     bk = []
     kernel_size = config.kernel_size
-    for bk_shape in bk_shapes:
+    for s_i, bk_shape in enumerate(bk_shapes):
         if bk_shape == "none":
             continue
         bk_path = config.output / bk_shape
@@ -34,7 +34,7 @@ def load_bk(args, bk_shapes):
         # ae_fm = torch.load(bk_path / "ae_fms.pt").to(args.device)
 
         bk.append({
-            "name": bk_shape,
+            "shape": s_i,
             "kernel_size": kernel_size,
             "kernels": kernels,
             "fm_img": fm_img,
@@ -179,7 +179,7 @@ def train_clauses(args, data_loader):
             image = image.squeeze()
             args.output_file_prefix = str(args.out_train_folder / f'img_{idx}')
             # percepting groups
-            groups = perception.percept_gestalt_groups(args, idx, group_bk, image)
+            groups = perception.percept_groups(args, idx, group_bk, image)
 
             # reasoning clauses
             lang = alpha.alpha(args, groups)
