@@ -681,7 +681,7 @@ def percept_feature_groups(args, bk, img, output_file_prefix):
     for segment in segments:
         segment_groups = []
         for b_i, bk_shape in enumerate(bk):
-            core_image = data_utils.rgb2bw(segment.permute(1, 2, 0).numpy(), resize=64)
+            core_image = data_utils.resize_img(segment.permute(1, 2, 0).numpy(), resize=64)
             fms = perception.one_layer_conv(core_image.unsqueeze(0), bk_shape["kernels"].float())
             # recall the memory
             mem_fms_data = recall_mem_fms(args, fms, bk_shape["fm_repo"], core_image, bk_shape["fm_img"])

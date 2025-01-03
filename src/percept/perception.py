@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from sklearn.cluster import DBSCAN
 
 from src import bk
+from src.utils.chart_utils import van
 from src.percept.percept_utils import *
 from src.memory import recall
 from src.reasoning import reason
@@ -50,8 +51,8 @@ def percept_feature_groups(args, bk_shapes, segment, img):
     feature_groups = []
 
     # rgb segment to resized bw image
-    seg_np = segment.permute(1, 2, 0).numpy().astype(np.uint8)
-    bw_img = data_utils.rgb2bw(seg_np, crop=True, resize=8).unsqueeze(0)
+    cropped_img, _ = data_utils.crop_img(segment.permute(1, 2, 0))
+    bw_img = data_utils.resize_img(cropped_img, resize=8).unsqueeze(0)
     seg_color = get_most_frequent_color(segment)
     for b_i, bk_shape in enumerate(bk_shapes):
         # shape_str = bk.bk_shapes[bk_shape["shape"]]
@@ -60,12 +61,11 @@ def percept_feature_groups(args, bk_shapes, segment, img):
         shifted_fms, rc_fms = recall.recall_fms(args, bk_shape, bw_img)
 
         # reasoning recalled groups
-        group_data = reason.reason_fms(args, segment, rc_fms, bk_shape, img,
-                                       bw_img)
+        group_data = reason.reason_fms(rc_fms, bk_shape, bw_img)
 
         group = Group(id=b_i,
                       name=bk_shape["shape"],
-                      input_signal=seg_np,
+                      input_signal=segment,
                       onside_signal=group_data["onside"],
                       memory_signal=group_data['recalled_bw_img'],
                       parents=None,
@@ -84,72 +84,43 @@ def percept_feature_groups(args, bk_shapes, segment, img):
 
 
 def percept_closure_groups(args, input_groups, bk_shapes, img):
-    """ group objects as a high level group """
-
-    # convert rgb image to black-white image
+    """ group input groups to output groups, which are high level groups """
+    # each object assigned a group id as its label
     args.obj_fm_size = 32
-    bw_img = data_utils.rgb2bw(img.numpy(), crop=False,
-                               resize=args.obj_fm_size).unsqueeze(0)
+    # all_obj_found_labels = False
 
-    segment = img.permute(2, 0, 1)
+    # preprocessing img, convert rgb image to black-white image
+    cropped_img, crop_data = data_utils.crop_img(img)
+    bw_img = data_utils.resize_img(cropped_img, resize=args.obj_fm_size).unsqueeze(0)
 
-    obj_groups = []
-    onside_shapes = []
-    for b_i, bk_shape in tqdm(enumerate(bk_shapes), desc="grouping objects"):
+    groups = []
+    labels = torch.zeros(args.obj_n) - 1
+    while torch.any(labels[:len(input_groups)] == -1):
         # recall the memory
-        args.save_path = config.output / bk_shape["name"]
-        shifted_fms, rc_fms = recall.recall_fms(args, bk_shape, bw_img,
-                                                reshape=args.obj_fm_size)
-        # reasoning recalled fms to group
-        group_data = reason.reason_fms(args, segment, rc_fms, bk_shape, img, bw_img,
-                                       reshape=args.obj_fm_size)
+        memory, group_label = recall.recall_match(args, bk_shapes, bw_img)
+        # assign each object a label
+        group_objs = reason.reason_labels(args, bw_img, input_groups, crop_data,
+                                          labels, memory)
+        if group_objs.sum() == 0:
+            break
 
-        onside_shapes.append(group_data["onside"])
+        labels[group_objs] = group_label
 
-    onside_shapes = torch.stack(onside_shapes, dim=0)
-    onside_argsmax = onside_shapes.float().argmax(dim=0)
-
-    for b_i, bk_shape in enumerate(bk_shapes):
-        onside_mask = onside_argsmax == b_i
-        shape_mask = torch.zeros_like(onside_argsmax)
-        for loc_group in input_groups:
-            input_seg = loc_group.input
-            seg_np = input_seg.numpy().astype(np.uint8)
-            seg_img = data_utils.rgb2bw(seg_np, crop=False,
-                                        resize=args.obj_fm_size).unsqueeze(0)
-            seg_mask = seg_img > 0
-            shape_mask += onside_mask * seg_mask.squeeze()
-
-        group_data = {
-            "onside": shape_mask,
-            "recalled_bw_img": shape_mask.unsqueeze(0).unsqueeze(0),
-            "parents": None,
-            "onside_percent": 0,
-        }
-
-        # # convert data to group object
-        group = Group(id=b_i,
-                      name=bk_shape["name"],
-                      input_signal=img,
-                      onside_signal=group_data["onside"],
-                      memory_signal=group_data['recalled_bw_img'],
-                      parents=input_groups,
-                      coverage=group_data["onside_percent"],
-                      color=None)
-        obj_groups.append(group)
-
-    best_idx = torch.tensor([g.onside_coverage for g in obj_groups]).argmax()
-    best_group = obj_groups[best_idx]
-    return best_group
+        # generate group object
+        group = gen_group_tensor(input_groups, group_label, group_objs)
+        groups.append(group)
+    group_ocm = torch.stack(groups)
+    return labels, group_ocm
 
 
 def cluster_by_proximity(object_matrix, threshold):
     # Function to compute distance or difference
-    n = len(object_matrix)
-    labels = torch.full((n,), -1, dtype=torch.int)
-    visited = torch.zeros(n, dtype=torch.bool)
+
+    obj_n = object_matrix.shape[0]
+    labels = np.full((obj_n,), -1, dtype=np.int32)
+    visited = np.zeros(obj_n, dtype=np.bool_)
     current_label = 0
-    for i in range(n):
+    for i in range(obj_n):
         if not visited[i]:
             # BFS or DFS
             stack = [i]
@@ -158,9 +129,10 @@ def cluster_by_proximity(object_matrix, threshold):
 
             while stack:
                 top = stack.pop()
-                for j in range(n):
+                for j in range(obj_n):
                     if not visited[j]:
-                        dist = distance(object_matrix[top, :2], object_matrix[j, :2])
+                        dist = proximity_distance(object_matrix[top, :2],
+                                                  object_matrix[j, :2])
                         if dist <= threshold:
                             visited[j] = True
                             labels[j] = current_label
@@ -169,12 +141,104 @@ def cluster_by_proximity(object_matrix, threshold):
     return labels
 
 
-def cluster_by_similarity(object_matrix, threshold):
-    pass
+def cluster_by_similarity(object_matrix, threshold, weights):
+    obj_n = object_matrix.shape[0]
+    labels = np.full((obj_n,), -1, dtype=np.int32)
+    visited = np.zeros(obj_n, dtype=np.bool_)
+    current_label = 0
+    for i in range(obj_n):
+        if not visited[i]:
+            # BFS or DFS
+            stack = [i]
+            visited[i] = True
+            labels[i] = current_label
+
+            while stack:
+                top = stack.pop()
+                for j in range(obj_n):
+                    if not visited[j]:
+                        dist = similarity_distance(object_matrix[top],
+                                                   object_matrix[j], weights)
+                        if dist <= threshold:
+                            visited[j] = True
+                            labels[j] = current_label
+                            stack.append(j)
+            current_label += 1
+    return labels
 
 
-def cluster_by_closure(object_matrix, threshold):
-    pass
+def load_bk(args, bk_shapes):
+    # load background knowledge
+    bk = []
+    kernel_size = config.kernel_size
+    for s_i, bk_shape in enumerate(bk_shapes):
+        if bk_shape == "none":
+            continue
+        bk_path = config.output / bk_shape
+        kernel_file = bk_path / f"kernel_patches_{kernel_size}.pt"
+        kernels = torch.load(kernel_file).to(args.device)
+
+        fm_file = bk_path / f"fms_patches_{kernel_size}.pt"
+        fm_data = torch.load(fm_file).to(args.device)
+        fm_img = fm_data[:, 0:1]
+        fm_repo = fm_data[:, 1:]
+
+        # load pretrained autoencoder
+        # ae = models.Autoencoder(fm_repo.shape[1])
+        # ae.load_state_dict(torch.load(bk_path / "fm_ae.pth"))
+        # # load the dimension reduced feature maps
+        # ae_fm = torch.load(bk_path / "ae_fms.pt").to(args.device)
+
+        bk.append({
+            "shape": s_i,
+            "kernel_size": kernel_size,
+            "kernels": kernels,
+            "fm_img": fm_img,
+            "fm_repo": fm_repo,
+            # "ae": ae,
+            # "ae_fm": ae_fm,
+        })
+    return bk
+
+
+def cluster_by_closure(args, object_matrix, img, threshold):
+    """ group objects as a high level group, return labels of each object """
+
+    # convert rgb image to black-white image
+    group_bk = load_bk(args, bk.bk_shapes)
+
+    img_torch = torch.from_numpy(img).to(args.device)
+    # segment the scene into separate parts
+    segments = detect_connected_regions(args, img_torch)
+    # detect local feature as groups
+    loc_groups = detect_local_features(args, segments, group_bk, img_torch)
+    # detect global feature as groups and seal the local feature groups into them
+    labels, groups = percept_closure_groups(args, loc_groups, group_bk, img_torch)
+
+    groups= torch.cat([groups, torch.zeros(len(object_matrix)-len(groups), 10)],dim=0)
+    return labels, groups
+
+
+def gen_group_tensor(input_groups, group_label, group_objs):
+    parent_objs = [input_groups[i] for i in range(len(input_groups)) if
+                   group_objs[i]]
+    parent_positions = torch.stack([obj.pos for obj in parent_objs])
+    x = parent_positions[:, 0]
+    y = parent_positions[:, 1]
+    group_x = x.mean()
+    group_y = y.mean()
+    # Shoelace formula
+    group_size = 0.5 * torch.abs(
+        torch.sum(x[:-1] * y[1:]) - torch.sum(y[:-1] * x[1:]))
+
+    color = "none"
+    shape = [0] * len(bk.bk_shapes)
+    shape[int(group_label.item())] = 1.0
+    color = list(bk.color_matplotlib[color])
+    others = [group_x, group_y, group_size]
+    tensor = torch.tensor(others + color + shape)
+    tensor[3:6] /= 255
+    return tensor
 
 
 def eval_similarity(groups):
@@ -182,41 +246,47 @@ def eval_similarity(groups):
     shape_labels = groups2labels(groups, "shape")
 
 
-def eval_closure(groups):
-    positions = groups2positions(groups)
-    shapes = positions2shapes(positions)
+# def eval_closure(groups):
+#     positions = groups2positions(groups)
+#     shapes = positions2shapes(positions)
 
 
-def cluster_by_principle(ocm, action, threshold):
+def cluster_by_principle(args, ocms, imgs, action, threshold, weights):
     """ evaluate gestalt scores, decide grouping based on which strategy
     - loc groups: individual objects;
     """
-    labels = cluster_by_proximity(ocm, threshold)
-    return labels
-    if config.gestalt_action[action] == "proximity":
-        # strategy: proximity
-        labels = cluster_by_proximity(ocm, threshold)
-    elif config.gestalt_action[action] == "similarity":
-        # strategy: similarity
-        labels = cluster_by_similarity(ocm, threshold)
-    elif config.gestalt_action[action] == "closure":
-        # strategy: closure
-        labels = cluster_by_closure(ocm, threshold)
-    else:
-        raise ValueError
-    return labels
+    labels = np.zeros(ocms.shape[:2])
+    groups = []
+    action = 2
+    for o_i, ocm in enumerate(ocms):
+        if config.gestalt_action[action] == "proximity":
+            labels[o_i] = cluster_by_proximity(ocm, threshold)
+        elif config.gestalt_action[action] == "similarity":
+            labels[o_i] = cluster_by_similarity(ocm, threshold, weights)
+        elif config.gestalt_action[action] == "closure":
+            labels[o_i], new_groups = cluster_by_closure(args, ocm, imgs[o_i],
+                                                         threshold)
+            groups.append(new_groups)
+        else:
+            raise ValueError("Unknown gestalt action {}".format(action))
+    groups = torch.stack(groups)
+    return groups, labels
+
+    #     # strategy: proximity
+    #     labels = cluster_by_proximity(ocm, threshold)
+    # elif config.gestalt_action[action] == "similarity":
+    #     # strategy: similarity
+    #     labels = cluster_by_similarity(ocm, threshold)
+    # elif config.gestalt_action[action] == "closure":
+    #     # strategy: closure
+    #     labels = cluster_by_closure(ocm, threshold)
+    # else:
+    #     raise ValueError
+    # return labels
 
 
 def percept_gestalt_groups(args, loc_groups, bk, img):
-
-    if gestalt_conf == "similarity":
-        gestalt_groups = percept_similarity_groups(args, loc_groups, bk, img)
-    elif gestalt_conf == "proximity":
-        gestalt_groups = percept_proximity_groups(args, loc_groups, bk, img)
-    elif gestalt_conf == "closure":
-        gestalt_groups = percept_closure_groups(args, loc_groups, bk, img)
-    else:
-        gestalt_groups = loc_groups
+    gestalt_groups = percept_closure_groups(args, loc_groups, bk, img)
     return gestalt_groups
 
 
@@ -274,17 +344,17 @@ def detect_local_features(args, segments, group_bk, img):
 
 def detect_global_features(args, loc_groups, bk, img):
     global_group_file = args.output_file_prefix + f"_global_groups.pt"
-    old_groups = loc_groups
     if os.path.exists(global_group_file):
-        new_groups = torch.load(global_group_file)
+        labels, groups = percept_closure_groups(args, loc_groups, bk, img)
+        # new_groups = torch.load(global_group_file)
     else:
-        new_groups = percept_gestalt_groups(args, loc_groups, bk, img)
-        while (new_groups != old_groups):
-            new_groups = percept_gestalt_groups(args, loc_groups, bk, img)
+        labels, groups = percept_closure_groups(args, loc_groups, bk, img)
+        # while (new_groups != old_groups):
+        #     new_groups = percept_gestalt_groups(args, loc_groups, bk, img)
 
-        torch.save(new_groups, global_group_file)
+        # torch.save(labels, global_group_file)
 
-    return [new_groups]
+    return labels, groups
 
 
 def percept_groups(args, idx, group_bk, img):
@@ -298,8 +368,8 @@ def percept_groups(args, idx, group_bk, img):
     return glo_groups
 
 
-def percept_reward(g):
-    pass
+def percept_reward(groups):
+    return np.all(groups == groups[0]).astype(np.float32)
 
 
 def identify_kernels(args, train_loader):

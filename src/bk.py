@@ -197,3 +197,12 @@ exp_closure_circle_triangle = {
     "task_random_pattern": "random",
     "task_cf_pattern": "random"
 }
+
+
+def tensor2dict(tensor):
+    tensor_dict = {}
+    tensor_dict['position'] = tensor[:2]
+    tensor_dict['size'] = tensor[2]
+    tensor_dict['color'] = tensor[3:6]
+    tensor_dict['shape'] = tensor[6:6+len(bk_shapes)]
+    return tensor_dict

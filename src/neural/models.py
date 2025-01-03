@@ -5,7 +5,6 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F  # Import F for functional operations
-import matplotlib.pyplot as plt
 
 from torch.utils.data import DataLoader, TensorDataset
 from src.neural.neural_utils import *

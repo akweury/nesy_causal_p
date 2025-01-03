@@ -92,7 +92,7 @@ class Group():
             [self.obj2tensor(self.name, self.color, self.pos, self.onside_coverage)])
 
     def find_center(self):
-        matrix = torch.from_numpy(self.input.sum(axis=-1).astype(np.float32))
+        matrix = self.input.sum(axis=-1)
         matrix[matrix == 633] = 0
         # Get the indices of all nonzero elements
         nonzero_indices = torch.argwhere(matrix != 0).float()

@@ -190,7 +190,7 @@ def kf2data(kf, width):
     return data
 
 
-def kf2tensor(kf, width):
+def kf2tensor(kf, max_length):
     tensors = []
     for obj in kf:
         shape = [0] * len(bk.bk_shapes)
@@ -200,6 +200,11 @@ def kf2tensor(kf, width):
         tensor = torch.tensor(others + color + shape)
         tensor[3:6] /= 255
         tensors.append(tensor)
+    if len(tensors) < max_length:
+        tensors = tensors + [torch.zeros(len(tensors[0]))] * (
+                    max_length - len(tensors))
+    else:
+        raise ValueError
     tensors = torch.stack(tensors)
     return tensors
 
@@ -266,11 +271,12 @@ def gen_and_save(kfs, path, data_counter, width):
     tensors = []
     data = []
     images = []
+    max_length = 32
     for kf in kfs:
         images.append(
             np.asarray(KandinskyUniverse.kandinskyFigureAsImage(kf, width)))
         data.append(kf2data(kf, width))
-        tensors.append(kf2tensor(kf, width))
+        tensors.append(kf2tensor(kf, max_length))
 
     tensors = torch.stack(tensors)
     images = chart_utils.hconcat_imgs(images)

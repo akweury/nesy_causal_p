@@ -22,19 +22,23 @@ class GestaltGroupingEnv(gymnasium.Env):
     The environment returns a toy (random) reward and ends after a fixed number of steps.
     """
 
-    def __init__(self, n_principles, max_threshold=1.0, bins=10):
+    def __init__(self, args, n_principles, obj_n, max_threshold=1.0, bins=10):
         super(GestaltGroupingEnv, self).__init__()
-
+        self.args = args
         self.n_principles = n_principles
         self.max_threshold = max_threshold
         self.bins = bins
         self.data_idx = 0
+        self.max_steps = 3
+        self.ocm = None
+        self.imgs = None
+
         # Observation: positions of objects (toy example).
         # Real case: could include color, shape, or feature embeddings.
         self.observation_space = spaces.Box(
             low=0.0,
             high=1.0,
-            shape=(4, 10),  # x,y coords for each object
+            shape=(3, obj_n, 10),  # x,y coords for each object
             dtype=np.float32
         )
 
@@ -47,16 +51,15 @@ class GestaltGroupingEnv(gymnasium.Env):
         # In a real implementation, you might add more actions
         # or even use a continuous action space for parameterized thresholds.
         self.action_space = spaces.Box(
-            low=0.0, high=1.0, shape=(2,), dtype=np.float32
+            low=0.0, high=1.0, shape=(4,), dtype=np.float32
         )
-
         # Initialize environment state
         self.reset()
 
     def next_data(self):
         self.data_idx += 1
-        task_tensor = self.dataset.load_data(self.data_idx)
-        return task_tensor
+        task_tensor, task_imgs = self.dataset.load_data(self.data_idx)
+        return task_tensor, task_imgs
 
     def reset(self, seed=123):
         """
@@ -64,13 +67,14 @@ class GestaltGroupingEnv(gymnasium.Env):
         Returns: initial observation
         """
         # load object positions in [0,1]x[0,1]
-        self.ocm = self.next_data().numpy()
+        self.ocm, self.imgs = self.next_data()
         # Could also store "group labels" or other info if needed
         self.steps_taken = 0
         info = {
             "steps_taken": self.steps_taken
         }
-
+        self.args.output_file_prefix = str(
+            config.model_gestalt / f'img_{self.data_idx}')
         return self.ocm, info
 
     def step(self, action):
@@ -87,12 +91,14 @@ class GestaltGroupingEnv(gymnasium.Env):
         truncated = False
         principle_float = action[0]
         threshold_float = action[1]
+        weight_float = action[2:5]
 
         principle_idx = int(round(principle_float * self.n_principles - 1))
         threshold = threshold_float * self.max_threshold
 
-        # input data
-        groups = perception.cluster_by_principle(self.ocm, principle_idx, threshold)
+        # input data, update the ocm
+        self.ocm, groups = perception.cluster_by_principle(
+            self.args, self.ocm, self.imgs, principle_idx, threshold, weight_float)
         # For demonstration, we give a random reward:
         reward = perception.percept_reward(groups)
 
@@ -124,9 +130,13 @@ def main():
     # load exp arguments
     args = args_utils.get_args()
     init_io_folders(args, config.model_gestalt)
+
     generate_training_patterns.genGestaltTraining(args)
     # Initialize the custom environment
-    env = GestaltGroupingEnv(n_principles=len(config.gestalt_action))
+    env = GestaltGroupingEnv(
+        args=args,
+        obj_n=args.obj_n,
+        n_principles=len(config.gestalt_action))
 
     # Check the environment (optional but recommended)
     check_env(env, warn=True)

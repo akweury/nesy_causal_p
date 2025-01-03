@@ -5,7 +5,7 @@ import cv2
 
 from src import bk
 from src.utils import data_utils, chart_utils
-from src.neural import models
+from src.utils.chart_utils import van
 
 
 def get_match_detail(mem_fm, visual_fm):

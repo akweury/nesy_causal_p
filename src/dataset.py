@@ -23,7 +23,8 @@ class BasicShapeDataset(Dataset):
 
     def __getitem__(self, idx):
         rgb_image = cv2.imread(self.image_paths[idx])
-        bw_img = data_utils.rgb2bw(rgb_image, crop=True, resize=8)
+        cropped_img, _ = data_utils.crop_img(rgb_image)
+        bw_img = data_utils.resize_img(cropped_img, resize=8)
         return bw_img
 
 
@@ -69,26 +70,38 @@ class GestaltDataset(Dataset):
         # return img
 
 
-
 class GSDataset(Dataset):
     def __init__(self):
-        self.data = torch.load(config.kp_gestalt_dataset/"train"/"train.pt")
+        self.data = torch.load(
+            config.kp_gestalt_dataset / "train" / "train.pt")
+        self.imgs = self.load_imgs(config.kp_gestalt_dataset / 'train')
 
     def __len__(self):
         return len(self.data)
-    # def load_data(self, idx):
-    #     file_name, file_extension = self.imgs[idx].split(".")
-    #     data = file_utils.load_json(f"{file_name}.json")
-    #     img = file_utils.load_img(self.imgs[idx])
-    #     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    #     return img, data, file_name.split("/")[-4:]
+
+    def load_imgs(self, path):
+        img_files = file_utils.get_all_files(path, '.png')
+        img_files = sorted(img_files)
+        imgs = []
+        for file in img_files:
+            img = file_utils.load_img(file)
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            img_list = []
+            for i in range(img.shape[1]//516):
+                img_list.append(img[:, i*516:(i+1)*516, :])
+            img_list = [im[2:-2, 2:-2] for im in img_list]
+            imgs.append(img_list)
+        return imgs
+
     def load_data(self, idx):
-        return self.data[idx]
+        return self.data[idx].numpy(), self.imgs[idx]
+
     def __getitem__(self, idx):
         # img, data, file_name = self.load_data(idx)
         # self.args.logger.debug(
         #     f"\n =========== Analysis Image {file_name} {idx + 1}/{len(self.imgs)} ==============")
         return self.data[idx]
+
 
 def load_dataset(args):
     args.step_counter += 1

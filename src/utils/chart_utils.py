@@ -134,6 +134,14 @@ def visual_np_array(array):
     plt.axis('off')
     plt.show()
 
+def van(array):
+    if len(array.shape) == 2:
+        visual_np_array(array.squeeze())
+    elif len(array.shape) == 3:
+        visual_np_array(array.squeeze())
+    elif len(array.shape) == 4:
+        visual_np_array(array[0].squeeze())
+
 
 def get_black_img():
     black_img = np.zeros((512, 512)).astype(np.uint8)

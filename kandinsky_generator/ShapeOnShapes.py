@@ -445,8 +445,8 @@ class ShapeOnShape(KandinskyTruthInterfce):
 
         objs = []
         so = 0.1
-        row_num = random.randint(3, 6)
-        col_num = random.randint(3, 6)
+        row_num = random.randint(3, 5)
+        col_num = random.randint(3, 5)
         diff_row_id = random.randint(0, row_num - 1)
         diff_col_id = random.randint(0, col_num - 1)
         row_space = 1 / (row_num + 1)

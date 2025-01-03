@@ -3,7 +3,8 @@ import numpy as np
 from src.memory.recall_utils import *
 from src.utils import data_utils, chart_utils
 from src.neural import models
-
+from src.reasoning import reason
+from src.utils.chart_utils import van
 
 def recall_fms(args, bk_shape, bw_img, reshape=None):
     # shift fm and images
@@ -18,8 +19,8 @@ def recall_fms(args, bk_shape, bw_img, reshape=None):
             shifted_fm_img.max() - shifted_fm_img.min())
     shifted_fm_img = shifted_fm_img.numpy()
 
-    chart_utils.visual_batch_imgs(shifted_fm_img[:30], args.save_path,
-                                  "in_fm_shifts.png")
+    # chart_utils.visual_batch_imgs(shifted_fm_img[:30], args.save_path,
+    #                               "in_fm_shifts.png")
     if reshape is not None:
         bk_fm_img = F.interpolate(bk_shape["fm_img"], size=(reshape, reshape),
                                   mode='bilinear', align_corners=False)
@@ -47,3 +48,20 @@ def recall_fms(args, bk_shape, bw_img, reshape=None):
     #                   f"highest conf: {best_shift[-1][0]:.2f}")
 
     return shifted_fms, best_shift
+
+
+def recall_match(args, bk_shapes, bw_img):
+    onside_shapes = []
+    onside_percents = torch.zeros(len(bk_shapes))
+    for b_i, bk_shape in enumerate(bk_shapes):
+        shifted_fms, rc_data = recall_fms(args, bk_shape, bw_img,
+                                          reshape=args.obj_fm_size)
+        # reasoning recalled fms to group
+        group_data = reason.reason_fms(rc_data, bk_shape, bw_img,
+                                       reshape=args.obj_fm_size)
+        onside_shapes.append(group_data["recalled_bw_img"])
+        onside_percents[b_i] = group_data["onside_percent"]
+    best_shape = onside_percents.argmax()
+    onside_pixels = onside_shapes[best_shape][0].squeeze()
+
+    return onside_pixels, best_shape

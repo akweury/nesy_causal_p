@@ -341,21 +341,23 @@ def to_bw_img(image):
     return image
 
 
-def rgb2bw(rgb, crop=False, resize=None):
-    bw_img = cv2.cvtColor(rgb, cv2.COLOR_BGR2GRAY)
-    bw_img[bw_img != 211] = 1
-    bw_img[bw_img == 211] = 0
-    if crop:
-        # bw image to cropped bw image
-        bw_img = crop_img(torch.from_numpy(bw_img).squeeze(), resize=resize)
-    else:
-        if resize:
-            bw_img = cv2.resize(bw_img, (resize, resize),
-                                interpolation=cv2.INTER_AREA)
-            bw_img = torch.from_numpy(bw_img).unsqueeze(0)
-        else:
-            bw_img = torch.from_numpy(bw_img).unsqueeze(0)
-    return bw_img
+def resize_img(img, resize):
+    # rgb = rgb_np.numpy().astype(np.uint8)
+    # bw_img = cv2.cvtColor(rgb, cv2.COLOR_BGR2GRAY)
+    # bw_img[bw_img != 211] = 1
+    # bw_img[bw_img == 211] = 0
+    # if crop:
+    #     # bw image to cropped bw image
+    #     bw_img, _ = crop_img(torch.from_numpy(bw_img).squeeze(), resize=resize)
+    # else:
+    #     if resize:
+    img = img.squeeze().numpy()
+    resized_img = cv2.resize(img, (resize, resize),
+                        interpolation=cv2.INTER_LINEAR)
+    resized_img = torch.from_numpy(resized_img).unsqueeze(0)
+        # else:
+        #     bw_img = torch.from_numpy(bw_img).unsqueeze(0)
+    return resized_img
 
 
 def find_valid_radius(matrix):
@@ -412,37 +414,44 @@ def matrix_equality(matrix1, matrix2):
     return similarity_matrix
 
 
-def crop_img(image, resize=None):
-    image = image.squeeze()
-    height, width = image.shape[-2], image.shape[-1]
-    # Find the bounding box of the nonzero values
-    nonzero_coords = torch.nonzero(image)
-    if nonzero_coords.numel() == 0:  # Handle completely empty images
-        return image
+def crop_img(img, crop_data=None):
+    rgb = img.numpy().astype(np.uint8)
+    bw_img = cv2.cvtColor(rgb, cv2.COLOR_BGR2GRAY)
+    bw_img[bw_img != 211] = 1
+    bw_img[bw_img == 211] = 0
+    bw_img = torch.from_numpy(bw_img).squeeze()
 
-    min_y, min_x = nonzero_coords.min(dim=0).values
-    max_y, max_x = nonzero_coords.max(dim=0).values
+    if crop_data is None:
+        height, width = bw_img.shape[-2], bw_img.shape[-1]
+        # Find the bounding box of the nonzero values
+        nonzero_coords = torch.nonzero(bw_img)
+        if nonzero_coords.numel() == 0:  # Handle completely empty images
+            return bw_img
 
-    # Compute the side length of the square
-    side_length = max(max_y - min_y + 1, max_x - min_x + 1)
+        min_y, min_x = nonzero_coords.min(dim=0).values
+        max_y, max_x = nonzero_coords.max(dim=0).values
 
-    # Adjust the bounding box to make it square
-    center_y = (min_y + max_y) // 2
-    center_x = (min_x + max_x) // 2
-    half_side = side_length // 2
+        # Compute the side length of the square
+        side_length = max(max_y - min_y + 1, max_x - min_x + 1)
 
-    # Compute the new square bounding box
-    new_min_y = max(center_y - half_side, 0)
-    new_max_y = min(center_y + half_side + 1, height)
-    new_min_x = max(center_x - half_side, 0)
-    new_max_x = min(center_x + half_side + 1, width)
+        # Adjust the bounding box to make it square
+        center_y = (min_y + max_y) // 2
+        center_x = (min_x + max_x) // 2
+        half_side = side_length // 2
 
+        # Compute the new square bounding box
+        new_min_y = max(center_y - half_side, 0)
+        new_max_y = min(center_y + half_side + 1, height)
+        new_min_x = max(center_x - half_side, 0)
+        new_max_x = min(center_x + half_side + 1, width)
+    else:
+        new_min_y, new_max_y, new_min_x, new_max_x = crop_data
     # Crop the image
-    cropped_image = image[new_min_y:new_max_y, new_min_x:new_max_x]
+    cropped_image = bw_img[new_min_y:new_max_y, new_min_x:new_max_x]
 
-    if resize is not None:
-        cropped_image = cv2.resize(cropped_image.numpy(), (resize, resize),
-                                   interpolation=cv2.INTER_AREA)
-        cropped_image = torch.from_numpy(cropped_image)
+    # if resize is not None:
+    #     cropped_image = cv2.resize(cropped_image.numpy(), (resize, resize),
+    #                                interpolation=cv2.INTER_AREA)
+    #     cropped_image = torch.from_numpy(cropped_image)
     cropped_image = cropped_image.unsqueeze(0)
-    return cropped_image
+    return cropped_image, [new_min_y, new_max_y, new_min_x, new_max_x]

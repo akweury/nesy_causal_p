@@ -41,7 +41,7 @@ def get_args():
     parser.add_argument("--exp_name", type=str, default=None)
     parser.add_argument("--th_group", type=float, default=0.01)
     parser.add_argument("--th_inv_nc", type=float, default=0.01)
-
+    parser.add_argument("--obj_n", type=int, default=32)
     parser.add_argument("--num_epochs", type=int, default=100)
     parser.add_argument("--top_data", type=int, default=100)
     parser.add_argument("--batch_size", type=int, default=10)
@@ -79,6 +79,7 @@ def get_args():
 
     os.makedirs(config.output / f"{args.exp_name}", exist_ok=True)
     args.batch_size = 1
+
 
     # args.exp_setting = eval(f"bk.{args.exp_name}")
     return args

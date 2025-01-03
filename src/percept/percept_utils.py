@@ -10,7 +10,7 @@ from tqdm import tqdm
 from PIL import Image, ImageDraw
 
 from src.utils import chart_utils, data_utils
-from src import dataset
+from src import dataset, bk
 
 
 def matrix_similarity(mat1, mat2):
@@ -134,5 +134,34 @@ def groups2labels(groups, label_type):
     return labels
 
 
-def distance(u, v):
+def proximity_distance(u, v):
     return np.linalg.norm(u - v)
+
+
+def similarity_distance(a, b, weights):
+    """Compute weighted distance between object i and j."""
+    a_dict = bk.tensor2dict(a)
+    b_dict = bk.tensor2dict(b)
+    (x1, y1) = a_dict["position"]
+    (x2, y2) = b_dict["position"]
+    shape_i = a_dict["shape"]
+    shape_j = a_dict["shape"]
+    color_i = a_dict["color"]
+    color_j = b_dict["color"]
+    w_pos = weights[0]
+    w_shape = weights[1]
+    w_color = weights[2]
+
+    # Positional distance (Euclidean)
+    pos_dist = np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
+
+    # Shape distance
+    shape_dist = 0 if (shape_i == shape_j) else 1
+
+    # Color distance
+    color_dist = 0 if (color_i == color_j) else 1
+
+    # Weighted sum
+    dist = w_pos * pos_dist + w_shape * shape_dist + w_color * color_dist
+
+    return dist
