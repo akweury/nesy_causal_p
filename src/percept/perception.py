@@ -46,14 +46,14 @@ def get_most_frequent_color(img):
     return closest_color_name
 
 
-def percept_feature_groups(args, bk_shapes, segment, img):
+def percept_feature_groups(args, bk_shapes, segment):
     """ recall the memory features from the given segments """
     feature_groups = []
 
     # rgb segment to resized bw image
-    cropped_img, _ = data_utils.crop_img(segment.permute(1, 2, 0))
+    cropped_img, _ = data_utils.crop_img(segment)
     bw_img = data_utils.resize_img(cropped_img, resize=8).unsqueeze(0)
-    seg_color = get_most_frequent_color(segment)
+    seg_color = get_most_frequent_color(segment.permute(2, 0, 1))
     for b_i, bk_shape in enumerate(bk_shapes):
         # shape_str = bk.bk_shapes[bk_shape["shape"]]
         args.save_path = config.output / bk.bk_shapes[bk_shape["shape"]]
@@ -83,19 +83,28 @@ def percept_feature_groups(args, bk_shapes, segment, img):
     return best_group
 
 
-def percept_closure_groups(args, input_groups, bk_shapes, img):
+def merge_segments(segments):
+    merged_img = segments[0].clone()
+    for segment in segments:
+        mask = (segment != torch.tensor([211, 211, 211])).any(dim=-1)
+        merged_img[mask] = segment[mask]
+    return merged_img
+
+
+def percept_closure_groups(args, segments, input_groups, bk_shapes):
     """ group input groups to output groups, which are high level groups """
     # each object assigned a group id as its label
     args.obj_fm_size = 32
     # all_obj_found_labels = False
-
+    img = merge_segments(segments)
     # preprocessing img, convert rgb image to black-white image
     cropped_img, crop_data = data_utils.crop_img(img)
     bw_img = data_utils.resize_img(cropped_img, resize=args.obj_fm_size).unsqueeze(0)
 
     groups = []
-    labels = torch.zeros(args.obj_n) - 1
-    while torch.any(labels[:len(input_groups)] == -1):
+    labels = torch.zeros(len(segments))
+    label_counter = 1
+    while torch.any(labels[:len(input_groups)] == 0):
         # recall the memory
         memory, group_label = recall.recall_match(args, bk_shapes, bw_img)
         # assign each object a label
@@ -104,22 +113,29 @@ def percept_closure_groups(args, input_groups, bk_shapes, img):
         if group_objs.sum() == 0:
             break
 
-        labels[group_objs] = group_label
-
+        labels[group_objs] += label_counter
+        label_counter += 1
         # generate group object
-        group = gen_group_tensor(input_groups, group_label, group_objs)
-        groups.append(group)
-    group_ocm = torch.stack(groups)
-    return labels, group_ocm
+        # group = gen_group_tensor(input_groups, group_label, group_objs)
+        # groups.append(group)
+    # if len(groups) == 0:
+    #     print("")
+    # group_ocm = torch.stack(groups)
+
+    return labels
 
 
 def cluster_by_proximity(object_matrix, threshold):
-    # Function to compute distance or difference
+    """ Function to compute distance or difference
+    Return:
+        labels 1 x O np array
+        groups 1 x O x P np array
+    """
 
     obj_n = object_matrix.shape[0]
-    labels = np.full((obj_n,), -1, dtype=np.int32)
-    visited = np.zeros(obj_n, dtype=np.bool_)
-    current_label = 0
+    labels = torch.full((len(object_matrix),), 0, dtype=torch.int32)
+    visited = torch.zeros(obj_n, dtype=torch.bool)
+    current_label = 1
     for i in range(obj_n):
         if not visited[i]:
             # BFS or DFS
@@ -138,14 +154,22 @@ def cluster_by_proximity(object_matrix, threshold):
                             labels[j] = current_label
                             stack.append(j)
             current_label += 1
+
+    # groups = torch.zeros((obj_n, 10))
+    # group_ids = np.unique(labels)
+    # for group_id in group_ids:
+    #     if group_id == -1:
+    #         continue
+    #     group = gen_group_tensor2(object_matrix, 0, labels == group_id)
+    #     groups[group_id] = group
     return labels
 
 
 def cluster_by_similarity(object_matrix, threshold, weights):
     obj_n = object_matrix.shape[0]
-    labels = np.full((obj_n,), -1, dtype=np.int32)
-    visited = np.zeros(obj_n, dtype=np.bool_)
-    current_label = 0
+    labels = torch.full((obj_n,), 0, dtype=torch.int32)
+    visited = torch.zeros(obj_n, dtype=torch.bool)
+    current_label = 1
     for i in range(obj_n):
         if not visited[i]:
             # BFS or DFS
@@ -164,6 +188,14 @@ def cluster_by_similarity(object_matrix, threshold, weights):
                             labels[j] = current_label
                             stack.append(j)
             current_label += 1
+    # groups = torch.zeros((obj_n, 10))
+    # group_ids = np.unique(labels)
+    # for group_id in group_ids:
+    #     if group_id == -1:
+    #         continue
+    #     group = gen_group_tensor2(object_matrix, 0, labels == group_id)
+    #     groups[group_id] = group
+
     return labels
 
 
@@ -201,25 +233,36 @@ def load_bk(args, bk_shapes):
     return bk
 
 
-def cluster_by_closure(args, object_matrix, img, threshold):
+def percept_segments(args, imgs):
+    seg_file = str(args.output_file_prefix) + f"_segments.pt"
+    if os.path.exists(seg_file):
+        segments = torch.load(seg_file)
+    else:
+        segments = []
+        for img in imgs:
+            img_torch = torch.from_numpy(img).to(args.device)
+            # segment the scene into separate parts
+            segment = detect_connected_regions(args, img_torch).int()
+            segments.append(segment)
+        torch.save(segments, seg_file)
+    return segments
+
+
+def cluster_by_closure(args, segments, obj_indices, threshold):
     """ group objects as a high level group, return labels of each object """
-
-    # convert rgb image to black-white image
     group_bk = load_bk(args, bk.bk_shapes)
-
-    img_torch = torch.from_numpy(img).to(args.device)
-    # segment the scene into separate parts
-    segments = detect_connected_regions(args, img_torch)
     # detect local feature as groups
-    loc_groups = detect_local_features(args, segments, group_bk, img_torch)
+    loc_groups = detect_local_features(args, segments, group_bk)
+    loc_groups = [loc_groups[i] for i in range(len(obj_indices)) if obj_indices[i]]
+
+    group_segs = segments[obj_indices]
     # detect global feature as groups and seal the local feature groups into them
-    labels, groups = percept_closure_groups(args, loc_groups, group_bk, img_torch)
+    labels = percept_closure_groups(args, group_segs, loc_groups, group_bk)
 
-    groups= torch.cat([groups, torch.zeros(len(object_matrix)-len(groups), 10)],dim=0)
-    return labels, groups
+    return labels
 
 
-def gen_group_tensor(input_groups, group_label, group_objs):
+def gen_group_tensor(input_groups, group_shape, group_objs):
     parent_objs = [input_groups[i] for i in range(len(input_groups)) if
                    group_objs[i]]
     parent_positions = torch.stack([obj.pos for obj in parent_objs])
@@ -233,11 +276,40 @@ def gen_group_tensor(input_groups, group_label, group_objs):
 
     color = "none"
     shape = [0] * len(bk.bk_shapes)
-    shape[int(group_label.item())] = 1.0
+    if group_shape is not None:
+        shape[int(group_shape.item())] = 1.0
     color = list(bk.color_matplotlib[color])
     others = [group_x, group_y, group_size]
     tensor = torch.tensor(others + color + shape)
     tensor[3:6] /= 255
+    if tensor.max() > 1:
+        print("")
+    return tensor
+
+
+def gen_group_tensor2(input_groups, group_shape, group_objs):
+    parent_tensors = np.stack([input_groups[i] for i in range(len(input_groups)) if group_objs[i]])
+    parent_positions = parent_tensors[:, :2]
+    x = parent_positions[:, 0]
+    y = parent_positions[:, 1]
+    group_x = x.mean()
+    group_y = y.mean()
+    # Shoelace formula
+    if len(parent_tensors) == 1:
+        group_size = parent_tensors[0, 2]
+        color = parent_tensors[0, 3:6].tolist()
+        shape = parent_tensors[0, 6:].tolist()
+    else:
+        group_size = 0.5 * np.abs(np.sum(x[:-1] * y[1:]) - np.sum(y[:-1] * x[1:]))
+        color = list(bk.color_matplotlib["none"])
+        shape = [0] * len(bk.bk_shapes)
+        if group_shape is not None:
+            shape[group_shape] = 1.0
+
+    others = [group_x, group_y, group_size]
+    tensor = torch.tensor(others + color + shape)
+    if tensor.max() > 1:
+        print("")
     return tensor
 
 
@@ -251,26 +323,36 @@ def eval_similarity(groups):
 #     shapes = positions2shapes(positions)
 
 
-def cluster_by_principle(args, ocms, imgs, action, threshold, weights):
+def cluster_by_principle(step, args, input_ocms, segments, labels, action, threshold, weights):
     """ evaluate gestalt scores, decide grouping based on which strategy
+
+    output: NxOxP np array, N example numbers, O max group numbers, P group property numbers
+    labels: NxO np array, N example numbers, O max group numbers
     - loc groups: individual objects;
+
     """
-    labels = np.zeros(ocms.shape[:2])
-    groups = []
-    action = 2
+    ocms = [input_ocms[s_i][:len(segments[s_i])] for s_i in range(len(segments))]
+
+    prediction = labels.copy()
     for o_i, ocm in enumerate(ocms):
-        if config.gestalt_action[action] == "proximity":
-            labels[o_i] = cluster_by_proximity(ocm, threshold)
-        elif config.gestalt_action[action] == "similarity":
-            labels[o_i] = cluster_by_similarity(ocm, threshold, weights)
-        elif config.gestalt_action[action] == "closure":
-            labels[o_i], new_groups = cluster_by_closure(args, ocm, imgs[o_i],
-                                                         threshold)
-            groups.append(new_groups)
-        else:
-            raise ValueError("Unknown gestalt action {}".format(action))
-    groups = torch.stack(groups)
-    return groups, labels
+        max_id = max(labels[o_i])
+        for id in labels[o_i].unique():
+            label_id = [id.item()] * len(labels[o_i])
+            mask = [a == b for a, b in zip(labels[o_i], label_id)]
+            obj_tensors = ocm[mask]
+            obj_tensors = obj_tensors.reshape(-1, 10)
+            if config.gestalt_action[action] == "proximity":
+                group_ids = cluster_by_proximity(obj_tensors, threshold)
+            elif config.gestalt_action[action] == "similarity":
+                group_ids = cluster_by_similarity(obj_tensors, threshold, weights)
+            elif config.gestalt_action[action] == "closure":
+                obj_indices = labels[o_i] == id
+                group_ids = cluster_by_closure(args, segments[o_i], obj_indices, threshold)
+            else:
+                raise ValueError("Unknown gestalt action {}".format(action))
+            prediction[o_i][mask] = (group_ids + max_id).float()
+
+    return prediction
 
     #     # strategy: proximity
     #     labels = cluster_by_proximity(ocm, threshold)
@@ -321,29 +403,32 @@ def detect_connected_regions(args, input_array, pixel_num=50):
     # Stack all labeled regions into a single tensor
     if len(labeled_regions) == 0:
         print('')
-    output_tensor = torch.tensor(np.stack(labeled_regions), dtype=torch.float32)
+    output_tensor = torch.tensor(np.stack(labeled_regions), dtype=torch.float32).permute(0, 2, 3, 1)
 
     args.logger.debug(f"detected connected regions: {output_tensor.shape[0]}")
 
     return output_tensor
 
 
-def detect_local_features(args, segments, group_bk, img):
-    group_file = args.output_file_prefix + f"_feature_groups.pt"
+def detect_local_features(args, segments, group_bk):
+    group_file = str(args.output_file_prefix) + f"_feature_groups.pt"
     if os.path.exists(group_file):
         groups = torch.load(group_file)
     else:
         groups = []
         for segment in tqdm(segments, desc="local features detection"):
-            group = percept_feature_groups(args, group_bk, segment, img)
+            group = percept_feature_groups(args, group_bk, segment)
             groups.append(group)
+        if len(groups) != len(segments):
+            print("")
         torch.save(groups, group_file)
     args.logger.debug(f"detected local features: {len(groups)}")
+
     return groups
 
 
 def detect_global_features(args, loc_groups, bk, img):
-    global_group_file = args.output_file_prefix + f"_global_groups.pt"
+    global_group_file = str(args.output_file_prefix) + f"global_groups.pt"
     if os.path.exists(global_group_file):
         labels, groups = percept_closure_groups(args, loc_groups, bk, img)
         # new_groups = torch.load(global_group_file)
@@ -361,15 +446,38 @@ def percept_groups(args, idx, group_bk, img):
     # segment the scene into separate parts
     segments = detect_connected_regions(args, img)
     # detect local feature as groups
-    loc_groups = detect_local_features(args, segments, group_bk, img)
+    loc_groups = detect_local_features(args, segments, group_bk)
     # detect global feature as groups and seal the local feature groups into them
     glo_groups = detect_global_features(args, loc_groups, group_bk, img)
 
     return glo_groups
 
 
-def percept_reward(groups):
-    return np.all(groups == groups[0]).astype(np.float32)
+def percept_reward(ocm, labels, max_label, action):
+    # if no new group, reward is 0
+    if max([max(label) for label in labels]) <= max_label:
+        return 0
+
+    valid_groups = ocm.sum(axis=-1) > 0
+
+    same_group_num = np.all(valid_groups == valid_groups[0], axis=1).all()
+
+    group_shape = ocm[:, :, 6:].reshape(ocm.shape[0], -1)
+    same_group_shape = np.all(group_shape == group_shape[0], axis=1).all()
+
+    group_color = ocm[:, :, 3:6].reshape(ocm.shape[0], -1)
+    same_group_color = np.all(group_color == group_color[0], axis=1).all()
+
+    if config.gestalt_action[action] == "proximity":
+        reward = 0
+    elif config.gestalt_action[action] == "similarity":
+        reward = bool(same_group_shape + same_group_color) * valid_groups[0].sum() > 1
+    elif config.gestalt_action[action] == "closure":
+        reward = bool(same_group_num * same_group_shape)
+    else:
+        raise ValueError("Unknown gestalt action {}".format(action))
+
+    return float(reward)
 
 
 def identify_kernels(args, train_loader):

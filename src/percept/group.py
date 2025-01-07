@@ -104,4 +104,7 @@ class Group():
         # Calculate the average row and column indices
         row_center = torch.mean(nonzero_indices[:, 0])
         col_center = torch.mean(nonzero_indices[:, 1])
-        return torch.tensor([row_center, col_center])
+        pos = torch.tensor([row_center, col_center])
+        if pos.max() > 1:
+            pos = pos / 512
+        return pos

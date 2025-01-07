@@ -156,10 +156,10 @@ def similarity_distance(a, b, weights):
     pos_dist = np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
 
     # Shape distance
-    shape_dist = 0 if (shape_i == shape_j) else 1
+    shape_dist = 0 if np.all(shape_i == shape_j) else 1
 
     # Color distance
-    color_dist = 0 if (color_i == color_j) else 1
+    color_dist = 0 if np.all(color_i == color_j) else 1
 
     # Weighted sum
     dist = w_pos * pos_dist + w_shape * shape_dist + w_color * color_dist

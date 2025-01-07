@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 import cv2
 import numpy as np
 
+from src import bk
+
 
 def zoom_matrix_to_image_cv(matrix, zoom_factor=8, colormap='plasma', padding=True):
     """
@@ -70,7 +72,6 @@ def zoom_img(matrix, zoom_factor=8, add_border=True):
 
 
 def color_mapping(matrix, norm_factor, text=None):
-
     # Choose a colormap, e.g., 'viridis'
     cmap = plt.get_cmap('viridis')
     zoomed_image = cv2.resize(cmap(matrix / norm_factor)[:, :, :3], (512, 512),
@@ -134,6 +135,7 @@ def visual_np_array(array):
     plt.axis('off')
     plt.show()
 
+
 def van(array):
     if len(array.shape) == 2:
         visual_np_array(array.squeeze())
@@ -151,7 +153,7 @@ def get_black_img():
 def array2img(array):
     img = cv2.resize(array, (512, 512), interpolation=cv2.INTER_NEAREST)
     img = color_mapping(img, 1, "BW")
-    img= cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     return img
 
 
@@ -182,3 +184,50 @@ def visual_batch_imgs(batch_imgs, path, name):
 def resize_img(img, new_size):
     resized_img = cv2.resize(img, (new_size, new_size), interpolation=cv2.INTER_NEAREST)
     return resized_img
+
+
+def shadow_obj(img, obj_tensor, label, action):
+    color = bk.color_matplotlib["gray"]
+    alpha = 0.5
+    size = int(obj_tensor[2] * 512 * 0.6)
+    x_pos = int(obj_tensor[0] * 512)
+    y_pos = int(obj_tensor[1] * 512)
+    top_left = (x_pos - size, y_pos - size)
+    bottom_right = (x_pos + size, y_pos + size)
+    overlay = img.copy()
+    cv2.rectangle(overlay, top_left, bottom_right, color, -1)
+    cv2.addWeighted(overlay, alpha, img, 1 - alpha, 0, img)
+
+    cv2.putText(img, text=str(label), org=(x_pos, y_pos), color=(255, 255, 255),
+                fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, thickness=2,
+                lineType=cv2.LINE_AA)
+
+
+    return img
+
+
+def ocm2img(labels, ocm, input_img, action):
+    unique_labels = np.unique(labels).astype(int)
+
+    img = add_text(f"Group", input_img)
+    for label in unique_labels:
+        group_ocm = ocm[labels == label]
+        for obj_tensor in group_ocm:
+            img = shadow_obj(img, obj_tensor, label, action)
+    cv2.putText(img, text=str(action), org=(50, 100), color=(0, 0, 255),
+                fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, thickness=2,
+                lineType=cv2.LINE_AA)
+    return img
+
+
+def visual_rl_step(task_img, ocms, output_labels, action, step):
+    output_imgs = []
+    for i, labels in enumerate(output_labels):
+        output_img = ocm2img(labels, ocms[i], task_img[i], action)
+        output_imgs.append(output_img)
+    output_imgs = hconcat_imgs(output_imgs)
+    cv2.putText(output_imgs, text=f"step {step}", org=(50, 50), color=(0, 0, 255),
+                fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, thickness=2,
+                lineType=cv2.LINE_AA)
+    return output_imgs
+

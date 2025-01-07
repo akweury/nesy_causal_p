@@ -47,9 +47,9 @@ def reason_fms(rc_fms, bk_shape, bw_img, reshape=None):
     # image matching
     # onside, offside = img_matching(mem_fm, in_fms)
 
-    onside = torch.stack([1 - (mem_fm.squeeze()-in_fms)**2 for mem_fm in mem_fms])
+    onside = torch.stack([1 - (mem_fm.squeeze() - in_fms) ** 2 for mem_fm in mem_fms])
     onside = onside.mean(dim=0)
-    onside[in_fms==0]=0
+    onside[in_fms == 0] = 0
     onside_mask = in_fms * (onside > 0.9)
 
     # recall confidence
@@ -68,18 +68,21 @@ def mask_similarity(mask1, mask2):
     return similarity
 
 
-def reason_labels(args, bw_img, objs,crop_data, labels, onside):
+def reason_labels(args, bw_img, objs, crop_data, labels, onside):
     group_objs = torch.zeros_like(labels).bool()
     for o_i, obj in enumerate(objs):
-        if labels[o_i] == -1:
-            cropped_img, _ = data_utils.crop_img(obj.input, crop_data)
-            seg_mask = data_utils.resize_img(cropped_img,
-                                             resize=args.obj_fm_size).unsqueeze(0) > 0
-            simi_conf = mask_similarity(onside, seg_mask)
-            if simi_conf > 0.4:
-                group_objs[o_i] = True
-                # find the mask of that object, remove the pixels of that object
-                bw_img[seg_mask] = 0
+        try:
+            if labels[o_i] == 0:
+                cropped_img, _ = data_utils.crop_img(obj.input, crop_data)
+                seg_mask = data_utils.resize_img(cropped_img,
+                                                 resize=args.obj_fm_size).unsqueeze(0) > 0
+                simi_conf = mask_similarity(onside, seg_mask)
+                if simi_conf > 0.4:
+                    group_objs[o_i] = True
+                    # find the mask of that object, remove the pixels of that object
+                    bw_img[seg_mask] = 0
+        except IndexError:
+            print("")
     return group_objs
 
 #

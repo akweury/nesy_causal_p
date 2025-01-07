@@ -132,7 +132,11 @@ bk_shapes = ["none", "circle", "square", "triangle"]
 # exp setting
 task_pattern_types = ["task_true_pattern", "task_random_pattern", "task_cf_pattern"]
 
-
+gestalt_action = {
+    "proximity":0,
+    1: "similarity",
+    2: "closure"
+}
 
 exp_count_group = {
     "bk_groups": ["circle_small", "square_small"],

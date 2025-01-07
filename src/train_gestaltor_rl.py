@@ -6,10 +6,11 @@ import numpy as np
 from gymnasium import spaces
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_checker import check_env
+import torch
 
 import config
 from kandinsky_generator import generate_training_patterns
-from utils import args_utils
+from utils import args_utils, chart_utils
 from src import dataset
 from percept import perception
 
@@ -28,11 +29,13 @@ class GestaltGroupingEnv(gymnasium.Env):
         self.n_principles = n_principles
         self.max_threshold = max_threshold
         self.bins = bins
+        # self.labels = None
         self.data_idx = 0
         self.max_steps = 3
+        self.max_group_id = -1
         self.ocm = None
         self.imgs = None
-
+        self.total_step = 0
         # Observation: positions of objects (toy example).
         # Real case: could include color, shape, or feature embeddings.
         self.observation_space = spaces.Box(
@@ -51,13 +54,14 @@ class GestaltGroupingEnv(gymnasium.Env):
         # In a real implementation, you might add more actions
         # or even use a continuous action space for parameterized thresholds.
         self.action_space = spaces.Box(
-            low=0.0, high=1.0, shape=(4,), dtype=np.float32
+            low=0.0, high=1.0, shape=(5,), dtype=np.float32
         )
         # Initialize environment state
         self.reset()
 
     def next_data(self):
         self.data_idx += 1
+        self.data_idx = self.data_idx % self.dataset.__len__()
         task_tensor, task_imgs = self.dataset.load_data(self.data_idx)
         return task_tensor, task_imgs
 
@@ -68,13 +72,22 @@ class GestaltGroupingEnv(gymnasium.Env):
         """
         # load object positions in [0,1]x[0,1]
         self.ocm, self.imgs = self.next_data()
+        self.visual_img = [chart_utils.hconcat_imgs(self.imgs)]
+
+        # self.labels = torch.zeros(len(self.ocm))
         # Could also store "group labels" or other info if needed
         self.steps_taken = 0
         info = {
             "steps_taken": self.steps_taken
         }
-        self.args.output_file_prefix = str(
-            config.model_gestalt / f'img_{self.data_idx}')
+
+        self.args.output_file_prefix = config.model_gestalt / f'data_{self.data_idx}'
+        os.makedirs(self.args.output_file_prefix, exist_ok=True)
+
+        # convert rgb image to black-white image
+        self.segments = perception.percept_segments(self.args, self.imgs)
+        self.labels = [torch.zeros(len(seg)) - 1 for seg in self.segments]
+        # self.ocm = [self.ocm[i][:len(self.segments[i])] for i in range(len(self.segments))]
         return self.ocm, info
 
     def step(self, action):
@@ -87,6 +100,8 @@ class GestaltGroupingEnv(gymnasium.Env):
         #   2. Compute how good the grouping is (F1 score vs. ground truth, etc.).
         #   3. That becomes your reward.
         # take the action, check if truncated/terminated
+        print(f"step: {self.steps_taken}")
+
         terminated = False
         truncated = False
         principle_float = action[0]
@@ -97,18 +112,29 @@ class GestaltGroupingEnv(gymnasium.Env):
         threshold = threshold_float * self.max_threshold
 
         # input data, update the ocm
-        self.ocm, groups = perception.cluster_by_principle(
-            self.args, self.ocm, self.imgs, principle_idx, threshold, weight_float)
-        # For demonstration, we give a random reward:
-        reward = perception.percept_reward(groups)
 
+        self.labels = perception.cluster_by_principle(self.steps_taken, self.args, self.ocm, self.segments, self.labels,
+                                                      principle_idx, threshold, weight_float)
+        ocm = [self.ocm[i][:len(self.segments[i])] for i in range(len(self.segments))]
+
+        self.visual_img.append(chart_utils.visual_rl_step(self.imgs, ocm, self.labels,
+                                                          config.gestalt_action[principle_idx], self.steps_taken))
+
+        # For demonstration, we give a random reward:
+        reward = perception.percept_reward(self.ocm, self.labels, self.max_group_id, principle_idx)
+
+        self.max_group_id = max([max(label) for label in self.labels])
         # For a realistic environment, you'd transform self.positions or maintain
         # a 'current_grouping' data structure. Here, we just keep positions static.
 
         self.steps_taken += 1
+        self.total_step += 1
         terminated = (self.steps_taken >= self.max_steps)
-        if self.steps_taken < self.max_steps and terminated:
+        if reward == 0:
             truncated = True
+            self.visual_img = chart_utils.vconcat_imgs(self.visual_img)
+            # if step % 10 == 0:
+            chart_utils.save_img(self.visual_img, config.models / "visual" / f"step_{self.total_step}.png")
 
         # info can hold debugging or diagnostic data
         info = {
