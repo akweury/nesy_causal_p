@@ -1497,6 +1497,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
                                                                              max_percent=0.8)
         else:
             raise ValueError("Shape does not support.")
+
         kf = g(so, truth)
         t = 0
         tt = 0

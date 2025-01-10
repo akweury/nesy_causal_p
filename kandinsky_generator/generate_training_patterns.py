@@ -4,14 +4,16 @@ import os
 import json
 from pathlib import Path
 import torch
+from fontTools.svgLib.path import shapes
 
 import config
 from tqdm import tqdm
 from kandinsky_generator.src.kp import KandinskyUniverse
 from kandinsky_generator.ShapeOnShapes import ShapeOnShape
 from src import bk
-from src.utils import chart_utils
+from src.utils import chart_utils, args_utils
 from src.percept import gestalt_group
+from kandinsky_generator import gestalt_patterns
 
 u = KandinskyUniverse.SimpleUniverse()
 
@@ -268,85 +270,67 @@ def genShapeOnShape(args):
                 image.save(base_path / f"{shape}_{(png_num + i):06d}.png")
 
 
-def gen_and_save(gen_fun, path, data_counter, width):
-    positive_tensors = []
-    negative_tensors = []
+def gen_and_save(path, width, principle):
     data = []
     images = []
     max_length = 64
+    all_tensors = {"positive": [], "negative": []}
 
-    positive_kfs = gen_fun(rule_style=True, n=3)
-    for kf in positive_kfs:
-        img = np.asarray(KandinskyUniverse.kandinskyFigureAsImage(kf, width)).copy()
-        outline_width = 0
-        # Set the top and bottom borders to red
-        # img[:outline_width, :, :] = np.array(bk.color_matplotlib["green"])  # Top border
-        # img[-outline_width:, :, :] = bk.color_matplotlib["green"]  # Bottom border
-        #
-        # # Set the left and right borders to red
-        # img[:, :outline_width, :] = bk.color_matplotlib["green"]  # Left border
-        # img[:, -outline_width:, :] = bk.color_matplotlib["green"]  # Right border
-        images.append(img)
-        data.append(kf2data(kf, width))
-        positive_tensors.append(kf2tensor(kf, max_length))
-    positive_tensors = torch.stack(positive_tensors)
+    if principle == "proximity":
+        task_names = ["proximity_two_groups", "proximity_three_groups", "proximity_always_three"]
+        # task_names = ["proximity_two_groups", "proximity_three_groups", "proximity_always_three"]
+    elif principle == "similarity":
+        task_names = []
+        # task_names = ["similarity_triangle_circle"]
+    elif principle == "closure":
+        task_names = []
+        # task_names = ["gestalt_triangle", "tri_group", "triangle_square"]
+    else:
+        raise ValueError
 
-    negative_kfs = gen_fun(rule_style=False)
-    for kf in negative_kfs:
-        img = np.asarray(KandinskyUniverse.kandinskyFigureAsImage(kf, width)).copy()
-        # outline_width = 0
-        # Set the top and bottom borders to red
-        # img[:outline_width, :, :] = bk.color_matplotlib["red"]  # Top border
-        # img[-outline_width:, :, :] = bk.color_matplotlib["red"]  # Bottom border
-        # # Set the left and right borders to red
-        # img[:, :outline_width, :] = bk.color_matplotlib["red"]  # Left border
-        # img[:, -outline_width:, :] = bk.color_matplotlib["red"]  # Right border
-        images.append(img)
-        data.append(kf2data(kf, width))
-        negative_tensors.append(kf2tensor(kf, max_length))
-    negative_tensors = torch.stack(negative_tensors)
+    for t_i, task_name in enumerate(task_names):
+        kfs = []
 
-    images = chart_utils.hconcat_imgs(images)
-    with open(path / f"{data_counter:06d}.json", 'w') as f:
-        json.dump(data, f)
-    Image.fromarray(images).save(path / f"{data_counter:06d}.png")
+        for dtype in [True, False]:
+            for example_i in range(3):
+                kfs.append(gestalt_patterns.gen_patterns(task_name, dtype, example_i))
+        tensors = []
+        images = []
+        for kf in kfs:
+            img = np.asarray(KandinskyUniverse.kandinskyFigureAsImage(kf, width)).copy()
+            images.append(img)
+            data.append(kf2data(kf, width))
+            tensors.append(kf2tensor(kf, max_length))
+        tensors = torch.stack(tensors)
 
-    return {"positive": positive_tensors, "negative": negative_tensors}
+        # save image
+        images = chart_utils.hconcat_imgs(images)
+        with open(path / f"{t_i:06d}.json", 'w') as f:
+            json.dump(data, f)
+        Image.fromarray(images).save(path / f"{t_i:06d}.png")
+
+        # save tensor
+        all_tensors["positive"].append(tensors[:3])
+        all_tensors["negative"].append(tensors[3:])
+    return all_tensors
 
 
-def genGestaltTraining(args):
+def genGestaltTraining():
     width = 512
-    shapeOnshapeObjects = ShapeOnShape(u, 20, 40)
     base_path = config.kp_gestalt_dataset
     os.makedirs(base_path, exist_ok=True)
+    principles = ["proximity", "similarity", 'closure']
 
-    gen_funs = [
-        shapeOnshapeObjects.triangle_square,
-        shapeOnshapeObjects.tri_group,
-        shapeOnshapeObjects.proximity_square,
-        shapeOnshapeObjects.similarity_triangle_circle,
-        shapeOnshapeObjects.gestalt_triangle,
-        shapeOnshapeObjects.continue_two_curves,
-        # shapeOnshapeObjects.cir_group
-    ]
-
-    for mode in ['train', "test"]:
-        data_counter = 0
-        data_tensors = []
-        data_path = base_path / mode
-        os.makedirs(data_path, exist_ok=True)
-        tensor_file = data_path / f"{mode}.pt"
-        if os.path.exists(tensor_file):
-            continue
-        for gen_fun in gen_funs:
-            # positive_kfs = gen_fun(rule_style=True, n=3)
-            tensors = gen_and_save(gen_fun, data_path, data_counter, width)
-            data_tensors.append(tensors)
-            # negative_kfs = gen_fun(rule_style=False)
-            # negative_tensors = gen_and_save(negative_kfs, data_path, data_counter, width)
-            # data_tensors.append({"positive": positive_tensors, "negative": negative_tensors})
-            data_counter += 1
-        torch.save(data_tensors, tensor_file)
+    for principle in principles:
+        for mode in ['train', "test"]:
+            data_path = base_path / mode
+            os.makedirs(data_path, exist_ok=True)
+            tensor_file = data_path / f"{mode}_{principle}.pt"
+            # if os.path.exists(tensor_file):
+            #     continue
+            tensors = gen_and_save(data_path, width, principle)
+            torch.save(tensors, tensor_file)
+    print("")
 
 
 if __name__ == "__main__":

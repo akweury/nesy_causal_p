@@ -518,7 +518,10 @@ def overlaps(shapes, width=1024):
     for s in shapes:
         image = Image.new("L", (width, width), 0)
         d = ImageDraw.Draw(image)
-        globals()[s.shape](d, w * s.x, w * s.y, w * s.size, 10)
+        try:
+            globals()[s.shape](d, w * s.x, w * s.y, w * s.size, 10)
+        except TypeError:
+            raise TypeError
         sumarray = sumarray + np.array(image)
 
     sumimage = Image.fromarray(sumarray)

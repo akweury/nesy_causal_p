@@ -168,7 +168,7 @@ def main():
     args = args_utils.get_args()
     init_io_folders(args, config.model_gestalt)
 
-    generate_training_patterns.genGestaltTraining(args)
+    generate_training_patterns.genGestaltTraining()
     # Initialize the custom environment
     env = GestaltGroupingEnv(
         args=args,
