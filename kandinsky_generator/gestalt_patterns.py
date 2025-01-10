@@ -67,7 +67,6 @@ def proximity_always_n(so, dtype, n=2):
         - one clusters of circles/square/triangle
         - all the clusters have same number of objects
         """
-
     objs = []
     cluster_dist = 0.3
     neighbour_dist = 0.1
@@ -119,6 +118,53 @@ def proximity_always_n(so, dtype, n=2):
     return objs
 
 
+def similarity_two_shapes(so, dtype, shape_a, shape_b, n=2):
+    """
+        positive pattern :
+        + n x m objects, where a random row has shape_a, and the rest objects are shape_b
+
+        negative pattern:
+        - one clusters of circles/square/triangle
+        - all the clusters have same number of objects
+        """
+    objs = []
+    cluster_dist = 0.3
+    neighbour_dist = 0.1
+    group_sizes = [2, 3, 4]
+    random_points_num = 2
+    color = random.choice(bk.color_large)
+    if dtype:
+        row_num = random.randint(3, 5)
+        col_num = random.randint(3, 5)
+        diff_row_id = random.randint(0, row_num - 1)
+        row_space = 1 / (row_num + 1)
+        col_space = 1 / (col_num + 1)
+        for x in range(row_num):
+            for y in range(col_num):
+                if x != diff_row_id:
+                    objs.append(kandinskyShape(color=color, shape=shape_a, size=so, x=(x + 1) * row_space,
+                                               y=(y + 1) * col_space, line_width=-1, solid=True))
+                else:
+                    objs.append(kandinskyShape(color=color, shape=shape_b, size=so, x=(x + 1) * row_space,
+                                               y=(y + 1) * col_space, line_width=-1, solid=True))
+
+    else:
+        row_num = random.randint(3, 5)
+        col_num = random.randint(3, 5)
+        diff_row_id = random.randint(0, row_num - 1)
+        row_space = 1 / (row_num + 1)
+        col_space = 1 / (col_num + 1)
+        for x in range(row_num):
+            for y in range(col_num):
+                if x != diff_row_id:
+                    objs.append(kandinskyShape(color=color, shape=shape_b, size=so, x=(x + 1) * row_space,
+                                               y=(y + 1) * col_space, line_width=-1, solid=True))
+                else:
+                    objs.append(kandinskyShape(color=color, shape=shape_a, size=so, x=(x + 1) * row_space,
+                                               y=(y + 1) * col_space, line_width=-1, solid=True))
+    return objs
+
+
 def gen_patterns(pattern_name, dtype, example_idx):
     so = 0.1
 
@@ -128,9 +174,8 @@ def gen_patterns(pattern_name, dtype, example_idx):
         g = lambda so, truth: proximity_n_groups(so, dtype, n=3)
     elif pattern_name == "proximity_always_three":
         g = lambda so, truth: proximity_always_n(so, dtype, n=3)
-
     elif pattern_name == "similarity_triangle_circle":
-        pass
+        g = lambda so, truth: similarity_two_shapes(so, dtype, "triangle", "circle", n=3)
     elif pattern_name == "gestalt_triangle":
         pass
     elif pattern_name == "tri_group":

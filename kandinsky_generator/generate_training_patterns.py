@@ -270,48 +270,52 @@ def genShapeOnShape(args):
                 image.save(base_path / f"{shape}_{(png_num + i):06d}.png")
 
 
-def gen_and_save(path, width, principle):
-    data = []
-    images = []
-    max_length = 64
-    all_tensors = {"positive": [], "negative": []}
-
+def get_task_names(principle):
     if principle == "proximity":
         task_names = ["proximity_two_groups", "proximity_three_groups", "proximity_always_three"]
-        # task_names = ["proximity_two_groups", "proximity_three_groups", "proximity_always_three"]
     elif principle == "similarity":
-        task_names = []
-        # task_names = ["similarity_triangle_circle"]
+        task_names = ["similarity_triangle_circle"]
     elif principle == "closure":
         task_names = []
         # task_names = ["gestalt_triangle", "tri_group", "triangle_square"]
     else:
         raise ValueError
+    return task_names
 
-    for t_i, task_name in enumerate(task_names):
-        kfs = []
 
-        for dtype in [True, False]:
-            for example_i in range(3):
-                kfs.append(gestalt_patterns.gen_patterns(task_name, dtype, example_i))
-        tensors = []
-        images = []
-        for kf in kfs:
-            img = np.asarray(KandinskyUniverse.kandinskyFigureAsImage(kf, width)).copy()
-            images.append(img)
-            data.append(kf2data(kf, width))
-            tensors.append(kf2tensor(kf, max_length))
-        tensors = torch.stack(tensors)
+def gen_and_save(path, width):
+    data = []
+    max_length = 64
+    all_tensors = {"positive": [], "negative": []}
+    task_counter = 0
+    principles = ["proximity", "similarity", 'closure']
+    for principle in principles:
+        task_names = get_task_names(principle)
+        for t_i, task_name in enumerate(task_names):
+            kfs = []
+            for dtype in [True, False]:
+                for example_i in range(3):
+                    kfs.append(gestalt_patterns.gen_patterns(task_name, dtype, example_i))
+            tensors = []
+            images = []
+            for kf in kfs:
+                img = np.asarray(KandinskyUniverse.kandinskyFigureAsImage(kf, width)).copy()
+                images.append(img)
+                data.append(kf2data(kf, width))
+                tensors.append(kf2tensor(kf, max_length))
+            tensors = torch.stack(tensors)
 
-        # save image
-        images = chart_utils.hconcat_imgs(images)
-        with open(path / f"{t_i:06d}.json", 'w') as f:
-            json.dump(data, f)
-        Image.fromarray(images).save(path / f"{t_i:06d}.png")
+            # save image
+            images = chart_utils.hconcat_imgs(images)
+            with open(path / f"{task_counter:06d}.json", 'w') as f:
+                json.dump(data, f)
+            Image.fromarray(images).save(path / f"{task_counter:06d}.png")
 
-        # save tensor
-        all_tensors["positive"].append(tensors[:3])
-        all_tensors["negative"].append(tensors[3:])
+            # save tensor
+            all_tensors["positive"].append(tensors[:3])
+            all_tensors["negative"].append(tensors[3:])
+
+            task_counter += 1
     return all_tensors
 
 
@@ -319,17 +323,14 @@ def genGestaltTraining():
     width = 512
     base_path = config.kp_gestalt_dataset
     os.makedirs(base_path, exist_ok=True)
-    principles = ["proximity", "similarity", 'closure']
-
-    for principle in principles:
-        for mode in ['train', "test"]:
-            data_path = base_path / mode
-            os.makedirs(data_path, exist_ok=True)
-            tensor_file = data_path / f"{mode}_{principle}.pt"
-            # if os.path.exists(tensor_file):
-            #     continue
-            tensors = gen_and_save(data_path, width, principle)
-            torch.save(tensors, tensor_file)
+    for mode in ['train', "test"]:
+        data_path = base_path / mode
+        os.makedirs(data_path, exist_ok=True)
+        tensor_file = data_path / f"{mode}.pt"
+        # if os.path.exists(tensor_file):
+        #     continue
+        tensors = gen_and_save(data_path, width)
+        torch.save(tensors, tensor_file)
     print("")
 
 
