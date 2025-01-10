@@ -18,7 +18,8 @@ var_dtypes = {
 const_dtypes = {
     "object_color": "object_color",
     "object_shape": "object_shape",
-    "group_label": "group_label"
+    "group_label": "group_label",
+    "object_num":"object_num",
 }
 
 # -----------------------------------------
@@ -34,7 +35,8 @@ pred_names = {
     "in_pattern": "in_pattern",
     "has_color": "exist_obj_color",
     "has_shape": "exist_obj_shape",
-    "group_shape": "exist_group_shape"
+    "group_shape": "exist_group_shape",
+    "object_num": "has_obj_num"
 }
 
 var_dtype_obj = var_dtypes["object"]
@@ -44,6 +46,7 @@ var_dtype_pattern = var_dtypes["pattern"]
 const_dtype_object_color = const_dtypes["object_color"]
 const_dtype_object_shape = const_dtypes["object_shape"]
 const_dtype_group = const_dtypes["group_label"]
+const_dtype_obj_num = const_dtypes["object_num"]
 
 
 def create_predicate_config(name, term_list):
@@ -86,13 +89,20 @@ predicate_configs["predicate_g_shape"] = create_predicate_config("group_shape", 
     f"{var_dtype_pattern},+",
 ])
 
+predicate_configs["predicate_obj_num"] = create_predicate_config("object_num", [
+    f"{const_dtype_obj_num},#",
+    f"{var_dtype_group},+",
+    f"{var_dtype_pattern},+",
+])
+
 const_dict = {
     f'{var_dtypes["pattern"]},+': "pattern",
     f'{var_dtypes["group"]},+': 'amount_group',
     f'{var_dtypes["object"]},+': 'amount_object',
     f'{const_dtypes["object_color"]},+': 'enum',
     f'{const_dtypes["object_shape"]},+': 'enum',
-    f'{const_dtypes["group_label"]},+': 'enum'
+    f'{const_dtypes["group_label"]},+': 'enum',
+    f'{const_dtypes["object_num"]},+': 'amount_number'
 }
 
 # dtype:
@@ -103,19 +113,23 @@ variable = {
 
 obj_ohc = ["color_name", "shape", "x", "y", "group_name", "group_conf"]
 prop_idx_dict = {
-    "color": 0,
-    "shape": 1,
-    "x": 2,
-    "y": 3,
-    "group_name": 4,
-    "group_conf": 5,
+    "x": 0,
+    "y": 1,
+    "size": 2,
+    "obj_num": 3,
+    "rgb_r": 4,
+    "rgb_g": 5,
+    "rgb_b": 6,
+    "shape_tri": 7,
+    "shape_sq": 8,
+    "shape_cir": 9,
 }
 color_small = ["blue", "yellow", "red"]
 
-shape_small = ["circle", "square", "triangle"]
-group_name_small = ["none", "data_triangle", "data_square", "data_circle"]
+# shape_small = ["circle", "square", "triangle"]
+# group_name_small = ["none", "data_triangle", "data_square", "data_circle"]
 
-attr_names = ['object_color', 'object_shape', "group_label"]
+attr_names = ['object_color', 'object_shape', 'object_num', "group_label"]
 
 neighbor_4 = [(-1, 0), (0, -1), (0, 1), (1, 0)]
 neighbor_8 = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
@@ -126,17 +140,12 @@ color_matplotlib.pop("black")
 no_color = "none"
 color_matplotlib[no_color] = (0, 0, 0)
 color_large = [k for k, v in list(color_matplotlib.items())]
-
-bk_shapes = ["none", "circle", "square", "triangle"]
+color_large_exclude_gray = [item for item in color_large if item != "lightgray"]
+bk_shapes = ["none", "triangle", "square", "circle"]
 
 # exp setting
 task_pattern_types = ["task_true_pattern", "task_random_pattern", "task_cf_pattern"]
 
-gestalt_action = {
-    "proximity":0,
-    1: "similarity",
-    2: "closure"
-}
 
 exp_count_group = {
     "bk_groups": ["circle_small", "square_small"],
@@ -208,5 +217,5 @@ def tensor2dict(tensor):
     tensor_dict['position'] = tensor[:2]
     tensor_dict['size'] = tensor[2]
     tensor_dict['color'] = tensor[3:6]
-    tensor_dict['shape'] = tensor[6:6+len(bk_shapes)]
+    tensor_dict['shape'] = tensor[6:6 + len(bk_shapes)]
     return tensor_dict

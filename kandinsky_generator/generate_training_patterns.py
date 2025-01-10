@@ -11,6 +11,7 @@ from kandinsky_generator.src.kp import KandinskyUniverse
 from kandinsky_generator.ShapeOnShapes import ShapeOnShape
 from src import bk
 from src.utils import chart_utils
+from src.percept import gestalt_group
 
 u = KandinskyUniverse.SimpleUniverse()
 
@@ -199,10 +200,10 @@ def kf2tensor(kf, max_length):
         others = [obj.x, obj.y, obj.size]
         tensor = torch.tensor(others + color + shape)
         tensor[3:6] /= 255
+
         tensors.append(tensor)
     if len(tensors) < max_length:
-        tensors = tensors + [torch.zeros(len(tensors[0]))] * (
-                    max_length - len(tensors))
+        tensors = tensors + [torch.zeros(len(tensors[0]))] * (max_length - len(tensors))
     else:
         raise ValueError
     tensors = torch.stack(tensors)
@@ -267,23 +268,50 @@ def genShapeOnShape(args):
                 image.save(base_path / f"{shape}_{(png_num + i):06d}.png")
 
 
-def gen_and_save(kfs, path, data_counter, width):
-    tensors = []
+def gen_and_save(gen_fun, path, data_counter, width):
+    positive_tensors = []
+    negative_tensors = []
     data = []
     images = []
-    max_length = 32
-    for kf in kfs:
-        images.append(
-            np.asarray(KandinskyUniverse.kandinskyFigureAsImage(kf, width)))
-        data.append(kf2data(kf, width))
-        tensors.append(kf2tensor(kf, max_length))
+    max_length = 64
 
-    tensors = torch.stack(tensors)
+    positive_kfs = gen_fun(rule_style=True, n=3)
+    for kf in positive_kfs:
+        img = np.asarray(KandinskyUniverse.kandinskyFigureAsImage(kf, width)).copy()
+        outline_width = 0
+        # Set the top and bottom borders to red
+        # img[:outline_width, :, :] = np.array(bk.color_matplotlib["green"])  # Top border
+        # img[-outline_width:, :, :] = bk.color_matplotlib["green"]  # Bottom border
+        #
+        # # Set the left and right borders to red
+        # img[:, :outline_width, :] = bk.color_matplotlib["green"]  # Left border
+        # img[:, -outline_width:, :] = bk.color_matplotlib["green"]  # Right border
+        images.append(img)
+        data.append(kf2data(kf, width))
+        positive_tensors.append(kf2tensor(kf, max_length))
+    positive_tensors = torch.stack(positive_tensors)
+
+    negative_kfs = gen_fun(rule_style=False)
+    for kf in negative_kfs:
+        img = np.asarray(KandinskyUniverse.kandinskyFigureAsImage(kf, width)).copy()
+        # outline_width = 0
+        # Set the top and bottom borders to red
+        # img[:outline_width, :, :] = bk.color_matplotlib["red"]  # Top border
+        # img[-outline_width:, :, :] = bk.color_matplotlib["red"]  # Bottom border
+        # # Set the left and right borders to red
+        # img[:, :outline_width, :] = bk.color_matplotlib["red"]  # Left border
+        # img[:, -outline_width:, :] = bk.color_matplotlib["red"]  # Right border
+        images.append(img)
+        data.append(kf2data(kf, width))
+        negative_tensors.append(kf2tensor(kf, max_length))
+    negative_tensors = torch.stack(negative_tensors)
+
     images = chart_utils.hconcat_imgs(images)
     with open(path / f"{data_counter:06d}.json", 'w') as f:
         json.dump(data, f)
     Image.fromarray(images).save(path / f"{data_counter:06d}.png")
-    return tensors
+
+    return {"positive": positive_tensors, "negative": negative_tensors}
 
 
 def genGestaltTraining(args):
@@ -293,12 +321,13 @@ def genGestaltTraining(args):
     os.makedirs(base_path, exist_ok=True)
 
     gen_funs = [
-        shapeOnshapeObjects.gestalt_triangle,
+        shapeOnshapeObjects.triangle_square,
         shapeOnshapeObjects.tri_group,
-        shapeOnshapeObjects.square_group,
         shapeOnshapeObjects.proximity_square,
         shapeOnshapeObjects.similarity_triangle_circle,
-        shapeOnshapeObjects.cir_group
+        shapeOnshapeObjects.gestalt_triangle,
+        shapeOnshapeObjects.continue_two_curves,
+        # shapeOnshapeObjects.cir_group
     ]
 
     for mode in ['train', "test"]:
@@ -310,9 +339,15 @@ def genGestaltTraining(args):
         if os.path.exists(tensor_file):
             continue
         for gen_fun in gen_funs:
-            kfs = gen_fun(rule_style=True, n=3)
-            tensors = gen_and_save(kfs, data_path, data_counter, width)
+            # positive_kfs = gen_fun(rule_style=True, n=3)
+            tensors = gen_and_save(gen_fun, data_path, data_counter, width)
             data_tensors.append(tensors)
+            # negative_kfs = gen_fun(rule_style=False)
+            # negative_tensors = gen_and_save(negative_kfs, data_path, data_counter, width)
+            # data_tensors.append({"positive": positive_tensors, "negative": negative_tensors})
             data_counter += 1
-
         torch.save(data_tensors, tensor_file)
+
+
+if __name__ == "__main__":
+    genGestaltTraining()

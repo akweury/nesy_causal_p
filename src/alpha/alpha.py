@@ -3,10 +3,9 @@ import itertools
 import torch
 
 from src.utils import log_utils
-from . import valuation, facts_converter, nsfr, pruning, clause_op
-from .fol import language
-from .fol import refinement
-from .. import bk
+from src.alpha import valuation, facts_converter, nsfr, pruning, clause_op
+from src.alpha.fol import language, refinement
+from src import bk
 
 
 def init_ilp(args, obj_num):
@@ -14,7 +13,7 @@ def init_ilp(args, obj_num):
     args.variable_obj_symbol = bk.variable_symbol_obj
     lang = language.Language(obj_num, args.variable_group_symbol,
                              args.variable_obj_symbol, args.lark_path,
-                             args.phi_num, args.rho_num)
+                             args.phi_num, args.rho_num, args.obj_n)
     return lang
 
 
@@ -134,24 +133,27 @@ def df_search(args, lang, C, FC, group):
     NSFR = nsfr.get_nsfr_model(args, lang, FC, atom_C)
     target_preds = list(set([c.head.pred.name for c in atom_C]))
     # clause evaluation
-    ils, dls = evaluation(args, NSFR, target_preds, group.ocm)
+    ils, dls = evaluation(args, NSFR, target_preds, group)
     # node extension (DFS)
     base_nodes = [atom_C[s_i] for s_i in range(len(ils)) if ils[s_i] > 0.6]
     extended_nodes = [atom_C[s_i] for s_i in range(len(ils)) if ils[s_i] > 0.6]
     # update const lists
     lang.update_consts(base_nodes)
-
     lang.generate_atoms()
 
-    extended_nodes = node_extension(args, lang, base_nodes, extended_nodes)
+    if len(base_nodes) == 0:
+        return
+    elif len(extended_nodes) == 1:
+        lang.clauses += extended_nodes
+        return
 
+    extended_nodes = node_extension(args, lang, base_nodes, extended_nodes)
     NSFR = nsfr.get_nsfr_model(args, lang, FC, extended_nodes)
     target_preds = list(set([c.head.pred.name for c in extended_nodes]))
     # clause evaluation
-    ils, dls = evaluation(args, NSFR, target_preds, group.ocm)
+    ils, dls = evaluation(args, NSFR, target_preds, group)
     pass_indices = [s_i for s_i in range(len(ils)) if ils[s_i] > 0.8]
-    extended_nodes = [extended_nodes[s_i] for s_i in range(len(ils)) if
-                      ils[s_i] > 0.6]
+    extended_nodes = [extended_nodes[s_i] for s_i in range(len(ils)) if ils[s_i] > 0.6]
     ils = ils[pass_indices]
 
     log_clause_str = ""
@@ -159,17 +161,15 @@ def df_search(args, lang, C, FC, group):
         log_clause_str += f"\n {i + 1}/{len(ils)} (s: {ils[i].item():.2f}) Clause: {extended_nodes[i]}"
     args.logger.debug(log_clause_str)
 
-    # prune clauses
-    # pruned_c = pruning.top_k_clauses(args, ils, dls, extended_nodes)
     extended_nodes = sorted(extended_nodes)
     lang.clauses += extended_nodes
 
 
-def eval_task(args, lang, FC, groups):
+def eval_task(args, lang, FC, ocm, gcm):
     NSFR = nsfr.get_nsfr_model(args, lang, FC, lang.clauses)
     target_preds = list(set([c.head.pred.name for c in lang.clauses]))
     # clause evaluation
-    group_conf = torch.zeros(len(groups))
+    group_conf = torch.zeros(len(gcm))
 
     for g_i, group in enumerate(groups):
         ils, dls = evaluation(args, NSFR, target_preds, group.ocm)
@@ -202,16 +202,46 @@ def remove_trivial_atoms(args, lang, FC, clauses, objs, data):
     return non_trivial_atoms
 
 
-def alpha(args, groups):
+def search_clauses(args, ocm, gcm, groups):
+    lang = None
+    example_num = len(groups)
+    principle_num = groups.shape[1]
+    all_clauses = []
+    for a_i in range(principle_num):
+        principle_clauses = []
+        principle_gcm = [gcm[i][a_i] for i in range(len(gcm))]
+        same_length = all([len(_gcm) == len(principle_gcm[0]) for _gcm in principle_gcm])
+        if not same_length:
+            continue
+
+        for e_i in range(example_num):
+            # reasoning clauses
+            lang = alpha(args, ocm[e_i], principle_gcm[e_i], groups[e_i, a_i, :len(ocm[e_i])])
+            if len(lang.clauses) == 0:
+                break
+            principle_clauses += lang.clauses
+        # remove infrequent clauses
+        if len(principle_clauses) > 0:
+            principle_clauses, lang = filter_infrequent_clauses(principle_clauses, lang, example_num)
+        all_clauses += principle_clauses
+    return lang
+
+
+def alpha(args, ocm, gcm, groups):
     obj_num = 1
     lang = init_ilp(args, obj_num)
     lang.reset_lang(g_num=1)
     VM = valuation.get_valuation_module(args, lang)
     FC = facts_converter.FactsConverter(args, lang, VM)
     C = lang.load_init_clauses()
-    for g_i in range(len(groups)):
+    group_labels = groups.unique()
+    if len(group_labels) > 5 or len(group_labels) == len(groups):
+        return lang
+    for g_i in range(len(group_labels)):
         lang.reset_lang(g_num=1)
-        df_search(args, lang, C, FC, groups[g_i])
+        group_obj_ocm = ocm[groups == group_labels[g_i]]
+        search_ocm = torch.cat((group_obj_ocm, gcm[g_i].unsqueeze(0)), dim=0)
+        df_search(args, lang, C, FC, search_ocm)
         lang.variable_set_id(args, g_i)
         # merged_clause = lang.rephase_clauses()
         # final_clause, name_dict = llama_call.rename_terms(merged_clause)
@@ -220,19 +250,23 @@ def alpha(args, groups):
     return lang
 
 
-def alpha_test(args, groups, lang):
+def alpha_test(args, ocm, gcm, lang):
     VM = valuation.get_valuation_module(args, lang)
     FC = facts_converter.FactsConverter(args, lang, VM, given_attrs=lang.attrs)
-    pred = eval_task(args, lang, FC, groups)
+    pred = eval_task(args, lang, FC, ocm, gcm)
     return pred
 
 
-def filter_infrequent_clauses(all_clauses, lang):
+def filter_infrequent_clauses(all_clauses, lang, example_num):
     frequency = {}
     for item in all_clauses:
         frequency[item] = frequency.get(item, 0) + 1
     most_frequency_value = max(frequency.values())
     most_frequent_clauses = [key for key, value in frequency.items() if
                              value == most_frequency_value]
-    lang.clauses = most_frequent_clauses
-    return lang
+
+    if most_frequency_value == example_num:
+        lang.done = True
+    else:
+        lang.done = False
+    return most_frequent_clauses, lang

@@ -1,8 +1,8 @@
 # Created by shaji at 24/06/2024
 
 from lark import Transformer
-from .logic import *
-from . import lang_utils
+from src.alpha.fol.logic import *
+from src.alpha.fol import lang_utils
 
 
 def flatten(x): return [z for y in x for z in (

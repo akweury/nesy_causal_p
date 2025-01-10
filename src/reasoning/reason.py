@@ -82,7 +82,7 @@ def reason_labels(args, bw_img, objs, crop_data, labels, onside):
                     # find the mask of that object, remove the pixels of that object
                     bw_img[seg_mask] = 0
         except IndexError:
-            print("")
+            raise IndexError
     return group_objs
 
 #

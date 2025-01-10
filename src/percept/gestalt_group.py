@@ -108,3 +108,43 @@ class Group():
         if pos.max() > 1:
             pos = pos / 512
         return pos
+
+
+def group_tensor2dict(group_tensor):
+    group_dict = {"x": group_tensor[0],
+                  "y": group_tensor[1],
+                  "size": group_tensor[2],
+                  "obj_num": group_tensor[3],
+                  "color_r": group_tensor[4],
+                  "color_g": group_tensor[5],
+                  "color_b": group_tensor[6],
+                  "shape_tri": group_tensor[7],
+                  "shape_sq": group_tensor[8],
+                  "shape_cir": group_tensor[9]}
+    return group_dict
+
+
+def gen_group_tensor(x, y, size, obj_num, r, g, b, tri, sq, cir):
+    return torch.tensor([x, y, size, obj_num, r, g, b, tri, sq, cir])
+
+
+def gen_extended_group_tensor(ocm):
+    extended_group_tensor = torch.zeros(4, 3, 32, 14)
+    extended_group_tensor[:, :, :, :10] = torch.repeat_interleave(torch.from_numpy(ocm).unsqueeze(0), 4, dim=0)
+    return extended_group_tensor
+
+
+def group_dict2tensor(group_dict):
+    group_tensor = torch.tensor([
+        group_dict["x"],
+        group_dict["y"],
+        group_dict["size"],
+        group_dict["obj_num"],
+        group_dict["color_r"],
+        group_dict["color_g"],
+        group_dict["color_b"],
+        group_dict["shape_tri"],
+        group_dict["shape_sq"],
+        group_dict["shape_cir"]
+    ])
+    return group_tensor

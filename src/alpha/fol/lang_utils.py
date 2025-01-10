@@ -1,5 +1,5 @@
 # Created by jing at 25.06.24
-from ... import bk
+from src import bk
 
 
 def get_pi_bodies_by_name(pi_clauses, pi_name):

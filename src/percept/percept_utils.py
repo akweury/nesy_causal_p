@@ -138,30 +138,27 @@ def proximity_distance(u, v):
     return np.linalg.norm(u - v)
 
 
-def similarity_distance(a, b, weights):
+def similarity_distance(a, b, mode):
     """Compute weighted distance between object i and j."""
     a_dict = bk.tensor2dict(a)
     b_dict = bk.tensor2dict(b)
-    (x1, y1) = a_dict["position"]
-    (x2, y2) = b_dict["position"]
+    # (x1, y1) = a_dict["position"]
+    # (x2, y2) = b_dict["position"]
     shape_i = a_dict["shape"]
-    shape_j = a_dict["shape"]
+    shape_j = b_dict["shape"]
     color_i = a_dict["color"]
     color_j = b_dict["color"]
-    w_pos = weights[0]
-    w_shape = weights[1]
-    w_color = weights[2]
+    # w_pos = weights[0]
+    # w_shape = weights[1]
+    # w_color = weights[2]
 
     # Positional distance (Euclidean)
-    pos_dist = np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
+    # pos_dist = np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
 
     # Shape distance
-    shape_dist = 0 if np.all(shape_i == shape_j) else 1
-
-    # Color distance
-    color_dist = 0 if np.all(color_i == color_j) else 1
-
-    # Weighted sum
-    dist = w_pos * pos_dist + w_shape * shape_dist + w_color * color_dist
+    if mode =="shape":
+        dist = 0 if np.all(shape_i == shape_j) else 1
+    else:
+        dist = 0 if np.all(color_i == color_j) else 1
 
     return dist

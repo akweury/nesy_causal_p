@@ -94,7 +94,7 @@ class GSDataset(Dataset):
         return imgs
 
     def load_data(self, idx):
-        return self.data[idx].numpy(), self.imgs[idx]
+        return self.data[idx]["positive"].numpy(),self.data[idx]["negative"].numpy(), self.imgs[idx]
 
     def __getitem__(self, idx):
         # img, data, file_name = self.load_data(idx)

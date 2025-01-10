@@ -117,12 +117,17 @@ class ShapeOnShape(KandinskyTruthInterfce):
         for i in range(n + 1):
             o = KandinskyUniverse.kandinskyShape()
             if t:
-                o.color = random.choice(["yellow", "red"])
-                o.shape = random.choice(["circle", "square"])
+                o.color = random.choice(["yellow", "green"])
+                if o.color == "yellow":
+                    o.shape = "square"
+                else:
+                    o.shape = "circle"
             else:
                 o.color = random.choice(KandinskyUniverse.matplotlib_colors_list)
                 o.shape = random.choice(KandinskyUniverse.kandinsky_shapes)
             o.size = so
+            o.solid = True
+            o.line_width = -1
             o.x = xs + i * dxi
             o.y = ys + i * dyi
             kf.append(o)
@@ -137,12 +142,17 @@ class ShapeOnShape(KandinskyTruthInterfce):
         for i in range(n):
             o = KandinskyUniverse.kandinskyShape()
             if t:
-                o.color = random.choice(["yellow", "red"])
-                o.shape = random.choice(["circle", "square"])
+                o.color = random.choice(["yellow", "green"])
+                if o.color == "yellow":
+                    o.shape = "square"
+                else:
+                    o.shape = "circle"
             else:
                 o.color = random.choice(KandinskyUniverse.matplotlib_colors_list)
                 o.shape = random.choice(KandinskyUniverse.kandinsky_shapes)
             o.size = so
+            o.solid = True
+            o.line_width = -1
             o.x = xs + (i + 1) * dxi
             o.y = ys + (i + 1) * dyi
             kf.append(o)
@@ -157,15 +167,201 @@ class ShapeOnShape(KandinskyTruthInterfce):
         for i in range(n - 1):
             o = KandinskyUniverse.kandinskyShape()
             if t:
-                o.color = random.choice(["yellow", "red"])
-                o.shape = random.choice(["circle", "square"])
+                o.color = random.choice(["yellow", "green"])
+                if o.color == "yellow":
+                    o.shape = "square"
+                else:
+                    o.shape = "circle"
             else:
                 o.color = random.choice(KandinskyUniverse.matplotlib_colors_list)
                 o.shape = random.choice(KandinskyUniverse.kandinsky_shapes)
             o.size = so
+            o.solid = True
+            o.line_width = -1
             o.x = xs + (i + 1) * dxi
             o.y = ys + (i + 1) * dyi
             kf.append(o)
+
+        random_percent = random.uniform(min_percent, max_percent)
+        kf = kf[:int(len(kf) * random_percent)]
+
+        return kf
+
+    def _bigTriangleCF(self, so, t, min_percent=1.0, max_percent=1.0):
+
+        kf = []
+        x = 0.4 + random.random() * 0.2
+        y = 0.4 + random.random() * 0.2
+        r = 0.3 - min(abs(0.5 - x), abs(0.5 - y))
+        n = int(2 * r * math.pi / 0.25)
+
+        innerdegree = math.radians(30)
+        dx = r * math.cos(innerdegree)
+        dy = r * math.sin(innerdegree)
+
+        if n < self.min:   n = self.min
+        if n > self.max:   n = self.max
+
+        n = round(n / 3)
+
+        xs = x
+        ys = y - r
+        xe = x + dx
+        ye = y + dy
+        dxi = (xe - xs) / n
+        dyi = (ye - ys) / n
+
+        for i in range(n + 1):
+            o = KandinskyUniverse.kandinskyShape()
+
+            o.color = random.choice(["yellow", "green"])
+            if o.color == "yellow":
+                o.shape = "circle"
+            else:
+                o.shape = "square"
+
+            o.size = so
+            o.x = xs + i * dxi
+            o.y = ys + i * dyi
+            o.solid = True
+            o.line_width = -1
+            kf.append(o)
+
+        xs = x + dx
+        ys = y + dy
+        xe = x - dx
+        ye = y + dy
+        dxi = (xe - xs) / n
+        dyi = (ye - ys) / n
+
+        for i in range(n):
+            o = KandinskyUniverse.kandinskyShape()
+
+            o.color = random.choice(["yellow", "green"])
+            if o.color == "yellow":
+                o.shape = "circle"
+            else:
+                o.shape = "square"
+
+            o.size = so
+            o.x = xs + (i + 1) * dxi
+            o.y = ys + (i + 1) * dyi
+            o.solid = True
+            o.line_width = -1
+            kf.append(o)
+
+        xs = x - dx
+        ys = y + dy
+        xe = x
+        ye = y - r
+        dxi = (xe - xs) / n
+        dyi = (ye - ys) / n
+
+        for i in range(n - 1):
+            o = KandinskyUniverse.kandinskyShape()
+
+            o.color = random.choice(["yellow", "green"])
+            if o.color == "yellow":
+                o.shape = "circle"
+            else:
+                o.shape = "square"
+
+            o.size = so
+            o.x = xs + (i + 1) * dxi
+            o.y = ys + (i + 1) * dyi
+            o.solid = True
+            o.line_width = -1
+            kf.append(o)
+
+        random_percent = random.uniform(min_percent, max_percent)
+        kf = kf[:int(len(kf) * random_percent)]
+
+        return kf
+
+    def _bigTriangleCF2(self, so, t, min_percent=1.0, max_percent=1.0):
+
+        kf = []
+        x = 0.4 + random.random() * 0.2
+        y = 0.4 + random.random() * 0.2
+        r = 0.3 - min(abs(0.5 - x), abs(0.5 - y))
+        n = int(2 * r * math.pi / 0.25)
+
+        innerdegree = math.radians(30)
+        dx = r * math.cos(innerdegree)
+        dy = r * math.sin(innerdegree)
+
+        if n < self.min:   n = self.min
+        if n > self.max:   n = self.max
+
+        n = round(n / 3)
+
+        xs = x
+        ys = y - r
+        xe = x + dx
+        ye = y + dy
+        dxi = (xe - xs) / n
+        dyi = (ye - ys) / n
+
+        for i in range(n + 1):
+            o = KandinskyUniverse.kandinskyShape()
+            o.color = random.choice(["yellow", "green"])
+            if o.color == "yellow":
+                o.shape = "square"
+            else:
+                o.shape = "circle"
+
+            o.size = so
+            o.x = xs + i * dxi
+            o.y = ys + i * dyi
+            o.solid = True
+            o.line_width = -1
+            kf.append(o)
+
+        xs = x + dx
+        ys = y + dy
+        xe = x - dx
+        ye = y + dy
+        dxi = (xe - xs) / n
+        dyi = (ye - ys) / n
+
+        for i in range(n):
+            o = KandinskyUniverse.kandinskyShape()
+
+            o.color = random.choice(["yellow", "green"])
+            if o.color == "yellow":
+                o.shape = "square"
+            else:
+                o.shape = "circle"
+
+            o.size = so
+            o.x = xs + (i + 1) * dxi
+            o.y = ys + (i + 1) * dyi
+            o.solid = True
+            o.line_width = -1
+            kf.append(o)
+
+        xs = x - dx
+        ys = y + dy
+        xe = x
+        ye = y - r
+        dxi = (xe - xs) / n
+        dyi = (ye - ys) / n
+
+        # for i in range(n - 1):
+        #     o = KandinskyUniverse.kandinskyShape()
+        #     if t:
+        #         o.color = random.choice(["yellow", "green"])
+        #         if o.color=="yellow":
+        #             o.shape="square"
+        #         else:
+        #             o.shape="circle"
+        #     else:
+        #         o.color = random.choice(KandinskyUniverse.matplotlib_colors_list)
+        #         o.shape = random.choice(KandinskyUniverse.kandinsky_shapes)
+        #     o.size = so
+        #     o.x = xs + (i + 1) * dxi
+        #     o.y = ys + (i + 1) * dyi
+        #     kf.append(o)
 
         random_percent = random.uniform(min_percent, max_percent)
         kf = kf[:int(len(kf) * random_percent)]
@@ -334,6 +530,67 @@ class ShapeOnShape(KandinskyTruthInterfce):
         kf = kf[:int(len(kf) * random_percent)]
         return kf
 
+    def _gestaltTriangleCF(self, so, t, min_percent=1.0, max_percent=1.0):
+        kf = []
+        x = 0.5  # + random.random() * 0.8
+        y = 0.8  # + random.random() * 0.8
+        r = 0.3 - min(abs(0.5 - x), abs(0.5 - y)) * 0.5
+        xs = x
+        ys = y - r
+
+        so = 0.4 + random.random() * 0.6
+        cir_so = so * 0.3
+
+        # correct the size to  the same area as an square
+
+        s = 0.7 * math.sqrt(3) * so / 3
+        dx = s * math.cos(math.radians(30))
+        dy = s * math.sin(math.radians(30))
+        # draw circles
+        o = KandinskyUniverse.kandinskyShape()
+        o.color = random.choice(["blue", "green", "yellow"])
+        o.shape = "circle"
+        o.size = cir_so
+        o.solid = True
+        o.line_width = -1
+        # (cx - s / 2, cy - s / 2), (cx + s / 2, cy + s / 2)
+        o.x = xs
+        o.y = ys - s
+        kf.append(o)
+
+        o = KandinskyUniverse.kandinskyShape()
+        o.color = random.choice(["blue", "green", "yellow"])
+        o.shape = "circle"
+        o.size = cir_so
+        o.x = xs + dx
+        o.y = ys + dy
+        o.solid = True
+        o.line_width = -1
+        kf.append(o)
+
+        o = KandinskyUniverse.kandinskyShape()
+        o.color = random.choice(["blue", "green", "yellow"])
+        o.shape = "circle"
+        o.size = cir_so
+        o.x = xs - dx
+        o.y = ys + dy
+        o.solid = True
+        o.line_width = -1
+        kf.append(o)
+
+        # # draw triangle
+        # o = KandinskyUniverse.kandinskyShape()
+        # o.color = "lightgray"
+        # o.shape = "triangle"
+        # o.size = so
+        # o.x = xs
+        # o.y = ys
+        # kf.append(o)
+
+        random_percent = random.uniform(min_percent, max_percent)
+        kf = kf[:int(len(kf) * random_percent)]
+        return kf
+
     def _gestaltCircleTriangle(self, so, t, min_percent=1.0, max_percent=1.0):
         so = so * 3
         # draw big circle
@@ -380,21 +637,70 @@ class ShapeOnShape(KandinskyTruthInterfce):
         objs = []
         so = 0.1
 
-        x_skip_cols = random.sample([1, 3, 5, 7, 9], 1)
-        y_skip_rows = random.sample([1, 3, 5, 7, 9], 1)
-        for x in range(1, 10, 2):
-            for y in range(1, 10, 2):
-                if x not in x_skip_cols and y not in y_skip_rows:
-                    # draw triangle
-                    # draw triangle
-                    objs.append(KandinskyUniverse.kandinskyShape(
-                        color=random.choice(bk.color_large),
-                        shape=random.choice(KandinskyUniverse.kandinsky_shapes),
-                        size=so,
-                        x=x * 0.1,
-                        y=y * 0.1,
-                        line_width=-1,
-                        solid=True))
+        mode = random.choice([1, 2])
+        if mode == 1:
+            for x in range(1, 10, 2):
+                for y in range(1, 10, 2):
+                    if (x in [1, 3] and y in [1, 3]) or (x in [7, 9] and y in [7, 9]):
+                        # draw triangle
+                        # draw triangle
+                        objs.append(KandinskyUniverse.kandinskyShape(
+                            color=random.choice(bk.color_large_exclude_gray),
+                            shape=random.choice(KandinskyUniverse.kandinsky_shapes),
+                            size=so,
+                            x=x * 0.1,
+                            y=y * 0.1,
+                            line_width=-1,
+                            solid=True))
+        else:
+            for x in range(1, 10, 2):
+                for y in range(1, 10, 2):
+                    if (x in [1, 3] and y in [7, 9]) or (x in [7, 9] and y in [1, 3]):
+                        # draw triangle
+                        # draw triangle
+                        objs.append(KandinskyUniverse.kandinskyShape(
+                            color=random.choice(bk.color_large_exclude_gray),
+                            shape=random.choice(KandinskyUniverse.kandinsky_shapes),
+                            size=so,
+                            x=x * 0.1,
+                            y=y * 0.1,
+                            line_width=-1,
+                            solid=True))
+        return objs
+
+    def _proximity_squareCF(self, so, t):
+        objs = []
+        so = 0.1
+
+        mode = random.choice([1, 2])
+        if mode == 1:
+            for x in range(1, 10, 2):
+                for y in range(1, 10, 2):
+                    if (x in [1, 3] and y in [1, 3]) or (x in [5, 7] and y in [1, 3]):
+                        # draw triangle
+                        # draw triangle
+                        objs.append(KandinskyUniverse.kandinskyShape(
+                            color=random.choice(bk.color_large_exclude_gray),
+                            shape=random.choice(KandinskyUniverse.kandinsky_shapes),
+                            size=so,
+                            x=x * 0.1,
+                            y=y * 0.1,
+                            line_width=-1,
+                            solid=True))
+        else:
+            for x in range(1, 10, 2):
+                for y in range(1, 10, 2):
+                    if (x in [1, 3] and y in [5, 7]) or (x in [5, 7] and y in [5, 7]):
+                        # draw triangle
+                        # draw triangle
+                        objs.append(KandinskyUniverse.kandinskyShape(
+                            color=random.choice(bk.color_large_exclude_gray),
+                            shape=random.choice(KandinskyUniverse.kandinsky_shapes),
+                            size=so,
+                            x=x * 0.1,
+                            y=y * 0.1,
+                            line_width=-1,
+                            solid=True))
         # x = 0.5  # + random.random() * 0.8
         # y = 0.7  # + random.random() * 0.8
         # r = 0.3 - min(abs(0.5 - x), abs(0.5 - y)) * 0.5
@@ -436,7 +742,44 @@ class ShapeOnShape(KandinskyTruthInterfce):
         # objs.append(o)
 
         return objs
+    def _continue_two_curves(self):
 
+        color = random.choice(bk.color_large)
+        while color == "lightgray":
+            color = random.choice(bk.color_large)
+
+        objs = []
+        so = 0.1
+        row_num = random.randint(3, 5)
+        col_num = random.randint(3, 5)
+        diff_row_id = random.randint(0, row_num - 1)
+        diff_col_id = random.randint(0, col_num - 1)
+        row_space = 1 / (row_num + 1)
+        col_space = 1 / (col_num + 1)
+        for x in range(row_num):
+            for y in range(col_num):
+                if x != diff_row_id and y != diff_col_id:
+                    # draw triangle
+                    objs.append(KandinskyUniverse.kandinskyShape(
+                        color=color,
+                        shape="triangle",
+                        size=so,
+                        x=(x + 1) * row_space,
+                        y=(y + 1) * col_space,
+                        line_width=-1,
+                        solid=True))
+                else:
+                    # draw circle
+                    objs.append(KandinskyUniverse.kandinskyShape(
+                        color=color,
+                        shape="circle",
+                        size=so,
+                        x=(x + 1) * row_space,
+                        y=(y + 1) * col_space,
+                        line_width=-1,
+                        solid=True))
+
+        return objs
     def _similarity_triangle_circle(self):
 
         color = random.choice(bk.color_large)
@@ -468,6 +811,46 @@ class ShapeOnShape(KandinskyTruthInterfce):
                     objs.append(KandinskyUniverse.kandinskyShape(
                         color=color,
                         shape="circle",
+                        size=so,
+                        x=(x + 1) * row_space,
+                        y=(y + 1) * col_space,
+                        line_width=-1,
+                        solid=True))
+
+        return objs
+
+
+    def _similarity_triangle_circleCF(self):
+
+        color = random.choice(bk.color_large)
+        while color == "lightgray":
+            color = random.choice(bk.color_large)
+
+        objs = []
+        so = 0.1
+        row_num = random.randint(3, 5)
+        col_num = random.randint(3, 5)
+        diff_row_id = random.randint(0, row_num - 1)
+        diff_col_id = random.randint(0, col_num - 1)
+        row_space = 1 / (row_num + 1)
+        col_space = 1 / (col_num + 1)
+        for x in range(row_num):
+            for y in range(col_num):
+                if x != diff_row_id and y != diff_col_id:
+                    # draw triangle
+                    objs.append(KandinskyUniverse.kandinskyShape(
+                        color=color,
+                        shape="circle",
+                        size=so,
+                        x=(x + 1) * row_space,
+                        y=(y + 1) * col_space,
+                        line_width=-1,
+                        solid=True))
+                else:
+                    # draw circle
+                    objs.append(KandinskyUniverse.kandinskyShape(
+                        color=color,
+                        shape="triangle",
                         size=so,
                         x=(x + 1) * row_space,
                         y=(y + 1) * col_space,
@@ -750,7 +1133,10 @@ class ShapeOnShape(KandinskyTruthInterfce):
             o = KandinskyUniverse.kandinskyShape()
             if t:
                 o.color = random.choice(["blue", "red"])
-                o.shape = random.choice(["circle", "triangle"])
+                if o.color == "blue":
+                    o.shape = "circle"
+                else:
+                    o.shape = "square"
             else:
                 o.color = random.choice(bk.color_large)
                 o.shape = random.choice(KandinskyUniverse.kandinsky_shapes)
@@ -762,7 +1148,10 @@ class ShapeOnShape(KandinskyTruthInterfce):
             o = KandinskyUniverse.kandinskyShape()
             if t:
                 o.color = random.choice(["blue", "red"])
-                o.shape = random.choice(["circle", "triangle"])
+                if o.color == "blue":
+                    o.shape = "circle"
+                else:
+                    o.shape = "square"
             else:
                 o.color = random.choice(bk.color_large)
                 o.shape = random.choice(KandinskyUniverse.kandinsky_shapes)
@@ -776,7 +1165,10 @@ class ShapeOnShape(KandinskyTruthInterfce):
             o = KandinskyUniverse.kandinskyShape()
             if t:
                 o.color = random.choice(["blue", "red"])
-                o.shape = random.choice(["circle", "triangle"])
+                if o.color == "blue":
+                    o.shape = "circle"
+                else:
+                    o.shape = "square"
             else:
                 o.color = random.choice(bk.color_large)
                 o.shape = random.choice(KandinskyUniverse.kandinsky_shapes)
@@ -788,10 +1180,137 @@ class ShapeOnShape(KandinskyTruthInterfce):
             o = KandinskyUniverse.kandinskyShape()
             if t:
                 o.color = random.choice(["blue", "red"])
-                o.shape = random.choice(["circle", "triangle"])
+                if o.color == "blue":
+                    o.shape = "circle"
+                else:
+                    o.shape = "square"
             else:
                 o.color = random.choice(bk.color_large)
                 o.shape = random.choice(KandinskyUniverse.kandinsky_shapes)
+            o.size = so
+            o.x = maxx
+            o.y = miny + (i + 1) * dx
+            o.solid = True
+            kf.append(o)
+        random_percent = random.uniform(min_percent, max_percent)
+        kf = kf[:int(len(kf) * random_percent)]
+        return kf
+
+    def _bigSquareCF(self, so, t, min_percent=1.0, max_percent=1.0):
+        kf = []
+        x = 0.4 + random.random() * 0.2
+        y = 0.4 + random.random() * 0.2
+        r = 0.4 - min(abs(0.5 - x), abs(0.5 - y))
+        m = 4 * int(r / 0.1)
+        if m < self.min:   m = self.min
+        if m > self.max:   m = self.max
+        minx = x - r / 2
+        maxx = x + r / 2
+        miny = y - r / 2
+        maxy = y + r / 2
+        n = int(m / 4)
+        dx = r / n
+        for i in range(n + 1):
+            o = KandinskyUniverse.kandinskyShape()
+            o.color = random.choice(["blue", "red"])
+            if o.color == "blue":
+                o.shape = "square"
+            else:
+                o.shape = "circle"
+            o.size = so
+            o.x = minx + i * dx
+            o.y = miny
+            o.solid = True
+            kf.append(o)
+            o = KandinskyUniverse.kandinskyShape()
+            o.color = random.choice(["blue", "red"])
+            if o.color == "blue":
+                o.shape = "square"
+            else:
+                o.shape = "circle"
+            o.size = so
+            o.x = minx + i * dx
+            o.y = maxy
+            o.solid = True
+            kf.append(o)
+
+        for i in range(n - 1):
+            o = KandinskyUniverse.kandinskyShape()
+            o.color = random.choice(["blue", "red"])
+            if o.color == "blue":
+                o.shape = "square"
+            else:
+                o.shape = "circle"
+            o.size = so
+            o.x = minx
+            o.y = miny + (i + 1) * dx
+            o.solid = True
+            kf.append(o)
+            o = KandinskyUniverse.kandinskyShape()
+            o.color = random.choice(["blue", "red"])
+            if o.color == "blue":
+                o.shape = "square"
+            else:
+                o.shape = "circle"
+            o.size = so
+            o.x = maxx
+            o.y = miny + (i + 1) * dx
+            o.solid = True
+            kf.append(o)
+        random_percent = random.uniform(min_percent, max_percent)
+        kf = kf[:int(len(kf) * random_percent)]
+        return kf
+
+    def _bigSquareCF2(self, so, t, min_percent=1.0, max_percent=1.0):
+        kf = []
+        x = 0.4 + random.random() * 0.2
+        y = 0.4 + random.random() * 0.2
+        r = 0.4 - min(abs(0.5 - x), abs(0.5 - y))
+        m = 4 * int(r / 0.1)
+        if m < self.min:   m = self.min
+        if m > self.max:   m = self.max
+        minx = x - r / 2
+        maxx = x + r / 2
+        miny = y - r / 2
+        maxy = y + r / 2
+        n = int(m / 4)
+        dx = r / n
+        for i in range(n + 1):
+            o = KandinskyUniverse.kandinskyShape()
+
+            o.color = random.choice(["blue", "red"])
+            if o.color == "blue":
+                o.shape = "circle"
+            else:
+                o.shape = "square"
+            o.size = so
+            o.x = minx + i * dx
+            o.y = miny
+            o.solid = True
+            kf.append(o)
+
+        for i in range(n - 1):
+            o = KandinskyUniverse.kandinskyShape()
+
+            o.color = random.choice(["blue", "red"])
+            if o.color == "blue":
+                o.shape = "circle"
+            else:
+                o.shape = "square"
+
+            o.size = so
+            o.x = minx
+            o.y = miny + (i + 1) * dx
+            o.solid = True
+            kf.append(o)
+            o = KandinskyUniverse.kandinskyShape()
+
+            o.color = random.choice(["blue", "red"])
+            if o.color == "blue":
+                o.shape = "circle"
+            else:
+                o.shape = "square"
+
             o.size = so
             o.x = maxx
             o.y = miny + (i + 1) * dx
@@ -894,7 +1413,9 @@ class ShapeOnShape(KandinskyTruthInterfce):
         so = 0.05
 
         # bk basic patterns
-        if shape == "circle":
+        if shape == "random":
+            g = lambda so, truth: self._random(size)
+        elif shape == "circle":
             g = lambda so, truth: self._circle(size, lw)
         elif shape == "circle_group":
             g = lambda so, truth: self._bigCircle(so, truth)
@@ -902,23 +1423,40 @@ class ShapeOnShape(KandinskyTruthInterfce):
             g = lambda so, truth: self._triangle(size, lw)
         elif shape == "triangle_group":
             g = lambda so, truth: self._bigTriangle(so, truth)
+        elif shape == "triangle_group_cf":
+            g = lambda so, truth: self._bigTriangleCF(so, truth)
+        elif shape == "triangle_group_cf2":
+            g = lambda so, truth: self._bigTriangleCF2(so, truth)
         elif shape == "square":
             g = lambda so, truth: self._square(size, lw)
         elif shape == "square_group":
             g = lambda so, truth: self._bigSquare(so, truth)
-
+        elif shape == "square_group_cf":
+            g = lambda so, truth: self._bigSquareCF(so, truth)
+        elif shape == "square_group_cf2":
+            g = lambda so, truth: self._bigSquareCF2(so, truth)
         elif shape == "diamond":
             g = lambda so, truth: self._bigDiamond(so, truth)
 
         # challenge patterns
         elif shape == "gestalt_triangle":
             g = lambda so, truth: self._gestaltTriangle(so, truth)
+        elif shape == "gestalt_triangle_cf":
+            g = lambda so, truth: self._gestaltTriangleCF(so, truth)
         elif shape == "gestalt_circle_triangle":
             g = lambda so, truth: self._gestaltCircleTriangle(so, truth)
         elif shape == "proximity_square":
             g = lambda so, truth: self._proximity_square(so, truth)
+        elif shape == "proximity_square_cf":
+            g = lambda so, truth: self._proximity_squareCF(so, truth)
         elif shape == "similarity_triangle_circle":
             g = lambda so, truth: self._similarity_triangle_circle()
+        elif shape == "similarity_triangle_circle_cf":
+            g = lambda so, truth: self._similarity_triangle_circleCF()
+        elif shape == "continue_two_curves":
+            g = lambda so, truth: self._continue_two_curves()
+        elif shape == "continue_two_curves_cf":
+            g = lambda so, truth: self._continue_two_curves_cf(so, truth)
         elif shape == "squarecircle":
             g = lambda so, truth: self._bigSquare(so, truth) + self._bigCircle(so,
                                                                                truth)
@@ -935,9 +1473,9 @@ class ShapeOnShape(KandinskyTruthInterfce):
                                                       truth) + self._bigTriangler(so,
                                                                                   truth)
         elif shape == 'trianglesquare':
-            g = lambda so, truth: self._bigSquare(so, truth) + self._bigTriangle(so,
-                                                                                 truth)
-
+            g = lambda so, truth: self._bigSquare(so, truth) + self._bigTriangle(so, truth)
+        elif shape == 'trianglesquare_cf':
+            g = lambda so, truth: self._bigSquareCF(so, truth) + self._bigTriangleCF(so, truth)
         elif shape == "circlesquare_count":
             g = lambda so, truth: self._smallCircleFlex(
                 so, truth) + self._smallSquare(so, truth) + self._smallCircleFlex(so,
@@ -963,14 +1501,14 @@ class ShapeOnShape(KandinskyTruthInterfce):
         t = 0
         tt = 0
         maxtry = 1000
-        # while (KandinskyUniverse.overlaps(kf) or KandinskyUniverse.overflow(
-        #         kf)) and (t < maxtry):
-        #     kf = g(so, truth)
-        #     if tt > 10:
-        #         tt = 0
-        #         so = so * 0.90
-        #     tt = tt + 1
-        #     t = t + 1
+        while (KandinskyUniverse.overlaps(kf) or KandinskyUniverse.overflow(
+                kf)) and (t < maxtry):
+            kf = g(so, truth)
+            if tt > 10:
+                tt = 0
+                so = so * 0.90
+            tt = tt + 1
+            t = t + 1
         return kf
 
     def tri_only(self, n=1, rule_style=False, size_lw=None):
@@ -983,18 +1521,39 @@ class ShapeOnShape(KandinskyTruthInterfce):
 
     def tri_group(self, n=1, rule_style=False):
         kfs = []
-        for i in range(n):
-            kf = self._only(rule_style, "triangle_group")
-            kfs.append(kf)
+        if rule_style:
+            for i in range(n):
+                kf = self._only(rule_style, "triangle_group")
+                kfs.append(kf)
+        else:
+            kfs.append(self._only(rule_style, "triangle_group_cf"))
+            kfs.append(self._only(rule_style, "triangle_group_cf2"))
+            kfs.append(self._only(rule_style, "triangle_group_cf2"))
+
         return kfs
 
     def gestalt_triangle(self, n=1, rule_style=False):
         kfs = []
-        for i in range(n):
-            kf = self._only(rule_style, "gestalt_triangle")
-            kfs.append(kf)
+        if rule_style:
+            for i in range(n):
+                kf = self._only(rule_style, "gestalt_triangle")
+                kfs.append(kf)
+        else:
+            kfs.append(self._only(rule_style, "gestalt_triangle_cf"))
+            kfs.append(self._only(rule_style, "gestalt_triangle_cf"))
+            kfs.append(self._only(rule_style, "gestalt_triangle_cf"))
         return kfs
-
+    def continue_two_curves(self, n=1, rule_style=False):
+        kfs = []
+        if rule_style:
+            for i in range(n):
+                kf = self._only(rule_style, "continue_two_curves")
+                kfs.append(kf)
+        else:
+            kfs.append(self._only(rule_style, "continue_two_curves_cf"))
+            kfs.append(self._only(rule_style, "continue_two_curves_cf"))
+            kfs.append(self._only(rule_style, "continue_two_curves_cf"))
+        return kfs
     def gestalt_circle_triangle(self, n=1, rule_style=False):
         kfs = []
         for i in range(n):
@@ -1004,16 +1563,26 @@ class ShapeOnShape(KandinskyTruthInterfce):
 
     def proximity_square(self, n=1, rule_style=False):
         kfs = []
-        for i in range(n):
-            kf = self._only(rule_style, "proximity_square")
-            kfs.append(kf)
+        if rule_style:
+            for i in range(n):
+                kf = self._only(rule_style, "proximity_square")
+                kfs.append(kf)
+        else:
+            kfs.append(self._only(rule_style, "proximity_square_cf"))
+            kfs.append(self._only(rule_style, "proximity_square_cf"))
+            kfs.append(self._only(rule_style, "proximity_square_cf"))
         return kfs
 
     def similarity_triangle_circle(self, n=1, rule_style=False):
         kfs = []
-        for i in range(n):
-            kf = self._only(rule_style, "similarity_triangle_circle")
-            kfs.append(kf)
+        if rule_style:
+            for i in range(n):
+                kf = self._only(rule_style, "similarity_triangle_circle")
+                kfs.append(kf)
+        else:
+            kfs.append(self._only(rule_style, "similarity_triangle_circle_cf"))
+            kfs.append(self._only(rule_style, "similarity_triangle_circle_cf"))
+            kfs.append(self._only(rule_style, "similarity_triangle_circle_cf"))
         return kfs
 
     def cir_only(self, n=1, rule_style=False, size_lw=None):
@@ -1050,10 +1619,14 @@ class ShapeOnShape(KandinskyTruthInterfce):
 
     def square_group(self, n=1, rule_style=False):
         kfs = []
-        for i in range(n):
-            # print(i)
-            kf = self._only(True, "square_group")
-            kfs.append(kf)
+        if rule_style:
+            for i in range(n):
+                # print(i)
+                kf = self._only(True, "square_group")
+                kfs.append(kf)
+        else:
+            kfs.append(self._only(True, "square_group_cf"))
+            kfs.append(self._only(True, "square_group_cf2"))
         return kfs
 
     def triangle_circle(self, n=1, rule_style=False):
@@ -1107,10 +1680,16 @@ class ShapeOnShape(KandinskyTruthInterfce):
 
     def triangle_square(self, n=1, rule_style=False):
         kfs = []
-        for i in range(n):
-            # print(i)
-            kf = self._only(True, "trianglesquare")
-            kfs.append(kf)
+        if rule_style:
+            for i in range(n):
+                # print(i)
+                kf = self._only(True, "trianglesquare")
+                kfs.append(kf)
+        else:
+            kfs.append(self._only(True, "trianglesquare_cf"))
+            kfs.append(self._only(True, "trianglesquare_cf"))
+            kfs.append(self._only(True, "trianglesquare_cf"))
+
         return kfs
 
     def diamond_circle(self, n=1, rule_style=False):
@@ -1174,3 +1753,9 @@ class ShapeOnShape(KandinskyTruthInterfce):
         t = self.min + self.max
         rg = Random(self.u, t, t)
         return rg.true_kf(n)
+
+    def _random(self, size):
+        # we are sure that random image does not contain "shapes on shapes"
+
+        rg = Random(self.u, size, size)
+        return rg.true_kf(1)

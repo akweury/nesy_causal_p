@@ -2,9 +2,9 @@
 import numpy as np
 
 import itertools
-from .logic import Atom, Clause, Var
-from . import lang_utils
-from ... import bk
+from src.alpha.fol.logic import Atom, Clause, Var
+from src.alpha.fol import lang_utils
+from src import bk
 
 
 # TODOL refine_from_modeb, generate_by_refinement

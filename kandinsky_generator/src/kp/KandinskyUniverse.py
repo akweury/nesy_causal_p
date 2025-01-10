@@ -285,6 +285,7 @@ def kandinskyFigureAsImage(shapes, width=600, subsampling=4):
 
     img_resampled = cv2.resize(
         img, (width, width), interpolation=cv2.INTER_AREA)
+
     image = Image.fromarray(img_resampled)
 
     return image

@@ -11,8 +11,11 @@ import torch
 import config
 from kandinsky_generator import generate_training_patterns
 from utils import args_utils, chart_utils
+from utils.chart_utils import van
 from src import dataset
 from percept import perception
+from alpha import alpha
+import eval_nsfr
 
 
 class GestaltGroupingEnv(gymnasium.Env):
@@ -54,7 +57,7 @@ class GestaltGroupingEnv(gymnasium.Env):
         # In a real implementation, you might add more actions
         # or even use a continuous action space for parameterized thresholds.
         self.action_space = spaces.Box(
-            low=0.0, high=1.0, shape=(5,), dtype=np.float32
+            low=0.0, high=1.0, shape=(2,), dtype=np.float32
         )
         # Initialize environment state
         self.reset()
@@ -62,8 +65,8 @@ class GestaltGroupingEnv(gymnasium.Env):
     def next_data(self):
         self.data_idx += 1
         self.data_idx = self.data_idx % self.dataset.__len__()
-        task_tensor, task_imgs = self.dataset.load_data(self.data_idx)
-        return task_tensor, task_imgs
+        task_tensor_pos, task_tensor_neg, task_imgs = self.dataset.load_data(self.data_idx)
+        return task_tensor_pos, task_tensor_neg, task_imgs
 
     def reset(self, seed=123):
         """
@@ -71,7 +74,9 @@ class GestaltGroupingEnv(gymnasium.Env):
         Returns: initial observation
         """
         # load object positions in [0,1]x[0,1]
-        self.ocm, self.imgs = self.next_data()
+        self.ocm_pos, self.ocm_neg, self.imgs = self.next_data()
+        self.imgs_pos = self.imgs[:3]
+        self.imgs_neg = self.imgs[3:]
         self.visual_img = [chart_utils.hconcat_imgs(self.imgs)]
 
         # self.labels = torch.zeros(len(self.ocm))
@@ -85,10 +90,12 @@ class GestaltGroupingEnv(gymnasium.Env):
         os.makedirs(self.args.output_file_prefix, exist_ok=True)
 
         # convert rgb image to black-white image
-        self.segments = perception.percept_segments(self.args, self.imgs)
+        self.segments = perception.percept_segments(self.args, self.imgs_pos, "pos")
+        self.segments_neg = perception.percept_segments(self.args, self.imgs_neg, "neg")
         self.labels = [torch.zeros(len(seg)) - 1 for seg in self.segments]
+        self.labels_neg = [torch.zeros(len(seg)) - 1 for seg in self.segments_neg]
         # self.ocm = [self.ocm[i][:len(self.segments[i])] for i in range(len(self.segments))]
-        return self.ocm, info
+        return self.ocm_pos, info
 
     def step(self, action):
         """
@@ -100,28 +107,28 @@ class GestaltGroupingEnv(gymnasium.Env):
         #   2. Compute how good the grouping is (F1 score vs. ground truth, etc.).
         #   3. That becomes your reward.
         # take the action, check if truncated/terminated
-        print(f"step: {self.steps_taken}")
-
-        terminated = False
+        # print(f"step: {self.steps_taken}")
         truncated = False
         principle_float = action[0]
         threshold_float = action[1]
-        weight_float = action[2:5]
 
         principle_idx = int(round(principle_float * self.n_principles - 1))
         threshold = threshold_float * self.max_threshold
 
-        # input data, update the ocm
+        gcm, groups = perception.cluster_by_principle(self.steps_taken, self.args, self.ocm_pos, self.segments,
+                                                      self.labels, principle_idx, threshold)
+        ocm = [torch.from_numpy(self.ocm_pos[i][:len(self.segments[i])]) for i in range(len(self.segments))]
 
-        self.labels = perception.cluster_by_principle(self.steps_taken, self.args, self.ocm, self.segments, self.labels,
-                                                      principle_idx, threshold, weight_float)
-        ocm = [self.ocm[i][:len(self.segments[i])] for i in range(len(self.segments))]
+        lang = alpha.search_clauses(self.args, ocm, gcm, groups)
 
-        self.visual_img.append(chart_utils.visual_rl_step(self.imgs, ocm, self.labels,
-                                                          config.gestalt_action[principle_idx], self.steps_taken))
+        # check negative
+        gcm_neg, groups_neg = perception.cluster_by_principle(self.steps_taken, self.args, self.ocm_neg,
+                                                              self.segments_neg, self.labels, principle_idx, threshold)
+        ocm_neg = [torch.from_numpy(self.ocm_neg[i][:len(self.segments_neg[i])]) for i in range(len(self.segments_neg))]
 
+        eval_nsfr.check_clauses(self.args, lang, ocm_neg, gcm_neg, groups_neg)
         # For demonstration, we give a random reward:
-        reward = perception.percept_reward(self.ocm, self.labels, self.max_group_id, principle_idx)
+        reward = perception.percept_reward(lang)
 
         self.max_group_id = max([max(label) for label in self.labels])
         # For a realistic environment, you'd transform self.positions or maintain
@@ -132,14 +139,18 @@ class GestaltGroupingEnv(gymnasium.Env):
         terminated = (self.steps_taken >= self.max_steps)
         if reward == 0:
             truncated = True
-            self.visual_img = chart_utils.vconcat_imgs(self.visual_img)
             # if step % 10 == 0:
-            chart_utils.save_img(self.visual_img, config.models / "visual" / f"step_{self.total_step}.png")
+            # chart_utils.save_img(self.visual_img, config.models / "visual" / f"step_{self.total_step}.png")
+        else:
+            terminated = True
+            print(f"{lang.clauses}")
 
+        self.visual_img.append(
+            chart_utils.visual_rl_step(self.imgs, ocm, groups, config.gestalt_action[principle_idx], reward))
+        self.visual_img = chart_utils.vconcat_imgs(self.visual_img)
+        chart_utils.save_img(self.visual_img, config.models / "visual" / f"step_{self.total_step}.png")
         # info can hold debugging or diagnostic data
-        info = {
-            "action_chosen": action
-        }
+        info = {"action_chosen": action}
 
         # Observation stays the same in this toy example
         # (in reality, the grouping or "state" would likely change).

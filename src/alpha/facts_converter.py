@@ -5,7 +5,7 @@ import torch.nn as nn
 from tqdm import tqdm
 
 from .fol.logic import NeuralPredicate, InventedPredicate
-from .. import bk
+from src import bk
 from src.alpha import valuation
 
 
@@ -80,16 +80,17 @@ class FactsConverter(nn.Module):
         term_name = term.dtype.name
         term_data = None
         if term_name == "group_data":
-            self.group_indices = group_data[:, bk.prop_idx_dict["group_name"]] > 0
-            term_data = group_data[self.group_indices]
+            # self.group_indices = group_data[:, bk.prop_idx_dict["group_name"]] > 0
+            term_data = group_data
             term_name = "group_data"
         elif term_name == "object":
             term_data = self.lang.term_index(term)
-        elif term_name in [bk.const_dtype_object_color, bk.const_dtype_object_shape, bk.const_dtype_group]:
+        elif term_name in [bk.const_dtype_object_color, bk.const_dtype_object_shape, bk.const_dtype_group,
+                           bk.const_dtype_obj_num]:
             term_data = self.attrs[term][0]
         # elif term_name in bk.attr_names:
-            # return the standard attribute code
-            # term_data = self.attrs[term]
+        # return the standard attribute code
+        # term_data = self.attrs[term]
         elif term_name == 'pattern':
             # return the image
             term_data = group_data
@@ -116,7 +117,7 @@ class FactsConverter(nn.Module):
                     pred_args[term_name] = term_data
 
                 # collecting the data
-                atom_conf = True
+                atom_conf = 1.0
                 for a_i in range(len(atom.pred.sub_preds)):
                     # if isinstance(atom.terms[a_i], Const):
                     #     term = atom.terms
@@ -133,7 +134,10 @@ class FactsConverter(nn.Module):
                     # valuating via the predicate mechanics
                     module = valuation.valuation_modules[module_name]
                     module_res = module(pred_args)
-                    atom_conf *= module_res
+                    try:
+                        atom_conf *= module_res
+                    except RuntimeError:
+                        raise RuntimeError
                 # self.args.logger.debug(f"(atom) {atom_conf:.1f} {atom} ")
                 V[:, i] = atom_conf
 

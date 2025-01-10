@@ -83,4 +83,6 @@ model_group_kp_triangle_only = storage / "output" / "kp_sy_triangle_only" / "tri
 # nn settings
 kernel_size = 3
 
-gestalt_action = ["proximity", "similarity", "closure"]
+gestalt_action = ["proximity", "color_similarity", "shape_similarity", "closure"]
+
+group_index = 10

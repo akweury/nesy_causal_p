@@ -2,7 +2,7 @@
 import torch
 from torch import nn as nn
 
-from .. import bk
+from src import bk
 
 
 class FCNNValuationModule(nn.Module):
@@ -127,12 +127,12 @@ class FCNNValuationModule(nn.Module):
             # group_idx = self.lang.term_index(term)
             # if group_idx < group_data.shape[0]:
             # group_data = group_data[group_idx]
-            self.group_indices = group_data[:, bk.prop_idx_dict["group_name"]] > 0
-            term_data = group_data[self.group_indices]
+            term_data = group_data
             term_name = "group_data"
         elif term_name == "object":
             term_data = self.lang.term_index(term)
-        elif term_name in [bk.const_dtype_object_color, bk.const_dtype_object_shape, bk.const_dtype_group]:
+        elif term_name in [bk.const_dtype_object_color, bk.const_dtype_object_shape, bk.const_dtype_group,
+                           bk.const_dtype_obj_num]:
             term_data = self.attrs[term][0]
         # elif term_name in bk.attr_names:
         #     # return the standard attribute code
@@ -391,11 +391,13 @@ class VFColor(nn.Module):
             color_gt = args_dict[bk.const_dtype_object_color]
         except KeyError:
             raise ValueError
-        group_data = args_dict[bk.var_dtype_group]
+        group_data = args_dict[bk.var_dtype_group][:-1]
         if group_data is None:
             return False
-        color_data = group_data[:, bk.prop_idx_dict["color"]]
-        is_color = (color_gt == color_data).sum().bool().float()
+        color_rgb_gt = torch.tensor(bk.color_matplotlib[bk.color_large[color_gt]]).reshape(1, 3)
+        color_indices = [bk.prop_idx_dict["rgb_r"], bk.prop_idx_dict["rgb_g"], bk.prop_idx_dict["rgb_b"]]
+        color_data = (group_data[:, color_indices] * 255).to(torch.uint8)
+        is_color = (color_rgb_gt == color_data).all(dim=1).all().float()
         return is_color
 
 
@@ -408,14 +410,37 @@ class VFShape(nn.Module):
         self.name = name
 
     def forward(self, args_dict):
-        group_data = args_dict[bk.var_dtype_group]
+        group_data = args_dict[bk.var_dtype_group][:-1]
         if group_data is None:
             return False
 
         shape_gt = args_dict[bk.const_dtype_object_shape]
-        shape_data = group_data[:, bk.prop_idx_dict["shape"]]
-        has_shape = (shape_gt == shape_data).sum().bool().float()
-        return has_shape
+        shape_indices = [bk.prop_idx_dict["shape_tri"],
+                         bk.prop_idx_dict["shape_sq"],
+                         bk.prop_idx_dict["shape_cir"]]
+        group_shape = group_data[:, shape_indices].argmax(dim=1) + 1
+
+        # conf = group_data[:, bk.prop_idx_dict["group_conf"]][0]
+        has_label = (shape_gt == group_shape).prod()
+        return has_label
+
+
+class VFCount(nn.Module):
+    """The function v_color.
+    """
+
+    def __init__(self, name):
+        super(VFCount, self).__init__()
+        self.name = name
+
+    def forward(self, args_dict):
+        group_data = args_dict[bk.var_dtype_group][:-1]
+        if group_data is None:
+            return False
+        num_gt = args_dict[bk.const_dtype_obj_num] + 1
+        group_num = len(group_data)
+        has_label = float(num_gt == group_num)
+        return has_label
 
 
 class VFGShape(nn.Module):
@@ -427,15 +452,19 @@ class VFGShape(nn.Module):
         self.name = name
 
     def forward(self, args_dict):
-        group_data = args_dict[bk.var_dtype_group]
-        group_label_gt = args_dict[bk.const_dtype_group]
+        group_data = args_dict[bk.var_dtype_group][-1]
+        group_shape_gt = args_dict[bk.const_dtype_group]
 
         if group_data is None:
             return False
+        shape_indices = [bk.prop_idx_dict["shape_tri"],
+                         bk.prop_idx_dict["shape_sq"],
+                         bk.prop_idx_dict["shape_cir"]]
+        if group_data[shape_indices].sum()==0:
+            return False
 
-        group_label = group_data[:, bk.prop_idx_dict["group_name"]][0]
-        group_conf = group_data[:, bk.prop_idx_dict["group_conf"]][0]
-        has_label = (group_label_gt == group_label) * group_conf
+        group_shape = group_data[shape_indices].argmax() + 1
+        has_label = (group_shape_gt == group_shape).prod()
         return has_label
 
 
@@ -697,7 +726,9 @@ def get_valuation_module(args, lang):
                  VFInG(bk.pred_names["in_group"]),
                  VFColor(bk.pred_names["has_color"]),
                  VFShape(bk.pred_names["has_shape"]),
-                 VFGShape(bk.pred_names["group_shape"])]
+                 VFGShape(bk.pred_names["group_shape"]),
+                 VFCount(bk.pred_names["object_num"]),
+                 ]
     VM = FCNNValuationModule(pred_funs, lang=lang, device=args.device)
     return VM
 
@@ -707,5 +738,6 @@ valuation_modules = {
     bk.pred_names["in_group"]: VFInG(bk.pred_names["in_group"]),
     bk.pred_names["has_color"]: VFColor(bk.pred_names["has_color"]),
     bk.pred_names["has_shape"]: VFShape(bk.pred_names["has_shape"]),
-    bk.pred_names["group_shape"]: VFGShape(bk.pred_names["group_shape"])
+    bk.pred_names["group_shape"]: VFGShape(bk.pred_names["group_shape"]),
+    bk.pred_names["object_num"]: VFCount(bk.pred_names["object_num"]),
 }

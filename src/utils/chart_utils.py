@@ -220,13 +220,14 @@ def ocm2img(labels, ocm, input_img, action):
     return img
 
 
-def visual_rl_step(task_img, ocms, output_labels, action, step):
+def visual_rl_step(task_img, ocms, output_labels, action, reward):
     output_imgs = []
     for i, labels in enumerate(output_labels):
-        output_img = ocm2img(labels, ocms[i], task_img[i], action)
+        labels_trun = labels[:len(ocms[i])]
+        output_img = ocm2img(labels_trun, ocms[i], task_img[i], action)
         output_imgs.append(output_img)
     output_imgs = hconcat_imgs(output_imgs)
-    cv2.putText(output_imgs, text=f"step {step}", org=(50, 50), color=(0, 0, 255),
+    cv2.putText(output_imgs, text=f"Reward {reward}", org=(50, 50), color=(0, 0, 255),
                 fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, thickness=2,
                 lineType=cv2.LINE_AA)
     return output_imgs

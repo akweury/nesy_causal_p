@@ -11,7 +11,7 @@ from scipy.spatial.distance import cdist
 
 import config
 import src.percept.percept_utils
-from src.percept.group import Group
+from src.percept.gestalt_group import Group
 from src.percept import perception
 from src.utils import args_utils, data_utils, chart_utils, file_utils
 

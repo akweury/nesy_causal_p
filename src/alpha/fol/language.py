@@ -4,10 +4,10 @@ from lark import Lark
 import itertools
 import torch.nn.functional as F
 
-from .exp_parser import ExpTree
-from .logic import *
-from . import lang_utils, mode_declaration
-from ... import bk
+from src.alpha.fol.exp_parser import ExpTree
+from src.alpha.fol.logic import *
+from src.alpha.fol import lang_utils, mode_declaration
+from src import bk
 
 
 def get_unused_args(c):
@@ -50,20 +50,21 @@ class Language(object):
     """
 
     def __init__(self, obj_num, variable_group_symbol, variable_obj_symbol,
-                 lark_path, phi_num, rho_num):
+                 lark_path, phi_num, rho_num, number):
         self.obj_vars = [Var(f"{variable_obj_symbol}_{v_i}", bk.var_dtypes["object"])
                          for v_i in range(obj_num)]
         self.obj_variable_num = obj_num
         self.variable_group_symbol = variable_group_symbol
         self.phi_num = phi_num
         self.rho_num = rho_num
+        self.number = number
         self.atoms = []
         self.funcs = []
         self.consts = []
         self.predicates = []
         self.mode_declarations = None
         # PI
-        self.inv_predicates = []
+        self.invented_preds = []
         self.inv_p_with_scores = []
         self.all_inv_p = []
         self.pi_c = []
@@ -97,7 +98,8 @@ class Language(object):
         return predicates
 
     def reset_lang(self, g_num):
-        self.consts, self.min_consts = self.load_consts(1, self.phi_num,
+        self.done = False
+        self.consts, self.min_consts = self.load_consts(self.number, 1, self.phi_num,
                                                         self.rho_num, 1)
         self.group_vars = [
             Var(f"{self.variable_group_symbol}_{v_i}", bk.var_dtypes["group"]) for
@@ -288,7 +290,7 @@ class Language(object):
         dtypes = [mode_declaration.DataType(dt) for dt in dtype_data]
         return NeuralPredicate(head_str, int(arity), dtypes)
 
-    def parse_min_const(self, g_num, obj_num, const, const_type):
+    def parse_min_const(self, number, g_num, obj_num, const, const_type):
         """Parse string to function symbols.
         """
         const_data_type = mode_declaration.DataType(const)
@@ -299,6 +301,10 @@ class Language(object):
                 num = g_num
             elif num == "object":
                 num = obj_num
+            elif num == "number":
+                num = number
+            else:
+                raise ValueError
             const_names = []
             for i in range(int(num)):
                 const_names.append(f"{const_data_type.name}{i + 1}of{num}")
@@ -311,7 +317,7 @@ class Language(object):
             consts.append(Const(name, const_data_type))
         return consts
 
-    def parse_const(self, g_num, phi_num, rho_num, obj_num, const, const_type):
+    def parse_const(self, number, g_num, phi_num, rho_num, obj_num, const, const_type):
         """Parse string to function symbols.
         """
         const_data_type = mode_declaration.DataType(const)
@@ -325,6 +331,8 @@ class Language(object):
                 num = g_num
             elif num == "object":
                 num = obj_num
+            elif num == "number":
+                num = number
             const_names = []
             for i in range(int(num)):
                 const_names.append(f"{const_data_type.name}{i + 1}of{num}")
@@ -350,15 +358,14 @@ class Language(object):
             consts.append(const)
         return consts
 
-    def load_consts(self, g_num, phi_num, rho_num, obj_num):
+    def load_consts(self, number, g_num, phi_num, rho_num, obj_num):
         consts = []
         min_consts = []
         for const_name, const_type in bk.const_dict.items():
             min_consts.extend(
-                self.parse_min_const(g_num, obj_num, const_name, const_type))
+                self.parse_min_const(number, g_num, obj_num, const_name, const_type))
             consts.extend(
-                self.parse_const(g_num, phi_num, rho_num, obj_num, const_name,
-                                 const_type))
+                self.parse_const(number, g_num, phi_num, rho_num, obj_num, const_name, const_type))
         return consts, min_consts
 
     def rename_bk_preds_in_clause(self, bk_prefix, line):
@@ -736,7 +743,7 @@ class Language(object):
         self.predicates = list(set(self.record_predicates))
         self.group_variable_num = self.record_group_variable_num
 
-        _, self.min_consts = self.load_consts(self.group_variable_num, self.phi_num,
+        _, self.min_consts = self.load_consts(self.number, self.group_variable_num, self.phi_num,
                                               self.rho_num, 1)
         for min_const in self.min_consts:
             if min_const not in self.consts:

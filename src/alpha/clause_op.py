@@ -21,7 +21,7 @@ def inv_pred_merge_bodies(bodies):
             preds += atom.pred.sub_preds
     preds = list(set(preds))
 
-    if len(preds) == 1:
+    if len(preds) <= 1:
         return None
 
     pred_indices = sorted(range(len(preds)), key=lambda i: preds[i])

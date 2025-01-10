@@ -1,6 +1,6 @@
 # Created by jing at 25.06.24
 
-from .logic import Clause, Atom, FuncTerm, Const, Var, InventedClause, InvAtom
+from src.alpha.fol.logic import Clause, Atom, FuncTerm, Const, Var, InventedClause, InvAtom
 
 
 def subs(exp, target_var, const):

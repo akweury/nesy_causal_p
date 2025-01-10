@@ -1,6 +1,6 @@
 # Created by jing at 25.06.24
 from .logic import *
-from ... import bk
+from src import bk
 
 
 class ModeDeclaration(object):
