@@ -1,4 +1,6 @@
 # Created by jing at 10.01.25
+import random
+
 from kandinsky_generator.src.kp import KandinskyUniverse
 from kandinsky_generator.gestalt_patterns_utils import *
 
@@ -131,11 +133,7 @@ def similarity_two_shapes(so, dtype, shape_a, shape_b, n=2):
         - all the clusters have same number of objects
         """
     objs = []
-    cluster_dist = 0.3
-    neighbour_dist = 0.1
-    group_sizes = [2, 3, 4]
-    random_points_num = 2
-    color = random.choice(bk.color_large)
+    color = random.choice(bk.color_large_exclude_gray)
     if dtype:
         row_num = random.randint(3, 5)
         col_num = random.randint(3, 5)
@@ -177,7 +175,7 @@ def closure_classic_triangle(so, dtype):
     ys = y - r
 
     so = 0.4 + random.random() * 0.6
-    cir_so = so * (0.3 + random.random() * 0.2)
+    cir_so = so * (0.2 + random.random() * 0.2)
 
     # correct the size to  the same area as an square
     s = 0.7 * math.sqrt(3) * so / 3
@@ -312,9 +310,85 @@ def closure_big_square(so, dtype):
     return objs
 
 
+def continuity_one_splits_n(so, dtype, n):
+    objs = []
+    main_road_length = 5
+    split_road_length = 4
+    dx = 0.08
+    dy = 0.08
+    main_y = 0.5
+
+    # draw the main road
+    colors = random.sample(bk.color_large_exclude_gray, 3)
+    shape = random.choice(bk.bk_shapes[1:])
+    minx = 0.1
+    for i in range(main_road_length):
+        objs.append(kandinskyShape(color=colors[0], shape=shape, size=so,
+                                   x=minx + i * dx, y=main_y, line_width=-1, solid=True))
+
+    # draw the split roads
+    minx = minx + main_road_length * dx
+    mode = random.choice([0, 1])
+    for i in range(split_road_length):
+        if dtype:
+            if mode == 0:
+                # same branch
+                objs.append(kandinskyShape(color=colors[0], shape=shape, size=so,
+                                           x=minx + i * dx, y=main_y + (i + 1) * dy, line_width=-1, solid=True))
+                # different branch
+                objs.append(kandinskyShape(color=colors[1], shape=shape, size=so,
+                                           x=minx + i * dx, y=main_y - (i + 1) * dy, line_width=-1, solid=True))
+            else:
+                # diff branch
+                objs.append(kandinskyShape(color=colors[1], shape=shape, size=so,
+                                           x=minx + i * dx, y=main_y + (i + 1) * dy, line_width=-1, solid=True))
+                # same branch
+                objs.append(kandinskyShape(color=colors[0], shape=shape, size=so,
+                                           x=minx + i * dx, y=main_y - (i + 1) * dy, line_width=-1, solid=True))
+        else:
+            if mode == 0:
+                # diff branch
+                objs.append(kandinskyShape(color=colors[1], shape=shape, size=so,
+                                           x=minx + i * dx, y=main_y + (i + 1) * dy, line_width=-1, solid=True))
+                # different branch
+                objs.append(kandinskyShape(color=colors[2], shape=shape, size=so,
+                                           x=minx + i * dx, y=main_y - (i + 1) * dy, line_width=-1, solid=True))
+            else:
+                # same branch
+                objs.append(kandinskyShape(color=colors[0], shape=shape, size=so,
+                                           x=minx + i * dx, y=main_y + (i + 1) * dy, line_width=-1, solid=True))
+                # same branch
+                objs.append(kandinskyShape(color=colors[0], shape=shape, size=so,
+                                           x=minx + i * dx, y=main_y - (i + 1) * dy, line_width=-1, solid=True))
+    return objs
+
+
+def symmetry_pattern(so, dtype):
+    objs = []
+    n = random.choice([3, 4, 5, 6])
+    ys = [0.5, 0.6, 0.4, 0.7, 0.3, 0.8]
+    ys = ys[:n]
+    for i in range(n):
+        x_shift = random.uniform(0.1, 0.4)
+        colors = random.sample(bk.color_large_exclude_gray, 2)
+        shape = random.choice(bk.bk_shapes[1:])
+        # left part
+        objs.append(kandinskyShape(color=colors[0], shape=shape, size=so,
+                                   x=0.5 - x_shift, y=ys[i], line_width=-1, solid=True))
+        if dtype:
+            # right part symmetry: identical
+            objs.append(kandinskyShape(color=colors[0], shape=shape, size=so,
+                                       x=0.5 + x_shift, y=ys[i], line_width=-1, solid=True))
+        else:
+            # right part symmetry: change shape or color
+            objs.append(kandinskyShape(color=colors[1], shape=shape, size=so,
+                                       x=0.5 + x_shift, y=ys[i], line_width=-1, solid=True))
+    return objs
+
+
 def gen_patterns(pattern_name, dtype):
     so = 0.1
-
+    overlap_patterns = ["gestalt_triangle"]
     if pattern_name == "proximity_two_groups":
         g = lambda so, truth: proximity_n_groups(so, dtype, n=2)
     elif pattern_name == "proximity_three_groups":
@@ -329,19 +403,27 @@ def gen_patterns(pattern_name, dtype):
         so = 0.05
         g = lambda so, truth: closure_big_triangle(so, dtype)
     elif pattern_name == "triangle_square":
-        so = 0.05
+        so = 0.03
         g = lambda so, truth: closure_big_square(so, dtype) + closure_big_triangle(so, dtype)
+    elif pattern_name == "continuity_one_splits_two":
+        g = lambda so, truth: continuity_one_splits_n(so, dtype, n=2)
+    elif pattern_name == "continuity_one_splits_three":
+        g = lambda so, truth: continuity_one_splits_n(so, dtype, n=3)
+    elif pattern_name == "symmetry_pattern":
+        g = lambda so, truth: symmetry_pattern(so, dtype)
+
     else:
         raise ValueError
     kf = g(so, dtype)
     t = 0
     tt = 0
     max_try = 1000
-    while (KandinskyUniverse.overlaps(kf) or KandinskyUniverse.overflow(kf)) and (t < max_try):
-        kf = g(so, dtype)
-        if tt > 10:
-            tt = 0
-            so = so * 0.90
-        tt = tt + 1
-        t = t + 1
+    if pattern_name not in overlap_patterns:
+        while (KandinskyUniverse.overlaps(kf) or KandinskyUniverse.overflow(kf)) and (t < max_try):
+            kf = g(so, dtype)
+            if tt > 10:
+                tt = 0
+                so = so * 0.90
+            tt = tt + 1
+            t = t + 1
     return kf

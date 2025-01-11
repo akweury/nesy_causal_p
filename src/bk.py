@@ -143,73 +143,9 @@ color_large = [k for k, v in list(color_matplotlib.items())]
 color_large_exclude_gray = [item for item in color_large if item != "lightgray"]
 bk_shapes = ["none", "triangle", "square", "circle"]
 
-# exp setting
-task_pattern_types = ["task_true_pattern", "task_random_pattern", "task_cf_pattern"]
+gestlat_principles = ["proximity", "similarity", 'closure', "continuity", "symmetry"]
 
 
-exp_count_group = {
-    "bk_groups": ["circle_small", "square_small"],
-    "task_name": "circlesquare_count",
-    "task_true_pattern": "circlesquare_count",
-    "task_random_pattern": "random",
-    "task_cf_pattern": "circlesquare_count_cf"
-}
-
-exp_gestalt_triangle = {
-    "bk_groups": ["circle", "triangle"],
-    "task_name": "01_gestalt_triangle",
-    "task_true_pattern": "gestalt_triangle",
-    "task_random_pattern": "random",
-    "task_cf_pattern": "gestalt_triangle"
-}
-
-exp_triangle_group = {
-    "bk_groups": ["circle", "square", "triangle"],
-    "task_name": "02_triangle_group",
-    "task_true_pattern": "triangle_group",
-    "task_random_pattern": "random",
-    "task_cf_pattern": "random"
-}
-
-exp_square_circle_group = {
-    "bk_groups": ["circle", "square", "triangle"],
-    "task_name": "03_square_circle_group",
-    "task_true_pattern": "square_circle_group",
-    "task_random_pattern": "random",
-    "task_cf_pattern": "random"
-}
-
-exp_circle_group = {
-    "bk_groups": ["circle", "square", "triangle"],
-    "task_name": "04_circle_group",
-    "task_true_pattern": "circle_group",
-    "task_random_pattern": "random",
-    "task_cf_pattern": "random"
-}
-
-exp_proximity_square = {
-    "bk_groups": ["circle", "square", "triangle"],
-    "task_name": "05_proximity_square",
-    "task_true_pattern": "proximity_square",
-    "task_random_pattern": "random",
-    "task_cf_pattern": "random"
-}
-
-exp_similarity_triangle_circle = {
-    "bk_groups": ["circle", "triangle"],
-    "task_name": "06_similarity_triangle_circle",
-    "task_true_pattern": "similarity_triangle_circle",
-    "task_random_pattern": "random",
-    "task_cf_pattern": "random"
-}
-
-exp_closure_circle_triangle = {
-    "bk_groups": ["circle", "triangle"],
-    "task_name": "07_gestalt_circle_triangle",
-    "task_true_pattern": "gestalt_circle_triangle",
-    "task_random_pattern": "random",
-    "task_cf_pattern": "random"
-}
 
 
 def tensor2dict(tensor):

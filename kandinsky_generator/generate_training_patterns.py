@@ -278,7 +278,14 @@ def get_task_names(principle):
     elif principle == "similarity":
         task_names = ["similarity_triangle_circle"]
     elif principle == "closure":
-        task_names = ["gestalt_triangle", "tri_group", "triangle_square"]
+        task_names = ["gestalt_triangle",
+                      "tri_group",
+                      "triangle_square"]
+    elif principle == "continuity":
+        task_names = ["continuity_one_splits_two",
+                      "continuity_one_splits_three"]
+    elif principle == "symmetry":
+        task_names = ["symmetry_pattern"]
     else:
         raise ValueError
     return task_names
@@ -290,10 +297,11 @@ def gen_and_save(path, width):
     example_num = 3
     all_tensors = {"positive": [], "negative": []}
     task_counter = 0
-    principles = ["proximity", "similarity", 'closure']
+    principles = bk.gestlat_principles
     for principle in principles:
         task_names = get_task_names(principle)
         for t_i, task_name in enumerate(task_names):
+            print("Generating training patterns for task {}".format(task_name))
             kfs = []
             for dtype in [True, False]:
                 for example_i in range(example_num):
