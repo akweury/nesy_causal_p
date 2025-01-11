@@ -272,12 +272,13 @@ def genShapeOnShape(args):
 
 def get_task_names(principle):
     if principle == "proximity":
-        task_names = ["proximity_two_groups", "proximity_three_groups", "proximity_always_three"]
+        task_names = ["proximity_two_groups",
+                      "proximity_three_groups",
+                      "proximity_always_three"]
     elif principle == "similarity":
         task_names = ["similarity_triangle_circle"]
     elif principle == "closure":
-        task_names = []
-        # task_names = ["gestalt_triangle", "tri_group", "triangle_square"]
+        task_names = ["gestalt_triangle", "tri_group", "triangle_square"]
     else:
         raise ValueError
     return task_names
@@ -286,6 +287,7 @@ def get_task_names(principle):
 def gen_and_save(path, width):
     data = []
     max_length = 64
+    example_num = 3
     all_tensors = {"positive": [], "negative": []}
     task_counter = 0
     principles = ["proximity", "similarity", 'closure']
@@ -294,8 +296,8 @@ def gen_and_save(path, width):
         for t_i, task_name in enumerate(task_names):
             kfs = []
             for dtype in [True, False]:
-                for example_i in range(3):
-                    kfs.append(gestalt_patterns.gen_patterns(task_name, dtype, example_i))
+                for example_i in range(example_num):
+                    kfs.append(gestalt_patterns.gen_patterns(task_name, dtype))
             tensors = []
             images = []
             for kf in kfs:
