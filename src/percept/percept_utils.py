@@ -162,3 +162,5 @@ def similarity_distance(a, b, mode):
         dist = 0 if np.all(color_i == color_j) else 1
 
     return dist
+
+

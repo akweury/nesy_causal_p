@@ -35,39 +35,29 @@ def init_io_folders(args, data_folder):
 def main():
     # load exp arguments
     args = args_utils.get_args()
-
-    data_folder = config.kp_challenge_dataset / args.exp_setting["task_name"]
-    init_io_folders(args, data_folder)
     args.step_counter = 0
     args.total_step = 8
-
-    # Generate Training Data -- Single Group Pattern
-    generate_training_patterns.genShapeOnShape(args)
-
-    # Generate Task Data -- Multiple Group Pattern
-    generate_task_patterns.genShapeOnShapeTask(args, 10)
+    args.output_file_prefix = config.models / "tmp"
+    os.makedirs(args.output_file_prefix, exist_ok=True)
+    # generate dataset
+    generate_training_patterns.genGestaltTraining()
 
     # Identify feature maps
     perception.collect_fms(args)
 
     # Import Generated Data
-    train_dl, test_pos_dl, test_rand_dl, test_cf_dl = dataset.load_dataset(args)
+    train_dl = dataset.load_dataset(args)
 
-    # Learn Clauses from Training Data
-    lang = train_nsfr.train_clauses(args, train_dl)
+    for task_id, (data_pos, data_neg, imgs) in enumerate(train_dl):
+        args.output_file_prefix = config.models / f"task_{task_id}_"
+        # grouping objects
+        gestalt_groups = perception.cluster_by_principle(args, imgs)
+        # Learn Clauses from Training Data
+        lang = train_nsfr.train_clauses(args, train_dl)
 
-    # Test Positive Patterns, statistic the accuracy,
-    acc_pos = check_clause(args, lang, test_pos_dl, "POSITIVE",
-                           args.out_positive_folder)
-
-    # Test counterfactual patterns
-    acc_cf = check_clause(args, lang, test_cf_dl, "NEGATIVE",
-                          args.out_cf_folder)
-
-    # Step 7: Test random patterns
-    acc_rand = check_clause(args, lang, test_rand_dl, "NEGATIVE",
-                            args.out_random_folder)
-
+        # Test Positive Patterns, statistic the accuracy,
+        acc_pos = check_clause(args, lang, test_pos_dl, "POSITIVE",
+                               args.out_positive_folder)
     # final logger
     args.logger.info(f"\n"
                      f"================ Test Images Accuracy ======================"

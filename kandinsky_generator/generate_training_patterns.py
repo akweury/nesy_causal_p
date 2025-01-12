@@ -337,8 +337,8 @@ def genGestaltTraining():
         data_path = base_path / mode
         os.makedirs(data_path, exist_ok=True)
         tensor_file = data_path / f"{mode}.pt"
-        # if os.path.exists(tensor_file):
-        #     continue
+        if os.path.exists(tensor_file):
+            continue
         tensors = gen_and_save(data_path, width)
         torch.save(tensors, tensor_file)
     print("")

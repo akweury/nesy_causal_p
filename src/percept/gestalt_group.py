@@ -15,10 +15,8 @@ class Group():
         self.memory = memory_signal
         self.parents = parents
         self.color = self.search_color(input_signal, onside_signal, color)
-        self.ocm = None
-        self.pos = None
+        self.pos, self.size = self.find_center()
         self.onside_coverage = coverage
-        self.generate_tensor()
 
     def __str__(self):
         # return self.name
@@ -41,7 +39,7 @@ class Group():
 
     def search_color(self, input_signal, onside_signal, color):
         if color is not None:
-            return bk.color_large.index(color)
+            return bk.color_matplotlib[color]
         mask = onside_signal > 0
         input_tensor = input_signal.numpy()
         zoomed_image = cv2.resize(input_tensor, onside_signal.size(),
@@ -51,7 +49,7 @@ class Group():
 
         # Find the most frequent color in the list
         if len(valid_pixels) == 0:
-            return bk.color_large.index(bk.no_color)  # Handle empty list
+            return bk.color_matplotlib[bk.no_color]  # Handle empty list
 
         color_counts = valid_pixels.unique(return_counts=True, dim=0)
         color_sorted = sorted(zip(color_counts[0], color_counts[1]),
@@ -69,27 +67,8 @@ class Group():
                 smallest_distance = distance
                 closest_color_name = color_name
 
-        color_id = bk.color_large.index(closest_color_name)
-        return color_id
-
-    def obj2tensor(self, shape, color, pos, group_count_conf):
-        obj_tensor = torch.zeros(len(bk.obj_ohc))
-        i = 0
-        obj_tensor[i] = color  # color
-        i += 1
-        obj_tensor[i] = shape  # shape
-        i += 1
-        obj_tensor[i] = pos[0]  # x position
-        i += 1
-        obj_tensor[i] = pos[1]  # y position
-        i += 1
-        obj_tensor[i] = group_count_conf  # group confidence
-        return obj_tensor
-
-    def generate_tensor(self):
-        self.pos = self.find_center()
-        self.ocm = torch.stack(
-            [self.obj2tensor(self.name, self.color, self.pos, self.onside_coverage)])
+        color = bk.color_matplotlib[closest_color_name]
+        return color
 
     def find_center(self):
         matrix = self.input.sum(axis=-1)
@@ -105,9 +84,13 @@ class Group():
         row_center = torch.mean(nonzero_indices[:, 0])
         col_center = torch.mean(nonzero_indices[:, 1])
         pos = torch.tensor([row_center, col_center])
+
+        x_size = (nonzero_indices[:, 0].max() - nonzero_indices[:, 0].min()) / self.input.shape[0]
+        y_size = (nonzero_indices[:, 1].max() - nonzero_indices[:, 1].min()) / self.input.shape[1]
+        obj_size = x_size * y_size
         if pos.max() > 1:
             pos = pos / 512
-        return pos
+        return pos, obj_size
 
 
 def group_tensor2dict(group_tensor):
@@ -148,3 +131,15 @@ def group_dict2tensor(group_dict):
         group_dict["shape_cir"]
     ])
     return group_tensor
+
+
+def group2tensor(group):
+    obj_num = 1 if group.parents is None else group.parents.shape[0]
+
+    tri = 1 if bk.bk_shapes[group.name] == "triangle" else 0
+    sq = 1 if bk.bk_shapes[group.name] == "square" else 0
+    cir = 1 if bk.bk_shapes[group.name] == "circle" else 0
+    color = torch.tensor(group.color) / 255
+    tensor = gen_group_tensor(group.pos[0], group.pos[1], group.size, obj_num,
+                              color[0], color[1], color[2], tri, sq, cir)
+    return tensor

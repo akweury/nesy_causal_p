@@ -25,6 +25,14 @@ def gestalt_perception_main():
     os.makedirs(config.model_gestalt, exist_ok=True)
     # generate dataset
     generate_training_patterns.genGestaltTraining()
+    # load dataset
+    task_dataset = dataset.GSDataset()
+
+
+    # group each task
+    # find out the common rules in the task
+    # evaluate the test image
+
 
 if __name__ == '__main__':
     gestalt_perception_main()

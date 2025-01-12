@@ -8,8 +8,7 @@ import pickle
 import os
 import config
 import cv2
-from tqdm import tqdm
-from src.utils import chart_utils
+from src import bk
 
 
 def data2patch(data):
@@ -353,10 +352,10 @@ def resize_img(img, resize):
     #     if resize:
     img = img.squeeze().numpy()
     resized_img = cv2.resize(img, (resize, resize),
-                        interpolation=cv2.INTER_LINEAR)
+                             interpolation=cv2.INTER_LINEAR)
     resized_img = torch.from_numpy(resized_img).unsqueeze(0)
-        # else:
-        #     bw_img = torch.from_numpy(bw_img).unsqueeze(0)
+    # else:
+    #     bw_img = torch.from_numpy(bw_img).unsqueeze(0)
     return resized_img
 
 
@@ -416,17 +415,16 @@ def matrix_equality(matrix1, matrix2):
 
 def crop_img(img, crop_data=None):
     rgb = img.numpy().astype(np.uint8)
+    bg_mask = np.all(rgb==bk.color_matplotlib["lightgray"], axis=-1)
+    rgb[bg_mask] = bk.color_matplotlib["none"]
     bw_img = cv2.cvtColor(rgb, cv2.COLOR_BGR2GRAY)
-    bw_img[bw_img != 211] = 1
-    bw_img[bw_img == 211] = 0
     bw_img = torch.from_numpy(bw_img).squeeze()
-
     if crop_data is None:
         height, width = bw_img.shape[-2], bw_img.shape[-1]
         # Find the bounding box of the nonzero values
         nonzero_coords = torch.nonzero(bw_img)
         if nonzero_coords.numel() == 0:  # Handle completely empty images
-            return bw_img
+            return bw_img, [0, 0, 0, 0]
 
         min_y, min_x = nonzero_coords.min(dim=0).values
         max_y, max_x = nonzero_coords.max(dim=0).values

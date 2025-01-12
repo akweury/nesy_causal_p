@@ -27,7 +27,7 @@ def get_most_frequent_color(img):
     color_counts = img.reshape(3, -1).permute(1, 0).unique(return_counts=True, dim=0)
     color_sorted = sorted(zip(color_counts[0], color_counts[1]),
                           key=lambda x: x[1], reverse=True)
-    if torch.all(color_sorted[0][0] == torch.tensor([211, 211, 211])):
+    if torch.all(color_sorted[0][0] == torch.tensor(bk.color_matplotlib["lightgray"])):
         most_frequent = color_sorted[1][0]
     else:
         most_frequent = color_sorted[0][0]
@@ -86,7 +86,7 @@ def percept_feature_groups(args, bk_shapes, segment):
 def merge_segments(segments):
     merged_img = segments[0].clone()
     for segment in segments:
-        mask = (segment != torch.tensor([211, 211, 211])).any(dim=-1)
+        mask = (segment != torch.tensor(bk.color_matplotlib["lightgray"])).any(dim=-1)
         merged_img[mask] = segment[mask]
     return merged_img
 
@@ -233,7 +233,7 @@ def percept_segments(args, imgs, dtype):
     else:
         segments = []
         for img in imgs:
-            img_torch = torch.from_numpy(img).to(args.device)
+            img_torch = img.to(args.device)
             # segment the scene into separate parts
             segment = detect_connected_regions(args, img_torch).int()
             segments.append(segment)
@@ -329,8 +329,30 @@ def eval_similarity(groups):
 #     positions = groups2positions(groups)
 #     shapes = positions2shapes(positions)
 
+def ocm_encoder(args, segments, dtype):
+    group_bk = load_bk(args, bk.bk_shapes)
+    # detect local feature as groups
+    ocms = []
+    for example_i in tqdm(range(len(segments)), f" ({dtype}) Example Segmentation"):
+        ocm_file = str(args.output_file_prefix) + f"ocm_{dtype}_example_{example_i}.pt"
+        example_seg = segments[example_i]
+        if os.path.exists(ocm_file):
+            example_ocm = torch.load(ocm_file)
+        else:
+            example_ocm = []
+            for segment in example_seg:
+                group = percept_feature_groups(args, group_bk, segment)
+                ocm = gestalt_group.group2tensor(group)
+                example_ocm.append(ocm)
+            example_ocm = torch.stack(example_ocm)
+            torch.save(example_ocm, ocm_file)
 
-def cluster_by_principle(step, args, input_ocms, segments, labels, action, threshold):
+        ocms.append(example_ocm)
+        args.logger.debug(f"detected local features: {len(example_ocm)}")
+    return ocms
+
+
+def cluster_by_principle(args, imgs):
     """ evaluate gestalt scores, decide grouping based on which strategy
 
     output: NxOxP np array, N example numbers, O max group numbers, P group property numbers
@@ -339,6 +361,19 @@ def cluster_by_principle(step, args, input_ocms, segments, labels, action, thres
 
     """
     # ocms_extended = gestalt_group.gen_extended_group_tensor(input_ocms)
+
+    # segmentation the images
+    imgs_pos = imgs[:3]
+    imgs_neg = imgs[3:]
+    segments_pos = percept_segments(args, imgs_pos, "pos")
+    segments_neg = percept_segments(args, imgs_neg, "neg")
+    group_label_pos = [torch.zeros(len(seg)) for seg in segments_pos]
+    group_label_neg = [torch.zeros(len(seg)) for seg in segments_neg]
+
+    # encode the segments to object centric matrix (ocm)
+    ocm_pos = ocm_encoder(args, segments_pos, "pos")
+    ocm_neg = ocm_encoder(args, segments_neg, "neg")
+
     gcms = []
     ocms = [input_ocms[s_i][:len(segments[s_i])] for s_i in range(len(segments))]
     example_num = len(input_ocms)
@@ -421,8 +456,7 @@ def detect_connected_regions(args, input_array, pixel_num=50):
     return output_tensor
 
 
-def detect_local_features(args, segments, seg_index, group_bk):
-    group_file = str(args.output_file_prefix) + f"_feature_groups_{seg_index}.pt"
+def detect_local_features(args, segments, example_i, group_bk):
     if os.path.exists(group_file):
         groups = torch.load(group_file)
     else:
@@ -538,7 +572,7 @@ def identify_fms(args, train_loader, kernels):
 
 
 def collect_fms(args):
-    bk_shapes = args.exp_setting["bk_groups"]
+    bk_shapes = bk.bk_shapes[1:]
     args.step_counter += 1
     args.logger.info(f"Step {args.step_counter}/{args.total_step}: "
                      f"Collecting FMs for patterns {bk_shapes}.")
