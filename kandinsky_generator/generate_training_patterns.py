@@ -271,10 +271,12 @@ def genShapeOnShape(args):
 
 
 def get_task_names(principle):
-    if principle == "proximity":
-        task_names = ["proximity_two_groups",
-                      "proximity_three_groups",
-                      "proximity_always_three"]
+    if principle == "good_figure":
+        task_names = ["good_figure_two_groups",
+                      "good_figure_three_groups",
+                      "good_figure_always_three"]
+    elif principle == "proximity":
+        task_names = ["proximity_red_triangle",]
     elif principle == "similarity":
         task_names = ["similarity_triangle_circle"]
     elif principle == "closure":
