@@ -1,5 +1,7 @@
 # Created by shaji at 24/06/2024
 import matplotlib
+import torch
+import config
 
 mode_recall = 8
 mode_excluded_preds = ["target"]
@@ -155,3 +157,29 @@ def tensor2dict(tensor):
     tensor_dict['color'] = tensor[3:6]
     tensor_dict['shape'] = tensor[6:6 + len(bk_shapes)]
     return tensor_dict
+
+
+def load_bk_fms(args, bk_shapes):
+    # load background knowledge
+    bk = []
+    kernel_size = config.kernel_size
+    for s_i, bk_shape in enumerate(bk_shapes):
+        if bk_shape == "none":
+            continue
+        bk_path = config.output / bk_shape
+        kernel_file = bk_path / f"kernel_patches_{kernel_size}.pt"
+        kernels = torch.load(kernel_file).to(args.device)
+
+        fm_file = bk_path / f"fms_patches_{kernel_size}.pt"
+        fm_data = torch.load(fm_file).to(args.device)
+        fm_img = fm_data[:, 0:1]
+        fm_repo = fm_data[:, 1:]
+
+        bk.append({
+            "shape": s_i,
+            "kernel_size": kernel_size,
+            "kernels": kernels,
+            "fm_img": fm_img,
+            "fm_repo": fm_repo,
+        })
+    return bk

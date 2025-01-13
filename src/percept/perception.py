@@ -4,6 +4,7 @@ import torch
 from scipy import ndimage
 import matplotlib.pyplot as plt
 from sklearn.cluster import DBSCAN
+from tqdm import tqdm
 
 from src import bk
 from src.utils.chart_utils import van
@@ -12,6 +13,7 @@ from src.memory import recall
 from src.reasoning import reason
 from src.percept import gestalt_group
 from src.neural import models
+from src.percept import gestalt_algs
 import config
 
 
@@ -126,72 +128,6 @@ def percept_closure_groups(args, segments, input_groups, bk_shapes):
     return gcms, labels
 
 
-def cluster_by_proximity(object_matrix, threshold):
-    """ Function to compute distance or difference
-    Return:
-        labels 1 x O np array
-        groups 1 x O x P np array
-    """
-
-    obj_n = object_matrix.shape[0]
-    labels = torch.full((obj_n,), 0, dtype=torch.int32)
-    visited = torch.zeros(obj_n, dtype=torch.bool)
-    current_label = 0
-    for i in range(obj_n):
-        if not visited[i]:
-            # BFS or DFS
-            stack = [i]
-            visited[i] = True
-            labels[i] = current_label
-            while stack:
-                top = stack.pop()
-                for j in range(obj_n):
-                    if not visited[j]:
-                        dist = proximity_distance(object_matrix[top, :2], object_matrix[j, :2])
-                        if dist <= threshold:
-                            visited[j] = True
-                            labels[j] = current_label
-                            stack.append(j)
-            current_label += 1
-    group_n = len(labels.unique())
-    gcms = torch.zeros((group_n, 10))
-    for group_id in labels.unique():
-        group = gen_group_tensor2(object_matrix, 0, labels == group_id)
-        gcms[group_id] = group
-    return gcms, labels
-
-
-def cluster_by_similarity(object_matrix, threshold, mode):
-    obj_n = object_matrix.shape[0]
-    labels = torch.full((obj_n,), 0, dtype=torch.int32)
-    visited = torch.zeros(obj_n, dtype=torch.bool)
-    current_label = 1
-    for i in range(obj_n):
-        if not visited[i]:
-            # BFS or DFS
-            stack = [i]
-            visited[i] = True
-            labels[i] = current_label
-
-            while stack:
-                top = stack.pop()
-                for j in range(obj_n):
-                    if not visited[j]:
-                        dist = similarity_distance(object_matrix[top], object_matrix[j], mode)
-                        if dist == threshold:
-                            visited[j] = True
-                            labels[j] = current_label
-                            stack.append(j)
-            current_label += 1
-
-    group_n = len(labels.unique())
-    gcms = torch.zeros((group_n, 10))
-    for g_i in range(group_n):
-        group = gen_group_tensor2(object_matrix, 0, labels == labels[g_i])
-        gcms[g_i] = group
-    return gcms, labels
-
-
 def load_bk(args, bk_shapes):
     # load background knowledge
     bk = []
@@ -241,18 +177,18 @@ def percept_segments(args, imgs, dtype):
     return segments
 
 
-def cluster_by_closure(args, segments, seg_index):
-    """ group objects as a high level group, return labels of each object """
-    group_bk = load_bk(args, bk.bk_shapes)
-    # detect local feature as groups
-    loc_groups = detect_local_features(args, segments, seg_index, group_bk)
-    # loc_groups = [loc_groups[i] for i in range(len(obj_indices)) if obj_indices[i]]
-
-    # group_segs = segments[obj_indices]
-    # detect global feature as groups and seal the local feature groups into them
-    gcms, labels = percept_closure_groups(args, segments[seg_index], loc_groups, group_bk)
-
-    return gcms, labels
+# def cluster_by_closure(args, segments, seg_index):
+#     """ group objects as a high level group, return labels of each object """
+#     group_bk = load_bk(args, bk.bk_shapes)
+#     # detect local feature as groups
+#     loc_groups = detect_local_features(args, segments, seg_index, group_bk)
+#     # loc_groups = [loc_groups[i] for i in range(len(obj_indices)) if obj_indices[i]]
+#
+#     # group_segs = segments[obj_indices]
+#     # detect global feature as groups and seal the local feature groups into them
+#     gcms, labels = percept_closure_groups(args, segments[seg_index], loc_groups, group_bk)
+#
+#     return gcms, labels
 
 
 def gen_group_tensor(input_groups, group_shape, group_objs):
@@ -288,38 +224,6 @@ def gen_group_tensor(input_groups, group_shape, group_objs):
     return tensor
 
 
-def gen_group_tensor2(input_groups, group_shape, group_objs):
-    parent_tensors = np.stack([input_groups[i] for i in range(len(input_groups)) if group_objs[i]])
-    parent_positions = parent_tensors[:, :2]
-    x = parent_positions[:, 0]
-    y = parent_positions[:, 1]
-    group_x = x.mean()
-    group_y = y.mean()
-    obj_num = len(parent_tensors)
-    # Shoelace formula
-    if len(parent_tensors) == 1:
-        return torch.from_numpy(parent_tensors[0])
-
-    else:
-        group_size = 0.5 * (x.max() - x.min() + y.max() - y.min())
-        color_r = 0
-        color_g = 0
-        color_b = 0
-        shape_tri = 0
-        shape_sq = 0
-        shape_cir = 0
-        if group_shape == "triangle":
-            shape_tri = 1
-        elif group_shape == "square":
-            shape_sq = 1
-        elif group_shape == "circle":
-            shape_cir = 1
-
-    group_tensor = gestalt_group.gen_group_tensor(group_x, group_y, group_size, obj_num, color_r, color_g, color_b,
-                                                  shape_tri, shape_sq, shape_cir)
-    return group_tensor
-
-
 def eval_similarity(groups):
     color_labels = groups2labels(groups, "color")
     shape_labels = groups2labels(groups, "shape")
@@ -330,92 +234,32 @@ def eval_similarity(groups):
 #     shapes = positions2shapes(positions)
 
 def ocm_encoder(args, segments, dtype):
-    group_bk = load_bk(args, bk.bk_shapes)
+    group_bk = bk.load_bk_fms(args, bk.bk_shapes)
     # detect local feature as groups
     ocms = []
+    groups = []
     for example_i in tqdm(range(len(segments)), f" ({dtype}) Example Segmentation"):
         ocm_file = str(args.output_file_prefix) + f"ocm_{dtype}_example_{example_i}.pt"
+        group_file = str(args.output_file_prefix) + f"group_{dtype}_example_{example_i}.pt"
         example_seg = segments[example_i]
-        if os.path.exists(ocm_file):
+        example_groups = []
+        if os.path.exists(ocm_file) and os.path.exists(group_file):
             example_ocm = torch.load(ocm_file)
+            example_groups = torch.load(group_file)
         else:
             example_ocm = []
             for segment in example_seg:
                 group = percept_feature_groups(args, group_bk, segment)
                 ocm = gestalt_group.group2tensor(group)
                 example_ocm.append(ocm)
+                example_groups.append(group)
             example_ocm = torch.stack(example_ocm)
             torch.save(example_ocm, ocm_file)
-
+            torch.save(example_groups, group_file)
         ocms.append(example_ocm)
+        groups.append(example_groups)
         args.logger.debug(f"detected local features: {len(example_ocm)}")
-    return ocms
-
-
-def cluster_by_principle(args, imgs):
-    """ evaluate gestalt scores, decide grouping based on which strategy
-
-    output: NxOxP np array, N example numbers, O max group numbers, P group property numbers
-    labels: NxO np array, N example numbers, O max group numbers
-    - loc groups: individual objects;
-
-    """
-    # ocms_extended = gestalt_group.gen_extended_group_tensor(input_ocms)
-
-    # segmentation the images
-    imgs_pos = imgs[:3]
-    imgs_neg = imgs[3:]
-    segments_pos = percept_segments(args, imgs_pos, "pos")
-    segments_neg = percept_segments(args, imgs_neg, "neg")
-    group_label_pos = [torch.zeros(len(seg)) for seg in segments_pos]
-    group_label_neg = [torch.zeros(len(seg)) for seg in segments_neg]
-
-    # encode the segments to object centric matrix (ocm)
-    ocm_pos = ocm_encoder(args, segments_pos, "pos")
-    ocm_neg = ocm_encoder(args, segments_neg, "neg")
-
-    gcms = []
-    ocms = [input_ocms[s_i][:len(segments[s_i])] for s_i in range(len(segments))]
-    example_num = len(input_ocms)
-    # example_num, principle_num, obj_max_num
-    group_labels = torch.zeros(example_num, 4, args.obj_n)
-    for o_i in range(example_num):
-        # label_id = [id.item()] * len(labels[o_i])
-        # mask = [a == b for a, b in zip(labels[o_i], label_id)]
-        # obj_tensors = ocm[mask]
-
-        # if config.gestalt_action[action] == "proximity":
-        example_gcm = []
-        prox_group_tensor, group_labels[o_i, 0, :len(ocms[o_i])] = cluster_by_proximity(ocms[o_i], 0.1)
-        example_gcm.append(prox_group_tensor)
-        # elif config.gestalt_action[action] == "shape_similarity":
-        shape_simi_group_tensor, group_labels[o_i, 1, :len(ocms[o_i])] = cluster_by_similarity(ocms[o_i], 0, "shape")
-        example_gcm.append(shape_simi_group_tensor)
-        # elif config.gestalt_action[action] == "color_similarity":
-        color_simi_group_tensor, group_labels[o_i, 2, :len(ocms[o_i])] = cluster_by_similarity(ocms[o_i], 0, "color")
-        example_gcm.append(color_simi_group_tensor)
-        # elif config.gestalt_action[action] == "closure":
-        closure_group_tensor, group_labels[o_i, 3, :len(ocms[o_i])] = cluster_by_closure(args, segments, o_i)
-        example_gcm.append(closure_group_tensor)
-        gcms.append(example_gcm)
-    return gcms, group_labels
-
-    #     # strategy: proximity
-    #     labels = cluster_by_proximity(ocm, threshold)
-    # elif config.gestalt_action[action] == "similarity":
-    #     # strategy: similarity
-    #     labels = cluster_by_similarity(ocm, threshold)
-    # elif config.gestalt_action[action] == "closure":
-    #     # strategy: closure
-    #     labels = cluster_by_closure(ocm, threshold)
-    # else:
-    #     raise ValueError
-    # return labels
-
-
-def percept_gestalt_groups(args, loc_groups, bk, img):
-    gestalt_groups = percept_closure_groups(args, loc_groups, bk, img)
-    return gestalt_groups
+    return ocms, groups
 
 
 def detect_connected_regions(args, input_array, pixel_num=50):
@@ -485,17 +329,6 @@ def detect_global_features(args, loc_groups, bk, img):
         # torch.save(labels, global_group_file)
 
     return labels, groups
-
-
-def percept_groups(args, idx, group_bk, img):
-    # segment the scene into separate parts
-    segments = detect_connected_regions(args, img)
-    # detect local feature as groups
-    loc_groups = detect_local_features(args, segments, group_bk)
-    # detect global feature as groups and seal the local feature groups into them
-    glo_groups = detect_global_features(args, loc_groups, group_bk, img)
-
-    return glo_groups
 
 
 def percept_reward(lang):
@@ -611,3 +444,64 @@ def collect_fms(args):
                           f"ratio: {len(fms) / len(train_loader):.2f} "
                           f"feature maps have been saved to "
                           f"{args.save_path}/f'fms_patches_{args.k_size}.pt'")
+
+
+def percept_gestalt_groups(args, ocms, segments, obj_groups, dtype):
+    gcms = []
+    group_labels = []
+    for example_i in range(len(ocms)):
+        example_gcm = []
+        example_group_labels = []
+        example_ocm = ocms[example_i]
+
+        labels_prox = gestalt_algs.cluster_by_proximity(example_ocm, 0.1)
+        example_group_labels.append(labels_prox)
+        gcm_prox = gestalt_group.gcm_encoder(labels_prox, example_ocm)
+        example_gcm.append(gcm_prox)
+
+        labels_simi_shape = gestalt_algs.cluster_by_similarity(example_ocm, 0, "shape")
+        example_group_labels.append(labels_simi_shape)
+        gcm_simi_shape = gestalt_group.gcm_encoder(labels_simi_shape, example_ocm)
+        example_gcm.append(gcm_simi_shape)
+
+        labels_simi_color = gestalt_algs.cluster_by_similarity(example_ocm, 0, "color")
+        example_group_labels.append(labels_simi_color)
+        gcm_simi_color = gestalt_group.gcm_encoder(labels_simi_color, example_ocm)
+        example_gcm.append(gcm_simi_color)
+
+        labels_closure = gestalt_algs.percept_closure_groups(args, segments, obj_groups)
+        example_group_labels.append(labels_closure)
+        gcm_closure = gestalt_group.gcm_encoder(labels_closure, example_ocm)
+        example_gcm.append(gcm_closure)
+
+        gcms.append(example_gcm)
+        group_labels.append(example_group_labels)
+    return gcms, group_labels
+
+
+def cluster_by_principle(args, imgs):
+    """ evaluate gestalt scores, decide grouping based on which strategy
+
+    output: NxOxP np array, N example numbers, O max group numbers, P group property numbers
+    labels: NxO np array, N example numbers, O max group numbers
+    - loc groups: individual objects;
+
+    """
+    # segmentation the images
+    imgs_pos = imgs[:3]
+    imgs_neg = imgs[3:]
+    segments_pos = percept_segments(args, imgs_pos, "pos")
+    segments_neg = percept_segments(args, imgs_neg, "neg")
+    group_label_pos = [torch.zeros(len(seg)) for seg in segments_pos]
+    group_label_neg = [torch.zeros(len(seg)) for seg in segments_neg]
+
+    # encode the segments to object centric matrix (ocm)
+    ocm_pos, obj_groups_pos = ocm_encoder(args, segments_pos, "pos")
+    ocm_neg, obj_groups_neg = ocm_encoder(args, segments_neg, "neg")
+
+    group_pos, group_labels_pos = percept_gestalt_groups(args, ocm_pos, segments_pos, obj_groups_pos, "pos")
+
+    gcms = None
+    group_labels = None
+
+    return gcms, group_labels

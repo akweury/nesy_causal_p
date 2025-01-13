@@ -453,3 +453,11 @@ def crop_img(img, crop_data=None):
     #     cropped_image = torch.from_numpy(cropped_image)
     cropped_image = cropped_image.unsqueeze(0)
     return cropped_image, [new_min_y, new_max_y, new_min_x, new_max_x]
+
+
+def merge_segments(segments):
+    merged_img = segments[0].clone()
+    for segment in segments:
+        mask = (segment != torch.tensor(bk.color_matplotlib["lightgray"])).any(dim=-1)
+        merged_img[mask] = segment[mask]
+    return merged_img

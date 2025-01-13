@@ -9,6 +9,7 @@ from utils import args_utils
 from src import dataset, bk
 from src.neural import models
 from src.percept import perception
+from src.utils.chart_utils import van
 
 
 def init_io_folders(args, data_folder):
@@ -50,6 +51,7 @@ def main():
 
     for task_id, (data_pos, data_neg, imgs) in enumerate(train_dl):
         args.output_file_prefix = config.models / f"task_{task_id}_"
+        van(imgs[0])
         # grouping objects
         gestalt_groups = perception.cluster_by_principle(args, imgs)
         # Learn Clauses from Training Data
