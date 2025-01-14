@@ -51,38 +51,19 @@ def get_most_frequent_color(img):
 def percept_feature_groups(args, bk_shapes, segment):
     """ recall the memory features from the given segments """
     feature_groups = []
-
-    # rgb segment to resized bw image
-    cropped_img, _ = data_utils.crop_img(segment)
-    bw_img = data_utils.resize_img(cropped_img, resize=8).unsqueeze(0)
     seg_color = get_most_frequent_color(segment.permute(2, 0, 1))
-    for b_i, bk_shape in enumerate(bk_shapes):
-        # shape_str = bk.bk_shapes[bk_shape["shape"]]
-        args.save_path = config.output / bk.bk_shapes[bk_shape["shape"]]
-        # recall the memory
-        shifted_fms, rc_fms = recall.recall_fms(args, bk_shape, bw_img)
+    # rgb segment to resized bw image
+    bw_img = img2bw(segment)
 
-        # reasoning recalled groups
-        group_data = reason.reason_fms(rc_fms, bk_shape, bw_img)
-
-        group = gestalt_group.Group(id=b_i,
-                                    name=bk_shape["shape"],
-                                    input_signal=segment,
-                                    onside_signal=group_data["onside"],
-                                    memory_signal=group_data['recalled_bw_img'],
-                                    parents=None,
-                                    coverage=group_data["onside_percent"],
-                                    color=seg_color)
-        feature_groups.append(group)
-
-        # log
-        # args.logger.debug(
-        #     f" Found group: {bk_shape['name']}: "
-        #     f" [coverage: {group.onside_coverage:.2f}]")
-
-    best_idx = torch.tensor([g.onside_coverage for g in feature_groups]).argmax()
-    best_group = feature_groups[best_idx]
-    return best_group
+    # recall the memory
+    recalled_fms, shape = recall.recall_fms(args, bk_shapes, bw_img)
+    # reasoning recalled groups
+    shape_kernels = bk_shapes[shape]["kernels"].float()
+    group_data = reason.reason_fms(recalled_fms, shape_kernels, bw_img)
+    group = gestalt_group.Group(id=0, name=shape + 1, input_signal=segment, onside_signal=group_data["onside"],
+                                # memory_signal=group_data['recalled_bw_img'],
+                                parents=None, coverage=group_data["onside_percent"], color=seg_color)
+    return group
 
 
 def merge_segments(segments):
@@ -239,8 +220,8 @@ def ocm_encoder(args, segments, dtype):
     ocms = []
     groups = []
     for example_i in tqdm(range(len(segments)), f" ({dtype}) Example Segmentation"):
-        ocm_file = str(args.output_file_prefix) + f"ocm_{dtype}_example_{example_i}.pt"
-        group_file = str(args.output_file_prefix) + f"group_{dtype}_example_{example_i}.pt"
+        ocm_file = str(args.output_file_prefix) + f"example_{example_i}_{dtype}_ocm.pt"
+        group_file = str(args.output_file_prefix) + f"example_{example_i}_{dtype}_group.pt"
         example_seg = segments[example_i]
         example_groups = []
         if os.path.exists(ocm_file) and os.path.exists(group_file):
@@ -249,7 +230,9 @@ def ocm_encoder(args, segments, dtype):
         else:
             example_ocm = []
             for segment in example_seg:
+                # van(segment)
                 group = percept_feature_groups(args, group_bk, segment)
+                # print(bk.bk_shapes[group.name])
                 ocm = gestalt_group.group2tensor(group)
                 example_ocm.append(ocm)
                 example_groups.append(group)
@@ -364,7 +347,8 @@ def percept_reward(lang):
 def identify_kernels(args, train_loader):
     k_size = args.k_size
     kernels = []
-    for (bw_img) in tqdm(train_loader, f"Idf. Kernels (k = {k_size})"):
+    for (img) in tqdm(train_loader, f"Idf. Kernels (k = {k_size})"):
+        bw_img = img2bw(img, 15)
         patches = bw_img.unfold(2, k_size, 1).unfold(3, k_size, 1)
         patches = patches.reshape(-1, k_size, k_size).unique(dim=0)
         patches = patches[~torch.all(patches == 0, dim=(1, 2))]
@@ -373,35 +357,42 @@ def identify_kernels(args, train_loader):
     return kernels
 
 
+def img2fm(img, kernels):
+    bw_img = img2bw(img)
+    fms = models.one_layer_conv(bw_img, kernels)
+    if fms.ndim == 3:
+        fms = fms.unsqueeze(0)
+    return fms
+
+
+def img2bw(img, resize=16):
+    cropped_img, _ = data_utils.crop_img(img.squeeze())
+    resized_img = data_utils.resize_img(cropped_img, resize=resize)
+    bw_img = data_utils.to_bw_img(resized_img)
+    return bw_img
+
+
+def fm_sum_channels(fm_all):
+    fm_sum = fm_all.sum(dim=1, keepdims=True)
+    fm_sum = (fm_sum - fm_sum.min()) / (fm_sum.max() - fm_sum.min())
+    return fm_sum
+
+
 def identify_fms(args, train_loader, kernels):
     # calculate fms
     k_size = args.k_size
     fm_all = []
-    data_shift_all = []
-    for (bw_img) in tqdm(train_loader, desc=f"Calc. FMs (k={k_size})"):
-        fms = models.one_layer_conv(bw_img, kernels)
-        fms, row_shift, col_shift = data_utils.shift_content_to_top_left(fms)
-
-        bw_img, _, _ = data_utils.shift_content_to_top_left(bw_img,
-                                                            row_shift,
-                                                            col_shift)
-        fm_all.append(fms)
-        data_shift_all.append(bw_img)
-
-    fm_all = torch.cat(fm_all, dim=0)
-
-    data_shift_all = torch.cat(data_shift_all, dim=0)
-    data_all = torch.cat((data_shift_all, fm_all), dim=1).unique(dim=0)
+    for (img) in tqdm(train_loader, desc=f"Calc. FMs (k={k_size})"):
+        fm = img2fm(img, kernels)
+        fm_all.append(fm)
+    fm_all = torch.cat(fm_all, dim=0).unique(dim=0)
 
     # visual memory fms
-    fm_np_array = data_all[:, 1:].sum(dim=1, keepdims=True)
-    fm_np_array = (fm_np_array - fm_np_array.min()) / (
-            fm_np_array.max() - fm_np_array.min())
-    fm_np_array = fm_np_array.permute(0, 2, 3, 1).numpy()
-
+    fm_all_sum = fm_sum_channels(fm_all)
+    fm_np_array = fm_all_sum.permute(0, 2, 3, 1).numpy()
     chart_utils.visual_batch_imgs(fm_np_array, args.save_path, "memory_fms.png")
 
-    return data_all
+    return fm_all
 
 
 def collect_fms(args):
@@ -447,36 +438,38 @@ def collect_fms(args):
 
 
 def percept_gestalt_groups(args, ocms, segments, obj_groups, dtype):
-    gcms = []
-    group_labels = []
-    for example_i in range(len(ocms)):
-        example_gcm = []
-        example_group_labels = []
-        example_ocm = ocms[example_i]
+    """
+    return:
+    gestalt principle: the gestalt principle that can perfect grouping inputs
+    gcm: group centric matrix of the groups
+    labels: grouping labels of each object
+    other: either thresholds (proximity) or the grouping shape (closure)
+    """
+    labels_prox, ths = gestalt_algs.cluster_by_proximity(ocms)
+    if labels_prox is not None:
+        principle = bk.gestalt_principles.index("proximity")
+        gcm = gestalt_group.gcm_encoder(labels_prox, ocms, group_shape=0)
+        return principle, gcm, labels_prox, ths
 
-        labels_prox = gestalt_algs.cluster_by_proximity(example_ocm, 0.1)
-        example_group_labels.append(labels_prox)
-        gcm_prox = gestalt_group.gcm_encoder(labels_prox, example_ocm)
-        example_gcm.append(gcm_prox)
+    labels_simi_shape = gestalt_algs.cluster_by_similarity(ocms, "shape")
+    if labels_simi_shape is not None:
+        principle = bk.gestalt_principles.index("similarity_shape")
+        gcm = gestalt_group.gcm_encoder(labels_simi_shape, ocms, group_shape=0)
+        return principle, gcm, labels_simi_shape, None
 
-        labels_simi_shape = gestalt_algs.cluster_by_similarity(example_ocm, 0, "shape")
-        example_group_labels.append(labels_simi_shape)
-        gcm_simi_shape = gestalt_group.gcm_encoder(labels_simi_shape, example_ocm)
-        example_gcm.append(gcm_simi_shape)
+    labels_simi_color = gestalt_algs.cluster_by_similarity(ocms, "color")
+    if labels_simi_color is not None:
+        principle = bk.gestalt_principles.index("similarity_color")
+        gcm = gestalt_group.gcm_encoder(labels_simi_color, ocms, group_shape=0)
+        return principle, gcm, labels_simi_color, None
 
-        labels_simi_color = gestalt_algs.cluster_by_similarity(example_ocm, 0, "color")
-        example_group_labels.append(labels_simi_color)
-        gcm_simi_color = gestalt_group.gcm_encoder(labels_simi_color, example_ocm)
-        example_gcm.append(gcm_simi_color)
+    labels_closure, shape_closure = gestalt_algs.cluster_by_closure(args, segments, obj_groups)
+    if labels_closure is not None:
+        principle = bk.gestalt_principles.index("closure")
+        gcm = gestalt_group.gcm_encoder(labels_closure, ocms, group_shape=shape_closure)
+        return principle, gcm, labels_closure, shape_closure
 
-        labels_closure = gestalt_algs.percept_closure_groups(args, segments, obj_groups)
-        example_group_labels.append(labels_closure)
-        gcm_closure = gestalt_group.gcm_encoder(labels_closure, example_ocm)
-        example_gcm.append(gcm_closure)
-
-        gcms.append(example_gcm)
-        group_labels.append(example_group_labels)
-    return gcms, group_labels
+    return None, None, None
 
 
 def cluster_by_principle(args, imgs):
@@ -499,9 +492,13 @@ def cluster_by_principle(args, imgs):
     ocm_pos, obj_groups_pos = ocm_encoder(args, segments_pos, "pos")
     ocm_neg, obj_groups_neg = ocm_encoder(args, segments_neg, "neg")
 
-    group_pos, group_labels_pos = percept_gestalt_groups(args, ocm_pos, segments_pos, obj_groups_pos, "pos")
+    prin, gcm_pos, labels_pos, others = percept_gestalt_groups(args, ocm_pos, segments_pos, obj_groups_pos, "pos")
 
-    gcms = None
-    group_labels = None
-
-    return gcms, group_labels
+    symbolic_dict = {
+        "ocm_pos": ocm_pos,
+        "ocm_neg": ocm_neg,
+        "gcm_pos": gcm_pos,
+        "gcm_neg": None,
+        "label_pos": labels_pos,
+    }
+    return symbolic_dict

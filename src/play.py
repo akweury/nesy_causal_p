@@ -51,11 +51,11 @@ def main():
 
     for task_id, (data_pos, data_neg, imgs) in enumerate(train_dl):
         args.output_file_prefix = config.models / f"task_{task_id}_"
-        van(imgs[0])
+
         # grouping objects
-        gestalt_groups = perception.cluster_by_principle(args, imgs)
+        symbolic_dict = perception.cluster_by_principle(args, imgs)
         # Learn Clauses from Training Data
-        lang = train_nsfr.train_clauses(args, train_dl)
+        lang = train_nsfr.train_clauses(args, symbolic_dict)
 
         # Test Positive Patterns, statistic the accuracy,
         acc_pos = check_clause(args, lang, test_pos_dl, "POSITIVE",

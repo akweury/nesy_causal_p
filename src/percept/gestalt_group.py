@@ -6,13 +6,13 @@ from src import bk
 
 
 class Group():
-    def __init__(self, id, name, input_signal, onside_signal, memory_signal, parents,
+    def __init__(self, id, name, input_signal, onside_signal, parents,
                  color, coverage):
         self.id = id
         self.name = name
         self.input = input_signal
         self.onside = onside_signal
-        self.memory = memory_signal
+        # self.memory = memory_signal
         self.parents = parents
         self.color = self.search_color(input_signal, onside_signal, color)
         self.pos, self.size = self.find_center()
@@ -145,27 +145,33 @@ def group2tensor(group):
     return tensor
 
 
-def gcm_encoder(labels, ocm):
-    group_num = len(labels.unique())
-    gcm = torch.zeros((group_num, 10))
-    for l_i, label in enumerate(labels.unique()):
-        group_ocms = ocm[labels == label]
-        parent_positions = group_ocms[:, :2]
-        x = parent_positions[:, 0]
-        y = parent_positions[:, 1]
-        group_x = x.mean()
-        group_y = y.mean()
-        obj_num = len(group_ocms)
-        if len(group_ocms) == 1:
-            gcm[l_i] = torch.from_numpy(group_ocms[0])
-        else:
-            group_size = 0.5 * (x.max() - x.min() + y.max() - y.min())
-            color_r = 0
-            color_g = 0
-            color_b = 0
-            shape_tri = 1 if group_shape == "triangle" else 0
-            shape_sq = 1 if group_shape == "square" else 0
-            shape_cir = 1 if group_shape == "circle" else 0
-            gcm[l_i] = gen_group_tensor(group_x, group_y, group_size, obj_num, color_r, color_g, color_b,
-                                        shape_tri, shape_sq, shape_cir)
-    return gcm
+def gcm_encoder(labels, ocms, group_shape=0):
+    shape = bk.bk_shapes[group_shape]
+    gcms = []
+    for example_i in range(len(ocms)):
+        ocm = ocms[example_i]
+        group_labels = labels[example_i]
+        group_num = len(group_labels.unique())
+        gcm = torch.zeros((group_num, 10))
+        for l_i, label in enumerate(group_labels.unique()):
+            group_ocms = ocm[group_labels == label]
+            parent_positions = group_ocms[:, :2]
+            x = parent_positions[:, 0]
+            y = parent_positions[:, 1]
+            group_x = x.mean()
+            group_y = y.mean()
+            obj_num = len(group_ocms)
+            if len(group_ocms) == 1:
+                gcm[l_i] = torch.from_numpy(group_ocms[0])
+            else:
+                group_size = 0.5 * (x.max() - x.min() + y.max() - y.min())
+                color_r = 0
+                color_g = 0
+                color_b = 0
+                shape_tri = 1 if shape == "triangle" else 0
+                shape_sq = 1 if shape == "square" else 0
+                shape_cir = 1 if shape == "circle" else 0
+                gcm[l_i] = gen_group_tensor(group_x, group_y, group_size, obj_num, color_r, color_g, color_b,
+                                            shape_tri, shape_sq, shape_cir)
+        gcms.append(gcm)
+    return gcms

@@ -145,7 +145,7 @@ color_large = [k for k, v in list(color_matplotlib.items())]
 color_large_exclude_gray = [item for item in color_large if item != "lightgray"]
 bk_shapes = ["none", "triangle", "square", "circle"]
 
-gestlat_principles = ["proximity", "similarity", 'closure', "continuity", "symmetry"]
+gestalt_principles = ["proximity", "similarity_shape","similarity_color", 'closure', "continuity", "symmetry"]
 
 
 
@@ -154,8 +154,9 @@ def tensor2dict(tensor):
     tensor_dict = {}
     tensor_dict['position'] = tensor[:2]
     tensor_dict['size'] = tensor[2]
-    tensor_dict['color'] = tensor[3:6]
-    tensor_dict['shape'] = tensor[6:6 + len(bk_shapes)]
+    tensor_dict['obj_num'] = tensor[3]
+    tensor_dict['color'] = tensor[4:7]
+    tensor_dict['shape'] = tensor[7:7 + len(bk_shapes)]
     return tensor_dict
 
 
@@ -172,14 +173,12 @@ def load_bk_fms(args, bk_shapes):
 
         fm_file = bk_path / f"fms_patches_{kernel_size}.pt"
         fm_data = torch.load(fm_file).to(args.device)
-        fm_img = fm_data[:, 0:1]
-        fm_repo = fm_data[:, 1:]
+        fm_repo = fm_data[:,]
 
         bk.append({
             "shape": s_i,
             "kernel_size": kernel_size,
             "kernels": kernels,
-            "fm_img": fm_img,
             "fm_repo": fm_repo,
         })
     return bk

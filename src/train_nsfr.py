@@ -165,25 +165,17 @@ def save_lang(args, lang):
 #     return [groups]
 
 
-def train_clauses(args, data_loader):
+def train_clauses(args, symbolic_dict):
     args.step_counter += 1
     lang = load_lang(args)
-
     if lang is None:
         # load background knowledge
         # lang = None
         all_clauses = []
         group_bk = load_bk(args, bk.bk_shapes)
-
-        for idx, (image, data) in enumerate(data_loader):
-            image = image.squeeze()
-            args.output_file_prefix = str(args.out_train_folder / f'img_{idx}')
-            # percepting groups
-            groups = perception.percept_groups(args, idx, group_bk, image)
-
-            # reasoning clauses
-            lang = alpha.alpha(args, groups)
-            all_clauses += lang.clauses
+        # reasoning clauses
+        lang = alpha.alpha(args, symbolic_dict)
+        all_clauses += lang.clauses
 
         # remove infrequent clauses
         lang = alpha.filter_infrequent_clauses(all_clauses, lang)

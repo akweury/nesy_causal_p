@@ -18,45 +18,25 @@ def fm_registration(fm_mem, bw_img_mem, fms_rc):
     return mem_fm, mem_bw_img
 
 
-def reason_fms(rc_fms, bk_shape, bw_img, reshape=None):
-    bw_img = bw_img.squeeze()
-    mem_fm_idx, mem_fm_shift, mem_fm_conf = rc_fms
-
-    if reshape is not None:
-        mem_fms = F.interpolate(bk_shape["fm_repo"][mem_fm_idx],
-                                size=(reshape, reshape), mode='bilinear',
-                                align_corners=False)
-        mem_bw_img = F.interpolate(bk_shape["fm_img"][mem_fm_idx],
-                                   size=(reshape, reshape),
-                                   mode='bilinear', align_corners=False)
-
-    else:
-        mem_fms = bk_shape["fm_repo"][mem_fm_idx]
-        mem_bw_img = bk_shape["fm_img"][mem_fm_idx]
-
-    in_fms = models.one_layer_conv(bw_img.unsqueeze(0).unsqueeze(0),
-                                   bk_shape["kernels"].float())
+def reason_fms(mem_fms, kernel, bw_img, reshape=None):
+    bw_img = bw_img.squeeze().unsqueeze(0).unsqueeze(0)
+    in_fms = models.one_layer_conv(bw_img, kernel)
     in_fms = in_fms.sum(dim=1).squeeze()
-    in_fms = (in_fms - in_fms.min()) / (in_fms.max() - in_fms.min())
-    mem_fms = mem_fms.sum(dim=1, keepdim=True)
+    in_fms = (in_fms - in_fms.min()) / ((in_fms.max() - in_fms.min()) + 1e-20)
 
-    mem_fm_min = torch.tensor([fm.min() for fm in mem_fms]).view(-1, 1, 1, 1)
-    mem_fm_max = torch.tensor([fm.max() for fm in mem_fms]).view(-1, 1, 1, 1)
-    mem_fms = (mem_fms - mem_fm_min) / (mem_fm_max - mem_fm_min)
+    # mem fms
+    mem_fms = mem_fms.squeeze().sum(dim=0)
+    mem_fms = (mem_fms - mem_fms.min()) / ((mem_fms.max() - mem_fms.min()) + 1e-20)
 
-    # image matching
-    # onside, offside = img_matching(mem_fm, in_fms)
-
-    onside = torch.stack([1 - (mem_fm.squeeze() - in_fms) ** 2 for mem_fm in mem_fms])
-    onside = onside.mean(dim=0)
-    onside[in_fms == 0] = 0
-    onside_mask = in_fms * (onside > 0.9)
-
+    # onside = 1 - (mem_fms - in_fms) ** 2
+    # onside[in_fms == 0] = 0
+    # onside_mask = in_fms * (onside > 0.8)
+    # memory and input intersection
+    onside_mask = (in_fms > 0) * (mem_fms > 0)
     # recall confidence
-    onside_percent = 1 - torch.mean((mem_fms[0].squeeze() - in_fms) ** 2).item()
+    onside_percent = 1 - torch.mean((mem_fms - in_fms) ** 2).item()
     group_data = {
         "onside": onside_mask,
-        "recalled_bw_img": mem_bw_img,
         "parents": None,
         "onside_percent": onside_percent,
     }

@@ -336,7 +336,7 @@ def load_pickle(file_name):
 
 def to_bw_img(image):
     # Load an image
-
+    image[image > 0] = 1
     return image
 
 
@@ -415,7 +415,7 @@ def matrix_equality(matrix1, matrix2):
 
 def crop_img(img, crop_data=None):
     rgb = img.numpy().astype(np.uint8)
-    bg_mask = np.all(rgb==bk.color_matplotlib["lightgray"], axis=-1)
+    bg_mask = np.all(rgb == bk.color_matplotlib["lightgray"], axis=-1)
     rgb[bg_mask] = bk.color_matplotlib["none"]
     bw_img = cv2.cvtColor(rgb, cv2.COLOR_BGR2GRAY)
     bw_img = torch.from_numpy(bw_img).squeeze()
@@ -435,7 +435,7 @@ def crop_img(img, crop_data=None):
         # Adjust the bounding box to make it square
         center_y = (min_y + max_y) // 2
         center_x = (min_x + max_x) // 2
-        half_side = side_length // 2
+        half_side = side_length // 2 + 5
 
         # Compute the new square bounding box
         new_min_y = max(center_y - half_side, 0)

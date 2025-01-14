@@ -22,10 +22,9 @@ class BasicShapeDataset(Dataset):
         return len(self.image_paths)
 
     def __getitem__(self, idx):
-        rgb_image = cv2.imread(self.image_paths[idx])
-        cropped_img, _ = data_utils.crop_img(rgb_image)
-        bw_img = data_utils.resize_img(cropped_img, resize=8)
-        return bw_img
+        rgb_image = torch.from_numpy(cv2.imread(self.image_paths[idx]))
+
+        return rgb_image
 
 
 class GestaltDataset(Dataset):
