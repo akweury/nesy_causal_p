@@ -21,7 +21,7 @@ const_dtypes = {
     "object_color": "object_color",
     "object_shape": "object_shape",
     "group_label": "group_label",
-    "object_num":"object_num",
+    "object_num": "object_num",
 }
 
 # -----------------------------------------
@@ -76,12 +76,14 @@ predicate_configs["predicate_in_group"] = create_predicate_config("in_group", [
 
 predicate_configs["predicate_color"] = create_predicate_config("has_color", [
     f"{const_dtype_object_color},#",
+    f"{var_dtype_obj},+",
     f"{var_dtype_group},+",
     f"{var_dtype_pattern},+",
 ])
 
 predicate_configs["predicate_shape"] = create_predicate_config("has_shape", [
     f"{const_dtype_object_shape},#",
+    f"{var_dtype_obj},+",
     f"{var_dtype_group},+",
     f"{var_dtype_pattern},+",
 ])
@@ -145,9 +147,7 @@ color_large = [k for k, v in list(color_matplotlib.items())]
 color_large_exclude_gray = [item for item in color_large if item != "lightgray"]
 bk_shapes = ["none", "triangle", "square", "circle"]
 
-gestalt_principles = ["proximity", "similarity_shape","similarity_color", 'closure', "continuity", "symmetry"]
-
-
+gestalt_principles = ["proximity", "similarity_shape", "similarity_color", 'closure', "continuity", "symmetry"]
 
 
 def tensor2dict(tensor):
@@ -173,7 +173,7 @@ def load_bk_fms(args, bk_shapes):
 
         fm_file = bk_path / f"fms_patches_{kernel_size}.pt"
         fm_data = torch.load(fm_file).to(args.device)
-        fm_repo = fm_data[:,]
+        fm_repo = fm_data[:, ]
 
         bk.append({
             "shape": s_i,

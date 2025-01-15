@@ -3,6 +3,8 @@
 from src.alpha.fol.logic import Var, Clause, InventedPredicate, Atom, InvAtom
 from src import bk
 from src.alpha.fol import lang_utils
+
+
 def non_trivial_vars(merged_body):
     vars = []
     for atom in merged_body:
@@ -43,20 +45,45 @@ def merge_clauses(clauses, lang):
     merged_clauses = []
     inv_atoms_grounded = []
     inv_atoms_ungrounded = []
-    if len(vars_in_body) == 2:
-        trivial_body = [b for b in bodies if b.pred.name in list(
-            bk.trivial_preds.keys())]
-        new_body = [b for b in bodies if b.pred.name not in list(
-            bk.trivial_preds.keys())]
-        vars = list(set([t for b in new_body for t in b.terms if type(t) == Var]))
-        inv_pred = inv_pred_merge_bodies(new_body)
-        if inv_pred is not None and inv_pred not in lang.predicates:
-            lang.predicates.append(inv_pred)
-            inv_atoms_grounded, inv_atoms_ungrounded = lang.generate_inv_atoms(inv_pred, vars)
 
-        head = clauses[0].head
-        for inv_atom in inv_atoms_ungrounded:
-            body = trivial_body + [inv_atom]
-            merged_clauses.append(Clause(head, body))
+    trivial_body = [b for b in bodies if b.pred.name in list(bk.trivial_preds.keys())]
+    new_body = [b for b in bodies if b.pred.name not in list(bk.trivial_preds.keys())]
+    vars = list(set([t for b in new_body for t in b.terms if type(t) == Var]))
+    inv_pred = inv_pred_merge_bodies(new_body)
+    if inv_pred is not None:
+        if inv_pred not in lang.predicates:
+            lang.predicates.append(inv_pred)
+        inv_atoms_grounded, inv_atoms_ungrounded = lang.generate_inv_atoms(inv_pred, vars)
+
+    head = clauses[0].head
+    for inv_atom in inv_atoms_ungrounded:
+        body = trivial_body + [inv_atom]
+        merged_clauses.append(Clause(head, body))
 
     return merged_clauses, inv_atoms_grounded
+
+
+def change_clause_obj_id(clauses, args, var_id, symbol):
+    var_dtypes = bk.var_dtypes["object"] if symbol == "O" else bk.var_dtypes["group"]
+    for c in clauses:
+        for a_i in range(len(c.body)):
+            if isinstance(c.body[a_i], InvAtom):
+                c.body[a_i].terms = list(c.body[a_i].terms)
+                for t_i in range(len(c.body[a_i].terms)):
+                    if isinstance(c.body[a_i].terms[t_i], Var):
+                        c.body[a_i].terms = list(c.body[a_i].terms)
+                        if symbol in c.body[a_i].terms[t_i].name:
+                            c.body[a_i].terms[t_i] = Var(f"{symbol}_{var_id}", var_dtypes)
+                        c.body[a_i].terms = tuple(c.body[a_i].terms)
+                    c.body[a_i].terms = tuple(c.body[a_i].terms)
+
+            else:
+                for t_i in range(len(c.body[a_i].terms)):
+                    c.body[a_i].terms = list(c.body[a_i].terms)
+                    if isinstance(c.body[a_i].terms[t_i], Var):
+                        if symbol in c.body[a_i].terms[t_i].name:
+                            c.body[a_i].terms[t_i] = Var(f"{symbol}_{var_id}", var_dtypes)
+                    c.body[a_i].terms = tuple(c.body[a_i].terms)
+    args.logger.debug(f"\nAll {len(clauses)} Machine Clauses in Group {var_id}:" +
+                      f"".join([f"\n{str(c)}" for c in clauses]))
+    return clauses

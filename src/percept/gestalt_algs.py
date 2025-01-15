@@ -33,6 +33,25 @@ def similarity_distance(a, b, mode):
     return dist
 
 
+def average_pairwise_distance(points):
+    # Convert list of points to a PyTorch tensor
+    points_tensor = torch.tensor(points, dtype=torch.float32)
+
+    # Compute pairwise differences
+    diff = points_tensor.unsqueeze(0) - points_tensor.unsqueeze(1)
+
+    # Compute Euclidean distances
+    distances = torch.norm(diff, dim=2)
+
+    # Extract upper triangle (excluding diagonal) to avoid redundant pairs
+    num_points = points_tensor.shape[0]
+    triu_indices = torch.triu_indices(num_points, num_points, offset=1)
+    pairwise_distances = distances[triu_indices[0], triu_indices[1]]
+
+    # Calculate and return the average distance
+    return pairwise_distances.mean().item()
+
+
 def algo_proximity(ocm, th):
     obj_n = ocm.shape[0]
     labels = torch.full((obj_n,), 0, dtype=torch.int32)
@@ -63,21 +82,14 @@ def cluster_by_proximity(ocms):
         labels 1 x O np array
         groups 1 x O x P np array
     """
-    thresholds = torch.arange(0.01, 0.41, 0.01)
-    valid_ths = []
-    labels = []
-    for th in thresholds:
-        th_clusters = []
-        preds = []
-        for ocm in ocms:
-            pred = algo_proximity(ocm, th)
-            th_clusters.append(len(pred.unique()))
-            preds.append(pred)
-        if len(torch.tensor(th_clusters).unique()) == 1:
-            valid_ths.append(th)
-            labels.append(preds)
 
-    return labels[0], valid_ths
+    th = 0.2
+    preds = []
+    for ocm in ocms:
+        pred = algo_proximity(ocm[:, :2], th)
+        preds.append(pred)
+
+    return preds, th
 
 
 def algo_similarity(ocm, mode):

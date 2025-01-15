@@ -26,7 +26,8 @@ class FactsConverter(nn.Module):
             lang.attrs = self.attrs
         else:
             self.attrs = given_attrs
-
+    def obj_mode(self):
+        self.vm.vfs = obj_vfs
     def init_attr_encodings(self, device):
         """Encode color and shape into one-hot encoding.
 

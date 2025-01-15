@@ -92,34 +92,6 @@ class FCNNValuationModule(nn.Module):
             Return:
                 The tensor representation of the input term.
         """
-
-        # if term.dtype.name == 'group_data':
-        #     term_index = self.lang.term_index(term)
-        #     # group_data = data[term_index]
-        #     # self.group_indices = group_data[:, bk.prop_idx_dict["group_name"]] > 0
-        #     # valid_data = group_data[self.group_indices]
-        #     return term_index
-        # if term.dtype.name == "group_data":
-        #     group_idx = self.lang.term_index(term)
-        #     group_data = data[group_idx]
-        #     self.group_indices = group_data[:, bk.prop_idx_dict["group_name"]] > 0
-        #     valid_data = group_data[self.group_indices]
-        #     return valid_data
-        # elif term.dtype.name == "object":
-        #     term_index = self.lang.term_index(term)
-        #     # obj_data = data[:, term_index]
-        #     return term_index
-        # elif term.dtype.name in ["color", "shape", "group_label"]:
-        #     gt_tensor = self.attrs[term][0]
-        #     return gt_tensor
-        # elif term.dtype.name in bk.attr_names:
-        #     # return the standard attribute code
-        #     return self.attrs[term]
-        # elif term.dtype.name == 'pattern':
-        #     # return the image
-        #     return data
-        # else:
-        #     raise ValueError("Invalid datatype of the given term: " + str(term) + ':' + term.dtype.name)
         term_name = term.dtype.name
         term_data = None
         self.group_indices = None
@@ -133,7 +105,10 @@ class FCNNValuationModule(nn.Module):
             term_data = self.lang.term_index(term)
         elif term_name in [bk.const_dtype_object_color, bk.const_dtype_object_shape, bk.const_dtype_group,
                            bk.const_dtype_obj_num]:
-            term_data = self.attrs[term][0]
+            try:
+                term_data = self.attrs[term][0]
+            except KeyError:
+                raise KeyError
         # elif term_name in bk.attr_names:
         #     # return the standard attribute code
         #     term_data = self.attrs[term]
@@ -391,13 +366,13 @@ class VFColor(nn.Module):
             color_gt = args_dict[bk.const_dtype_object_color]
         except KeyError:
             raise ValueError
-        group_data = args_dict[bk.var_dtype_group][:-1]
+        group_data = args_dict[bk.var_dtype_group]
         if group_data is None:
-            return False
+            return 0.0
         color_rgb_gt = torch.tensor(bk.color_matplotlib[bk.color_large[color_gt]]).reshape(1, 3)
         color_indices = [bk.prop_idx_dict["rgb_r"], bk.prop_idx_dict["rgb_g"], bk.prop_idx_dict["rgb_b"]]
         color_data = (group_data[:, color_indices] * 255).to(torch.uint8)
-        is_color = (color_rgb_gt == color_data).all(dim=1).all().float()
+        is_color = float((color_rgb_gt == color_data).all())
         return is_color
 
 
@@ -410,9 +385,9 @@ class VFShape(nn.Module):
         self.name = name
 
     def forward(self, args_dict):
-        group_data = args_dict[bk.var_dtype_group][:-1]
+        group_data = args_dict[bk.var_dtype_group]
         if group_data is None:
-            return False
+            return 0.0
 
         shape_gt = args_dict[bk.const_dtype_object_shape]
         shape_indices = [bk.prop_idx_dict["shape_tri"],
@@ -421,7 +396,7 @@ class VFShape(nn.Module):
         group_shape = group_data[:, shape_indices].argmax(dim=1) + 1
 
         # conf = group_data[:, bk.prop_idx_dict["group_conf"]][0]
-        has_label = (shape_gt == group_shape).prod()
+        has_label = float(shape_gt == group_shape)
         return has_label
 
 
@@ -434,11 +409,11 @@ class VFCount(nn.Module):
         self.name = name
 
     def forward(self, args_dict):
-        group_data = args_dict[bk.var_dtype_group][:-1]
-        if group_data is None:
-            return False
+        group_data = args_dict[bk.var_dtype_group]
+        if group_data is None or group_data[0, bk.prop_idx_dict["obj_num"]] == 1:
+            return 0.0
         num_gt = args_dict[bk.const_dtype_obj_num] + 1
-        group_num = len(group_data)
+        group_num = group_data[0, bk.prop_idx_dict["obj_num"]]
         has_label = float(num_gt == group_num)
         return has_label
 
@@ -452,19 +427,20 @@ class VFGShape(nn.Module):
         self.name = name
 
     def forward(self, args_dict):
-        group_data = args_dict[bk.var_dtype_group][-1]
+        group_data = args_dict[bk.var_dtype_group]
         group_shape_gt = args_dict[bk.const_dtype_group]
 
         if group_data is None:
-            return False
+            return 0.0
         shape_indices = [bk.prop_idx_dict["shape_tri"],
                          bk.prop_idx_dict["shape_sq"],
                          bk.prop_idx_dict["shape_cir"]]
-        if group_data[shape_indices].sum()==0:
-            return False
+        obj_num_index = bk.prop_idx_dict["obj_num"]
+        if group_data[:, shape_indices].sum() == 0 or group_data[0, obj_num_index] == 1:
+            return 0.0
 
-        group_shape = group_data[shape_indices].argmax() + 1
-        has_label = (group_shape_gt == group_shape).prod()
+        group_shape = group_data[:, shape_indices].argmax() + 1
+        has_label = float(group_shape_gt == group_shape)
         return has_label
 
 

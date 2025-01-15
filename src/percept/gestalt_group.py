@@ -147,14 +147,13 @@ def group2tensor(group):
 
 def gcm_encoder(labels, ocms, group_shape=0):
     shape = bk.bk_shapes[group_shape]
-    gcms = []
+    groups = []
     for example_i in range(len(ocms)):
         ocm = ocms[example_i]
-        group_labels = labels[example_i]
-        group_num = len(group_labels.unique())
-        gcm = torch.zeros((group_num, 10))
-        for l_i, label in enumerate(group_labels.unique()):
-            group_ocms = ocm[group_labels == label]
+        example_labels = labels[example_i]
+        example_groups = []
+        for l_i, label in enumerate(example_labels.unique()):
+            group_ocms = ocm[example_labels == label]
             parent_positions = group_ocms[:, :2]
             x = parent_positions[:, 0]
             y = parent_positions[:, 1]
@@ -162,7 +161,7 @@ def gcm_encoder(labels, ocms, group_shape=0):
             group_y = y.mean()
             obj_num = len(group_ocms)
             if len(group_ocms) == 1:
-                gcm[l_i] = torch.from_numpy(group_ocms[0])
+                gcm = torch.from_numpy(group_ocms[0])
             else:
                 group_size = 0.5 * (x.max() - x.min() + y.max() - y.min())
                 color_r = 0
@@ -171,7 +170,12 @@ def gcm_encoder(labels, ocms, group_shape=0):
                 shape_tri = 1 if shape == "triangle" else 0
                 shape_sq = 1 if shape == "square" else 0
                 shape_cir = 1 if shape == "circle" else 0
-                gcm[l_i] = gen_group_tensor(group_x, group_y, group_size, obj_num, color_r, color_g, color_b,
-                                            shape_tri, shape_sq, shape_cir)
-        gcms.append(gcm)
-    return gcms
+                gcm = gen_group_tensor(group_x, group_y, group_size, obj_num, color_r, color_g, color_b,
+                                       shape_tri, shape_sq, shape_cir)
+            group_ocms = group_ocms.reshape(-1, 10)
+            gcm = gcm.reshape(-1, 10)
+            group = {"gcm": gcm, "ocm": group_ocms}
+            example_groups.append(group)
+        groups.append(example_groups)
+
+    return groups

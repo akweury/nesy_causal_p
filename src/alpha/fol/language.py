@@ -236,9 +236,7 @@ class Language(object):
             term_list.append(grounded_terms)
         term_list = list(set(itertools.product(*term_list)))
         term_list = lang_utils.remove_chaos_terms(term_list)
-        term_list = tuple(
-            [tuple(lang_utils.orgnize_inv_pred_dtypes(terms)) for terms in
-             term_list])
+        term_list = tuple([tuple(lang_utils.orgnize_inv_pred_dtypes(terms)) for terms in term_list])
 
         grounded_atoms = []
         for terms in term_list:
@@ -247,13 +245,11 @@ class Language(object):
         ungrounded_term_list = []
         for sub_pred in pred.sub_preds:
             dtypes = sub_pred.dtypes
-            assignment_list = [self.assign_terms(dtype.data[1], dtype, vars) for
-                               dtype in dtypes]
+            assignment_list = [self.assign_terms(dtype.data[1], dtype, vars) for dtype in dtypes]
             ungrounded_terms = list(itertools.product(*assignment_list))
             ungrounded_term_list.append(ungrounded_terms)
         ungrounded_term_list = list(set(itertools.product(*ungrounded_term_list)))
-        ungrounded_term_list = [tuple(lang_utils.orgnize_inv_pred_dtypes(terms)) for
-                                terms in ungrounded_term_list]
+        ungrounded_term_list = [tuple(lang_utils.orgnize_inv_pred_dtypes(terms)) for terms in ungrounded_term_list]
         ungrounded_atoms = []
         for terms in ungrounded_term_list:
             ungrounded_atoms.append(InvAtom(pred, terms))
@@ -303,8 +299,6 @@ class Language(object):
                 num = obj_num
             elif num == "number":
                 num = number
-            else:
-                raise ValueError
             const_names = []
             for i in range(int(num)):
                 const_names.append(f"{const_data_type.name}{i + 1}of{num}")
@@ -730,11 +724,6 @@ class Language(object):
         self.record_consts += self.occurred_consts
         self.record_predicates += self.predicates
         self.record_group_variable_num += 1
-        # self.record_final_clauses.append({
-        #     "group_id": g_i,
-        #     "final_clause": final_clause,
-        #     "machine_clauses": self.clauses
-        # })
 
     def clear_repeat_language(self):
         self.clauses = list(set(self.record_clauses))
@@ -749,8 +738,7 @@ class Language(object):
             if min_const not in self.consts:
                 self.consts.append(min_const)
         self.group_vars = [
-            Var(f"{self.variable_group_symbol}_{v_i}", bk.var_dtypes["group"]) for
-            v_i in
+            Var(f"{self.variable_group_symbol}_{v_i}", bk.var_dtypes["group"]) for v_i in
             range(self.group_variable_num)]
         self.generate_atoms()
 

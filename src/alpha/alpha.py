@@ -1,7 +1,7 @@
 # Created by shaji at 24/06/2024
 import itertools
 import torch
-
+import copy
 from src.utils import log_utils
 from src.alpha import valuation, facts_converter, nsfr, pruning, clause_op
 from src.alpha.fol import language, refinement
@@ -22,7 +22,8 @@ def extension(args, lang, clauses):
     B_ = []
 
     refinement_generator = refinement.RefinementGenerator(lang=lang)
-    for c in clauses:
+    for c_original in clauses:
+        c = copy.deepcopy(c_original)
         refs_i = refinement_generator.refinement_clause(c)
         unused_args, used_args = language.get_unused_args(c)
         # refs_i_removed = pruning.remove_duplicate_clauses(refs_i, unused_args, used_args, args)
@@ -48,10 +49,7 @@ def extension(args, lang, clauses):
 
 
 def node_extension(args, lang, base_nodes, extended_nodes):
-    # refinement_generator = refinement.RefinementGenerator(lang=lang)
-    # extend nodes
     new_nodes = []
-    # node_combs = list(itertools.combinations(base_nodes, 2))
     node_combs = list(set(itertools.product(base_nodes, extended_nodes)))
     for node_comb in node_combs:
         clause_combined, new_atoms = clause_op.merge_clauses(node_comb, lang)
@@ -129,6 +127,7 @@ def beam_search(args, lang, C, FC, objs):
 
 def df_search(args, lang, C, FC, group):
     # node evaluation
+    lang.reset_lang(g_num=1)
     atom_C = extension(args, lang, C)
     NSFR = nsfr.get_nsfr_model(args, lang, FC, atom_C)
     target_preds = list(set([c.head.pred.name for c in atom_C]))
@@ -163,6 +162,8 @@ def df_search(args, lang, C, FC, group):
 
     extended_nodes = sorted(extended_nodes)
     lang.clauses += extended_nodes
+    clauses = lang.clauses
+    return clauses
 
 
 def eval_task(args, lang, FC, ocm, gcm):
@@ -227,26 +228,59 @@ def search_clauses(args, ocm, gcm, groups):
     return lang
 
 
-def alpha(args, ocm, gcm, groups):
+def common_elements(lists):
+    if not lists:
+        return set()
+
+    # Convert the first list to a set and intersect with the rest
+    common = set(lists[0])
+    for lst in lists[1:]:
+        common &= set(lst)
+
+    return common
+
+# def check_clause_in_images(clause, all_clauses):
+#     exist_all = True
+#     for image_clauses in all_clauses:
+#         for group in image_clauses:
+#             for group_clause in group["group_clauses"]:
+#                 if clause
+def search_common_clauses(all_groups):
+    common_group_clauses = []
+    # test the clause in the first image, if it exists in the rest of images, save it
+    for group in all_groups[0]:
+        for group_clause in group["group_clauses"]:
+            exist = check_clause_in_images(group_clause, all_groups[1:])
+            if exist:
+                common_group_clauses.append(group_clause)
+
+
+def alpha(args, symbolic_dict):
     obj_num = 1
     lang = init_ilp(args, obj_num)
     lang.reset_lang(g_num=1)
     VM = valuation.get_valuation_module(args, lang)
     FC = facts_converter.FactsConverter(args, lang, VM)
     C = lang.load_init_clauses()
-    group_labels = groups.unique()
-    if len(group_labels) > 5 or len(group_labels) == len(groups):
-        return lang
-    for g_i in range(len(group_labels)):
-        lang.reset_lang(g_num=1)
-        group_obj_ocm = ocm[groups == group_labels[g_i]]
-        search_ocm = torch.cat((group_obj_ocm, gcm[g_i].unsqueeze(0)), dim=0)
-        df_search(args, lang, C, FC, search_ocm)
-        lang.variable_set_id(args, g_i)
-        # merged_clause = lang.rephase_clauses()
-        # final_clause, name_dict = llama_call.rename_terms(merged_clause)
-        lang.record_milestone()
-    lang.clear_repeat_language()
+    groups_pos = symbolic_dict["groups_pos"]
+    example_num = len(groups_pos)
+    all_groups = []
+    for example_i in range(example_num):
+        example_groups = []
+        for g_i, group in enumerate(groups_pos[example_i]):
+            ocms = group["ocm"]
+            gcm = group["gcm"]
+            obj_clauses = []
+            for o_i, ocm in enumerate(ocms):
+                clauses = df_search(args, lang, C, FC, ocm.unsqueeze(0))
+                clauses = clause_op.change_clause_obj_id(clauses, args, o_i, bk.variable_symbol_obj)
+                obj_clauses.append(clauses)
+            group_clauses = df_search(args, lang, C, FC, gcm)
+            group_clauses = clause_op.change_clause_obj_id(group_clauses, args, g_i, bk.variable_symbol_group)
+            group_data = {"group_clauses": group_clauses, "obj_clauses": obj_clauses}
+            example_groups.append(group_data)
+        all_groups.append(example_groups)
+    lang.all_groups= all_groups
     return lang
 
 
