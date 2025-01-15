@@ -492,10 +492,10 @@ def cluster_by_principle(args, imgs):
     ocm_pos, obj_groups_pos = ocm_encoder(args, segments_pos, "pos")
     ocm_neg, obj_groups_neg = ocm_encoder(args, segments_neg, "neg")
 
-    prin, group_pos, labels_pos, others = percept_gestalt_groups(args, ocm_pos, segments_pos, obj_groups_pos, "pos")
-
+    prin, group_pos, labels_pos, others_pos = percept_gestalt_groups(args, ocm_pos, segments_pos, obj_groups_pos, "pos")
+    _, group_neg, labels_neg, others_neg = percept_gestalt_groups(args, ocm_neg, segments_neg, obj_groups_neg, "neg")
     groups = {
-        "groups_pos": group_pos,
-        "label_pos": labels_pos,
+        "group_pos": group_pos, "label_pos": labels_pos,
+        "group_neg": group_neg, "label_neg": labels_neg,
     }
     return groups

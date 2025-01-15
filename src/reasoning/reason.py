@@ -120,6 +120,19 @@ def sementical_same_clause(clause1, clause2):
     return sementical_same
 
 
+def remove_sementic_same_clauses(clause_list1, clause_list2):
+    list1_only_clauses = []
+    for clause in clause_list1:
+        only_list1 = True
+        for clause2 in clause_list2:
+            if sementical_same_clause(clause, clause2):
+                only_list1 = False
+                break
+        if only_list1:
+            list1_only_clauses.append(clause)
+    return list1_only_clauses
+
+
 def get_all_clauses(img_clauses):
     clauses = []
     for ic in img_clauses:
@@ -188,7 +201,7 @@ def in_exact_one_group(ctt, ctt_count, clauses):
     return true_in_all_image_all_groups, true_in_all_image_all_groups_cs
 
 
-def find_common_rules(image_clauses):
+def find_common_rules(image_clauses_pos, image_clauses_neg):
     # for each clause, check if it true in all image, check if it is true with condition.
     # 1: check if it is true in all groups, is_true(C, allG), is_true(C, allI), is_true(C, amoG), is_true
     # give one object's tensor, has_color(O1, red)
@@ -199,18 +212,33 @@ def find_common_rules(image_clauses):
     # G: group number
     # O: object number
 
+    clauses_pos = get_all_clauses(image_clauses_pos)
+    clauses_neg = get_all_clauses(image_clauses_neg)
+
     # create clause truth table
-    ctt, ctt_count = create_ctt(image_clauses)
+    ctt_pos, ctt_count_pos = create_ctt(image_clauses_pos)
+    ctt_neg, ctt_count_neg = create_ctt(image_clauses_neg)
 
     # reason if clauses are truth in all images
-    true_all_image, true_all_image_clauses = in_all_image(ctt, ctt_count, image_clauses)
+    true_all_image_clauses = in_all_image(ctt_pos, ctt_count_pos, clauses_pos)
+    true_all_image_clauses_neg = in_all_image(ctt_neg, ctt_count_neg, clauses_neg)
+    # remove clauses that exist in both pos and neg
+    true_all_image_clauses_pos_only = remove_sementic_same_clauses(true_all_image_clauses, true_all_image_clauses_neg)
+
     # reason if clauses are truth in all groups in all images
-    true_all_group, true_all_group_clauses = in_all_group(ctt, ctt_count, image_clauses)
+    true_all_group, true_all_group_clauses = in_all_group(ctt_pos, ctt_count_pos, clauses_pos)
+    true_all_group_neg, true_all_group_clauses_neg = in_all_group(ctt_neg, ctt_count_neg, clauses_neg)
+    true_all_group_clauses_pos_only = remove_sementic_same_clauses(true_all_group_clauses, true_all_group_clauses_neg)
+
     # reason if clauses are truth in at most one group in all images
-    true_exact_one_group, true_exact_one_group_clauses = in_exact_one_group(ctt, ctt_count, image_clauses)
+    true_exact_one_group, true_exact_one_group_clauses = in_exact_one_group(ctt_pos, ctt_count_pos, clauses_pos)
+    true_exact_one_group_neg, true_exact_one_group_clauses_neg = in_exact_one_group(ctt_neg, ctt_count_neg, clauses_neg)
+    true_exact_one_group_clauses_pos_only = remove_sementic_same_clauses(true_exact_one_group_clauses,
+                                                                         true_exact_one_group_clauses_neg)
+
     common_rules_dict = {
-        "true_all_image": true_all_image_clauses,
-        "true_all_group": true_all_group_clauses,
-        "true_exact_one_group": true_exact_one_group_clauses
+        "true_all_image": true_all_image_clauses_pos_only,
+        "true_all_group": true_all_group_clauses_pos_only,
+        "true_exact_one_group": true_exact_one_group_clauses_pos_only
     }
     return common_rules_dict

@@ -104,13 +104,10 @@ def train_clauses(args, groups):
     args.step_counter += 1
     lang = load_lang(args)
     if lang is None:
-        # load background knowledge
-        # lang = None
-        all_clauses = []
-        group_bk = load_bk(args, bk.bk_shapes)
         # reasoning clauses
-        lang = alpha.alpha(args, groups)
-        rules = reason.find_common_rules(lang.all_groups)
+        lang_pos = alpha.alpha(args, groups["group_pos"])
+        lang_neg = alpha.alpha(args, groups["group_neg"])
+        rules = reason.find_common_rules(lang_pos.all_groups, lang_neg.all_groups)
         #
         # # remove infrequent clauses
         # lang = alpha.filter_infrequent_clauses(all_clauses, lang)

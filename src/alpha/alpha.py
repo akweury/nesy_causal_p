@@ -255,19 +255,19 @@ def search_common_clauses(all_groups):
                 common_group_clauses.append(group_clause)
 
 
-def alpha(args, symbolic_dict):
+def alpha(args, groups):
     obj_num = 1
     lang = init_ilp(args, obj_num)
     lang.reset_lang(g_num=1)
     VM = valuation.get_valuation_module(args, lang)
     FC = facts_converter.FactsConverter(args, lang, VM)
     C = lang.load_init_clauses()
-    groups_pos = symbolic_dict["groups_pos"]
-    example_num = len(groups_pos)
+
+    example_num = len(groups)
     all_groups = []
     for example_i in range(example_num):
         example_groups = []
-        for g_i, group in enumerate(groups_pos[example_i]):
+        for g_i, group in enumerate(groups[example_i]):
             ocms = group["ocm"]
             gcm = group["gcm"]
             obj_clauses = []
