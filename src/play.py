@@ -55,16 +55,17 @@ def main():
         # grouping objects
         groups = perception.cluster_by_principle(args, imgs)
         # Learn Clauses from Training Data
-        lang = train_nsfr.train_clauses(args, groups)
+        lang, rules = train_nsfr.train_clauses(args, groups)
 
         # Test Positive Patterns, statistic the accuracy,
-        acc_pos = check_clause(args, lang, test_pos_dl, "POSITIVE",
-                               args.out_positive_folder)
-    # final logger
+        acc = check_clause(args, lang, test_imgs, test_labels)
+        acc_baseline = None
+        acc_rand = None
+        # final logger
     args.logger.info(f"\n"
                      f"================ Test Images Accuracy ======================"
                      f"[ pos|cf|rand "
-                     f"{acc_pos:.2f} | {acc_cf:.2f} | {acc_rand:.2f} ]\n"
+                     f"{acc:.2f} | {acc_baseline:.2f} | {acc_rand:.2f} ]\n"
                      f"================ End of the Program ======================")
 
     return

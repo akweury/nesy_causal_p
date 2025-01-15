@@ -130,7 +130,16 @@ def remove_sementic_same_clauses(clause_list1, clause_list2):
                 break
         if only_list1:
             list1_only_clauses.append(clause)
-    return list1_only_clauses
+    sementic_unique_clauses = []
+    for clause in list1_only_clauses:
+        sementic_unique = True
+        for unique_c in sementic_unique_clauses:
+            if sementical_same_clause(clause, unique_c):
+                sementic_unique = False
+                break
+        if sementic_unique:
+            sementic_unique_clauses.append(clause)
+    return sementic_unique_clauses
 
 
 def get_all_clauses(img_clauses):

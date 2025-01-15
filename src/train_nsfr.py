@@ -68,23 +68,28 @@ def load_lang(args):
             lang.consts = lang_data["consts"]
             lang.atoms = lang_data["atoms"]
             lang.attrs = lang_data["attrs"]
-            lang.llm_clauses = lang_data["llm_clauses"]
-            lang.name_dict = lang_data["name_dict"]
+            # lang.llm_clauses = lang_data["llm_clauses"]
+            # lang.name_dict = lang_data["name_dict"]
             lang.generate_atoms()
-            args.logger.debug(
-                f"\n ================= Loaded Pretrained Language ================= " +
-                f"\n ==== Machine Clauses: " +
-                "".join([f"\n{c_i + 1}/{len(lang.clauses)} {lang.clauses[c_i]}"
-                         for c_i in range(len(lang.clauses))]) +
-                f"\n ==== LLM Description: " +
-                "".join(
-                    [f"\n{c_i + 1}/{len(lang.llm_clauses)} {lang.llm_clauses[c_i]}"
-                     for c_i in range(len(lang.llm_clauses))]))
-            return lang
+
+            rules = {
+                "true_all_image": lang_data["true_all_image"],
+                "true_all_group": lang_data["true_all_group"],
+                "true_exact_one_group": lang_data["true_exact_one_group"],
+            }
+            # args.logger.debug(
+            #     f"\n ================= Loaded Pretrained Language ================= " +
+            #     f"\n ==== Machine Clauses: " +
+            #     "".join([f"\n{c_i + 1}/{len(lang.clauses)} {lang.clauses[c_i]}"
+            #              for c_i in range(len(lang.clauses))]) +
+            #     f"\n ==== LLM Description: " +
+            #     "".join([f"\n{c_i + 1}/{len(lang.llm_clauses)} {lang.llm_clauses[c_i]}"
+            #              for c_i in range(len(lang.llm_clauses))]))
+            return lang, rules
     return None
 
 
-def save_lang(args, lang):
+def save_lang(args, lang, rules):
     lang_dict = {
         "atoms": lang.atoms,
         "clauses": lang.clauses,
@@ -92,17 +97,18 @@ def save_lang(args, lang):
         "preds": lang.predicates,
         "g_num": lang.group_variable_num,
         "attrs": lang.attrs,
-        "llm_clauses": lang.llm_clauses,
-        "name_dict": lang.name_dict
+        # "llm_clauses": lang.llm_clauses,
+        # "name_dict": lang.name_dict,
+        "true_all_image": rules["true_all_image"],
+        "true_all_group": rules["true_all_group"],
+        "true_exact_one_group": rules["true_exact_one_group"],
     }
-    torch.save(lang_dict, config.output / args.exp_name / f'learned_lang.pkl')
-
-
+    torch.save(lang_dict, config.models / f'learned_lang.pkl')
 
 
 def train_clauses(args, groups):
     args.step_counter += 1
-    lang = load_lang(args)
+    lang, rules = load_lang(args)
     if lang is None:
         # reasoning clauses
         lang_pos = alpha.alpha(args, groups["group_pos"])
@@ -116,11 +122,11 @@ def train_clauses(args, groups):
         # lang = llama_call.convert_to_final_clauses(args, lang)
 
         # save language
-        save_lang(args, lang)
-    args.logger.info(f"Step {args.step_counter}/{args.total_step}: "
-                     f"Reasoned {len(lang.llm_clauses)} LLM Rules, "
-                     f"{len(lang.clauses)} Machine Clauses")
-    return lang
+        save_lang(args, lang_pos, rules)
+    # args.logger.info(f"Step {args.step_counter}/{args.total_step}: "
+    #                  f"Reasoned {len(lang.llm_clauses)} LLM Rules, "
+    #                  f"{len(lang.clauses)} Machine Clauses")
+    return lang, rules
 
 
 if __name__ == "__main__":
