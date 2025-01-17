@@ -166,16 +166,32 @@ def df_search(args, lang, C, FC, group):
     return clauses
 
 
-def eval_task(args, lang, FC, ocm, gcm):
-    NSFR = nsfr.get_nsfr_model(args, lang, FC, lang.clauses)
+def eval_task(args, lang, FC, images_data, all_clauses):
+    """
+    return: true, if all the clauses are satisfied, else false.
+    """
+    lang.clauses = all_clauses
     target_preds = list(set([c.head.pred.name for c in lang.clauses]))
-    # clause evaluation
-    group_conf = torch.zeros(len(gcm))
-
-    for g_i, group in enumerate(groups):
-        ils, dls = evaluation(args, NSFR, target_preds, group.ocm)
-        group_conf[g_i] = ils.squeeze()
-    return group_conf
+    preds= []
+    for example_i in range(len(images_data)):
+        example_preds = []
+        for clause in all_clauses:
+            NSFR = nsfr.get_nsfr_model(args, lang, FC, [clause])
+            clause_preds = []
+            for g_i, group in enumerate(images_data[example_i]):
+                ocms = group["ocm"]
+                gcm = group["gcm"]
+                gcm_preds = []
+                ils, dls = evaluation(args, NSFR, target_preds, gcm)
+                gcm_preds = ils.squeeze()
+                ocm_preds = []
+                for o_i, ocm in enumerate(ocms):
+                    ils, dls = evaluation(args, NSFR, target_preds, ocm.unsqueeze(0))
+                    ocm_preds.append(ils.squeeze())
+                clause_preds.append(ocm_preds)
+            example_preds.append(clause_preds)
+        preds.append(example_preds)
+    return preds
 
 
 def remove_trivial_atoms(args, lang, FC, clauses, objs, data):
@@ -239,6 +255,7 @@ def common_elements(lists):
 
     return common
 
+
 # def check_clause_in_images(clause, all_clauses):
 #     exist_all = True
 #     for image_clauses in all_clauses:
@@ -280,14 +297,25 @@ def alpha(args, groups):
             group_data = {"group_clauses": group_clauses, "obj_clauses": obj_clauses}
             example_groups.append(group_data)
         all_groups.append(example_groups)
-    lang.all_groups= all_groups
+    lang.all_groups = all_groups
+    # update language consts, atoms
+    clauses = []
+    for ic in all_groups:
+        for g in ic:
+            clauses += g["group_clauses"]
+            for obj_clause in g["obj_clauses"]:
+                clauses += obj_clause
+    lang.update_consts(clauses)
+    lang.generate_atoms(clauses)
+    lang.update_predicates(clauses)
+    lang.clauses = clauses
     return lang
 
 
-def alpha_test(args, ocm, gcm, lang):
+def alpha_test(args, groups, lang, all_clauses):
     VM = valuation.get_valuation_module(args, lang)
     FC = facts_converter.FactsConverter(args, lang, VM, given_attrs=lang.attrs)
-    pred = eval_task(args, lang, FC, ocm, gcm)
+    pred = eval_task(args, lang, FC, groups, all_clauses)
     return pred
 
 

@@ -445,17 +445,19 @@ def percept_gestalt_groups(args, ocms, segments, obj_groups, dtype):
     labels: grouping labels of each object
     other: either thresholds (proximity) or the grouping shape (closure)
     """
+    labels_simi_shape = gestalt_algs.cluster_by_similarity(ocms, "shape")
+    if labels_simi_shape is not None:
+        principle = bk.gestalt_principles.index("similarity_shape")
+        gcm = gestalt_group.gcm_encoder(labels_simi_shape, ocms, group_shape=0)
+        return principle, gcm, labels_simi_shape, None
+
     labels_prox, ths = gestalt_algs.cluster_by_proximity(ocms)
     if labels_prox is not None:
         principle = bk.gestalt_principles.index("proximity")
         gcm = gestalt_group.gcm_encoder(labels_prox, ocms, group_shape=0)
         return principle, gcm, labels_prox, ths
 
-    labels_simi_shape = gestalt_algs.cluster_by_similarity(ocms, "shape")
-    if labels_simi_shape is not None:
-        principle = bk.gestalt_principles.index("similarity_shape")
-        gcm = gestalt_group.gcm_encoder(labels_simi_shape, ocms, group_shape=0)
-        return principle, gcm, labels_simi_shape, None
+
 
     labels_simi_color = gestalt_algs.cluster_by_similarity(ocms, "color")
     if labels_simi_color is not None:

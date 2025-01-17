@@ -175,14 +175,18 @@ def proximity_red_triangle(so, dtype):
     return objs
 
 
-def similarity_two_shapes(so, dtype, shape_a, shape_b, n=2):
+def similarity_two_colors(so, dtype):
     """
         positive pattern :
-        + n x m objects, where a random row has shape_a, and the rest objects are shape_b
+        + n x m objects, shapes are randomly drawn from a uniform distribution,
+        colors are randomly choose between red and blue
+        ideal clause: G_1 is color red, G2 is color blue
 
         negative pattern:
-        - one clusters of circles/square/triangle
-        - all the clusters have same number of objects
+        - shapes are randomly drawn from a uniform distribution,
+        - colors are not alwasy red and blue, but also with yellow
+
+
         """
     objs = []
     color = random.choice(bk.color_large_exclude_gray)
@@ -194,12 +198,10 @@ def similarity_two_shapes(so, dtype, shape_a, shape_b, n=2):
         col_space = 1 / (col_num + 1)
         for x in range(row_num):
             for y in range(col_num):
-                if x != diff_row_id:
-                    objs.append(kandinskyShape(color=color, shape=shape_a, size=so, x=(x + 1) * row_space,
-                                               y=(y + 1) * col_space, line_width=-1, solid=True))
-                else:
-                    objs.append(kandinskyShape(color=color, shape=shape_b, size=so, x=(x + 1) * row_space,
-                                               y=(y + 1) * col_space, line_width=-1, solid=True))
+                color = random.choice(["blue", "red"])
+                shape = "triangle" if color == "red" else "square"
+                objs.append(kandinskyShape(color=color, shape=shape, size=so, x=(x + 1) * row_space,
+                                           y=(y + 1) * col_space, line_width=-1, solid=True))
 
     else:
         row_num = random.randint(3, 5)
@@ -207,14 +209,21 @@ def similarity_two_shapes(so, dtype, shape_a, shape_b, n=2):
         diff_row_id = random.randint(0, row_num - 1)
         row_space = 1 / (row_num + 1)
         col_space = 1 / (col_num + 1)
+        colors = random.choice([["red", "yellow"], ["blue", "yellow"]])
         for x in range(row_num):
             for y in range(col_num):
-                if x != diff_row_id:
-                    objs.append(kandinskyShape(color=color, shape=shape_b, size=so, x=(x + 1) * row_space,
-                                               y=(y + 1) * col_space, line_width=-1, solid=True))
+                color = random.choice(colors)
+                if color == "red":
+                    shape = "triangle"
+                elif color == "blue":
+                    shape = "square"
+                elif colors == ["red", "yellow"]:
+                    shape = "square"
                 else:
-                    objs.append(kandinskyShape(color=color, shape=shape_a, size=so, x=(x + 1) * row_space,
-                                               y=(y + 1) * col_space, line_width=-1, solid=True))
+                    shape = "triangle"
+                objs.append(kandinskyShape(color=color, shape=shape, size=so, x=(x + 1) * row_space,
+                                           y=(y + 1) * col_space, line_width=-1, solid=True))
+
     return objs
 
 
@@ -444,7 +453,7 @@ def gen_patterns(pattern_name, dtype):
     if pattern_name == "proximity_red_triangle":
         g = lambda so, truth: proximity_red_triangle(so, dtype)
     elif pattern_name == "similarity_triangle_circle":
-        g = lambda so, truth: similarity_two_shapes(so, dtype, "triangle", "circle", n=3)
+        g = lambda so, truth: similarity_two_colors(so, dtype)
     elif pattern_name == "gestalt_triangle":
         g = lambda so, truth: closure_classic_triangle(so, dtype)
     elif pattern_name == "tri_group":

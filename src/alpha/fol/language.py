@@ -192,7 +192,7 @@ class Language(object):
         self.atoms = spec_atoms + sorted(atoms) + sorted(bk_pi_atoms) + sorted(
             pi_atoms)
 
-    def generate_atoms(self):
+    def generate_atoms(self, clauses=None):
         p_ = Predicate('.', 1, [DataType('spec,?')])
         false = Atom(p_, [Const('__F__', dtype=DataType('spec,?'))])
         true = Atom(p_, [Const('__T__', dtype=DataType('spec,?'))])
@@ -209,9 +209,11 @@ class Language(object):
             elif isinstance(pred, InventedPredicate):
                 for args in args_list:
                     atoms.append(InvAtom(pred, args))
-
-        self.atoms = spec_atoms + sorted(
-            atoms)  # + sorted(bk_pi_atoms) + sorted(pi_atoms)
+        if clauses is not None:
+            for clause in clauses:
+                if clause.body[0] not in atoms:
+                    atoms.append(clause.body[0])
+        self.atoms = spec_atoms + sorted(atoms)
 
     def assign_terms(self, mode, dtype, vars):
         if mode == "#":
@@ -297,8 +299,6 @@ class Language(object):
                 num = g_num
             elif num == "object":
                 num = obj_num
-            elif num == "number":
-                num = number
             const_names = []
             for i in range(int(num)):
                 const_names.append(f"{const_data_type.name}{i + 1}of{num}")
@@ -317,16 +317,10 @@ class Language(object):
         const_data_type = mode_declaration.DataType(const)
         if "amount_" in const_type:
             _, num = const_type.split('_')
-            if num == "phi":
-                num = phi_num
-            elif num == "rho":
-                num = rho_num
-            elif num == "group":
+            if num == "group":
                 num = g_num
             elif num == "object":
                 num = obj_num
-            elif num == "number":
-                num = number
             const_names = []
             for i in range(int(num)):
                 const_names.append(f"{const_data_type.name}{i + 1}of{num}")
@@ -334,8 +328,11 @@ class Language(object):
             const_names = ['data']
         elif 'group_pattern' == const_type:
             const_names = ['group']
-        elif 'enum' in const_type:
+        elif "quantity" == const_type:
             const_names = []
+            for i in range(int(number)):
+                const_names.append(f"{const_data_type.name}{i + 1}")
+        elif 'enum' in const_type:
             if const_data_type.name == bk.const_dtypes["object_color"]:
                 const_names = bk.color_large
             elif const_data_type.name == bk.const_dtypes["object_shape"]:
@@ -782,3 +779,9 @@ class Language(object):
                  range(len(rewritted_clauses))]))
 
         return rewritted_clauses
+
+    def update_predicates(self, clauses):
+        for clause in clauses:
+            if clause.body[0].pred not in self.predicates:
+                self.predicates.append(clause.body[0].pred)
+

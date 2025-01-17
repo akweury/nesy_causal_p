@@ -106,7 +106,7 @@ const_dict = {
     f'{const_dtypes["object_color"]},+': 'enum',
     f'{const_dtypes["object_shape"]},+': 'enum',
     f'{const_dtypes["group_label"]},+': 'enum',
-    f'{const_dtypes["object_num"]},+': 'amount_number'
+    f'{const_dtypes["object_num"]},+': 'quantity'
 }
 
 # dtype:
@@ -149,6 +149,11 @@ bk_shapes = ["none", "triangle", "square", "circle"]
 
 gestalt_principles = ["proximity", "similarity_shape", "similarity_color", 'closure', "continuity", "symmetry"]
 
+rule_logic_types = [
+    "true_all_image",
+    "true_all_group",
+    "true_exact_one_group"
+]
 
 def tensor2dict(tensor):
     tensor_dict = {}

@@ -57,7 +57,7 @@ def load_data(args, image_path):
 
 
 def load_lang(args):
-    lang_file = config.output / f'learned_lang.pkl'
+    lang_file = str(args.output_file_prefix) + f'learned_lang.pkl'
     if os.path.exists(lang_file):
         lang_data = torch.load(lang_file)
         if lang_data is not None:
@@ -86,7 +86,7 @@ def load_lang(args):
             #     "".join([f"\n{c_i + 1}/{len(lang.llm_clauses)} {lang.llm_clauses[c_i]}"
             #              for c_i in range(len(lang.llm_clauses))]))
             return lang, rules
-    return None
+    return None, None
 
 
 def save_lang(args, lang, rules):
@@ -103,13 +103,13 @@ def save_lang(args, lang, rules):
         "true_all_group": rules["true_all_group"],
         "true_exact_one_group": rules["true_exact_one_group"],
     }
-    torch.save(lang_dict, config.models / f'learned_lang.pkl')
+    torch.save(lang_dict, str(args.output_file_prefix) + f'learned_lang.pkl')
 
 
 def train_clauses(args, groups):
     args.step_counter += 1
-    lang, rules = load_lang(args)
-    if lang is None:
+    lang_pos, rules = load_lang(args)
+    if lang_pos is None:
         # reasoning clauses
         lang_pos = alpha.alpha(args, groups["group_pos"])
         lang_neg = alpha.alpha(args, groups["group_neg"])
@@ -123,10 +123,7 @@ def train_clauses(args, groups):
 
         # save language
         save_lang(args, lang_pos, rules)
-    # args.logger.info(f"Step {args.step_counter}/{args.total_step}: "
-    #                  f"Reasoned {len(lang.llm_clauses)} LLM Rules, "
-    #                  f"{len(lang.clauses)} Machine Clauses")
-    return lang, rules
+    return lang_pos, rules
 
 
 if __name__ == "__main__":

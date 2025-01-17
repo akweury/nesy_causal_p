@@ -47,18 +47,21 @@ def main():
     perception.collect_fms(args)
 
     # Import Generated Data
-    train_dl = dataset.load_dataset(args)
+    data_loader = dataset.load_dataset(args)
 
-    for task_id, (data_pos, data_neg, imgs) in enumerate(train_dl):
+    for task_id, (train_data, test_data) in enumerate(data_loader):
+        if task_id == 0:
+            continue
         args.output_file_prefix = config.models / f"task_{task_id}_"
-        # van(imgs[0])
+        imgs_train = train_data["img"]
+        imgs_test = test_data["img"]
         # grouping objects
-        groups = perception.cluster_by_principle(args, imgs)
+        groups = perception.cluster_by_principle(args, imgs_train)
         # Learn Clauses from Training Data
         lang, rules = train_nsfr.train_clauses(args, groups)
 
-        # Test Positive Patterns, statistic the accuracy,
-        acc = check_clause(args, lang, test_imgs, test_labels)
+        # Test Patterns, statistic the accuracy
+        acc = check_clause(args, lang, rules, imgs_test)
         acc_baseline = None
         acc_rand = None
         # final logger

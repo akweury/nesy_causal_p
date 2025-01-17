@@ -117,18 +117,13 @@ def algo_similarity(ocm, mode):
 
 
 def cluster_by_similarity(ocms, mode):
-    labels = []
     th_clusters = []
     preds = []
     for ocm in ocms:
         pred = algo_similarity(ocm, mode)
         th_clusters.append(len(pred.unique()))
         preds.append(pred)
-    if len(torch.tensor(th_clusters).unique()) == 1:
-        label = preds[0]
-    else:
-        label = None
-    return label
+    return preds
 
 
 def algo_closure(args, segments, input_groups):

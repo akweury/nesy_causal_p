@@ -71,11 +71,14 @@ class GestaltDataset(Dataset):
 
 class GSDataset(Dataset):
     def __init__(self):
-        self.data = torch.load(config.kp_gestalt_dataset / "train" / "train.pt")
-        self.imgs = self.load_imgs(config.kp_gestalt_dataset / 'train')
+        self.data_train = torch.load(config.kp_gestalt_dataset / "train" / "train.pt")
+        self.imgs_train = self.load_imgs(config.kp_gestalt_dataset / "train")
+
+        self.data_test = torch.load(config.kp_gestalt_dataset / "test" / "test.pt")
+        self.imgs_test = self.load_imgs(config.kp_gestalt_dataset / "test")
 
     def __len__(self):
-        return len(self.data)
+        return len(self.data_train)
 
     def load_imgs(self, path):
         img_files = file_utils.get_all_files(path, '.png')
@@ -92,7 +95,17 @@ class GSDataset(Dataset):
         return imgs
 
     def __getitem__(self, idx):
-        return self.data["positive"][idx], self.data["negative"][idx], self.imgs[idx]
+        train_data = {
+            "pos": self.data_train["positive"][idx],
+            "neg": self.data_train["negative"][idx],
+            "img": self.imgs_train[idx],
+        }
+        test_data = {
+            "pos": self.data_test["positive"][idx],
+            "neg": self.data_test["negative"][idx],
+            "img": self.imgs_test[idx],
+        }
+        return train_data, test_data
 
 
 def load_dataset(args):
@@ -100,8 +113,8 @@ def load_dataset(args):
     args.logger.info(f"Step {args.step_counter}/{args.total_step}: "
                      f"Importing training and testing data.")
 
-    train_dataset = GSDataset()
-    train_loader = DataLoader(train_dataset,
-                              batch_size=args.batch_size,
-                              shuffle=False)
-    return train_loader
+    _dataset = GSDataset()
+    data_loader = DataLoader(_dataset,
+                             batch_size=args.batch_size,
+                             shuffle=False)
+    return data_loader

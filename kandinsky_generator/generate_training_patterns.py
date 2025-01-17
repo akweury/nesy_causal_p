@@ -276,9 +276,11 @@ def get_task_names(principle):
                       "good_figure_three_groups",
                       "good_figure_always_three"]
     elif principle == "proximity":
-        task_names = ["proximity_red_triangle",]
-    elif principle == "similarity":
+        task_names = ["proximity_red_triangle", ]
+    elif principle == "similarity_shape":
         task_names = ["similarity_triangle_circle"]
+    elif principle == "similarity_color":
+        task_names = []
     elif principle == "closure":
         task_names = ["gestalt_triangle",
                       "tri_group",
@@ -299,7 +301,7 @@ def gen_and_save(path, width):
     example_num = 3
     all_tensors = {"positive": [], "negative": []}
     task_counter = 0
-    principles = bk.gestlat_principles
+    principles = bk.gestalt_principles
     for principle in principles:
         task_names = get_task_names(principle)
         for t_i, task_name in enumerate(task_names):

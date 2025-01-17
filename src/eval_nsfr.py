@@ -7,6 +7,7 @@ from utils import file_utils, args_utils, data_utils
 from percept import perception
 from src.alpha import alpha
 from src import bk
+from src.reasoning import reason
 
 
 def load_data(args, image_path):
@@ -82,93 +83,92 @@ def group2ocm(data, groups):
     group_ocms = torch.stack(group_ocms, dim=0)
     return group_ocms
 
-def check_clauses(args, lang, ocm_neg, gcm_neg, groups_neg):
-    # load background knowledge
-    example_num = len(ocm_neg)
-    clauses_conf = torch.zeros((example_num, len(lang.clauses)))
+
+# def check_clauses(args, lang, ocm_neg, gcm_neg, groups_neg):
+#     # load background knowledge
+#     example_num = len(ocm_neg)
+#     clauses_conf = torch.zeros((example_num, len(lang.clauses)))
+#     group_bk = load_bk(args, bk.bk_shapes)
+#
+#     for e_i in range(example_num):
+#         clauses_conf[e_i] = alpha.alpha_test(args, ocm_neg[e_i], gcm_neg[e_i], lang)
+#
+#         # logger
+#         satisfied_clause_indices = torch.nonzero(
+#             clauses_conf[idx] >= args.valid_rule_th).reshape(-1)
+#         dissatisfied_clause_indices = torch.nonzero(
+#             clauses_conf[idx] < args.valid_rule_th).squeeze()
+#         satisfied_clauses = [f"({clauses_conf[idx, c_i]:.2f}) {lang.clauses[c_i]}\n"
+#                              for c_i in satisfied_clause_indices]
+#         dissatisfied_clauses = [
+#             f"({clauses_conf[idx, c_i]:.2f}) {lang.clauses[c_i]}\n" for c_i in
+#             dissatisfied_clause_indices]
+#
+#         args.logger.debug(f"\n"
+#                           f"{image_label} Image {idx} Machine clauses: \n" +
+#                           f"".join(satisfied_clauses) +
+#                           f"".join(dissatisfied_clauses)
+#                           )
+#         mean_conf = clauses_conf[idx].mean()
+#         if image_label == "POSITIVE" and mean_conf < 0.8:
+#             args.logger.warning(
+#                 f"\n (FALSE Negative) conf|threshold {mean_conf}|0.8")
+#
+#     pred_conf = clauses_conf.mean(dim=1)
+#
+#     args.logger.info(f"\n"
+#                      f"Step {args.step_counter}/{args.total_step}: "
+#                      f"Test {image_label} Images\n"
+#                      f"Confidence for each image: {pred_conf}\n"
+#                      f"Average Accuracy: {pred_conf.mean(dim=0):.2f}\n")
+#
+#     return pred_conf.mean()
+
+
+def check_clause(args, lang, rules, imgs_test):
+    # first three images are positive, last three images are negative
+    preds = torch.zeros(len(imgs_test))
+    image_label = torch.zeros(len(imgs_test))
+    image_label[:3] += 1
+    all_clauses = rules["true_all_image"] + rules["true_all_group"] + rules["true_exact_one_group"]
+    clauses_labels = ([0] * len(rules[bk.rule_logic_types[0]]) +
+                      [1] * len(rules[bk.rule_logic_types[1]]) +
+                      [2] * len(rules[bk.rule_logic_types[2]]))
+
     group_bk = load_bk(args, bk.bk_shapes)
+    groups = perception.cluster_by_principle(args, imgs_test)
+    pos_clause_scores = alpha.alpha_test(args, groups["group_pos"], lang, all_clauses)
+    neg_clause_scores = alpha.alpha_test(args, groups["group_neg"], lang, all_clauses)
 
-    for e_i in range(example_num):
-        clauses_conf[e_i] = alpha.alpha_test(args, ocm_neg[e_i], gcm_neg[e_i], lang)
+    preds[:3] = reason.reason_test_results(pos_clause_scores, clauses_labels)
+    preds[3:] = reason.reason_test_results(neg_clause_scores, clauses_labels)
+    acc = (preds == image_label).sum() / len(preds)
 
-        # logger
-        satisfied_clause_indices = torch.nonzero(
-            clauses_conf[idx] >= args.valid_rule_th).reshape(-1)
-        dissatisfied_clause_indices = torch.nonzero(
-            clauses_conf[idx] < args.valid_rule_th).squeeze()
-        satisfied_clauses = [f"({clauses_conf[idx, c_i]:.2f}) {lang.clauses[c_i]}\n"
-                             for c_i in satisfied_clause_indices]
-        dissatisfied_clauses = [
-            f"({clauses_conf[idx, c_i]:.2f}) {lang.clauses[c_i]}\n" for c_i in
-            dissatisfied_clause_indices]
+    # logger
+    # satisfied_clause_indices = torch.nonzero(clauses_conf[idx] >= args.valid_rule_th).reshape(-1)
+    # dissatisfied_clause_indices = torch.nonzero(clauses_conf[idx] < args.valid_rule_th).squeeze()
+    # satisfied_clauses = [f"({clauses_conf[idx, c_i]:.2f}) {lang.clauses[c_i]}\n" for c_i in satisfied_clause_indices]
+    # dissatisfied_clauses = [f"({clauses_conf[idx, c_i]:.2f}) {lang.clauses[c_i]}\n" for c_i in
+    #                         dissatisfied_clause_indices]
 
-        args.logger.debug(f"\n"
-                          f"{image_label} Image {idx} Machine clauses: \n" +
-                          f"".join(satisfied_clauses) +
-                          f"".join(dissatisfied_clauses)
-                          )
-        mean_conf = clauses_conf[idx].mean()
-        if image_label == "POSITIVE" and mean_conf < 0.8:
-            args.logger.warning(
-                f"\n (FALSE Negative) conf|threshold {mean_conf}|0.8")
+    # args.logger.debug(f"\n"
+    #                   f"{image_label} Image {idx} Machine clauses: \n" +
+    #                   f"".join(satisfied_clauses) +
+    #                   f"".join(dissatisfied_clauses))
+    # mean_conf = clauses_conf[idx].mean()
+    # if image_label == "POSITIVE" and mean_conf < 0.8:
+    #     args.logger.warning(
+    #         f"\n (FALSE Negative) conf|threshold {mean_conf}|0.8")
+    #
+    # pred_conf = clauses_conf.mean(dim=1)
+    #
+    # args.logger.info(f"\n"
+    #                  f"Step {args.step_counter}/{args.total_step}: "
+    #                  f"Test {image_label} Images\n"
+    #                  f"Confidence for each image: {pred_conf}\n"
+    #                  f"Average Accuracy: {pred_conf.mean(dim=0):.2f}\n")
 
-    pred_conf = clauses_conf.mean(dim=1)
-
-    args.logger.info(f"\n"
-                     f"Step {args.step_counter}/{args.total_step}: "
-                     f"Test {image_label} Images\n"
-                     f"Confidence for each image: {pred_conf}\n"
-                     f"Average Accuracy: {pred_conf.mean(dim=0):.2f}\n")
-
-    return pred_conf.mean()
-
-def check_clause(args, lang, data_loader, image_label, output_path):
-    args.step_counter += 1
-
-    # load background knowledge
-    check_size = 4
-    clauses_conf = torch.zeros((len(data_loader), len(lang.clauses)))
-    group_bk = load_bk(args, bk.bk_shapes)
-
-    for idx, (image, data) in enumerate(data_loader):
-        image = image.squeeze()
-        args.output_file_prefix = str(output_path / f'img_{idx}')
-        # percepting groups
-        groups = perception.percept_groups(args, idx, group_bk, image)
-
-        if len(groups) != 0:
-            clauses_conf[idx] = alpha.alpha_test(args, groups, lang)
-
-        # logger
-        satisfied_clause_indices = torch.nonzero(
-            clauses_conf[idx] >= args.valid_rule_th).reshape(-1)
-        dissatisfied_clause_indices = torch.nonzero(
-            clauses_conf[idx] < args.valid_rule_th).squeeze()
-        satisfied_clauses = [f"({clauses_conf[idx, c_i]:.2f}) {lang.clauses[c_i]}\n"
-                             for c_i in satisfied_clause_indices]
-        dissatisfied_clauses = [
-            f"({clauses_conf[idx, c_i]:.2f}) {lang.clauses[c_i]}\n" for c_i in
-            dissatisfied_clause_indices]
-
-        args.logger.debug(f"\n"
-                          f"{image_label} Image {idx} Machine clauses: \n" +
-                          f"".join(satisfied_clauses) +
-                          f"".join(dissatisfied_clauses)
-                          )
-        mean_conf = clauses_conf[idx].mean()
-        if image_label == "POSITIVE" and mean_conf < 0.8:
-            args.logger.warning(
-                f"\n (FALSE Negative) conf|threshold {mean_conf}|0.8")
-
-    pred_conf = clauses_conf.mean(dim=1)
-
-    args.logger.info(f"\n"
-                     f"Step {args.step_counter}/{args.total_step}: "
-                     f"Test {image_label} Images\n"
-                     f"Confidence for each image: {pred_conf}\n"
-                     f"Average Accuracy: {pred_conf.mean(dim=0):.2f}\n")
-
-    return pred_conf.mean()
+    return acc
 
 
 if __name__ == "__main__":
