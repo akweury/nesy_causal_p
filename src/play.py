@@ -50,8 +50,6 @@ def main():
     data_loader = dataset.load_dataset(args)
 
     for task_id, (train_data, test_data) in enumerate(data_loader):
-        if task_id == 0:
-            continue
         args.output_file_prefix = config.models / f"task_{task_id}_"
         imgs_train = train_data["img"]
         imgs_test = test_data["img"]

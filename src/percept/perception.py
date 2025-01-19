@@ -457,8 +457,6 @@ def percept_gestalt_groups(args, ocms, segments, obj_groups, dtype):
         gcm = gestalt_group.gcm_encoder(labels_prox, ocms, group_shape=0)
         return principle, gcm, labels_prox, ths
 
-
-
     labels_simi_color = gestalt_algs.cluster_by_similarity(ocms, "color")
     if labels_simi_color is not None:
         principle = bk.gestalt_principles.index("similarity_color")
@@ -470,6 +468,10 @@ def percept_gestalt_groups(args, ocms, segments, obj_groups, dtype):
         principle = bk.gestalt_principles.index("closure")
         gcm = gestalt_group.gcm_encoder(labels_closure, ocms, group_shape=shape_closure)
         return principle, gcm, labels_closure, shape_closure
+
+
+
+
 
     return None, None, None
 

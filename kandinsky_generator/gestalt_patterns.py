@@ -227,6 +227,60 @@ def similarity_two_colors(so, dtype):
     return objs
 
 
+def similarity_two_pairs(so, dtype):
+    """
+        positive pattern :
+        + n x m objects, shapes are randomly drawn from a uniform distribution,
+        colors are randomly choose between red and blue
+        ideal clause: G_1 is color red, G2 is color blue
+
+        negative pattern:
+        - shapes are randomly drawn from a uniform distribution,
+        - colors are not alwasy red and blue, but also with yellow
+
+
+        """
+    objs = []
+    color = random.choice(bk.color_large_exclude_gray)
+    if dtype:
+        positions = [
+            [0.3, 0.3], [0.5, 0.4],
+            [0.6, 0.7], [0.8, 0.4]
+        ]
+        for p_i in range(2):
+            color = random.choice(bk.color_large_exclude_gray)
+            shape = random.choice(bk.bk_shapes[1:])
+            for o_i in range(2):
+                objs.append(kandinskyShape(color=color, shape=shape, size=so,
+                                           x=positions[p_i * 2 + o_i][0],
+                                           y=positions[p_i * 2 + o_i][1], line_width=-1, solid=True))
+
+    else:
+        positions = [
+            [0.3, 0.3], [0.5, 0.4],
+            [0.6, 0.7], [0.8, 0.4]
+        ]
+        for p_i in range(2):
+            mode = random.choice([1,2])
+            if mode == 1:
+                # same shape, not same color
+                color = random.sample(bk.color_large_exclude_gray, 2)
+                shape = random.choice(bk.bk_shapes[1:])
+                for o_i in range(2):
+                    objs.append(kandinskyShape(color=color[o_i], shape=shape, size=so,
+                                               x=positions[p_i * 2 + o_i][0],
+                                               y=positions[p_i * 2 + o_i][1], line_width=-1, solid=True))
+            else:
+                # same shape, not same color
+                color = random.choice(bk.color_large_exclude_gray)
+                shape = random.sample(bk.bk_shapes[1:], 2)
+                for o_i in range(2):
+                    objs.append(kandinskyShape(color=color, shape=shape[o_i], size=so,
+                                               x=positions[p_i * 2 + o_i][0],
+                                               y=positions[p_i * 2 + o_i][1], line_width=-1, solid=True))
+    return objs
+
+
 def closure_classic_triangle(so, dtype):
     objs = []
     x = 0.5  # + random.random() * 0.8
@@ -454,6 +508,8 @@ def gen_patterns(pattern_name, dtype):
         g = lambda so, truth: proximity_red_triangle(so, dtype)
     elif pattern_name == "similarity_triangle_circle":
         g = lambda so, truth: similarity_two_colors(so, dtype)
+    elif pattern_name == "similarity_two_pairs":
+        g = lambda so, truth: similarity_two_pairs(so, dtype)
     elif pattern_name == "gestalt_triangle":
         g = lambda so, truth: closure_classic_triangle(so, dtype)
     elif pattern_name == "tri_group":
