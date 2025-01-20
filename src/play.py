@@ -10,7 +10,7 @@ from src import dataset, bk
 from src.neural import models
 from src.percept import perception
 from src.utils.chart_utils import van
-
+from src import llama_call
 
 def init_io_folders(args, data_folder):
     args.train_folder = data_folder / "train" / "task_true_pattern"
@@ -57,9 +57,10 @@ def main():
         groups = perception.cluster_by_principle(args, imgs_train)
         # Learn Clauses from Training Data
         lang, rules = train_nsfr.train_clauses(args, groups)
-
         # Test Patterns, statistic the accuracy
-        acc = check_clause(args, lang, rules, imgs_test)
+        check_results = check_clause(args, lang, rules, imgs_test)
+        # convert to natural language
+        natural_rules, failed_reasons = llama_call.convert_to_final_clauses(args, rules, check_results)
         acc_baseline = None
         acc_rand = None
         # final logger

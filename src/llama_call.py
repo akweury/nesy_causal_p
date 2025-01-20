@@ -1,6 +1,7 @@
 # Created by jing at 16.07.24
 import requests
 from src.alpha.fol.logic import InvAtom
+from src.alpha.fol.logic import Const, Var
 
 url = "http://localhost:11434/api/chat"
 
@@ -58,7 +59,7 @@ def clause2rule(clause):
         f"(O_x, G_x, I), means object O_x in the group G_x, and G_x in the image I;"
         f"(G_x, I), means G_x in the image I."
         f"\n\nThe actual group shape, object shape, object color is written in the parenthesis."
-        )
+    )
     response = ""
     for atom in clause.body:
         atom_str = ""
@@ -111,59 +112,132 @@ def llama_rename_term(term_str):
     return response
 
 
-def llama_rewrite_clause(term_str, group_id, group_name):
-    prompt = (
-        f"Several types of objects {term_str} form a shape of {group_name}, "
-        f"which are considered as a group with group id {group_id}. "
-        f"Now use one sentence to include the following information"
-        f"1. the group name;"
-        f"2. what kind of shape do the objects together form;"
-        f"3. what kind of objects exist in the group {group_id} one by one, "
-        f"make sure all of descriptions following same form; "
-        f"describe clearly their properties, such as color, shape, etc."
-        f"Describe it clear and simple. Only answer with the sentence. ")
+def llama_rewrite_clause(principle, rule_level, obj_desc, group_id, group_name):
+    if principle == "closure":
+        prompt = (
+            f"Several types of objects {obj_desc} form a shape of {group_name}, "
+            f"which are considered as a group with group id {group_id}. "
+            f"Now use one sentence to include the following information"
+            f"1. the group name;"
+            f"2. what kind of shape do the objects together form;"
+            f"3. what kind of objects exist in the group {group_id} one by one, "
+            f"make sure all of descriptions following same form; "
+            f"describe clearly their properties, such as color, shape, etc."
+            f"Describe it clear and simple. Only answer with the sentence. ")
+    elif principle == "similarity":
+        prompt = (
+            f"According to the gestalt principle {principle}, the objects can be groups together,"
+            f"the rule holds true on the {rule_level} level."
+            f"For each {rule_level}, there exists object {obj_desc}."
+            f"Now use one sentence to describe the rule including the following information"
+            f"1. what kind of objects in the group"
+            f"2. the rule holds true on the {rule_level} level."
+            f"make sure all of descriptions following same form; "
+            f"describe clearly their properties, such as color, shape, etc."
+            f"Describe it clear and simple. Only answer with the sentence. ")
+
+    elif principle == "proximity":
+        prompt = (f"There are positive patterns and negative patterns. "
+                  f"The positive patterns following the same rules, whereas the negative patterns do not. "
+                  f"We found the following facts: there are always a set of objects in the pattern, "
+                  f"in the positive patterns, the objects can be grouped together following the gestalt principle proximity, "
+                  f"in each of the group, there exists {obj_desc}, where in the negative patterns, such rules does not hold."
+                  f"Now use one sentence to describe the rule, make sure all of descriptions following same form; "
+                  f"Describe it clear and simple. Only answer with the sentence. "
+                  f"")
+
+    else:
+        raise ValueError
     response = llama3(prompt)
     return response
 
 
-def rewrite_clauses(args, merged_clauses):
-    # rephase the terms
-    name_dict = {}
-    obj_props = []
-    final_clauses = []
-    for merged_clause in merged_clauses:
-        for obj_term in merged_clause.body[0].terms[0]:
-            if tuple(obj_term) in name_dict:
-                continue
-            term_str = ",".join([t.name for t in obj_term])
-            new_term = llama_rename_term(term_str)
-            obj_props.append(new_term)
-            name_dict[tuple(obj_term)] = new_term
-        group_label = merged_clause.body[0].terms[-1]
-        group_id = merged_clause.body[0].terms[-2][0]
+def rewrite_true_all_group_rules(rules, name_dict):
+    """
+    :return: natural langauge explanations of each rule
+    """
+    natural_language_explanations = []
+    for rule in rules:
+        obj_props = []
+        for term in rule.body[0].terms:
+            if isinstance(term, Const) and "object" in term.dtype.name:
+                obj_props.append(term.name)
+        if tuple(obj_props) not in name_dict:
+            obj_str = ",".join(obj_props)
+            obj_desc = llama_rename_term(obj_str)
+            name_dict[tuple(obj_props)] = obj_desc
+        else:
+            obj_desc = name_dict[tuple(obj_props)]
+
+        group_label = rule.body[0].terms[-1]
+        group_id = rule.body[0].terms[-1].id
         # rewrite the whole clause
-        final_clause = llama_rewrite_clause(obj_props, group_id, obj_props)
-        final_clauses.append(final_clause)
+        final_clause = llama_rewrite_clause("proximity", "group", obj_desc, group_id, obj_props)
+        natural_language_explanations.append(final_clause)
+
+    return natural_language_explanations
+
+
+def rewrite_true_all_image_rules(rules):
+    pass
+
+
+def rewrite_clauses(args, rules):
+    # rephrase the terms
+    name_dict = {}
+    # explain different types of the rules
+    final_clauses = {}
+    # true all image rules
+    final_clauses["true_all_groups"] = rewrite_true_all_group_rules(rules["true_all_group"], name_dict)
+    final_clauses["true_all_images"] = rewrite_true_all_image_rules(rules["true_all_image"], name_dict)
 
     args.logger.debug(
         "\n =============== LLM: Rename terms =============== " + "".join(
             [f"\n{k} -> {v}" for k, v in name_dict.items()]))
     args.logger.debug(
         f"\n =============== LLM: Clause Description =============== " + "".join(
-            [f"\n {c_i + 1}/{len(final_clauses)} {final_clauses[c_i]}" for c_i in
-             range(len(final_clauses))]))
+            [f"\n {c_i + 1}/{len(final_clauses['true_all_groups'])} {final_clauses['true_all_groups'][c_i]}" for c_i in
+             range(len(final_clauses["true_all_groups"]))]))
 
     return final_clauses, name_dict
 
+def rewrite_neg_clauses(args, rules):
+    # rephrase the terms
+    name_dict = {}
+    # explain different types of the rules
+    final_clauses = {}
+    # true all image rules
+    final_clauses["true_all_groups"] = rewrite_true_all_group_rules(rules["true_all_group"], name_dict)
+    final_clauses["true_all_images"] = rewrite_true_all_image_rules(rules["true_all_image"], name_dict)
+
+    args.logger.debug(
+        "\n =============== LLM: Rename terms =============== " + "".join(
+            [f"\n{k} -> {v}" for k, v in name_dict.items()]))
+    args.logger.debug(
+        f"\n =============== LLM: Clause Description =============== " + "".join(
+            [f"\n {c_i + 1}/{len(final_clauses['true_all_groups'])} {final_clauses['true_all_groups'][c_i]}" for c_i in
+             range(len(final_clauses["true_all_groups"]))]))
+
+    return final_clauses, name_dict
 
 if __name__ == "__main__":
     response = llama3("who wrote the book godfather")
     print(response)
 
 
-def convert_to_final_clauses(args, lang):
-    merged_clauses = lang.rewrite_clauses(args)
-    llm_clauses, name_dict = rewrite_clauses(args, merged_clauses)
-    lang.llm_clauses = llm_clauses
-    lang.name_dict = name_dict
-    return lang
+def convert_to_final_clauses(args, rules, test_results):
+    """ explain following things using natural language:
+    - what is the rule for the positive patterns
+    - which rule does the negative pattern not satisfied
+
+    return: rules in natural language, rules are not met by the negative patterns
+    """
+    # explain the rules in positive pattern
+    llm_clauses, name_dict = rewrite_clauses(args, rules)
+    # explain the reason that pattern is negative
+    llm_neg_explains = rewrite_neg_clauses(args, test_results)
+
+
+    natural_rules = {}
+    negative_explanations = []
+    return natural_rules, negative_explanations

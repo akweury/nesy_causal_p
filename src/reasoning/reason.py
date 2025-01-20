@@ -259,9 +259,13 @@ def check_true_in_image(group_scores):
 
 def check_true_all_group(group_scores, th=0.8):
     pred = True
+    group_preds = []
     for group in group_scores:
-        pred *= max(group) > th
-    return pred
+        group_score = max(group) > th
+        group_preds.append(group_score)
+        pred *= group_score
+    return pred, group_preds
+
 
 def check_true_exact_one_group(group_scores):
     raise NotImplementedError
@@ -269,16 +273,19 @@ def check_true_exact_one_group(group_scores):
 
 def reason_test_results(clause_scores, clause_labels):
     preds = torch.zeros(len(clause_scores), dtype=torch.bool)
+    pred_details = []
     for example_i in range(len(clause_scores)):
         pred = True
         for c_i, label in enumerate(clause_labels):
             if bk.rule_logic_types[label] == "true_all_image":
                 pred *= check_true_in_image(clause_scores[example_i][c_i])
             elif bk.rule_logic_types[label] == "true_all_group":
-                pred *= check_true_all_group(clause_scores[example_i][c_i])
+                clause_preds, group_preds = check_true_all_group(clause_scores[example_i][c_i])
+                pred_details.append(group_preds)
+                pred *= clause_preds
             elif bk.rule_logic_types[label] == "true_exact_one_group":
                 pred *= check_true_exact_one_group(clause_scores[example_i][c_i])
             else:
                 raise ValueError(f"Unknown rule logic_type: {bk.rule_logic_types[label]}")
         preds[example_i] = pred
-    return preds.float()
+    return preds.float(), pred_details

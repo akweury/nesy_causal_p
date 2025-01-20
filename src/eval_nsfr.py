@@ -124,6 +124,21 @@ def group2ocm(data, groups):
 #
 #     return pred_conf.mean()
 
+def visual_group_on_the_image(img, group_ocms):
+    pass
+
+
+def visual_negative_image(check_results, imgs):
+    negative_details = check_results["negative_details"]
+
+    for img_i in range(len(negative_details)):
+        img = imgs[img_i]
+        for g_i in range(len(negative_details[img_i])):
+            valid_group = negative_details[img_i][g_i]
+            group_data = check_results["negative_groups"][img_i][g_i]
+            if not valid_group:
+                visual_group_on_the_image(img, group_data["ocm"])
+
 
 def check_clause(args, lang, rules, imgs_test):
     # first three images are positive, last three images are negative
@@ -140,10 +155,18 @@ def check_clause(args, lang, rules, imgs_test):
     pos_clause_scores = alpha.alpha_test(args, groups["group_pos"], lang, all_clauses)
     neg_clause_scores = alpha.alpha_test(args, groups["group_neg"], lang, all_clauses)
 
-    preds[:3] = reason.reason_test_results(pos_clause_scores, clauses_labels)
-    preds[3:] = reason.reason_test_results(neg_clause_scores, clauses_labels)
+    preds[:3], pred_details_pos = reason.reason_test_results(pos_clause_scores, clauses_labels)
+    preds[3:], pred_details_neg = reason.reason_test_results(neg_clause_scores, clauses_labels)
     acc = (preds == image_label).sum() / len(preds)
 
+    check_results = {
+        "acc": acc,
+        "negative_details": pred_details_neg,
+        "negative_groups": groups["group_neg"]
+    }
+
+    visual_negative_image(check_results, imgs_test[3:])
+    return check_results
     # logger
     # satisfied_clause_indices = torch.nonzero(clauses_conf[idx] >= args.valid_rule_th).reshape(-1)
     # dissatisfied_clause_indices = torch.nonzero(clauses_conf[idx] < args.valid_rule_th).squeeze()
@@ -167,8 +190,6 @@ def check_clause(args, lang, rules, imgs_test):
     #                  f"Test {image_label} Images\n"
     #                  f"Confidence for each image: {pred_conf}\n"
     #                  f"Average Accuracy: {pred_conf.mean(dim=0):.2f}\n")
-
-    return acc
 
 
 if __name__ == "__main__":

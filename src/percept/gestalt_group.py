@@ -161,7 +161,7 @@ def gcm_encoder(labels, ocms, group_shape=0):
             group_y = y.mean()
             obj_num = len(group_ocms)
             if len(group_ocms) == 1:
-                gcm = torch.from_numpy(group_ocms[0])
+                gcm = group_ocms[0]
             else:
                 group_size = 0.5 * (x.max() - x.min() + y.max() - y.min())
                 color_r = 0
