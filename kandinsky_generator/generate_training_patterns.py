@@ -296,7 +296,6 @@ def get_task_names(principle):
 
 
 def gen_and_save(path, width):
-    data = []
     max_length = 64
     example_num = 3
     all_tensors = {"positive": [], "negative": []}
@@ -304,8 +303,10 @@ def gen_and_save(path, width):
     principles = bk.gestalt_principles
     for principle in principles:
         task_names = get_task_names(principle)
+
         for t_i, task_name in enumerate(task_names):
             print("Generating training patterns for task {}".format(task_name))
+            img_data = []
             kfs = []
             for dtype in [True, False]:
                 for example_i in range(example_num):
@@ -315,15 +316,18 @@ def gen_and_save(path, width):
             for kf in kfs:
                 img = np.asarray(KandinskyUniverse.kandinskyFigureAsImage(kf, width)).copy()
                 images.append(img)
-                data.append(kf2data(kf, width))
+                img_data.append(kf2data(kf, width))
                 tensors.append(kf2tensor(kf, max_length))
             tensors = torch.stack(tensors)
 
             # save image
             images = chart_utils.hconcat_imgs(images)
+            Image.fromarray(images).save(path / f"{task_counter:06d}.png")
+            # save data
+            data = {"principle": principle,
+                    "img_data": img_data}
             with open(path / f"{task_counter:06d}.json", 'w') as f:
                 json.dump(data, f)
-            Image.fromarray(images).save(path / f"{task_counter:06d}.png")
 
             # save tensor
             all_tensors["positive"].append(tensors[:3])

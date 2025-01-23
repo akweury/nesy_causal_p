@@ -8,6 +8,7 @@ from src.utils import data_utils
 from src import bk
 from src.utils.chart_utils import van
 from src.memory import recall
+from src.neural import models
 from src.reasoning import reason
 
 
@@ -133,23 +134,23 @@ def algo_closure(args, segments, input_groups):
     args.obj_fm_size = 32
     # all_obj_found_labels = False
     img = data_utils.merge_segments(segments)
-    # preprocessing img, convert rgb image to black-white image
-    cropped_img, crop_data = data_utils.crop_img(img)
-    bw_img = data_utils.resize_img(cropped_img, resize=args.obj_fm_size).unsqueeze(0)
 
+    # preprocessing img, convert rgb image to black-white image
+    # cropped_img, crop_data = data_utils.crop_img(img)
+    # bw_img = data_utils.resize_img(cropped_img, resize=args.obj_fm_size).unsqueeze(0)
     # groups = []
     labels = torch.zeros(len(segments))
     label_counter = 1
     group_label = 0
     while torch.any(labels[:len(input_groups)] == 0):
         # recall the memory
-        memory, group_label = recall.recall_match(args, bk_shapes, bw_img)
+        memory, group_label, cropped_data, kernels = recall.recall_match(args, bk_shapes, img)
         # assign each object a label
-        group_objs = reason.reason_labels(args, bw_img, input_groups, crop_data, labels, memory)
+        same_group = reason.reason_labels(input_groups, cropped_data, labels, memory, kernels)
 
-        if group_objs.sum() == 0:
+        if same_group.sum() == 0:
             break
-        labels[group_objs] += label_counter
+        labels[same_group] += label_counter
         label_counter += 1
     return labels, group_label
 

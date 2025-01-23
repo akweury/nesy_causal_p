@@ -163,7 +163,17 @@ def df_search(args, lang, C, FC, group):
     extended_nodes = sorted(extended_nodes)
     lang.clauses += extended_nodes
     clauses = lang.clauses
-    return clauses
+    if len(clauses) > 1:
+
+        lang.reset_lang(g_num=1)
+        atom_C = extension(args, lang, C)
+        NSFR = nsfr.get_nsfr_model(args, lang, FC, atom_C)
+        target_preds = list(set([c.head.pred.name for c in atom_C]))
+        # clause evaluation
+        ils, dls = evaluation(args, NSFR, target_preds, group)
+        raise ValueError
+    else:
+        return clauses[0]
 
 
 def eval_task(args, lang, FC, images_data, all_clauses):
@@ -172,7 +182,7 @@ def eval_task(args, lang, FC, images_data, all_clauses):
     """
     lang.clauses = all_clauses
     target_preds = list(set([c.head.pred.name for c in lang.clauses]))
-    preds= []
+    preds = []
     for example_i in range(len(images_data)):
         example_preds = []
         for clause in all_clauses:
@@ -272,7 +282,20 @@ def search_common_clauses(all_groups):
                 common_group_clauses.append(group_clause)
 
 
-def alpha(args, groups):
+def save_lang(args, lang, mode):
+    lang_dict = {
+        "all_groups": lang.all_groups,
+        "atoms": lang.atoms,
+        "clauses": lang.clauses,
+        "consts": lang.consts,
+        "preds": lang.predicates,
+        "g_num": lang.group_variable_num,
+        "attrs": lang.attrs,
+    }
+    torch.save(lang_dict, str(args.output_file_prefix) + f'learned_lang_{mode}.pkl')
+
+
+def alpha(args, groups, mode):
     obj_num = 1
     lang = init_ilp(args, obj_num)
     lang.reset_lang(g_num=1)
@@ -287,11 +310,16 @@ def alpha(args, groups):
         for g_i, group in enumerate(groups[example_i]):
             ocms = group["ocm"]
             gcm = group["gcm"]
-            obj_clauses = []
+            obj_clauses = {}
             for o_i, ocm in enumerate(ocms):
-                clauses = df_search(args, lang, C, FC, ocm.unsqueeze(0))
-                clauses = clause_op.change_clause_obj_id(clauses, args, o_i, bk.variable_symbol_obj)
-                obj_clauses.append(clauses)
+                clause = df_search(args, lang, C, FC, ocm.unsqueeze(0))
+                clause = clause_op.change_clause_obj_id(clause, args, o_i, bk.variable_symbol_obj)
+                if clause is None:
+                    continue
+                if clause not in obj_clauses:
+                    obj_clauses[clause] = 1
+                else:
+                    obj_clauses[clause] += 1
             group_clauses = df_search(args, lang, C, FC, gcm)
             group_clauses = clause_op.change_clause_obj_id(group_clauses, args, g_i, bk.variable_symbol_group)
             group_data = {"group_clauses": group_clauses, "obj_clauses": obj_clauses}
@@ -302,13 +330,18 @@ def alpha(args, groups):
     clauses = []
     for ic in all_groups:
         for g in ic:
-            clauses += g["group_clauses"]
-            for obj_clause in g["obj_clauses"]:
-                clauses += obj_clause
+            g_clause = g["group_clauses"]
+            if g_clause not in clauses:
+                clauses.append(g_clause)
+            for obj_clause, _ in g["obj_clauses"].items():
+                if obj_clause not in clauses:
+                    clauses.append(obj_clause)
     lang.update_consts(clauses)
     lang.generate_atoms(clauses)
     lang.update_predicates(clauses)
     lang.clauses = clauses
+
+    save_lang(args, lang, mode)
     return lang
 
 

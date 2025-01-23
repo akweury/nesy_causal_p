@@ -63,27 +63,25 @@ def merge_clauses(clauses, lang):
     return merged_clauses, inv_atoms_grounded
 
 
-def change_clause_obj_id(clauses, args, var_id, symbol):
+def change_clause_obj_id(c, args, var_id, symbol):
     var_dtypes = bk.var_dtypes["object"] if symbol == "O" else bk.var_dtypes["group"]
-    for c in clauses:
-        for a_i in range(len(c.body)):
-            if isinstance(c.body[a_i], InvAtom):
-                c.body[a_i].terms = list(c.body[a_i].terms)
-                for t_i in range(len(c.body[a_i].terms)):
-                    if isinstance(c.body[a_i].terms[t_i], Var):
-                        c.body[a_i].terms = list(c.body[a_i].terms)
-                        if symbol in c.body[a_i].terms[t_i].name:
-                            c.body[a_i].terms[t_i] = Var(f"{symbol}_{var_id}", var_dtypes)
-                        c.body[a_i].terms = tuple(c.body[a_i].terms)
-                    c.body[a_i].terms = tuple(c.body[a_i].terms)
 
-            else:
-                for t_i in range(len(c.body[a_i].terms)):
+    for a_i in range(len(c.body)):
+        if isinstance(c.body[a_i], InvAtom):
+            c.body[a_i].terms = list(c.body[a_i].terms)
+            for t_i in range(len(c.body[a_i].terms)):
+                if isinstance(c.body[a_i].terms[t_i], Var):
                     c.body[a_i].terms = list(c.body[a_i].terms)
-                    if isinstance(c.body[a_i].terms[t_i], Var):
-                        if symbol in c.body[a_i].terms[t_i].name:
-                            c.body[a_i].terms[t_i] = Var(f"{symbol}_{var_id}", var_dtypes)
+                    if symbol in c.body[a_i].terms[t_i].name:
+                        c.body[a_i].terms[t_i] = Var(f"{symbol}_{var_id}", var_dtypes)
                     c.body[a_i].terms = tuple(c.body[a_i].terms)
-    args.logger.debug(f"\nAll {len(clauses)} Machine Clauses in Group {var_id}:" +
-                      f"".join([f"\n{str(c)}" for c in clauses]))
-    return clauses
+                c.body[a_i].terms = tuple(c.body[a_i].terms)
+
+        else:
+            for t_i in range(len(c.body[a_i].terms)):
+                c.body[a_i].terms = list(c.body[a_i].terms)
+                if isinstance(c.body[a_i].terms[t_i], Var):
+                    if symbol in c.body[a_i].terms[t_i].name:
+                        c.body[a_i].terms[t_i] = Var(f"{symbol}_{var_id}", var_dtypes)
+                c.body[a_i].terms = tuple(c.body[a_i].terms)
+    return c

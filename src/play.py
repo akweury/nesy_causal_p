@@ -12,6 +12,7 @@ from src.percept import perception
 from src.utils.chart_utils import van
 from src import llama_call
 
+
 def init_io_folders(args, data_folder):
     args.train_folder = data_folder / "train" / "task_true_pattern"
     os.makedirs(args.train_folder, exist_ok=True)
@@ -38,8 +39,8 @@ def main():
     args = args_utils.get_args()
     args.step_counter = 0
     args.total_step = 8
-    args.output_file_prefix = config.models / "tmp"
-    os.makedirs(args.output_file_prefix, exist_ok=True)
+
+    # os.makedirs(args.output_file_prefix, exist_ok=True)
     # generate dataset
     generate_training_patterns.genGestaltTraining()
 
@@ -49,26 +50,20 @@ def main():
     # Import Generated Data
     data_loader = dataset.load_dataset(args)
 
-    for task_id, (train_data, test_data) in enumerate(data_loader):
-        args.output_file_prefix = config.models / f"task_{task_id}_"
+    for task_id, (train_data, test_data, principle) in enumerate(data_loader):
+        if task_id in [0, 1, 2]:
+            continue
+        args.output_file_prefix = config.models / f"t{task_id}_"
         imgs_train = train_data["img"]
         imgs_test = test_data["img"]
         # grouping objects
-        groups = perception.cluster_by_principle(args, imgs_train)
+        groups = perception.cluster_by_principle(args, imgs_train, "train", principle[0])
         # Learn Clauses from Training Data
         lang, rules = train_nsfr.train_clauses(args, groups)
         # Test Patterns, statistic the accuracy
-        check_results = check_clause(args, lang, rules, imgs_test)
+        check_results = check_clause(args, lang, rules, imgs_test, principle[0])
         # convert to natural language
-        natural_rules, failed_reasons = llama_call.convert_to_final_clauses(args, rules, check_results)
-        acc_baseline = None
-        acc_rand = None
-        # final logger
-    args.logger.info(f"\n"
-                     f"================ Test Images Accuracy ======================"
-                     f"[ pos|cf|rand "
-                     f"{acc:.2f} | {acc_baseline:.2f} | {acc_rand:.2f} ]\n"
-                     f"================ End of the Program ======================")
+        natural_rules = llama_call.convert_to_final_clauses(args, rules, check_results, principle[0], task_id)
 
     return
 

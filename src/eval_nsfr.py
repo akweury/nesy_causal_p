@@ -1,6 +1,7 @@
 # Created by shaji at 27/10/2024
 import cv2
 import torch
+import random
 
 import config
 from utils import file_utils, args_utils, data_utils
@@ -8,6 +9,7 @@ from percept import perception
 from src.alpha import alpha
 from src import bk
 from src.reasoning import reason
+from src.utils.chart_utils import van
 
 
 def load_data(args, image_path):
@@ -124,8 +126,35 @@ def group2ocm(data, groups):
 #
 #     return pred_conf.mean()
 
-def visual_group_on_the_image(img, group_ocms):
-    pass
+def visual_group_on_the_image(img_np, obj_tensors, color):
+    """
+    there is a set of objects in the image,
+    the image is given as pytorch tensor with size 1x512x512x3,
+    now give the obj_tensors as pytorch tensor with size Nx10, where N is the number of the objects,
+    for each object, the 0,1 indices are x and y position,
+    index 2 saves the object size in range [0,1], which is the relative size according to the whole image,
+    draw the shadow area on the objects using cv2
+
+    :param img_np:
+    :param group_ocms:
+    :return:
+    """
+    transparency = 0.35
+    img_np = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)  # convert color channels
+    for obj in obj_tensors:
+        x, y, size = obj[0], obj[1], obj[2]
+        # Convert coordinates and size from [0,1] range to actual pixel values
+        x = int(x * img_np.shape[1])
+        y = int(y * img_np.shape[0])
+        size = 40  # int(size * min(img_np.shape[0], img_np.shape[1]) * 1.3)
+        # Create an overlay
+        overlay = img_np.copy()
+        # Draw the circle on the overlay
+        cv2.circle(overlay, (x, y), size, color, thickness=-1)
+
+        # Blend the overlay with the original image
+        cv2.addWeighted(overlay, transparency, img_np, 1 - transparency, 0, img_np)
+    return img_np
 
 
 def visual_negative_image(check_results, imgs):
@@ -133,25 +162,29 @@ def visual_negative_image(check_results, imgs):
 
     for img_i in range(len(negative_details)):
         img = imgs[img_i]
-        for g_i in range(len(negative_details[img_i])):
-            valid_group = negative_details[img_i][g_i]
-            group_data = check_results["negative_groups"][img_i][g_i]
-            if not valid_group:
-                visual_group_on_the_image(img, group_data["ocm"])
+        labeled_img = img.clone().squeeze().numpy()
+        group_colors = random.sample(list(bk.color_matplotlib.values()), 10)
+        for c_i in range(len(negative_details[img_i])):
+            for g_i in range(len(negative_details[img_i][c_i])):
+                valid_group = negative_details[img_i][c_i][g_i]
+                group_data = check_results["negative_groups"][img_i][g_i]
+                if not valid_group:
+                    labeled_img = visual_group_on_the_image(labeled_img, group_data["ocm"], group_colors[g_i])
+            # save labeled image
+            cv2.imwrite(str(config.models / "visual" / f"neg_{img_i}_c{c_i}.png"), labeled_img)
 
 
-def check_clause(args, lang, rules, imgs_test):
+def check_clause(args, lang, rules, imgs_test, principle):
     # first three images are positive, last three images are negative
     preds = torch.zeros(len(imgs_test))
     image_label = torch.zeros(len(imgs_test))
     image_label[:3] += 1
-    all_clauses = rules["true_all_image"] + rules["true_all_group"] + rules["true_exact_one_group"]
+    all_clauses = rules["true_all_image"] + rules["true_all_group"]  # + rules["true_exact_one_group"]
     clauses_labels = ([0] * len(rules[bk.rule_logic_types[0]]) +
-                      [1] * len(rules[bk.rule_logic_types[1]]) +
-                      [2] * len(rules[bk.rule_logic_types[2]]))
+                      [1] * len(rules[bk.rule_logic_types[1]]))  # + [2] * len(rules[bk.rule_logic_types[2]]))
 
     group_bk = load_bk(args, bk.bk_shapes)
-    groups = perception.cluster_by_principle(args, imgs_test)
+    groups = perception.cluster_by_principle(args, imgs_test, "test", principle)
     pos_clause_scores = alpha.alpha_test(args, groups["group_pos"], lang, all_clauses)
     neg_clause_scores = alpha.alpha_test(args, groups["group_neg"], lang, all_clauses)
 
@@ -162,7 +195,8 @@ def check_clause(args, lang, rules, imgs_test):
     check_results = {
         "acc": acc,
         "negative_details": pred_details_neg,
-        "negative_groups": groups["group_neg"]
+        "negative_groups": groups["group_neg"],
+        "principle": groups["principle"]
     }
 
     visual_negative_image(check_results, imgs_test[3:])

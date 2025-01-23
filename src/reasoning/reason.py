@@ -1,4 +1,6 @@
 # Created by shaji at 25/07/2024
+import torch
+
 from src.reasoning.reason_utils import *
 import torch.nn.functional as F  # Import F for functional operations
 
@@ -19,15 +21,10 @@ def fm_registration(fm_mem, bw_img_mem, fms_rc):
     return mem_fm, mem_bw_img
 
 
-def reason_fms(mem_fms, kernel, bw_img, reshape=None):
-    bw_img = bw_img.squeeze().unsqueeze(0).unsqueeze(0)
-    in_fms = models.one_layer_conv(bw_img, kernel)
-    in_fms = in_fms.sum(dim=1).squeeze()
-    in_fms = (in_fms - in_fms.min()) / ((in_fms.max() - in_fms.min()) + 1e-20)
-
-    # mem fms
-    mem_fms = mem_fms.squeeze().sum(dim=0)
-    mem_fms = (mem_fms - mem_fms.min()) / ((mem_fms.max() - mem_fms.min()) + 1e-20)
+def reason_fms(in_fms, mem_fms, reshape=None):
+    # in_fms = models.img2fm(img, kernel)
+    in_fms = models.fm_merge(in_fms)
+    mem_fms = models.fm_merge(mem_fms)
 
     # onside = 1 - (mem_fms - in_fms) ** 2
     # onside[in_fms == 0] = 0
@@ -49,19 +46,23 @@ def mask_similarity(mask1, mask2):
     return similarity
 
 
-def reason_labels(args, bw_img, objs, crop_data, labels, onside):
+def reason_labels(objs, crop_data, labels, onside, kernels):
     group_objs = torch.zeros_like(labels).bool()
     for o_i, obj in enumerate(objs):
         try:
             if labels[o_i] == 0:
-                cropped_img, _ = data_utils.crop_img(obj.input, crop_data)
-                seg_mask = data_utils.resize_img(cropped_img,
-                                                 resize=args.obj_fm_size).unsqueeze(0) > 0
-                simi_conf = mask_similarity(onside, seg_mask)
-                if simi_conf > 0.4:
+                obj_img = obj.input
+                obj_fm, _ = models.img2fm(obj_img, kernels, crop_data)
+                obj_fm = models.fm_merge(obj_fm)
+                obj_mask = obj_fm > 0
+                # cropped_img, _ = data_utils.crop_img(obj.input, crop_data)
+                # seg_mask = data_utils.resize_img(cropped_img,
+                #                                  resize=args.obj_fm_size).unsqueeze(0) > 0
+                simi_conf = mask_similarity(onside, obj_mask)
+                if simi_conf > 0.5:
                     group_objs[o_i] = True
                     # find the mask of that object, remove the pixels of that object
-                    bw_img[seg_mask] = 0
+                    # bw_img[seg_mask] = 0
         except IndexError:
             raise IndexError
     return group_objs
@@ -120,9 +121,10 @@ def sementical_same_clause(clause1, clause2):
     return sementical_same
 
 
-def remove_sementic_same_clauses(clause_list1, clause_list2):
+def remove_sementic_same_clauses(clause_list1, clause_list2, counter):
     list1_only_clauses = []
-    for clause in clause_list1:
+    list1_only_counter = []
+    for c_i, clause in enumerate(clause_list1):
         only_list1 = True
         for clause2 in clause_list2:
             if sementical_same_clause(clause, clause2):
@@ -130,8 +132,10 @@ def remove_sementic_same_clauses(clause_list1, clause_list2):
                 break
         if only_list1:
             list1_only_clauses.append(clause)
+            list1_only_counter.append(counter[c_i])
     sementic_unique_clauses = []
-    for clause in list1_only_clauses:
+    sementic_unique_counter = []
+    for c_i, clause in enumerate(list1_only_clauses):
         sementic_unique = True
         for unique_c in sementic_unique_clauses:
             if sementical_same_clause(clause, unique_c):
@@ -139,16 +143,17 @@ def remove_sementic_same_clauses(clause_list1, clause_list2):
                 break
         if sementic_unique:
             sementic_unique_clauses.append(clause)
-    return sementic_unique_clauses
+            sementic_unique_counter.append(list1_only_counter[c_i])
+    return sementic_unique_clauses, sementic_unique_counter
 
 
 def get_all_clauses(img_clauses):
     clauses = []
     for ic in img_clauses:
         for g in ic:
-            clauses += g["group_clauses"]
-            for obj_clause in g["obj_clauses"]:
-                clauses += obj_clause
+            clauses.append(g["group_clauses"])
+            for obj_clause, _ in g["obj_clauses"].items():
+                clauses.append(obj_clause)
     return clauses
 
 
@@ -159,35 +164,50 @@ def create_ctt(image_clauses):
     img_num = len(image_clauses)
     group_c_num = [len(igs) for igs in image_clauses]
     obj_num = [len(ig["obj_clauses"]) for igs in image_clauses for ig in igs]
-    obj_c_num = [len(oc) for igs in image_clauses for ig in igs for oc in ig["obj_clauses"]]
+    obj_c_num = [oc_count for igs in image_clauses for ig in igs for oc, oc_count in ig["obj_clauses"].items()]
     c_num = sum(obj_c_num) + sum(group_c_num)
-
     # calculate clause truth table
-    ctt = torch.zeros(c_num, img_num, max(group_c_num), max(obj_num), max(obj_c_num)).to(torch.bool)
+    ctt = torch.zeros(c_num, img_num, max(group_c_num), max(obj_num)).to(torch.bool)
     ctt_count = torch.zeros(c_num, img_num, max(group_c_num), max(obj_num))
     for c_i in range(c_num):
         for i_i, img_c in enumerate(image_clauses):
             for g_i, group in enumerate(img_c):
                 # group clause truth
-                for o_i, obj_clauses in enumerate(group["obj_clauses"]):
-                    ctt_count[c_i, i_i, g_i, o_i] = len(obj_clauses)
-                    for oc_i, clause in enumerate(obj_clauses):
-                        # group_clause = group["group_clauses"][0]
-                        # if (sementical_same_clause(group_clause, clauses[c_i])):
-                        #     ctt[c_i, i_i, g_i, o_i, 0] = True
-                        if (sementical_same_clause(clause, clauses[c_i])):
-                            ctt[c_i, i_i, g_i, o_i, oc_i] = True
+                for o_i, (obj_clause, c_count) in enumerate(group["obj_clauses"].items()):
+                    ctt_count[c_i, i_i, g_i, o_i] = c_count
+                    if (sementical_same_clause(obj_clause, clauses[c_i])):
+                        ctt[c_i, i_i, g_i, o_i] = True
     return ctt, ctt_count
 
 
 def in_all_image(ctt, ctt_count, clauses):
-    true_in_all_image = ctt.any(dim=-1).any(dim=-1).any(dim=-1).all(dim=-1)
+    """
+    for each clause, check if it is true in each image
+
+    :param ctt:
+    :param ctt_count:
+    :param clauses:
+    :return: validation, NxI boolean tensor, N is clause number, I is image number;
+    counter, NxI integer tensor, N is clause number, I is image number
+    """
+    # true in group
+    # counter for each group
+    counter_group = ctt.sum(dim=-1)
+    # counter for each image
+    counter_img = counter_group.sum(dim=-1)
+
+    true_in_all_image = ctt.any(dim=-1).any(dim=-1).all(dim=-1)
     true_in_all_image_cs = [clauses[i] for i in range(len(clauses)) if true_in_all_image[i]]
-    return true_in_all_image_cs
+    counter = [counter_img[i] for i in range(len(clauses)) if true_in_all_image[i]]
+    return true_in_all_image_cs, counter
 
 
 def in_all_group(ctt, ctt_count, clauses):
-    true_any_objc_any_obj = ctt.any(dim=-1).any(dim=-1)
+    # true in group
+    # counter for each group
+    counter_group = ctt.sum(dim=-1)
+
+    true_any_objc_any_obj = ctt.any(dim=-1)
     true_in_all_groups = torch.zeros(ctt.shape[:2]).bool()
     for c_i in range(ctt.shape[0]):
         for img_i in range(ctt.shape[1]):
@@ -195,7 +215,9 @@ def in_all_group(ctt, ctt_count, clauses):
             true_in_all_groups[c_i, img_i] = true_any_objc_any_obj[c_i, img_i, :g_num].all()
     true_in_all_image_all_groups = true_in_all_groups.all(dim=-1)
     true_in_all_image_all_groups_cs = [clauses[i] for i in range(len(clauses)) if true_in_all_image_all_groups[i]]
-    return true_in_all_image_all_groups, true_in_all_image_all_groups_cs
+
+    counter = [counter_group[i] for i in range(len(clauses)) if true_in_all_image_all_groups[i]]
+    return true_in_all_image_all_groups, true_in_all_image_all_groups_cs, counter
 
 
 def in_exact_one_group(ctt, ctt_count, clauses):
@@ -229,63 +251,94 @@ def find_common_rules(image_clauses_pos, image_clauses_neg):
     ctt_neg, ctt_count_neg = create_ctt(image_clauses_neg)
 
     # reason if clauses are truth in all images
-    true_all_image_clauses = in_all_image(ctt_pos, ctt_count_pos, clauses_pos)
-    true_all_image_clauses_neg = in_all_image(ctt_neg, ctt_count_neg, clauses_neg)
+    true_all_image_clauses, counter_img_pos = in_all_image(ctt_pos, ctt_count_pos, clauses_pos)
+    true_all_image_clauses_neg, counter_img_neg = in_all_image(ctt_neg, ctt_count_neg, clauses_neg)
     # remove clauses that exist in both pos and neg
-    true_all_image_clauses_pos_only = remove_sementic_same_clauses(true_all_image_clauses, true_all_image_clauses_neg)
+    true_all_image_clauses_pos_only, counter_all_img_pos_only = remove_sementic_same_clauses(true_all_image_clauses,
+                                                                                             true_all_image_clauses_neg,
+                                                                                             counter_img_pos)
 
     # reason if clauses are truth in all groups in all images
-    true_all_group, true_all_group_clauses = in_all_group(ctt_pos, ctt_count_pos, clauses_pos)
-    true_all_group_neg, true_all_group_clauses_neg = in_all_group(ctt_neg, ctt_count_neg, clauses_neg)
-    true_all_group_clauses_pos_only = remove_sementic_same_clauses(true_all_group_clauses, true_all_group_clauses_neg)
+    true_all_group, true_all_group_clauses, counter_group_pos = in_all_group(ctt_pos, ctt_count_pos, clauses_pos)
+    true_all_group_neg, true_all_group_clauses_neg, counter_group_neg = in_all_group(ctt_neg, ctt_count_neg,
+                                                                                     clauses_neg)
+    true_all_group_clauses_pos_only, counter_all_group_pos_only = remove_sementic_same_clauses(true_all_group_clauses,
+                                                                                               true_all_group_clauses_neg,
+                                                                                               counter_group_pos)
 
     # reason if clauses are truth in at most one group in all images
-    true_exact_one_group, true_exact_one_group_clauses = in_exact_one_group(ctt_pos, ctt_count_pos, clauses_pos)
-    true_exact_one_group_neg, true_exact_one_group_clauses_neg = in_exact_one_group(ctt_neg, ctt_count_neg, clauses_neg)
-    true_exact_one_group_clauses_pos_only = remove_sementic_same_clauses(true_exact_one_group_clauses,
-                                                                         true_exact_one_group_clauses_neg)
+    # true_exact_one_group, true_exact_one_group_clauses = in_exact_one_group(ctt_pos, ctt_count_pos, clauses_pos)
+    # true_exact_one_group_neg, true_exact_one_group_clauses_neg = in_exact_one_group(ctt_neg, ctt_count_neg, clauses_neg)
+    # true_exact_one_group_clauses_pos_only, counter_exact_one_group_pos_only = remove_sementic_same_clauses(
+    #     true_exact_one_group_clauses,
+    #     true_exact_one_group_clauses_neg)
 
     common_rules_dict = {
         "true_all_image": true_all_image_clauses_pos_only,
+        "true_all_image_counter": counter_all_img_pos_only,
+
         "true_all_group": true_all_group_clauses_pos_only,
-        "true_exact_one_group": true_exact_one_group_clauses_pos_only
+        "true_all_group_counter": counter_all_group_pos_only,
+
+        # "true_exact_one_group": true_exact_one_group_clauses_pos_only,
+        # "true_exact_one_group_counter":counter_exact_one_group_pos_only,
+
     }
     return common_rules_dict
 
 
-def check_true_in_image(group_scores):
-    raise NotImplementedError
+def check_true_in_image(group_scores, th=0.8):
+    pred = False
+    group_preds = []
+    for group in group_scores:
+        group_pred = max(group) > th
+        group_preds.append(group_pred)
+
+        pred = torch.bitwise_or(pred, group_pred)
+    return pred, group_preds
 
 
 def check_true_all_group(group_scores, th=0.8):
     pred = True
     group_preds = []
     for group in group_scores:
-        group_score = max(group) > th
-        group_preds.append(group_score)
-        pred *= group_score
+        group_pred = max(group) > th
+        group_preds.append(group_pred)
+        pred = torch.bitwise_and(pred, group_pred)
     return pred, group_preds
 
 
-def check_true_exact_one_group(group_scores):
-    raise NotImplementedError
+def check_true_exact_one_group(group_scores, th=0.8):
+    group_preds = []
+    for group in group_scores:
+        group_pred = max(group) > th
+        group_preds.append(group_pred)
+
+    pred = sum(group_preds) == 1
+    return pred, group_preds
 
 
 def reason_test_results(clause_scores, clause_labels):
     preds = torch.zeros(len(clause_scores), dtype=torch.bool)
     pred_details = []
     for example_i in range(len(clause_scores)):
-        pred = True
+        ex_pred = True
+        ex_pred_details = []
         for c_i, label in enumerate(clause_labels):
             if bk.rule_logic_types[label] == "true_all_image":
-                pred *= check_true_in_image(clause_scores[example_i][c_i])
+                clause_pred, group_preds = check_true_in_image(clause_scores[example_i][c_i])
+                ex_pred_details.append(group_preds)
+                ex_pred = torch.bitwise_and(clause_pred, ex_pred)
             elif bk.rule_logic_types[label] == "true_all_group":
-                clause_preds, group_preds = check_true_all_group(clause_scores[example_i][c_i])
-                pred_details.append(group_preds)
-                pred *= clause_preds
+                clause_pred, group_preds = check_true_all_group(clause_scores[example_i][c_i])
+                ex_pred_details.append(group_preds)
+                ex_pred = torch.bitwise_and(clause_pred, ex_pred)
             elif bk.rule_logic_types[label] == "true_exact_one_group":
-                pred *= check_true_exact_one_group(clause_scores[example_i][c_i])
+                clause_pred, group_preds = check_true_exact_one_group(clause_scores[example_i][c_i])
+                ex_pred_details.append(group_preds)
+                ex_pred = torch.bitwise_and(clause_pred, ex_pred)
             else:
                 raise ValueError(f"Unknown rule logic_type: {bk.rule_logic_types[label]}")
-        preds[example_i] = pred
+        pred_details.append(ex_pred_details)
+        preds[example_i] = ex_pred
     return preds.float(), pred_details

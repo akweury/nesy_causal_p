@@ -106,7 +106,7 @@ class FCNNValuationModule(nn.Module):
         elif term_name in [bk.const_dtype_object_color, bk.const_dtype_object_shape, bk.const_dtype_group,
                            bk.const_dtype_obj_num]:
             try:
-                term_data = self.attrs[term][0]
+                term_data = term
             except KeyError:
                 raise KeyError
         # elif term_name in bk.attr_names:
@@ -369,7 +369,9 @@ class VFColor(nn.Module):
         group_data = args_dict[bk.var_dtype_group]
         if group_data is None:
             return 0.0
-        color_rgb_gt = torch.tensor(bk.color_matplotlib[bk.color_large[color_gt]]).reshape(1, 3)
+        if type(color_gt) == int:
+            print("")
+        color_rgb_gt = torch.tensor(bk.color_matplotlib[color_gt.name]).reshape(1, 3)
         color_indices = [bk.prop_idx_dict["rgb_r"], bk.prop_idx_dict["rgb_g"], bk.prop_idx_dict["rgb_b"]]
         color_data = (group_data[:, color_indices] * 255).to(torch.uint8)
         is_color = float((color_rgb_gt == color_data).all())
@@ -389,12 +391,16 @@ class VFShape(nn.Module):
         if group_data is None:
             return 0.0
 
-        shape_gt = args_dict[bk.const_dtype_object_shape]
+        shape_name_gt = args_dict[bk.const_dtype_object_shape]
         shape_indices = [bk.prop_idx_dict["shape_tri"],
                          bk.prop_idx_dict["shape_sq"],
                          bk.prop_idx_dict["shape_cir"]]
-        group_shape = group_data[:, shape_indices].argmax(dim=1) + 1
+        if group_data[:, shape_indices].sum == 0:
+            group_shape = 0
+        else:
+            group_shape = group_data[:, shape_indices].argmax(dim=1) + 1
 
+        shape_gt = bk.bk_shapes.index(shape_name_gt.name)
         # conf = group_data[:, bk.prop_idx_dict["group_conf"]][0]
         has_label = float(shape_gt == group_shape)
         return has_label
@@ -412,7 +418,8 @@ class VFCount(nn.Module):
         group_data = args_dict[bk.var_dtype_group]
         if group_data is None or group_data[0, bk.prop_idx_dict["obj_num"]] == 1:
             return 0.0
-        num_gt = args_dict[bk.const_dtype_obj_num] + 1
+        num_name_gt = args_dict[bk.const_dtype_obj_num]
+        num_gt = int(num_name_gt.name.split("object_num")[-1]) + 1
         group_num = group_data[0, bk.prop_idx_dict["obj_num"]]
         has_label = float(num_gt == group_num)
         return has_label

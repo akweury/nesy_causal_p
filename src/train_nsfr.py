@@ -56,8 +56,8 @@ def load_data(args, image_path):
     return img, patch
 
 
-def load_lang(args):
-    lang_file = str(args.output_file_prefix) + f'learned_lang.pkl'
+def load_lang(args, mode):
+    lang_file = str(args.output_file_prefix) + f'learned_lang_{mode}.pkl'
     if os.path.exists(lang_file):
         lang_data = torch.load(lang_file)
         if lang_data is not None:
@@ -68,15 +68,16 @@ def load_lang(args):
             lang.consts = lang_data["consts"]
             lang.atoms = lang_data["atoms"]
             lang.attrs = lang_data["attrs"]
+            lang.all_groups = lang_data["all_groups"]
             # lang.llm_clauses = lang_data["llm_clauses"]
             # lang.name_dict = lang_data["name_dict"]
             lang.generate_atoms()
 
-            rules = {
-                "true_all_image": lang_data["true_all_image"],
-                "true_all_group": lang_data["true_all_group"],
-                "true_exact_one_group": lang_data["true_exact_one_group"],
-            }
+            # rules = {
+            #     "true_all_image": lang_data["true_all_image"],
+            #     "true_all_group": lang_data["true_all_group"],
+            #     "true_exact_one_group": lang_data["true_exact_one_group"],
+            # }
             # args.logger.debug(
             #     f"\n ================= Loaded Pretrained Language ================= " +
             #     f"\n ==== Machine Clauses: " +
@@ -85,8 +86,8 @@ def load_lang(args):
             #     f"\n ==== LLM Description: " +
             #     "".join([f"\n{c_i + 1}/{len(lang.llm_clauses)} {lang.llm_clauses[c_i]}"
             #              for c_i in range(len(lang.llm_clauses))]))
-            return lang, rules
-    return None, None
+            return lang
+    return None
 
 
 def save_lang(args, lang, rules):
@@ -108,21 +109,16 @@ def save_lang(args, lang, rules):
 
 def train_clauses(args, groups):
     args.step_counter += 1
-    lang_pos, rules = load_lang(args)
+    lang_pos = load_lang(args, "positive")
+    lang_neg = load_lang(args, "negative")
     if lang_pos is None:
         # reasoning clauses
-        lang_pos = alpha.alpha(args, groups["group_pos"])
-        lang_neg = alpha.alpha(args, groups["group_neg"])
-        rules = reason.find_common_rules(lang_pos.all_groups, lang_neg.all_groups)
-        #
-        # # remove infrequent clauses
-        # lang = alpha.filter_infrequent_clauses(all_clauses, lang)
-        #
-        # # convert machine clause to final clause
-        # lang = llama_call.convert_to_final_clauses(args, lang)
+        lang_pos = alpha.alpha(args, groups["group_pos"], "positive")
+    if lang_neg is None:
+        lang_neg = alpha.alpha(args, groups["group_neg"], "negative")
 
-        # save language
-        save_lang(args, lang_pos, rules)
+    rules = reason.find_common_rules(lang_pos.all_groups, lang_neg.all_groups)
+
     return lang_pos, rules
 
 

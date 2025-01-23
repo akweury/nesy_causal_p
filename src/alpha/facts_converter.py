@@ -7,7 +7,7 @@ from tqdm import tqdm
 from .fol.logic import NeuralPredicate, InventedPredicate
 from src import bk
 from src.alpha import valuation
-
+from src.alpha.fol.logic import Var
 
 class FactsConverter(nn.Module):
     """
@@ -80,7 +80,10 @@ class FactsConverter(nn.Module):
         return torch.stack(vs)
 
     def ground_to_tensor(self, term, group_data):
-        term_name = term.dtype.name
+        if isinstance(term, Var):
+            term_name = term.var_type
+        else:
+            term_name = term.dtype.name
         term_data = None
         if term_name == "group_data":
             # self.group_indices = group_data[:, bk.prop_idx_dict["group_name"]] > 0
@@ -90,7 +93,7 @@ class FactsConverter(nn.Module):
             term_data = self.lang.term_index(term)
         elif term_name in [bk.const_dtype_object_color, bk.const_dtype_object_shape, bk.const_dtype_group,
                            bk.const_dtype_obj_num]:
-            term_data = self.attrs[term][0]
+            term_data = term
         # elif term_name in bk.attr_names:
         # return the standard attribute code
         # term_data = self.attrs[term]

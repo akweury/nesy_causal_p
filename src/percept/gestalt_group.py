@@ -83,11 +83,11 @@ class Group():
         # Calculate the average row and column indices
         row_center = torch.mean(nonzero_indices[:, 0])
         col_center = torch.mean(nonzero_indices[:, 1])
-        pos = torch.tensor([row_center, col_center])
+        pos = torch.tensor([col_center, row_center])
 
         x_size = (nonzero_indices[:, 0].max() - nonzero_indices[:, 0].min()) / self.input.shape[0]
         y_size = (nonzero_indices[:, 1].max() - nonzero_indices[:, 1].min()) / self.input.shape[1]
-        obj_size = x_size * y_size
+        obj_size = max(x_size, y_size)
         if pos.max() > 1:
             pos = pos / 512
         return pos, obj_size

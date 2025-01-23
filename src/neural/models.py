@@ -5,11 +5,14 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F  # Import F for functional operations
+import cv2
+import numpy as np
 
 from torch.utils.data import DataLoader, TensorDataset
 from src.neural.neural_utils import *
 
 import config
+from src import bk
 
 
 # Define the Autoencoder
@@ -153,3 +156,96 @@ def one_layer_conv(data, kernels):
     # mask = (max_value == output).to(torch.float32)
     output = output / 9
     return output
+
+
+def crop_img(img, crop_data=None):
+    rgb = img.numpy().astype(np.uint8)
+    bg_mask = np.all(rgb == bk.color_matplotlib["lightgray"], axis=-1)
+    rgb[bg_mask] = [0, 0, 0]
+    bw_img = cv2.cvtColor(rgb, cv2.COLOR_BGR2GRAY)
+    bw_img = torch.from_numpy(bw_img).squeeze()
+    if crop_data is None:
+        height, width = bw_img.shape[-2], bw_img.shape[-1]
+        # Find the bounding box of the nonzero values
+        nonzero_coords = torch.nonzero(bw_img)
+        if nonzero_coords.numel() == 0:  # Handle completely empty images
+            return bw_img, [0, 0, 0, 0]
+
+        min_y, min_x = nonzero_coords.min(dim=0).values
+        max_y, max_x = nonzero_coords.max(dim=0).values
+
+        # Compute the side length of the square
+        side_length = max(max_y - min_y + 1, max_x - min_x + 1)
+
+        # Adjust the bounding box to make it square
+        center_y = (min_y + max_y) // 2
+        center_x = (min_x + max_x) // 2
+        half_side = side_length // 2 + 5
+
+        # Compute the new square bounding box
+        new_min_y = max(center_y - half_side, 0)
+        new_max_y = min(center_y + half_side + 1, height)
+        new_min_x = max(center_x - half_side, 0)
+        new_max_x = min(center_x + half_side + 1, width)
+    else:
+        new_min_y, new_max_y, new_min_x, new_max_x = crop_data
+    # Crop the image
+    cropped_image = bw_img[new_min_y:new_max_y, new_min_x:new_max_x]
+
+    # if resize is not None:
+    #     cropped_image = cv2.resize(cropped_image.numpy(), (resize, resize),
+    #                                interpolation=cv2.INTER_AREA)
+    #     cropped_image = torch.from_numpy(cropped_image)
+    cropped_image = cropped_image.unsqueeze(0)
+    return cropped_image, [new_min_y, new_max_y, new_min_x, new_max_x]
+
+
+def resize_img(img, resize):
+    # rgb = rgb_np.numpy().astype(np.uint8)
+    # bw_img = cv2.cvtColor(rgb, cv2.COLOR_BGR2GRAY)
+    # bw_img[bw_img != 211] = 1
+    # bw_img[bw_img == 211] = 0
+    # if crop:
+    #     # bw image to cropped bw image
+    #     bw_img, _ = crop_img(torch.from_numpy(bw_img).squeeze(), resize=resize)
+    # else:
+    #     if resize:
+    img = img.squeeze().numpy()
+    resized_img = cv2.resize(img, (resize, resize),
+                             interpolation=cv2.INTER_LINEAR)
+    resized_img = torch.from_numpy(resized_img).unsqueeze(0)
+    # else:
+    #     bw_img = torch.from_numpy(bw_img).unsqueeze(0)
+    return resized_img
+
+
+def to_bw_img(image):
+    # Load an image
+    image[image > 0] = 1
+    return image
+
+
+def img2bw(img, cropped_data=None, resize=16):
+    cropped_img, cropped_data = crop_img(img.squeeze(), crop_data=cropped_data)
+    resized_img = resize_img(cropped_img, resize=resize)
+    bw_img = to_bw_img(resized_img)
+    return bw_img, cropped_data
+
+
+def img2fm(img, kernels, cropped_data=None):
+    bw_img, cropped_data = img2bw(img, cropped_data)
+    fms = one_layer_conv(bw_img, kernels)
+    if fms.ndim == 3:
+        fms = fms.unsqueeze(0)
+    return fms, cropped_data
+
+
+def fm_merge(fms):
+    if fms.ndim == 3:
+        in_fms = fms.sum(dim=0).squeeze()
+    elif fms.ndim == 4:
+        in_fms = fms.sum(dim=1).squeeze()
+    else:
+        raise ValueError
+    merged_fm = (in_fms - in_fms.min()) / ((in_fms.max() - in_fms.min()) + 1e-20)
+    return merged_fm

@@ -41,7 +41,6 @@ pred_names = {
     "object_num": "has_obj_num"
 }
 
-
 var_dtype_obj = var_dtypes["object"]
 var_dtype_group = var_dtypes["group"]
 var_dtype_pattern = var_dtypes["pattern"]
@@ -141,9 +140,12 @@ neighbor_8 = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 
 
 color_matplotlib = {k: tuple(int(v[i:i + 2], 16) for i in (1, 3, 5)) for k, v in
                     list(matplotlib.colors.cnames.items())}
+color_matplotlib.pop("darkslategray")
+color_matplotlib.pop("lightslategray")
 color_matplotlib.pop("black")
-no_color = "none"
-color_matplotlib[no_color] = (0, 0, 0)
+color_matplotlib.pop("darkgray")
+
+color_dict_rgb2name = {value: key for key, value in color_matplotlib.items()}
 color_large = [k for k, v in list(color_matplotlib.items())]
 color_large_exclude_gray = [item for item in color_large if item != "lightgray"]
 bk_shapes = ["none", "triangle", "square", "circle"]
@@ -155,6 +157,7 @@ rule_logic_types = [
     "true_all_group",
     "true_exact_one_group"
 ]
+
 
 def tensor2dict(tensor):
     tensor_dict = {}

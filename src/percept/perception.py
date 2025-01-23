@@ -35,7 +35,7 @@ def get_most_frequent_color(img):
         most_frequent = color_sorted[0][0]
 
     # Find the closest color in the dictionary
-    closest_color_name = bk.no_color
+    closest_color_name = bk.color_large[0]
     smallest_distance = float('inf')
     distances = []
     for color_name, color_rgb in bk.color_matplotlib.items():
@@ -220,8 +220,8 @@ def ocm_encoder(args, segments, dtype):
     ocms = []
     groups = []
     for example_i in tqdm(range(len(segments)), f" ({dtype}) Example Segmentation"):
-        ocm_file = str(args.output_file_prefix) + f"example_{example_i}_{dtype}_ocm.pt"
-        group_file = str(args.output_file_prefix) + f"example_{example_i}_{dtype}_group.pt"
+        ocm_file = str(args.output_file_prefix) + f"e{example_i}_{dtype}_ocm.pt"
+        group_file = str(args.output_file_prefix) + f"e{example_i}_{dtype}_group.pt"
         example_seg = segments[example_i]
         example_groups = []
         if os.path.exists(ocm_file) and os.path.exists(group_file):
@@ -348,7 +348,7 @@ def identify_kernels(args, train_loader):
     k_size = args.k_size
     kernels = []
     for (img) in tqdm(train_loader, f"Idf. Kernels (k = {k_size})"):
-        bw_img = img2bw(img, 15)
+        bw_img = models.img2bw(img, 15)
         patches = bw_img.unfold(2, k_size, 1).unfold(3, k_size, 1)
         patches = patches.reshape(-1, k_size, k_size).unique(dim=0)
         patches = patches[~torch.all(patches == 0, dim=(1, 2))]
@@ -357,19 +357,6 @@ def identify_kernels(args, train_loader):
     return kernels
 
 
-def img2fm(img, kernels):
-    bw_img = img2bw(img)
-    fms = models.one_layer_conv(bw_img, kernels)
-    if fms.ndim == 3:
-        fms = fms.unsqueeze(0)
-    return fms
-
-
-def img2bw(img, resize=16):
-    cropped_img, _ = data_utils.crop_img(img.squeeze())
-    resized_img = data_utils.resize_img(cropped_img, resize=resize)
-    bw_img = data_utils.to_bw_img(resized_img)
-    return bw_img
 
 
 def fm_sum_channels(fm_all):
@@ -382,15 +369,20 @@ def identify_fms(args, train_loader, kernels):
     # calculate fms
     k_size = args.k_size
     fm_all = []
+    all_imgs = []
     for (img) in tqdm(train_loader, desc=f"Calc. FMs (k={k_size})"):
-        fm = img2fm(img, kernels)
+        all_imgs.append(models.img2bw(img))
+
+    for (img) in tqdm(train_loader, desc=f"Calc. FMs (k={k_size})"):
+        fm = models.img2fm(img, kernels)
+
         fm_all.append(fm)
     fm_all = torch.cat(fm_all, dim=0).unique(dim=0)
 
     # visual memory fms
     fm_all_sum = fm_sum_channels(fm_all)
-    fm_np_array = fm_all_sum.permute(0, 2, 3, 1).numpy()
-    chart_utils.visual_batch_imgs(fm_np_array, args.save_path, "memory_fms.png")
+
+    chart_utils.visual_batch_imgs(fm_all_sum.permute(0, 2, 3, 1).numpy(), args.save_path, "memory_fms.png")
 
     return fm_all
 
@@ -437,7 +429,7 @@ def collect_fms(args):
                           f"{args.save_path}/f'fms_patches_{args.k_size}.pt'")
 
 
-def percept_gestalt_groups(args, ocms, segments, obj_groups, dtype):
+def percept_gestalt_groups(args, ocms, segments, obj_groups, dtype, principle):
     """
     return:
     gestalt principle: the gestalt principle that can perfect grouping inputs
@@ -445,38 +437,31 @@ def percept_gestalt_groups(args, ocms, segments, obj_groups, dtype):
     labels: grouping labels of each object
     other: either thresholds (proximity) or the grouping shape (closure)
     """
-    labels_simi_shape = gestalt_algs.cluster_by_similarity(ocms, "shape")
-    if labels_simi_shape is not None:
-        principle = bk.gestalt_principles.index("similarity_shape")
-        gcm = gestalt_group.gcm_encoder(labels_simi_shape, ocms, group_shape=0)
-        return principle, gcm, labels_simi_shape, None
-
-    labels_prox, ths = gestalt_algs.cluster_by_proximity(ocms)
-    if labels_prox is not None:
-        principle = bk.gestalt_principles.index("proximity")
-        gcm = gestalt_group.gcm_encoder(labels_prox, ocms, group_shape=0)
-        return principle, gcm, labels_prox, ths
-
-    labels_simi_color = gestalt_algs.cluster_by_similarity(ocms, "color")
-    if labels_simi_color is not None:
-        principle = bk.gestalt_principles.index("similarity_color")
-        gcm = gestalt_group.gcm_encoder(labels_simi_color, ocms, group_shape=0)
-        return principle, gcm, labels_simi_color, None
-
-    labels_closure, shape_closure = gestalt_algs.cluster_by_closure(args, segments, obj_groups)
-    if labels_closure is not None:
-        principle = bk.gestalt_principles.index("closure")
-        gcm = gestalt_group.gcm_encoder(labels_closure, ocms, group_shape=shape_closure)
-        return principle, gcm, labels_closure, shape_closure
-
-
-
-
+    if principle == "proximity":
+        labels_prox, ths = gestalt_algs.cluster_by_proximity(ocms)
+        if labels_prox is not None:
+            gcm = gestalt_group.gcm_encoder(labels_prox, ocms, group_shape=0)
+            return gcm, labels_prox, ths
+    elif principle == "similarity_shape":
+        labels_simi_shape = gestalt_algs.cluster_by_similarity(ocms, "shape")
+        if labels_simi_shape is not None:
+            gcm = gestalt_group.gcm_encoder(labels_simi_shape, ocms, group_shape=0)
+            return gcm, labels_simi_shape, None
+    elif principle == "similarity_color":
+        labels_simi_color = gestalt_algs.cluster_by_similarity(ocms, "color")
+        if labels_simi_color is not None:
+            gcm = gestalt_group.gcm_encoder(labels_simi_color, ocms, group_shape=0)
+            return gcm, labels_simi_color, None
+    elif principle == "closure":
+        labels_closure, shape_closure = gestalt_algs.cluster_by_closure(args, segments, obj_groups)
+        if labels_closure is not None:
+            gcm = gestalt_group.gcm_encoder(labels_closure, ocms, group_shape=shape_closure)
+            return gcm, labels_closure, shape_closure
 
     return None, None, None
 
 
-def cluster_by_principle(args, imgs):
+def cluster_by_principle(args, imgs, mode, principle):
     """ evaluate gestalt scores, decide grouping based on which strategy
 
     output: NxOxP np array, N example numbers, O max group numbers, P group property numbers
@@ -487,19 +472,22 @@ def cluster_by_principle(args, imgs):
     # segmentation the images
     imgs_pos = imgs[:3]
     imgs_neg = imgs[3:]
-    segments_pos = percept_segments(args, imgs_pos, "pos")
-    segments_neg = percept_segments(args, imgs_neg, "neg")
+    segments_pos = percept_segments(args, imgs_pos, f"{mode}_pos")
+    segments_neg = percept_segments(args, imgs_neg, f"{mode}_neg")
     group_label_pos = [torch.zeros(len(seg)) for seg in segments_pos]
     group_label_neg = [torch.zeros(len(seg)) for seg in segments_neg]
 
     # encode the segments to object centric matrix (ocm)
-    ocm_pos, obj_groups_pos = ocm_encoder(args, segments_pos, "pos")
-    ocm_neg, obj_groups_neg = ocm_encoder(args, segments_neg, "neg")
-
-    prin, group_pos, labels_pos, others_pos = percept_gestalt_groups(args, ocm_pos, segments_pos, obj_groups_pos, "pos")
-    _, group_neg, labels_neg, others_neg = percept_gestalt_groups(args, ocm_neg, segments_neg, obj_groups_neg, "neg")
+    ocm_pos, obj_groups_pos = ocm_encoder(args, segments_pos, f"{mode}_pos")
+    ocm_neg, obj_groups_neg = ocm_encoder(args, segments_neg, f"{mode}_neg")
+    # percept groups based on gestalt principles
+    group_pos, labels_pos, others_pos = percept_gestalt_groups(args, ocm_pos, segments_pos, obj_groups_pos, "pos",
+                                                               principle)
+    group_neg, labels_neg, others_neg = percept_gestalt_groups(args, ocm_neg, segments_neg, obj_groups_neg, "neg",
+                                                                  principle)
     groups = {
         "group_pos": group_pos, "label_pos": labels_pos,
         "group_neg": group_neg, "label_neg": labels_neg,
+        'principle': principle
     }
     return groups

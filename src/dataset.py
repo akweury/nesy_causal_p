@@ -2,7 +2,7 @@
 
 import torch
 import cv2
-
+import json
 from torch.utils.data import Dataset, DataLoader
 import config
 from src.utils import data_utils, file_utils, chart_utils
@@ -78,7 +78,7 @@ class GSDataset(Dataset):
         self.imgs_test = self.load_imgs(config.kp_gestalt_dataset / "test")
 
     def __len__(self):
-        return len(self.data_train)
+        return len(self.data_train["positive"])
 
     def load_imgs(self, path):
         img_files = file_utils.get_all_files(path, '.png')
@@ -105,7 +105,10 @@ class GSDataset(Dataset):
             "neg": self.data_test["negative"][idx],
             "img": self.imgs_test[idx],
         }
-        return train_data, test_data
+
+
+        principle = file_utils.load_json(str(config.kp_gestalt_dataset / "train" / f"{idx:06d}.json"))["principle"]
+        return train_data, test_data, principle
 
 
 def load_dataset(args):
