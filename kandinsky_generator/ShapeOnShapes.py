@@ -370,24 +370,17 @@ class ShapeOnShape(KandinskyTruthInterfce):
 
     def _triangle(self, so, lw, min_percent=1.0, max_percent=1.0):
         kf = []
-        x = 0.5  # + random.random() * 0.8
+        x = 0.2  # + random.random() * 0.8
         y = 0.8  # + random.random() * 0.8
-        r = 0.3 - min(abs(0.5 - x), abs(0.5 - y)) * 0.5
-
-        xs = x
-        ys = y - r
 
         o = KandinskyUniverse.kandinskyShape()
-        o.color = "darkblue"
+        o.color = "green"
         o.shape = "triangle"
         o.size = so
         o.line_width = lw
-        o.x = xs
-        o.y = ys
+        o.x = x
+        o.y = y
         kf.append(o)
-
-        random_percent = random.uniform(min_percent, max_percent)
-        kf = kf[:int(len(kf) * random_percent)]
         return kf
 
     def _smallCircleFlex(self, so, t):
@@ -742,6 +735,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
         # objs.append(o)
 
         return objs
+
     def _continue_two_curves(self):
 
         color = random.choice(bk.color_large)
@@ -780,6 +774,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
                         solid=True))
 
         return objs
+
     def _similarity_triangle_circle(self):
 
         color = random.choice(bk.color_large)
@@ -818,7 +813,6 @@ class ShapeOnShape(KandinskyTruthInterfce):
                         solid=True))
 
         return objs
-
 
     def _similarity_triangle_circleCF(self):
 
@@ -1544,6 +1538,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
             kfs.append(self._only(rule_style, "gestalt_triangle_cf"))
             kfs.append(self._only(rule_style, "gestalt_triangle_cf"))
         return kfs
+
     def continue_two_curves(self, n=1, rule_style=False):
         kfs = []
         if rule_style:
@@ -1555,6 +1550,7 @@ class ShapeOnShape(KandinskyTruthInterfce):
             kfs.append(self._only(rule_style, "continue_two_curves_cf"))
             kfs.append(self._only(rule_style, "continue_two_curves_cf"))
         return kfs
+
     def gestalt_circle_triangle(self, n=1, rule_style=False):
         kfs = []
         for i in range(n):

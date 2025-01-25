@@ -107,12 +107,15 @@ def llama_rename_predicate(sub_pred_names):
     return response
 
 
-def llama_rename_term(term_str):
-    prompt = (f"Given two words to describe the object properties: {term_str}. "
-              f"Now reorganise them and return a new phase that covers all the given descriptions but no other words."
-              f"Only answer with the phase.")
+def llama_rename_term(term_str, level):
+    prompt = (f"If there is an object, it has property shape and color."
+              f"If there is a group, it consists with multiple objects, these objects form a shape of group, "
+              f"the group can also has object number as its property."
+              f"Now, there is a {level}. It has properties {term_str}."
+              f"Now reorganise them and return a new phase that covers all the given descriptions but no other words. "
+              f"Do not omit any number if there exist such. Only answer with the phase. No other words.")
     response = llama3(prompt)
-    if len(response) > 30:
+    if len(response) > 50:
         response = llama3("Answered irrelevant words.")
     return response
 
@@ -122,16 +125,10 @@ def llama_rewrite_clause(principle, rule_level, facts, obj_num):
              f"There's a consistent pattern in all the positive images.")
     end = "Only answer with the rewrite sentences. No other sentence."
     if principle == "closure":
-        prompt = (
-            f"Several types of objects {obj_desc} form a shape of {group_name}, "
-            f"which are considered as a group with group id {group_id}. "
-            f"Now use one sentence to include the following information"
-            f"1. the group name;"
-            f"2. what kind of shape do the objects together form;"
-            f"3. what kind of objects exist in the group {group_id} one by one, "
-            f"make sure all of descriptions following same form; "
-            f"describe clearly their properties, such as color, shape, etc."
-            f"Describe it clear and simple. Only answer with the sentence. ")
+        prompt = (f"When grouping the objects in the positive image via gestalt principle closure, "
+                  f"they following the following fact: {facts}."
+                  f"where in the negative patterns, such rules does not hold."
+                  )
     elif principle == "similarity_color":
         prompt = (
             f"The objects are grouped based on shared attributes color, forming distinct clusters."
@@ -179,26 +176,24 @@ def rewrite_true_all_group_rules(rules, name_dict, natural_language_explanations
     return natural_language_explanations
 
 
-def rewrite_true_all_image_rules(rules, name_dict, rule_explanations, principle, obj_num):
+def rewrite_true_all_image_rules(rule, name_dict, rule_explanations, principle, obj_num, level):
+    if rule in rule_explanations["true_all_image"]:
+        return rule_explanations
     facts = []
-    for rule in rules:
-        if rule in rule_explanations["true_all_image"]:
-            continue
-        obj_props = []
-        for term in rule.body[0].terms:
-            if isinstance(term, Const) and "object" in term.dtype.name:
-                obj_props.append(term.name)
-        if tuple(obj_props) not in name_dict:
-            obj_str = ",".join(obj_props)
-            obj_desc = llama_rename_term(obj_str)
-            name_dict[tuple(obj_props)] = obj_desc
-        else:
-            obj_desc = name_dict[tuple(obj_props)]
-        facts.append(obj_desc)
-        num = obj_num
-        # rewrite the whole clause
-        final_clause = llama_rewrite_clause(principle, "image", obj_desc, obj_num)
-        rule_explanations["true_all_image"][rule] = final_clause
+    obj_props = []
+    for term in rule.body[0].terms:
+        if isinstance(term, Const) and "object" in term.dtype.name:
+            obj_props.append(term.name)
+    if tuple(obj_props) not in name_dict:
+        obj_str = ",".join(obj_props)
+        obj_desc = llama_rename_term(obj_str, level)
+        name_dict[tuple(obj_props)] = obj_desc
+    else:
+        obj_desc = name_dict[tuple(obj_props)]
+    facts.append(obj_desc)
+    # rewrite the whole clause
+    final_clause = llama_rewrite_clause(principle, "image", obj_desc, obj_num)
+    rule_explanations["true_all_image"][rule] = final_clause
 
     return rule_explanations
 
@@ -232,10 +227,14 @@ def save_llm_responses(rule_explanations, name_dict, task_id):
 def rewrite_clauses(args, rules, principle, task_id):
     rule_explanations, name_dict = load_llm_responses(task_id)
     # true all image rules
-    rewrite_true_all_group_rules(rules["true_all_group"], name_dict, rule_explanations, principle,
-                                 rules["true_all_group_counter"])
-    rewrite_true_all_image_rules(rules["true_all_image"], name_dict, rule_explanations, principle,
-                                 rules["true_all_image_counter"])
+    for rule in rules:
+        if rule["type"] == "true_all_image_g":
+            rewrite_true_all_image_rules(rule["rule"], name_dict, rule_explanations, principle, rule["counter"],
+                                         "group")
+        elif rule["type"] == "true_all_group_g":
+            rewrite_true_all_group_rules(rule["rule"], name_dict, rule_explanations, principle, rule["counter"])
+        else:
+            raise ValueError
 
     args.logger.debug(
         "\n =============== LLM: Rename terms =============== " + "".join(

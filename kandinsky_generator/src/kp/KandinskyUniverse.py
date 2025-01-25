@@ -203,7 +203,7 @@ def kandinskyFigureAsImagePIL(shapes, width=600, subsampling=4):
 #         return [42, 75, 215]
 
 
-def kandinskyFigureAsImage(shapes, width=600, subsampling=4):
+def kandinskyFigureAsImage(shapes, width=600, subsampling=1):
     w = subsampling * width
     img = np.zeros((w, w, 3), np.uint8)
     img[:, :] = bk.color_matplotlib["lightgray"]

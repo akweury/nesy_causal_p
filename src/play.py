@@ -43,15 +43,15 @@ def main():
     # os.makedirs(args.output_file_prefix, exist_ok=True)
     # generate dataset
     generate_training_patterns.genGestaltTraining()
-
-    # Identify feature maps
-    perception.collect_fms(args)
-
     # Import Generated Data
     data_loader = dataset.load_dataset(args)
 
+    # Identify feature maps
+    perception.collect_fms(args)
+    # perception.test_fms(args, data_loader)
+
     for task_id, (train_data, test_data, principle) in enumerate(data_loader):
-        if task_id in [0, 1, 2]:
+        if task_id in [0, 1, 2, 3]:
             continue
         args.output_file_prefix = config.models / f"t{task_id}_"
         imgs_train = train_data["img"]

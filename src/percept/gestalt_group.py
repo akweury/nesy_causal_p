@@ -146,7 +146,7 @@ def group2tensor(group):
 
 
 def gcm_encoder(labels, ocms, group_shape=0):
-    shape = bk.bk_shapes[group_shape]
+    shape = bk.bk_shapes[group_shape[0]]
     groups = []
     for example_i in range(len(ocms)):
         ocm = ocms[example_i]

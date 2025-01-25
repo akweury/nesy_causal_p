@@ -232,3 +232,7 @@ def visual_rl_step(task_img, ocms, output_labels, action, reward):
                 lineType=cv2.LINE_AA)
     return output_imgs
 
+
+def show_line_chart(data):
+    plt.plot(data)
+    plt.show()

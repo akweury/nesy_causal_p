@@ -11,6 +11,7 @@ from src.memory import recall
 from src.neural import models
 from src.reasoning import reason
 
+from PIL import Image, ImageDraw
 
 def proximity_distance(u, v):
     return np.linalg.norm(u - v)
@@ -168,12 +169,7 @@ def cluster_by_closure(args, segments, obj_groups):
         all_labels.append(labels)
         all_shapes.append(shapes)
 
-    same_group_num = len(torch.tensor(group_lengths).unique()) == 1
-    same_group_label = len(torch.tensor(all_shapes).unique()) == 1
-    if same_group_num and same_group_label:
-        pred_label = all_labels[0]
-        pred_shape = all_shapes[0]
-    else:
-        pred_label = None
-        pred_shape = None
-    return pred_label, pred_shape
+    # same_group_num = len(torch.tensor(group_lengths).unique()) == 1
+    # same_group_label = len(torch.tensor(all_shapes).unique()) == 1
+
+    return all_labels, all_shapes

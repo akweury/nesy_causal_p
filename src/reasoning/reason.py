@@ -32,7 +32,7 @@ def reason_fms(in_fms, mem_fms, reshape=None):
     # memory and input intersection
     onside_mask = (in_fms > 0) * (mem_fms > 0)
     # recall confidence
-    onside_percent = 1 - torch.mean((mem_fms - in_fms) ** 2).item()
+    onside_percent = torch.bitwise_and((mem_fms > 0), (in_fms > 0)).sum() / (mem_fms > 0).sum()
     group_data = {
         "onside": onside_mask,
         "parents": None,
@@ -169,18 +169,22 @@ def create_ctt(image_clauses):
     # calculate clause truth table
     ctt = torch.zeros(c_num, img_num, max(group_c_num), max(obj_num)).to(torch.bool)
     ctt_count = torch.zeros(c_num, img_num, max(group_c_num), max(obj_num))
+    g_ctt = torch.zeros(c_num, img_num, max(group_c_num)).to(torch.bool)
     for c_i in range(c_num):
         for i_i, img_c in enumerate(image_clauses):
             for g_i, group in enumerate(img_c):
                 # group clause truth
+                group_clause = group["group_clauses"]
+                if (sementical_same_clause(group_clause, clauses[c_i])):
+                    g_ctt[c_i, i_i, g_i] = True
                 for o_i, (obj_clause, c_count) in enumerate(group["obj_clauses"].items()):
                     ctt_count[c_i, i_i, g_i, o_i] = c_count
                     if (sementical_same_clause(obj_clause, clauses[c_i])):
                         ctt[c_i, i_i, g_i, o_i] = True
-    return ctt, ctt_count
+    return ctt, ctt_count, g_ctt
 
 
-def in_all_image(ctt, ctt_count, clauses):
+def in_all_image(g_ctt, ctt, ctt_count, clauses):
     """
     for each clause, check if it is true in each image
 
@@ -199,7 +203,15 @@ def in_all_image(ctt, ctt_count, clauses):
     true_in_all_image = ctt.any(dim=-1).any(dim=-1).all(dim=-1)
     true_in_all_image_cs = [clauses[i] for i in range(len(clauses)) if true_in_all_image[i]]
     counter = [counter_img[i] for i in range(len(clauses)) if true_in_all_image[i]]
-    return true_in_all_image_cs, counter
+
+    true_in_all_image_g_level = g_ctt.any(dim=-1).all(dim=-1)
+    true_in_all_image_g_level_clauses = [clauses[i] for i in range(len(clauses)) if true_in_all_image_g_level[i]]
+    counter_img_group_level = g_ctt.sum(dim=-1)
+    counter_group_level = [counter_img_group_level[i] for i in range(len(clauses)) if true_in_all_image_g_level[i]]
+
+    true_clauses = true_in_all_image_cs + true_in_all_image_g_level_clauses
+    true_counter = counter + counter_group_level
+    return true_in_all_image_cs, true_in_all_image_g_level_clauses, counter, counter_group_level
 
 
 def in_all_group(ctt, ctt_count, clauses):
@@ -247,23 +259,22 @@ def find_common_rules(image_clauses_pos, image_clauses_neg):
     clauses_neg = get_all_clauses(image_clauses_neg)
 
     # create clause truth table
-    ctt_pos, ctt_count_pos = create_ctt(image_clauses_pos)
-    ctt_neg, ctt_count_neg = create_ctt(image_clauses_neg)
+    ctt_pos, ctt_count_pos, g_ctt_pos = create_ctt(image_clauses_pos)
+    ctt_neg, ctt_count_neg, g_ctt_neg = create_ctt(image_clauses_neg)
 
     # reason if clauses are truth in all images
-    true_all_image_clauses, counter_img_pos = in_all_image(ctt_pos, ctt_count_pos, clauses_pos)
-    true_all_image_clauses_neg, counter_img_neg = in_all_image(ctt_neg, ctt_count_neg, clauses_neg)
+    img_c, img_g_c, count_pos_c, counter_pos_g_c = in_all_image(g_ctt_pos, ctt_pos, ctt_count_pos, clauses_pos)
+    # true_all_image_clauses_neg, counter_img_neg = in_all_image(g_ctt_neg, ctt_neg, ctt_count_neg, clauses_neg)
     # remove clauses that exist in both pos and neg
-    true_all_image_clauses_pos_only, counter_all_img_pos_only = remove_sementic_same_clauses(true_all_image_clauses,
-                                                                                             true_all_image_clauses_neg,
-                                                                                             counter_img_pos)
+    img_c_pos_only, counter_img_c_pos_only = remove_sementic_same_clauses(img_c, clauses_neg, count_pos_c)
+    img_g_c_pos_only, counter_img_g_c_pos_only = remove_sementic_same_clauses(img_g_c, clauses_neg, counter_pos_g_c)
 
     # reason if clauses are truth in all groups in all images
     true_all_group, true_all_group_clauses, counter_group_pos = in_all_group(ctt_pos, ctt_count_pos, clauses_pos)
     true_all_group_neg, true_all_group_clauses_neg, counter_group_neg = in_all_group(ctt_neg, ctt_count_neg,
                                                                                      clauses_neg)
     true_all_group_clauses_pos_only, counter_all_group_pos_only = remove_sementic_same_clauses(true_all_group_clauses,
-                                                                                               true_all_group_clauses_neg,
+                                                                                               clauses_neg,
                                                                                                counter_group_pos)
 
     # reason if clauses are truth in at most one group in all images
@@ -272,19 +283,26 @@ def find_common_rules(image_clauses_pos, image_clauses_neg):
     # true_exact_one_group_clauses_pos_only, counter_exact_one_group_pos_only = remove_sementic_same_clauses(
     #     true_exact_one_group_clauses,
     #     true_exact_one_group_clauses_neg)
-
-    common_rules_dict = {
-        "true_all_image": true_all_image_clauses_pos_only,
-        "true_all_image_counter": counter_all_img_pos_only,
-
-        "true_all_group": true_all_group_clauses_pos_only,
-        "true_all_group_counter": counter_all_group_pos_only,
-
-        # "true_exact_one_group": true_exact_one_group_clauses_pos_only,
-        # "true_exact_one_group_counter":counter_exact_one_group_pos_only,
-
-    }
-    return common_rules_dict
+    common_rues = []
+    for c_i, c in enumerate(img_c_pos_only):
+        common_rues.append({
+            "rule": c,
+            "counter": counter_img_c_pos_only[c_i],
+            "type": "true_all_image"
+        })
+    for c_i, c in enumerate(img_g_c_pos_only):
+        common_rues.append({
+            "rule": c,
+            "counter": counter_img_g_c_pos_only[c_i],
+            "type": "true_all_image_g"
+        })
+    for c_i, c in enumerate(true_all_group_clauses_pos_only):
+        common_rues.append({
+            "rule": c,
+            "counter": counter_all_group_pos_only[c_i],
+            "type": "true_all_group"
+        })
+    return common_rues
 
 
 def check_true_in_image(group_scores, th=0.8):
@@ -318,27 +336,28 @@ def check_true_exact_one_group(group_scores, th=0.8):
     return pred, group_preds
 
 
-def reason_test_results(clause_scores, clause_labels):
+def reason_test_results(clause_scores, label):
     preds = torch.zeros(len(clause_scores), dtype=torch.bool)
     pred_details = []
     for example_i in range(len(clause_scores)):
         ex_pred = True
         ex_pred_details = []
-        for c_i, label in enumerate(clause_labels):
-            if bk.rule_logic_types[label] == "true_all_image":
-                clause_pred, group_preds = check_true_in_image(clause_scores[example_i][c_i])
-                ex_pred_details.append(group_preds)
-                ex_pred = torch.bitwise_and(clause_pred, ex_pred)
-            elif bk.rule_logic_types[label] == "true_all_group":
-                clause_pred, group_preds = check_true_all_group(clause_scores[example_i][c_i])
-                ex_pred_details.append(group_preds)
-                ex_pred = torch.bitwise_and(clause_pred, ex_pred)
-            elif bk.rule_logic_types[label] == "true_exact_one_group":
-                clause_pred, group_preds = check_true_exact_one_group(clause_scores[example_i][c_i])
-                ex_pred_details.append(group_preds)
-                ex_pred = torch.bitwise_and(clause_pred, ex_pred)
-            else:
-                raise ValueError(f"Unknown rule logic_type: {bk.rule_logic_types[label]}")
-        pred_details.append(ex_pred_details)
+        if len(clause_scores[example_i]) == 0:
+            ex_pred = False
+        if label in ["true_all_image", "true_all_image_g"]:
+            clause_pred, group_preds = check_true_in_image(clause_scores[example_i])
+            ex_pred_details.append(group_preds)
+            ex_pred = torch.bitwise_and(clause_pred, ex_pred)
+        elif bk.rule_logic_types[label] == "true_all_group":
+            clause_pred, group_preds = check_true_all_group(clause_scores[example_i])
+            ex_pred_details.append(group_preds)
+            ex_pred = torch.bitwise_and(clause_pred, ex_pred)
+        elif bk.rule_logic_types[label] == "true_exact_one_group":
+            clause_pred, group_preds = check_true_exact_one_group(clause_scores[example_i])
+            ex_pred_details.append(group_preds)
+            ex_pred = torch.bitwise_and(clause_pred, ex_pred)
+        else:
+            raise ValueError(f"Unknown rule logic_type: {bk.rule_logic_types[label]}")
+        pred_details.append(group_preds)
         preds[example_i] = ex_pred
-    return preds.float(), pred_details
+    return preds.bool(), pred_details

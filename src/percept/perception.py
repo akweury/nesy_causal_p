@@ -2,10 +2,12 @@
 import numpy as np
 import torch
 from scipy import ndimage
+import itertools
 import matplotlib.pyplot as plt
 from sklearn.cluster import DBSCAN
 from tqdm import tqdm
-
+import torch.nn.functional as F  # Import F for functional operations
+from PIL import Image, ImageDraw
 from src import bk
 from src.utils.chart_utils import van
 from src.percept.percept_utils import *
@@ -20,7 +22,7 @@ import config
 # -----------------------------------------------------------------------------------
 
 def get_most_frequent_color(img):
-    assert img.shape == (3, 512, 512)
+    assert img.ndim == 3
 
     # Find the most frequent color in the list
     if img.sum() == 0:
@@ -48,21 +50,157 @@ def get_most_frequent_color(img):
     return closest_color_name
 
 
+def crop_to_valid_area(image, threshold=10):
+    """
+    Crop the image to the smallest bounding box that contains valid information.
+
+    Args:
+        image (np.ndarray): Grayscale test image as a NumPy array.
+        threshold (int): Pixel intensity threshold to identify non-empty regions.
+
+    Returns:
+        np.ndarray: Cropped image.
+        tuple: (x_min, y_min, x_max, y_max) coordinates of the cropped region.
+    """
+    # Find non-zero areas
+    valid_rows = np.any(image > threshold, axis=1)
+    valid_cols = np.any(image > threshold, axis=0)
+
+    if not np.any(valid_rows) or not np.any(valid_cols):
+        # No valid area
+        return image, (0, 0, image.shape[1], image.shape[0])
+
+    y_min, y_max = np.where(valid_rows)[0][[0, -1]]
+    x_min, x_max = np.where(valid_cols)[0][[0, -1]]
+
+    # Include bordering cases by padding
+    padding = 0  # Add padding to account for partial patches
+    y_min = max(0, y_min - padding)
+    y_max = min(image.shape[0], y_max + padding)
+    x_min = max(0, x_min - padding)
+    x_max = min(image.shape[1], x_max + padding)
+
+    cropped_image = image[y_min:y_max, x_min:x_max]
+    return cropped_image, (x_min, y_min, x_max, y_max)
+
+
+from scipy.spatial.distance import cdist
+
+
+def find_similar_patches(test_image, dataset_patches, vertex_labels, shape_labels, patch_size=32, threshold=1000):
+    """
+    Find patches in the test image that are similar to those in the dataset.
+
+    Args:
+        test_image (np.ndarray): Test image as a NumPy array (grayscale).
+        dataset_patches (list): List of patches from the dataset as NumPy arrays.
+        vertex_labels (list): List of labels corresponding to the dataset patches.
+        patch_size (int): Size of the patches to extract (default is 32x32).
+        threshold (float): Threshold for similarity measure (lower is more similar).
+
+    Returns:
+        list: List of matched patches' labels and their positions in the test image.
+    """
+    matches = []
+    half_size = patch_size // 2
+
+    # Crop the image to the valid area
+    cropped_image, (x_offset, y_offset, _, _) = crop_to_valid_area(test_image, 0)
+    # Pad the test image to handle boundary cases
+    padded_image = np.pad(cropped_image, ((half_size, half_size), (half_size, half_size)), mode='constant',
+                          constant_values=0)
+    # Pre-compute flattened dataset patches for faster distance computation
+    dataset_flat = np.array([p.flatten() for p in dataset_patches])
+
+    # Iterate through every possible patch in the test image
+    for y in range(half_size, cropped_image.shape[0] + half_size):
+        for x in range(half_size, cropped_image.shape[1] + half_size):
+            # Extract the patch from the test image
+            patch = padded_image[y - half_size:y + half_size, x - half_size:x + half_size]
+            # Compute distances to all dataset patches
+            distances = cdist(patch.flatten()[np.newaxis], dataset_flat, metric='sqeuclidean')[0]
+
+            # # Flatten the patch and compute distances to all dataset patches
+            # patch_flat = patch.flatten()
+            # dataset_flat = [p.flatten() for p in dataset_patches]
+            # distances = cdist([patch_flat], dataset_flat, metric='sqeuclidean')[0]
+
+            # Find the most similar patch in the dataset
+            min_distance = np.min(distances)
+            if min_distance < threshold:
+                best_match_idx = np.argmin(distances)
+                label = vertex_labels[best_match_idx]
+                shape_label = shape_labels[best_match_idx]
+                matches.append({"vertex_label": label, "position": (x - half_size, y - half_size),
+                                "shape_label": shape_label,
+                                "distance": min_distance})
+    return matches
+
+
+from collections import Counter
+
+
+def extract_most_frequent_label_matches(matches):
+    """
+    Extract the matches with the most frequent label.
+
+    Args:
+        matches (list): List of match dictionaries, each containing 'label' and 'position'.
+
+    Returns:
+        list: List of matches corresponding to the most frequent label.
+    """
+    if not matches:
+        return []
+
+    # Count the occurrences of each label
+    label_counts = Counter(match["shape_label"] for match in matches)
+
+    # Find the most frequent label
+    most_frequent_label = label_counts.most_common(1)[0][0]
+
+    # Filter matches with the most frequent label
+    frequent_matches = [match for match in matches if match["shape_label"] == most_frequent_label]
+
+    return frequent_matches
+
+
 def percept_feature_groups(args, bk_shapes, segment):
     """ recall the memory features from the given segments """
     feature_groups = []
     seg_color = get_most_frequent_color(segment.permute(2, 0, 1))
     # rgb segment to resized bw image
-    bw_img = img2bw(segment)
 
     # recall the memory
-    recalled_fms, shape = recall.recall_fms(args, bk_shapes, bw_img)
-    # reasoning recalled groups
-    shape_kernels = bk_shapes[shape]["kernels"].float()
-    group_data = reason.reason_fms(recalled_fms, shape_kernels, bw_img)
-    group = gestalt_group.Group(id=0, name=shape + 1, input_signal=segment, onside_signal=group_data["onside"],
+    scores = []
+    recalled_fms_all = []
+    all_in_fms = []
+    # Example test image
+
+    test_image = np.array(Image.fromarray(segment.numpy().astype('uint8')).convert("L"))
+    test_image[test_image == 211] = 0
+    test_image[test_image > 0] = 1
+    # Find similar patches
+    dataset_patches = torch.cat([bk_shapes[i]["fm_repo"] for i in range(len(bk_shapes))], dim=0)
+    dataset_patches[dataset_patches > 0] = 1
+    vertex_labels = [bk_shapes[i]["labels"] for i in range(len(bk_shapes))]
+    vertex_labels = torch.cat([vertex_labels[i] for i in range(len(vertex_labels))])
+    shape_labels = [[i] * len(bk_shapes[i]["fm_repo"]) for i in range(len(bk_shapes))]
+    shape_labels = list(itertools.chain.from_iterable(shape_labels))
+
+    th = 0
+    matches = find_similar_patches(test_image, dataset_patches, vertex_labels, shape_labels, patch_size=32,
+                                   threshold=10)
+    while len(matches) == 0:
+        th += 1
+        matches = find_similar_patches(test_image, dataset_patches, vertex_labels, shape_labels, patch_size=32,
+                                       threshold=th)
+    most_frequent_matches = extract_most_frequent_label_matches(matches)
+    match_shape_id = most_frequent_matches[0]["shape_label"] + 1
+
+    group = gestalt_group.Group(id=0, name=match_shape_id, input_signal=segment, onside_signal=None,
                                 # memory_signal=group_data['recalled_bw_img'],
-                                parents=None, coverage=group_data["onside_percent"], color=seg_color)
+                                parents=None, coverage=None, color=seg_color)
     return group
 
 
@@ -247,16 +385,17 @@ def ocm_encoder(args, segments, dtype):
 
 def detect_connected_regions(args, input_array, pixel_num=50):
     # Find unique colors
-    unique_colors, inverse = np.unique(input_array.reshape(-1, 3), axis=0,
+    unique_colors, inverse = np.unique(input_array.squeeze().reshape(-1, 3), axis=0,
                                        return_inverse=True)
     labeled_regions = []
 
+    width = input_array.shape[1]
     for color_idx, color in enumerate(unique_colors):
         if np.equal(color, np.array(bk.color_matplotlib["lightgray"],
                                     dtype=np.uint8)).all():
             continue
         # Create a mask for the current color
-        mask = (inverse == color_idx).reshape(512, 512)
+        mask = (inverse == color_idx).reshape(width, width)
 
         # Label connected components in the mask
         labeled_mask, num_features = ndimage.label(mask)
@@ -266,7 +405,7 @@ def detect_connected_regions(args, input_array, pixel_num=50):
             region_mask = (labeled_mask == region_id)
             if region_mask.sum() > pixel_num:
                 # Add the region to the labeled regions
-                region_tensor = np.zeros((3, 512, 512), dtype=np.float32)
+                region_tensor = np.zeros((3, width, width), dtype=np.float32)
                 region_tensor += np.array(
                     (bk.color_matplotlib["lightgray"])).reshape(3, 1, 1)
                 for channel in range(3):
@@ -347,7 +486,7 @@ def percept_reward(lang):
 def identify_kernels(args, train_loader):
     k_size = args.k_size
     kernels = []
-    for (img) in tqdm(train_loader, f"Idf. Kernels (k = {k_size})"):
+    for (img, vertices) in tqdm(train_loader, f"Idf. Kernels (k = {k_size})"):
         bw_img = models.img2bw(img, 15)
         patches = bw_img.unfold(2, k_size, 1).unfold(3, k_size, 1)
         patches = patches.reshape(-1, k_size, k_size).unique(dim=0)
@@ -357,34 +496,52 @@ def identify_kernels(args, train_loader):
     return kernels
 
 
-
-
 def fm_sum_channels(fm_all):
     fm_sum = fm_all.sum(dim=1, keepdims=True)
     fm_sum = (fm_sum - fm_sum.min()) / (fm_sum.max() - fm_sum.min())
     return fm_sum
 
 
-def identify_fms(args, train_loader, kernels):
+def identify_fms(args, shape):
     # calculate fms
     k_size = args.k_size
     fm_all = []
     all_imgs = []
-    for (img) in tqdm(train_loader, desc=f"Calc. FMs (k={k_size})"):
-        all_imgs.append(models.img2bw(img))
 
-    for (img) in tqdm(train_loader, desc=f"Calc. FMs (k={k_size})"):
-        fm = models.img2fm(img, kernels)
+    # Load metadata
+    metadata_path = config.kp_base_dataset / shape / "metadata.json"
+    if not os.path.exists(str(metadata_path)):
+        raise FileNotFoundError(f"Metadata file not found in {str(metadata_path)}")
+    metadata = data_utils.load_json(metadata_path)
 
-        fm_all.append(fm)
-    fm_all = torch.cat(fm_all, dim=0).unique(dim=0)
+    patches = []
+    labels = []
+    patch_set = set()
+    # Iterate through the metadata
+    for entry in metadata:
+        for p_i, patch_filename in enumerate(entry["patches"]):
+            patch_path = config.kp_base_dataset / shape / patch_filename
+            if os.path.exists(patch_path):
+                patch_image = Image.open(patch_path)
+                patch_array = np.array(patch_image)
+                patch_tuple = tuple(map(tuple, patch_array))
+                if patch_tuple not in patch_set:
+                    patch_set.add(patch_tuple)
+                    patches.append(torch.from_numpy(patch_array))
+                    labels.append(p_i)
 
-    # visual memory fms
-    fm_all_sum = fm_sum_channels(fm_all)
+    # for (img) in tqdm(train_loader, desc=f"Calc. FMs (k={k_size})"):
+    #     all_imgs.append(models.img2bw(img))
+    #
+    # for (img) in tqdm(train_loader, desc=f"Calc. FMs (k={k_size})"):
+    #     fm = models.img2fm(img, kernels)
+    #
+    #     fm_all.append(fm)
+    fm_all = torch.stack(patches)
 
-    chart_utils.visual_batch_imgs(fm_all_sum.permute(0, 2, 3, 1).numpy(), args.save_path, "memory_fms.png")
+    chart_utils.visual_batch_imgs(fm_all.unsqueeze(-1).numpy(), args.save_path, "memory_fms.png")
 
-    return fm_all
+    return fm_all, labels
 
 
 def collect_fms(args):
@@ -402,31 +559,103 @@ def collect_fms(args):
         # load data
         train_loader, val_loader = prepare_data(args)
 
-        # kernel identification
-        kernel_file = args.save_path / f"kernel_patches_{args.k_size}.pt"
-        if not os.path.exists(kernel_file):
-            kernels = identify_kernels(args, train_loader)
-            torch.save(kernels, kernel_file)
-        else:
-            kernels = torch.load(kernel_file)
+        # # kernel identification
+        # kernel_file = args.save_path / f"kernel_patches_{args.k_size}.pt"
+        # if not os.path.exists(kernel_file):
+        #     kernels = identify_kernels(args, train_loader)
+        #     torch.save(kernels, kernel_file)
+        # else:
+        #     kernels = torch.load(kernel_file)
 
         # fm identification
         fm_file = args.save_path / f'fms_patches_{args.k_size}.pt'
         if not os.path.exists(fm_file):
-            fms = identify_fms(args, train_loader, kernels)
-            torch.save(fms, fm_file)
+            fms, labels = identify_fms(args, bk_shape)
+            fms_labels = {"fms": fms, "labels": labels}
+            torch.save(fms_labels, fm_file)
         else:
-            fms = torch.load(fm_file)
+            fms_labels = torch.load(fm_file)
+            fms = fms_labels["fms"]
+            labels = fms_labels["labels"]
 
-        # log
-        args.logger.debug(f"#Kernels: {len(kernels)}, "
-                          f"#Data: {len(train_loader)}, "
-                          f"Ratio: {len(kernels) / len(train_loader):.2f}"
-                          f"#FM: {len(fms)}. "
-                          f"#Data: {len(train_loader)}, "
-                          f"ratio: {len(fms) / len(train_loader):.2f} "
-                          f"feature maps have been saved to "
-                          f"{args.save_path}/f'fms_patches_{args.k_size}.pt'")
+
+def test_fms(args, data_loader):
+    for task_id, (train_data, test_data, principle) in enumerate(data_loader):
+        args.output_file_prefix = config.models / f"t{task_id}_"
+        imgs = test_data["img"]
+        labels_pos_gt = test_data["pos"].squeeze()
+        labels_neg_gt = test_data["neg"].squeeze()
+        imgs_pos = imgs[:3]
+        imgs_neg = imgs[3:]
+        segments_pos = percept_segments(args, imgs_pos, f"test_pos")
+        segments_neg = percept_segments(args, imgs_neg, f"test_neg")
+
+        all_labels_gt = []
+        for img_i in range(len(segments_pos)):
+            obj_num = segments_pos[img_i].shape[0]
+            objs_labels = torch.argmax(labels_pos_gt[img_i, :obj_num,
+                                       [bk.prop_idx_dict["shape_tri"], bk.prop_idx_dict["shape_sq"],
+                                        bk.prop_idx_dict["shape_cir"]]], dim=1)
+            all_labels_gt += objs_labels
+
+        for img_i in range(len(segments_neg)):
+            obj_num = segments_neg[img_i].shape[0]
+            objs_labels = torch.argmax(labels_neg_gt[img_i, :obj_num,
+                                       [bk.prop_idx_dict["shape_tri"], bk.prop_idx_dict["shape_sq"],
+                                        bk.prop_idx_dict["shape_cir"]]], dim=1)
+            all_labels_gt += objs_labels
+
+        all_obj_imgs = torch.cat(segments_pos + segments_neg, dim=0)
+        all_labels_gt = torch.stack(all_labels_gt)
+        group_bk = bk.load_bk_fms(args, bk.bk_shapes)
+        pred_labels = torch.zeros(len(all_obj_imgs))
+
+        # remove all the similar tensors
+        all_fms = torch.cat([
+            group_bk[0]["fm_repo"].sum(dim=1),
+            group_bk[1]["fm_repo"].sum(dim=1),
+            group_bk[2]["fm_repo"].sum(dim=1),
+        ], dim=0)
+        # Combine all tensors into one list and remove duplicates
+
+        unique_tensors = []
+        # Assuming all_fms is your tensor
+        n = all_fms.shape[0]  # Get the length of the first dimension
+        perm = torch.randperm(n)  # Generate a permutation of indices
+        all_fms_shuffled = all_fms[perm]  # Reindex the tensor
+
+        for tensor in all_fms_shuffled:
+            max_similar_score = 0
+            for unique_tensor in unique_tensors:
+                similar_score = F.cosine_similarity(tensor, unique_tensor).mean()
+                if similar_score > max_similar_score:
+                    max_similar_score = similar_score
+            if max_similar_score < 0.95:
+                unique_tensors.append(tensor)
+
+        # Redistribute tensors back into their original sets
+        bk1 = group_bk[0]["fm_repo"].sum(dim=1)
+        bk2 = group_bk[1]["fm_repo"].sum(dim=1)
+        bk3 = group_bk[2]["fm_repo"].sum(dim=1)
+        unique_set1 = [group_bk[0]["fm_repo"][t_i] for t_i, tensor in enumerate(bk1) if
+                       any((tensor == unique_tensor).all() for unique_tensor in unique_tensors)]
+        unique_set2 = [group_bk[1]["fm_repo"][t_i] for t_i, tensor in enumerate(bk2) if
+                       any((tensor == unique_tensor).all() for unique_tensor in unique_tensors)]
+        unique_set3 = [group_bk[2]["fm_repo"][t_i] for t_i, tensor in enumerate(bk3) if
+                       any((tensor == unique_tensor).all() for unique_tensor in unique_tensors)]
+
+        fm_repos = [unique_set1, unique_set2, unique_set3]
+        for img_i in range(len(all_obj_imgs)):
+            scores = []
+            for shape_i in range(len(group_bk)):
+                fm_repo = torch.stack(fm_repos[shape_i])
+                in_fms, _ = models.img2fm(all_obj_imgs[img_i], group_bk[shape_i]["kernels"])
+                recalled_fms, score = recall.recall_fms(in_fms, fm_repo)
+                scores.append(score)
+            pred_labels[img_i] = np.argmax(scores)
+
+        accuracy = (pred_labels == all_labels_gt).sum() / len(all_labels_gt)
+        print(accuracy)
 
 
 def percept_gestalt_groups(args, ocms, segments, obj_groups, dtype, principle):
@@ -484,7 +713,7 @@ def cluster_by_principle(args, imgs, mode, principle):
     group_pos, labels_pos, others_pos = percept_gestalt_groups(args, ocm_pos, segments_pos, obj_groups_pos, "pos",
                                                                principle)
     group_neg, labels_neg, others_neg = percept_gestalt_groups(args, ocm_neg, segments_neg, obj_groups_neg, "neg",
-                                                                  principle)
+                                                               principle)
     groups = {
         "group_pos": group_pos, "label_pos": labels_pos,
         "group_neg": group_neg, "label_neg": labels_neg,

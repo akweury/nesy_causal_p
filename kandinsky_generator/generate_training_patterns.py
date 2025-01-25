@@ -196,13 +196,12 @@ def kf2data(kf, width):
 def kf2tensor(kf, max_length):
     tensors = []
     for obj in kf:
-        shape = [0] * len(bk.bk_shapes)
-        shape[bk.bk_shapes.index(obj.shape)] = 1.0
-        color = list(bk.color_matplotlib[obj.color])
-        others = [obj.x, obj.y, obj.size]
-        tensor = torch.tensor(others + color + shape)
-        tensor[3:6] /= 255
-
+        color = np.array((bk.color_matplotlib[obj.color])) / 255
+        tri = 1 if obj.shape == "triangle" else 0
+        sq = 1 if obj.shape == "square" else 0
+        cir = 1 if obj.shape == "circle" else 0
+        tensor = gestalt_group.gen_group_tensor(obj.x, obj.y, obj.size, 1,
+                                                color[0], color[1], color[2], tri, sq, cir)
         tensors.append(tensor)
     if len(tensors) < max_length:
         tensors = tensors + [torch.zeros(len(tensors[0]))] * (max_length - len(tensors))
@@ -213,10 +212,7 @@ def kf2tensor(kf, max_length):
 
 
 def genShapeOnShape(args):
-    shapes = args.exp_setting["bk_groups"]
-    args.step_counter += 1
-    args.logger.info(f"Step {args.step_counter}/{args.total_step}: "
-                     f"Generating {shapes} training patterns")
+    shapes = bk.bk_shapes[1:]
     width = 512
     size_list = np.arange(0.05, 0.90, 0.05)
     line_width_list = np.arange(0.05, 2, 0.05)
@@ -295,7 +291,7 @@ def get_task_names(principle):
     return task_names
 
 
-def gen_and_save(path, width):
+def gen_and_save(path, width, mode):
     max_length = 64
     example_num = 3
     all_tensors = {"positive": [], "negative": []}
@@ -310,7 +306,7 @@ def gen_and_save(path, width):
             kfs = []
             for dtype in [True, False]:
                 for example_i in range(example_num):
-                    kfs.append(gestalt_patterns.gen_patterns(task_name, dtype))
+                    kfs.append(gestalt_patterns.gen_patterns(task_name, dtype))  # pattern generation
             tensors = []
             images = []
             for kf in kfs:
@@ -321,6 +317,11 @@ def gen_and_save(path, width):
             tensors = torch.stack(tensors)
 
             # save image
+            os.makedirs(path / ".." / f"{mode}_all", exist_ok=True)
+            os.makedirs(path / ".." / f"{mode}_all" / f"{task_counter}", exist_ok=True)
+            for img_i in range(len(images)):
+                Image.fromarray(images[img_i]).save(
+                    path / ".." / f"{mode}_all" / f"{task_counter}" / f"sep_{task_counter:06d}_{img_i}.png")
             images = chart_utils.hconcat_imgs(images)
             Image.fromarray(images).save(path / f"{task_counter:06d}.png")
             # save data
@@ -338,7 +339,7 @@ def gen_and_save(path, width):
 
 
 def genGestaltTraining():
-    width = 512
+    width = 1024
     base_path = config.kp_gestalt_dataset
     os.makedirs(base_path, exist_ok=True)
     for mode in ['train', "test"]:
@@ -347,10 +348,229 @@ def genGestaltTraining():
         tensor_file = data_path / f"{mode}.pt"
         if os.path.exists(tensor_file):
             continue
-        tensors = gen_and_save(data_path, width)
+        tensors = gen_and_save(data_path, width, mode)
         torch.save(tensors, tensor_file)
     print("")
 
 
+def generate_triangle_image(image_size=512, min_size=20, max_size=200):
+    """
+    Generate a single image with a random triangle.
+
+    Args:
+        image_size (int): Size of the square image (image_size x image_size).
+        min_size (int): Minimum size of the triangle.
+        max_size (int): Maximum size of the triangle.
+
+    Returns:
+        np.ndarray: Generated image as a NumPy array.
+        list: List of vertices positions.
+    """
+    # Create a blank white image
+    image = Image.new("L", (image_size, image_size), color="black")
+    draw = ImageDraw.Draw(image)
+
+    # Randomly determine the triangle size
+    triangle_size = np.random.randint(min_size, max_size)
+
+    # Ensure the triangle is fully within bounds
+    margin = 50 + triangle_size // 2
+    x_center = np.random.randint(margin, image_size - margin)
+    y_center = np.random.randint(margin, image_size - margin)
+
+    # Calculate the vertices of the triangle
+    half_height = int(np.sqrt(3) / 2 * triangle_size)
+    vertices = [
+        (x_center, y_center - 2 * half_height // 3),  # Top vertex
+        (x_center - triangle_size // 2, y_center + half_height // 3),  # Bottom-left vertex
+        (x_center + triangle_size // 2, y_center + half_height // 3)  # Bottom-right vertex
+    ]
+
+    # Random color for the triangle
+    color = 255
+
+    # Draw the triangle
+    draw.polygon(vertices, fill=color)
+
+    return np.array(image), vertices
+
+
+def generate_circle_image(image_size=512, min_size=20, max_size=200, hollow=False, max_border_width=10):
+    """
+    Generate a single image with a random circle.
+
+    Args:
+        image_size (int): Size of the square image (image_size x image_size).
+        min_size (int): Minimum size of the circle diameter.
+        max_size (int): Maximum size of the circle diameter.
+        hollow (bool): Whether the circle should be hollow (transparent inside).
+        max_border_width (int): Maximum width of the border for hollow circles.
+
+    Returns:
+        np.ndarray: Generated image as a NumPy array.
+        list: Center and radius of the circle.
+    """
+    # Create a blank transparent image
+    image = Image.new("L", (image_size, image_size), color="black")
+    draw = ImageDraw.Draw(image)
+
+    # Randomly determine the circle diameter
+    circle_diameter = np.random.randint(min_size, max_size)
+
+    # Ensure the circle is fully within bounds
+    margin = 50 + circle_diameter // 2
+    x_center = np.random.randint(margin, image_size - margin)
+    y_center = np.random.randint(margin, image_size - margin)
+
+    # Define the bounding box for the circle
+    bounding_box = [
+        (x_center - circle_diameter // 2, y_center - circle_diameter // 2),
+        (x_center + circle_diameter // 2, y_center + circle_diameter // 2)
+    ]
+
+    # Random color for the circle
+    color = 255
+
+    # Draw the filled circle
+    draw.ellipse(bounding_box, fill=color)
+    # Calculate four random points on the edge of the circle
+    angles = np.random.uniform(0, 2 * np.pi, 4)
+    edge_points = [
+        (x_center + int((circle_diameter // 2) * np.cos(angle)),
+         y_center + int((circle_diameter // 2) * np.sin(angle)))
+        for angle in angles
+    ]
+    return np.array(image), edge_points
+
+
+def generate_square_image(image_size=512, min_size=20, max_size=200, hollow=False, max_border_width=10):
+    """
+    Generate a single image with a random square.
+
+    Args:
+        image_size (int): Size of the square image (image_size x image_size).
+        min_size (int): Minimum size of the square.
+        max_size (int): Maximum size of the square.
+        hollow (bool): Whether the square should be hollow (transparent inside).
+        max_border_width (int): Maximum width of the border for hollow squares.
+
+    Returns:
+        np.ndarray: Generated image as a NumPy array.
+        list: List of vertices positions.
+    """
+    # Create a blank transparent image
+    image = Image.new("L", (image_size, image_size), color="black")
+    draw = ImageDraw.Draw(image)
+
+    # Randomly determine the square size
+    square_size = np.random.randint(min_size, max_size)
+
+    # Ensure the square is fully within bounds
+    margin = 50 + square_size // 2
+    x_center = np.random.randint(margin, image_size - margin)
+    y_center = np.random.randint(margin, image_size - margin)
+
+    # Calculate the vertices of the square
+    vertices = [
+        (x_center - square_size // 2, y_center - square_size // 2),  # Top-left vertex
+        (x_center + square_size // 2, y_center - square_size // 2),  # Top-right vertex
+        (x_center + square_size // 2, y_center + square_size // 2),  # Bottom-right vertex
+        (x_center - square_size // 2, y_center + square_size // 2)  # Bottom-left vertex
+    ]
+
+    # Random color for the square
+    color = 255
+
+    draw.rectangle((vertices[0], vertices[2]), fill=color)
+
+    return np.array(image), vertices
+
+
+def extract_patches(image, vertices, patch_size=32):
+    """
+    Extract patches of size patch_size x patch_size around each vertex.
+
+    Args:
+        image (np.ndarray): Input image as a NumPy array.
+        vertices (list): List of (x, y) tuples representing vertex coordinates.
+        patch_size (int): Size of the patch to extract (default is 32).
+
+    Returns:
+        list: List of extracted patches as NumPy arrays.
+    """
+    patches = []
+    half_size = patch_size // 2
+    padded_image = np.pad(image, ((half_size, half_size), (half_size, half_size)), mode='constant', constant_values=0)
+
+    for (x, y) in vertices:
+        x_p, y_p = x + half_size, y + half_size
+        patch = padded_image[y_p - half_size:y_p + half_size, x_p - half_size:x_p + half_size]
+        patches.append(patch)
+
+    return patches
+
+
+def generate_dataset(shape, output_dir="triangle_dataset", num_images=1000, image_size=512):
+    """
+    Generate a dataset of triangle images.
+
+    Args:
+        output_dir (str): Directory to save the dataset.
+        num_images (int): Number of images to generate.
+        image_size (int): Size of the square image (image_size x image_size).
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    metadata = []
+
+    for i in tqdm(range(num_images)):
+        # Generate a triangle image
+        if shape == "triangle":
+            image, vertices = generate_triangle_image(image_size=image_size)
+        elif shape == "square":
+            image, vertices = generate_square_image(image_size=image_size)
+        elif shape == "circle":
+            image, vertices = generate_circle_image(image_size=image_size)
+        else:
+            raise ValueError
+
+        # Extract patches for each vertex
+        patches = extract_patches(image, vertices)
+
+        # Save the image
+        image_filename = os.path.join(output_dir, f"triangle_{i:04d}.png")
+        image = Image.fromarray(image)
+        image.save(image_filename)
+
+        # Save patches
+        for j, patch in enumerate(patches):
+            patch_filename = os.path.join(output_dir, f"{shape}_{i:04d}_patch_{j}.png")
+            patch_image = Image.fromarray(patch)
+            patch_image.save(patch_filename)
+
+        # Record metadata
+        metadata.append({
+            "image": f"triangle_{i:04d}.png",
+            "vertices": vertices,
+            "patches": [f"{shape}_{i:04d}_patch_{j}.png" for j in range(len(patches))]
+        })
+
+        # if (i + 1) % 100 == 0:
+        #     print(f"Generated {i + 1}/{num_images} images")
+
+    # Save metadata as JSON
+    metadata_filename = os.path.join(output_dir, f"metadata.json")
+    with open(metadata_filename, "w") as f:
+        json.dump(metadata, f, indent=4)
+
+    print(f"Metadata saved to '{metadata_filename}'.")
+
+
 if __name__ == "__main__":
-    genGestaltTraining()
+    num_images_to_generate = 1000
+    image_size = 512
+    # Parameters
+    for shape in ["circle", "square", "triangle"]:
+        output_directory = config.kp_base_dataset / shape
+        # Generate dataset
+        generate_dataset(shape, output_dir=output_directory, num_images=num_images_to_generate, image_size=image_size)
+        print(f"Dataset generation complete. Images saved to '{output_directory}'.")

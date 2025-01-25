@@ -146,8 +146,8 @@ def train_fm_stack():
             f"feature maps have been saved to {config.output / f'{args.exp_name}' / 'fms.pt'}")
 
 
-def train_fm_cloud(logger, bk_shape):
-    args = args_utils.get_args(logger)
+def train_fm_cloud(bk_shape):
+    args = args_utils.get_args()
     args.exp_name = bk_shape
 
     save_path = config.output / f"{args.exp_name}"
@@ -165,9 +165,9 @@ def train_fm_cloud(logger, bk_shape):
         patches = patches[~torch.all(patches == 0, dim=(1, 2))]
         kernels.append(patches)
     kernels = torch.cat(kernels, dim=0).unique(dim=0).unsqueeze(1)
-    logger.debug(f"#Kernels: {len(kernels)}, "
-                 f"#Data: {len(train_loader)}, "
-                 f"Ratio: {len(kernels) / len(train_loader):.2f}")
+    args.logger.debug(f"#Kernels: {len(kernels)}, "
+                      f"#Data: {len(train_loader)}, "
+                      f"Ratio: {len(kernels) / len(train_loader):.2f}")
     torch.save(kernels, save_path / f"kernel_patches_{k_size}.pt")
 
     # calculate fms
@@ -187,7 +187,7 @@ def train_fm_cloud(logger, bk_shape):
     data_shift_all = torch.cat(data_shift_all, dim=0)
     data_all = torch.cat((data_shift_all, fm_all), dim=1).unique(dim=0)
     torch.save(data_all, save_path / f'fms_patches_{k_size}.pt')
-    logger.debug(
+    args.logger.debug(
         f"#FM: {len(data_all)}. "
         f"#Data: {len(train_loader)}, "
         f"ratio: {len(data_all) / len(train_loader):.2f} "
@@ -197,8 +197,6 @@ def train_fm_cloud(logger, bk_shape):
 
 if __name__ == "__main__":
     # Create a color handler
-    logger = args_utils.init_logger()
     bk_shapes = ["circle", "triangle", "square"]
-
     for bk_shape in bk_shapes:
-        train_fm_cloud(logger, bk_shape)
+        train_fm_cloud(bk_shape)

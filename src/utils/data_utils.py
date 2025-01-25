@@ -461,3 +461,10 @@ def merge_segments(segments):
         mask = (segment != torch.tensor(bk.color_matplotlib["lightgray"])).any(dim=-1)
         merged_img[mask] = segment[mask]
     return merged_img
+
+
+def load_json(file):
+    import json
+    with open(file, 'r') as f:
+        data = json.load(f)
+    return data

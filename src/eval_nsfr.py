@@ -176,25 +176,35 @@ def visual_negative_image(check_results, imgs):
 
 def check_clause(args, lang, rules, imgs_test, principle):
     # first three images are positive, last three images are negative
-    preds = torch.zeros(len(imgs_test))
+    preds_pos = []
+    preds_neg = []
     image_label = torch.zeros(len(imgs_test))
     image_label[:3] += 1
-    all_clauses = rules["true_all_image"] + rules["true_all_group"]  # + rules["true_exact_one_group"]
-    clauses_labels = ([0] * len(rules[bk.rule_logic_types[0]]) +
-                      [1] * len(rules[bk.rule_logic_types[1]]))  # + [2] * len(rules[bk.rule_logic_types[2]]))
 
-    group_bk = load_bk(args, bk.bk_shapes)
+    # group_bk = load_bk(args, bk.bk_shapes)
     groups = perception.cluster_by_principle(args, imgs_test, "test", principle)
-    pos_clause_scores = alpha.alpha_test(args, groups["group_pos"], lang, all_clauses)
-    neg_clause_scores = alpha.alpha_test(args, groups["group_neg"], lang, all_clauses)
+    all_details = []
+    for rule in rules:
+        c = rule["rule"]
+        r_type = rule["type"]
+        counter = rule["counter"]
+        if r_type == "true_all_image_g":
+            c_scores_pos = alpha.alpha_test(args, groups["group_pos"], lang, [c], "group")
+            c_scores_neg = alpha.alpha_test(args, groups["group_neg"], lang, [c], "group")
 
-    preds[:3], pred_details_pos = reason.reason_test_results(pos_clause_scores, clauses_labels)
-    preds[3:], pred_details_neg = reason.reason_test_results(neg_clause_scores, clauses_labels)
+            pred_pos, _ = reason.reason_test_results(c_scores_pos, r_type)
+            pred_neg, details = reason.reason_test_results(c_scores_neg, r_type)
+            preds_pos.append(pred_pos)
+            preds_neg.append(pred_neg)
+            all_details.append(details)
+    preds_pos = torch.stack(preds_pos).reshape(-1, 3).prod(dim=0)
+    preds_neg = torch.stack(preds_neg).reshape(-1, 3).prod(dim=0)
+    preds = torch.cat((preds_pos, preds_neg))
     acc = (preds == image_label).sum() / len(preds)
 
     check_results = {
         "acc": acc,
-        "negative_details": pred_details_neg,
+        "negative_details": all_details,
         "negative_groups": groups["group_neg"],
         "principle": groups["principle"]
     }

@@ -6,7 +6,7 @@ import json
 from torch.utils.data import Dataset, DataLoader
 import config
 from src.utils import data_utils, file_utils, chart_utils
-
+import numpy as np
 
 class BasicShapeDataset(Dataset):
     def __init__(self, args, transform=None):
@@ -16,15 +16,40 @@ class BasicShapeDataset(Dataset):
         # self.labels = []
         self.device = args.device
         folder = config.kp_base_dataset / args.bk_shape
-        self.image_paths = file_utils.get_all_files(folder, "png", False)[:1000]
-
+        self.image_paths = sorted(file_utils.get_all_files(folder, "png", False)[:1000])
+        self.vertices = data_utils.load_json(folder/'metadata.json')
     def __len__(self):
         return len(self.image_paths)
 
+    def extract_patches(self, image, vertices, patch_size=32):
+        """
+        Extract patches of size patch_size x patch_size around each vertex.
+
+        Args:
+            image (np.ndarray): Input image as a NumPy array.
+            vertices (list): List of (x, y) tuples representing vertex coordinates.
+            patch_size (int): Size of the patch to extract (default is 32).
+
+        Returns:
+            list: List of extracted patches as NumPy arrays.
+        """
+        patches = []
+        half_size = patch_size // 2
+        padded_image = np.pad(image, ((half_size, half_size), (half_size, half_size), (0, 0)), mode='constant',
+                              constant_values=0)
+
+        for (x, y) in vertices:
+            x_p, y_p = x + half_size, y + half_size
+            patch = padded_image[y_p - half_size:y_p + half_size, x_p - half_size:x_p + half_size]
+            patches.append(torch.from_numpy(patch).unsqueeze(0))
+
+        return torch.cat(patches, dim=0)
     def __getitem__(self, idx):
         rgb_image = torch.from_numpy(cv2.imread(self.image_paths[idx]))
+        vertices = self.vertices[idx]["vertices"]
+        patches = self.extract_patches(rgb_image.numpy(), vertices)
 
-        return rgb_image
+        return patches, vertices
 
 
 class GestaltDataset(Dataset):
@@ -88,8 +113,8 @@ class GSDataset(Dataset):
             img = file_utils.load_img(file)
             img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             img_list = []
-            for i in range(img.shape[1] // 516):
-                img_list.append(img[:, i * 516:(i + 1) * 516, :])
+            for i in range(img.shape[1] // img.shape[0]):
+                img_list.append(img[:, i * img.shape[0]:(i + 1) * img.shape[0], :])
             img_list = [im[2:-2, 2:-2] for im in img_list]
             imgs.append(img_list)
         return imgs

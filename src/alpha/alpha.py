@@ -160,7 +160,7 @@ def df_search(args, lang, C, FC, group):
         log_clause_str += f"\n {i + 1}/{len(ils)} (s: {ils[i].item():.2f}) Clause: {extended_nodes[i]}"
     args.logger.debug(log_clause_str)
 
-    extended_nodes = sorted(extended_nodes)
+    extended_nodes = sorted(extended_nodes) + sorted(base_nodes)
     lang.clauses += extended_nodes
     clauses = lang.clauses
     if len(clauses) > 1:
@@ -176,7 +176,7 @@ def df_search(args, lang, C, FC, group):
         return clauses[0]
 
 
-def eval_task(args, lang, FC, images_data, all_clauses):
+def eval_task(args, lang, FC, images_data, all_clauses, level):
     """
     return: true, if all the clauses are satisfied, else false.
     """
@@ -189,16 +189,18 @@ def eval_task(args, lang, FC, images_data, all_clauses):
             NSFR = nsfr.get_nsfr_model(args, lang, FC, [clause])
             clause_preds = []
             for g_i, group in enumerate(images_data[example_i]):
-                ocms = group["ocm"]
-                gcm = group["gcm"]
-                gcm_preds = []
-                ils, dls = evaluation(args, NSFR, target_preds, gcm)
-                gcm_preds = ils.squeeze()
-                ocm_preds = []
-                for o_i, ocm in enumerate(ocms):
-                    ils, dls = evaluation(args, NSFR, target_preds, ocm.unsqueeze(0))
-                    ocm_preds.append(ils.squeeze())
-                clause_preds.append(ocm_preds)
+                if level == "group":
+                    gcm = group["gcm"]
+                    ils, _ = evaluation(args, NSFR, target_preds, gcm)
+                    clause_pred = ils.squeeze()
+                else:
+                    ocms = group["ocm"]
+                    clause_pred = []
+                    for o_i, ocm in enumerate(ocms):
+                        ils, _ = evaluation(args, NSFR, target_preds, ocm.unsqueeze(0))
+                        clause_pred.append(ils.squeeze())
+
+                clause_preds.append(clause_pred)
             example_preds.append(clause_preds)
         preds.append(example_preds)
     return preds
@@ -345,10 +347,10 @@ def alpha(args, groups, mode):
     return lang
 
 
-def alpha_test(args, groups, lang, all_clauses):
+def alpha_test(args, groups, lang, all_clauses, level):
     VM = valuation.get_valuation_module(args, lang)
     FC = facts_converter.FactsConverter(args, lang, VM, given_attrs=lang.attrs)
-    pred = eval_task(args, lang, FC, groups, all_clauses)
+    pred = eval_task(args, lang, FC, groups, all_clauses, level)
     return pred
 
 

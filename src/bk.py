@@ -1,4 +1,6 @@
 # Created by shaji at 24/06/2024
+import random
+
 import matplotlib
 import torch
 import config
@@ -177,17 +179,23 @@ def load_bk_fms(args, bk_shapes):
         if bk_shape == "none":
             continue
         bk_path = config.output / bk_shape
-        kernel_file = bk_path / f"kernel_patches_{kernel_size}.pt"
-        kernels = torch.load(kernel_file).to(args.device)
+        # kernel_file = bk_path / f"kernel_patches_{kernel_size}.pt"
+        # kernels = torch.load(kernel_file).to(args.device)
 
         fm_file = bk_path / f"fms_patches_{kernel_size}.pt"
-        fm_data = torch.load(fm_file).to(args.device)
-        fm_repo = fm_data[:, ]
+        fm_data = torch.load(fm_file)
 
+        fms = fm_data["fms"]
+        labels = torch.tensor(fm_data["labels"])
+        if len(fms) > 50:
+            fms_indices = random.sample(range(len(fms)), 50)
+            fms = fms[fms_indices]
+            labels = labels[fms_indices]
         bk.append({
             "shape": s_i,
             "kernel_size": kernel_size,
-            "kernels": kernels,
-            "fm_repo": fm_repo,
+            # "kernels": kernels,
+            "fm_repo": fms,
+            "labels": labels,
         })
     return bk

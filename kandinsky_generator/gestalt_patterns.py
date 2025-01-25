@@ -261,7 +261,7 @@ def similarity_two_pairs(so, dtype):
             [0.6, 0.7], [0.8, 0.4]
         ]
         for p_i in range(2):
-            mode = random.choice([1,2])
+            mode = random.choice([1, 2])
             if mode == 1:
                 # same shape, not same color
                 color = random.sample(bk.color_large_exclude_gray, 2)
@@ -297,19 +297,40 @@ def closure_classic_triangle(so, dtype):
     dx = s * math.cos(math.radians(30))
     dy = s * math.sin(math.radians(30))
 
-    # draw circles
-    objs.append(kandinskyShape(color=random.choice(["blue", "green", "yellow"]),
-                               shape="circle", size=cir_so, x=xs, y=ys - s, line_width=-1, solid=True))
-
-    objs.append(kandinskyShape(color=random.choice(["blue", "green", "yellow"]),
-                               shape="circle", size=cir_so, x=xs + dx, y=ys + dy, line_width=-1, solid=True))
-
-    objs.append(kandinskyShape(color=random.choice(["blue", "green", "yellow"]),
-                               shape="circle", size=cir_so, x=xs - dx, y=ys + dy, line_width=-1, solid=True))
     if dtype:
-        # draw triangle
-        objs.append(kandinskyShape(color="lightgray",
-                                   shape="triangle", size=so, x=xs, y=ys, line_width=-1, solid=True))
+        # draw circles
+        objs.append(kandinskyShape(color=random.choice(["blue", "green", "yellow"]),
+                                   shape="circle", size=cir_so, x=xs, y=ys - s, line_width=-1, solid=True))
+
+        objs.append(kandinskyShape(color=random.choice(["blue", "green", "yellow"]),
+                                   shape="circle", size=cir_so, x=xs + dx, y=ys + dy, line_width=-1, solid=True))
+
+        objs.append(kandinskyShape(color=random.choice(["blue", "green", "yellow"]),
+                                   shape="circle", size=cir_so, x=xs - dx, y=ys + dy, line_width=-1, solid=True))
+
+        if random.random() > 0.5:
+            # draw triangle
+            objs.append(kandinskyShape(color="lightgray",
+                                       shape="triangle", size=so, x=xs, y=ys, line_width=-1, solid=True))
+    else:
+        dy = s * math.cos(math.radians(30))
+        so *= 1.2
+        # draw circles
+        objs.append(kandinskyShape(color=random.choice(["blue", "green", "yellow"]),
+                                   shape="circle", size=cir_so, x=xs - dx, y=ys - dy, line_width=-1, solid=True))
+
+        objs.append(kandinskyShape(color=random.choice(["blue", "green", "yellow"]),
+                                   shape="circle", size=cir_so, x=xs + dx, y=ys + dy, line_width=-1, solid=True))
+
+        objs.append(kandinskyShape(color=random.choice(["blue", "green", "yellow"]),
+                                   shape="circle", size=cir_so, x=xs - dx, y=ys + dy, line_width=-1, solid=True))
+
+        objs.append(kandinskyShape(color=random.choice(["blue", "green", "yellow"]),
+                                   shape="circle", size=cir_so, x=xs + dx, y=ys - dy, line_width=-1, solid=True))
+        if random.random() > 0.5:
+            # draw triangle
+            objs.append(kandinskyShape(color="lightgray",
+                                       shape="square", size=so, x=xs, y=ys, line_width=-1, solid=True))
 
     return objs
 
@@ -320,7 +341,7 @@ def closure_big_triangle(so, dtype):
     y = 0.4 + random.random() * 0.2
     r = 0.3 - min(abs(0.5 - x), abs(0.5 - y))
     # n = int(2 * r * math.pi / 0.25)
-    n = 20
+    n = 15
     innerdegree = math.radians(30)
     dx = r * math.cos(innerdegree)
     dy = r * math.sin(innerdegree)
@@ -380,7 +401,7 @@ def closure_big_square(so, dtype):
     x = 0.4 + random.random() * 0.2
     y = 0.4 + random.random() * 0.2
     r = 0.4 - min(abs(0.5 - x), abs(0.5 - y))
-    m = 20
+    m = 15
 
     minx = x - r / 2
     maxx = x + r / 2
@@ -513,10 +534,10 @@ def gen_patterns(pattern_name, dtype):
     elif pattern_name == "gestalt_triangle":
         g = lambda so, truth: closure_classic_triangle(so, dtype)
     elif pattern_name == "tri_group":
-        so = 0.05
+        so = 0.1
         g = lambda so, truth: closure_big_triangle(so, dtype)
     elif pattern_name == "triangle_square":
-        so = 0.03
+        so = 0.1
         g = lambda so, truth: closure_big_square(so, dtype) + closure_big_triangle(so, dtype)
     elif pattern_name == "continuity_one_splits_two":
         g = lambda so, truth: continuity_one_splits_n(so, dtype, n=2)

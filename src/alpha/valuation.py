@@ -419,7 +419,7 @@ class VFCount(nn.Module):
         if group_data is None or group_data[0, bk.prop_idx_dict["obj_num"]] == 1:
             return 0.0
         num_name_gt = args_dict[bk.const_dtype_obj_num]
-        num_gt = int(num_name_gt.name.split("object_num")[-1]) + 1
+        num_gt = int(num_name_gt.name.split("object_num")[-1])
         group_num = group_data[0, bk.prop_idx_dict["obj_num"]]
         has_label = float(num_gt == group_num)
         return has_label
