@@ -186,6 +186,7 @@ def load_bk_fms(args, bk_shapes):
         fm_data = torch.load(fm_file)
 
         fms = fm_data["fms"]
+        contours = fm_data["contours"]
         labels = torch.tensor(fm_data["labels"])
         if len(fms) > 50:
             fms_indices = random.sample(range(len(fms)), 50)
@@ -196,6 +197,7 @@ def load_bk_fms(args, bk_shapes):
             "kernel_size": kernel_size,
             # "kernels": kernels,
             "fm_repo": fms,
+            "contour":contours,
             "labels": labels,
         })
     return bk

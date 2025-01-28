@@ -11,7 +11,6 @@ from src.memory import recall
 from src.neural import models
 from src.reasoning import reason
 
-from PIL import Image, ImageDraw
 
 def proximity_distance(u, v):
     return np.linalg.norm(u - v)
@@ -133,26 +132,29 @@ def algo_closure(args, segments, input_groups):
     # each object assigned a group id as its label
     bk_shapes = bk.load_bk_fms(args, bk.bk_shapes)
     args.obj_fm_size = 32
-    # all_obj_found_labels = False
     img = data_utils.merge_segments(segments)
 
-    # preprocessing img, convert rgb image to black-white image
-    # cropped_img, crop_data = data_utils.crop_img(img)
-    # bw_img = data_utils.resize_img(cropped_img, resize=args.obj_fm_size).unsqueeze(0)
-    # groups = []
     labels = torch.zeros(len(segments))
     label_counter = 1
     group_label = 0
-    while torch.any(labels[:len(input_groups)] == 0):
-        # recall the memory
-        memory, group_label, cropped_data, kernels = recall.recall_match(args, bk_shapes, img)
-        # assign each object a label
-        same_group = reason.reason_labels(input_groups, cropped_data, labels, memory, kernels)
+    contour_points, contour_segs, contour_seg_labels = models.get_contour_segs(img)
 
-        if same_group.sum() == 0:
-            break
-        labels[same_group] += label_counter
-        label_counter += 1
+    # base on the segments, what shape can you recall by considering closure principle
+    # find line groups
+    lines = models.get_line_groups(contour_points, contour_segs, contour_seg_labels, img.shape[0])
+    curves = models.get_curves(contour_points, contour_segs, contour_seg_labels, img.shape[0])
+    # find polygons or circles
+    triangles = models.find_triangles(lines)
+    squares = models.find_squares(lines)
+    # circles = models.find_circles(curves)
+    if triangles:
+        group_label = 1
+    elif squares:
+        group_label = 2
+    else:
+        group_label = 3
+    labels = labels + 1
+
     return labels, group_label
 
 

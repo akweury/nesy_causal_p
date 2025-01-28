@@ -530,18 +530,25 @@ def identify_fms(args, shape):
                     patches.append(torch.from_numpy(patch_array))
                     labels.append(p_i)
 
-    # for (img) in tqdm(train_loader, desc=f"Calc. FMs (k={k_size})"):
-    #     all_imgs.append(models.img2bw(img))
-    #
-    # for (img) in tqdm(train_loader, desc=f"Calc. FMs (k={k_size})"):
-    #     fm = models.img2fm(img, kernels)
-    #
-    #     fm_all.append(fm)
     fm_all = torch.stack(patches)
+    img_path = config.kp_base_dataset / shape / metadata[0]['image']
+    image = np.array(Image.open(img_path))
+    # get the contours
+    contour_points = data_utils.get_contours(image)
+    contour_points = contour_points.reshape(-1, 2)
+    contour_img = np.zeros((512, 512, 3), dtype=np.uint8)
+    from src import bk
+    for i in range(len(contour_points)):
 
-    chart_utils.visual_batch_imgs(fm_all.unsqueeze(-1).numpy(), args.save_path, "memory_fms.png")
+        pos = contour_points[i]
+        if i < 5:
+            contour_img[pos[1], pos[0]] = [255, 0, 0]
+        else:
+            contour_img[pos[1], pos[0]] = [255, 255, 255]
+    van(contour_img)
 
-    return fm_all, labels
+    direction_vector = torch.tensor(data_utils.contour_to_direction_vector(contour_points))
+    return fm_all, direction_vector, labels
 
 
 def collect_fms(args):
@@ -570,8 +577,8 @@ def collect_fms(args):
         # fm identification
         fm_file = args.save_path / f'fms_patches_{args.k_size}.pt'
         if not os.path.exists(fm_file):
-            fms, labels = identify_fms(args, bk_shape)
-            fms_labels = {"fms": fms, "labels": labels}
+            fms, contours, labels = identify_fms(args, bk_shape)
+            fms_labels = {"fms": fms, "labels": labels, "contours": contours}
             torch.save(fms_labels, fm_file)
         else:
             fms_labels = torch.load(fm_file)
@@ -690,7 +697,7 @@ def percept_gestalt_groups(args, ocms, segments, obj_groups, dtype, principle):
     return None, None, None
 
 
-def cluster_by_principle(args, imgs, mode, principle):
+def cluster_by_principle(args, imgs, mode, prin):
     """ evaluate gestalt scores, decide grouping based on which strategy
 
     output: NxOxP np array, N example numbers, O max group numbers, P group property numbers
@@ -701,22 +708,22 @@ def cluster_by_principle(args, imgs, mode, principle):
     # segmentation the images
     imgs_pos = imgs[:3]
     imgs_neg = imgs[3:]
-    segments_pos = percept_segments(args, imgs_pos, f"{mode}_pos")
-    segments_neg = percept_segments(args, imgs_neg, f"{mode}_neg")
-    group_label_pos = [torch.zeros(len(seg)) for seg in segments_pos]
-    group_label_neg = [torch.zeros(len(seg)) for seg in segments_neg]
+    seg_pos = percept_segments(args, imgs_pos, f"{mode}_pos")
+    seg_neg = percept_segments(args, imgs_neg, f"{mode}_neg")
+    group_label_pos = [torch.zeros(len(seg)) for seg in seg_pos]
+    group_label_neg = [torch.zeros(len(seg)) for seg in seg_neg]
 
     # encode the segments to object centric matrix (ocm)
-    ocm_pos, obj_groups_pos = ocm_encoder(args, segments_pos, f"{mode}_pos")
-    ocm_neg, obj_groups_neg = ocm_encoder(args, segments_neg, f"{mode}_neg")
+    ocm_pos, obj_g_pos = ocm_encoder(args, seg_pos, f"{mode}_pos")
+    ocm_neg, obj_g_neg = ocm_encoder(args, seg_neg, f"{mode}_neg")
     # percept groups based on gestalt principles
-    group_pos, labels_pos, others_pos = percept_gestalt_groups(args, ocm_pos, segments_pos, obj_groups_pos, "pos",
-                                                               principle)
-    group_neg, labels_neg, others_neg = percept_gestalt_groups(args, ocm_neg, segments_neg, obj_groups_neg, "neg",
-                                                               principle)
+
+    group_neg, labels_neg, others_neg = percept_gestalt_groups(args, ocm_neg, seg_neg, obj_g_neg, "neg", prin)
+    group_pos, labels_pos, others_pos = percept_gestalt_groups(args, ocm_pos, seg_pos, obj_g_pos, "pos", prin)
+
     groups = {
         "group_pos": group_pos, "label_pos": labels_pos,
         "group_neg": group_neg, "label_neg": labels_neg,
-        'principle': principle
+        'principle': prin
     }
     return groups

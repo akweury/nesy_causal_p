@@ -9,6 +9,8 @@ import os
 import config
 import cv2
 from src import bk
+from src.utils.chart_utils import van
+from src.utils import chart_utils
 
 
 def data2patch(data):
@@ -350,13 +352,12 @@ def resize_img(img, resize):
     #     bw_img, _ = crop_img(torch.from_numpy(bw_img).squeeze(), resize=resize)
     # else:
     #     if resize:
-    img = img.squeeze().numpy()
-    resized_img = cv2.resize(img, (resize, resize),
-                             interpolation=cv2.INTER_LINEAR)
-    resized_img = torch.from_numpy(resized_img).unsqueeze(0)
+
+    resized_image = cv2.resize(img.astype(np.uint8), (resize, resize), interpolation=cv2.INTER_NEAREST)
+
     # else:
     #     bw_img = torch.from_numpy(bw_img).unsqueeze(0)
-    return resized_img
+    return resized_image
 
 
 def find_valid_radius(matrix):
@@ -468,3 +469,201 @@ def load_json(file):
     with open(file, 'r') as f:
         data = json.load(f)
     return data
+
+
+def get_contours(input_tensor):
+    """
+    Find contours of isolated areas in a binary image, draw them, and crop the image
+    to include only the bounding box containing the contours.
+
+    Args:
+        input_tensor (torch.Tensor): A 2D binary tensor of shape (H, W) with values 0 or 1.
+
+    Returns:
+        torch.Tensor: Cropped tensor containing only the area with contours.
+    """
+    # Ensure the image is binary
+    binary_image = cv2.threshold(input_tensor, 127, 255, cv2.THRESH_BINARY)[1]
+
+    # Find contours with all points along the edges
+    contours, _ = cv2.findContours(binary_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+
+    # Extract the first (and only) contour
+    contour = contours[0]
+
+    # Convert the contour points to a list of (x, y) tuples
+    contour_points = [tuple(point[0]) for point in contour]
+
+    # Sort contour points to align with the original shape
+    # Sort by y first, then by x for each row
+    contour_points_sorted = sorted(contour_points, key=lambda p: (p[1], p[0]))
+
+    return contour
+    #
+    # # Convert PyTorch tensor to numpy array
+    # input_array = input_tensor.astype(np.uint8)
+    #
+    # # Find contours with all points along the edges
+    # contours, _ = cv2.findContours(input_array, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    #
+    # # Extract the first (and only) contour
+    # contour = contours[0]
+    #
+    # # Convert the contour points to a list of (x, y) tuples
+    # contour_points = torch.tensor([tuple(point[0]) for point in contour])
+    # return contours
+
+    # # Create an empty array to draw contours
+    # contour_array = np.zeros_like(input_array)
+    #
+    # # Draw contours on the empty array
+    # cv2.drawContours(contour_array, contours, -1, color=1, thickness=1)
+    #
+    # # Find bounding box for all contours
+    # x, y, w, h = cv2.boundingRect(np.vstack(contours))  # Combine all contours into one set
+    #
+    # # Crop the contour area
+    # cropped_array = contour_array[y:y + h, x:x + w]
+    # pad_size = 32
+    # padded_image = np.pad(cropped_array, ((pad_size, pad_size), (pad_size, pad_size)), mode='constant',
+    #                       constant_values=0)
+    # resized_array = resize_img(padded_image, 128)
+    # return resized_array, contours[0]
+
+
+def crop_to_valid_area(image, threshold=10):
+    """
+    Crop the image to the smallest bounding box that contains valid information.
+
+    Args:
+        image (np.ndarray): Grayscale test image as a NumPy array.
+        threshold (int): Pixel intensity threshold to identify non-empty regions.
+
+    Returns:
+        np.ndarray: Cropped image.
+        tuple: (x_min, y_min, x_max, y_max) coordinates of the cropped region.
+    """
+    # Find non-zero areas
+    valid_rows = np.any(image > threshold, axis=1)
+    valid_cols = np.any(image > threshold, axis=0)
+
+    if not np.any(valid_rows) or not np.any(valid_cols):
+        # No valid area
+        return image, (0, 0, image.shape[1], image.shape[0])
+
+    y_min, y_max = np.where(valid_rows)[0][[0, -1]]
+    x_min, x_max = np.where(valid_cols)[0][[0, -1]]
+
+    # Include bordering cases by padding
+    padding = 0  # Add padding to account for partial patches
+    y_min = max(0, y_min - padding)
+    y_max = min(image.shape[0], y_max + padding)
+    x_min = max(0, x_min - padding)
+    x_max = min(image.shape[1], x_max + padding)
+
+    cropped_image = image[y_min:y_max, x_min:x_max]
+    return cropped_image, (x_min, y_min, x_max, y_max)
+
+
+def direction_vectors_to_angles(direction_vectors):
+    """
+    Convert each direction vector to its corresponding angle in degrees.
+
+    Args:
+        direction_vectors (np.ndarray): An Nx2 array where each row is a direction vector [dx, dy].
+
+    Returns:
+        np.ndarray: A 1D array of angles in degrees corresponding to each direction vector.
+    """
+    # Extract dx and dy components
+    dx = direction_vectors[:, 0]
+    dy = direction_vectors[:, 1]
+
+    # Compute angles in radians using arctan2
+    angles_radians = np.arctan2(dy, dx)
+
+    # Convert radians to degrees
+    angles_degrees = np.degrees(angles_radians)
+
+    # Ensure all angles are in the range [0, 360)
+    angles_degrees = np.mod(angles_degrees, 360)
+
+    return angles_degrees
+
+
+def smooth_directions_degrees(directions, window_size=5, sharpness_threshold=30):
+    """
+    Smooth the directions (in degrees) while preserving sharp angle changes.
+
+    Args:
+        directions (array-like): Input directions (in degrees).
+        window_size (int): Size of the smoothing window (must be odd).
+        sharpness_threshold (float): Threshold for detecting sharp angle changes (in degrees).
+
+    Returns:
+        np.ndarray: Smoothed directions (in degrees).
+    """
+    directions = np.asarray(directions)
+    directions = np.deg2rad(directions)  # Convert degrees to radians for processing
+    directions = np.unwrap(directions)  # Handle angular wrap-around
+
+    smoothed = np.zeros_like(directions)
+    half_window = window_size // 2
+
+    for i in range(len(directions)):
+        # Define the window bounds
+        start = max(0, i - half_window)
+        end = min(len(directions), i + half_window + 1)
+
+        # Extract the window
+        window = directions[start:end]
+
+        # Calculate angular differences in the window
+        angular_diffs = np.abs(np.diff(window))
+
+        # Preserve sharp changes by filtering based on the sharpness threshold (converted to radians)
+        if np.any(angular_diffs > np.deg2rad(sharpness_threshold)):
+            smoothed[i] = directions[i]  # Keep the original value
+        else:
+            smoothed[i] = np.mean(window)  # Apply smoothing
+
+    smoothed = np.rad2deg(smoothed)  # Convert back to degrees
+    return np.mod(smoothed, 360)  # Wrap angles back to [0, 360]
+
+
+def contour_to_direction_vector(contour):
+    """
+    Convert a contour into a direction vector.
+
+    Args:
+        contour (np.ndarray): Contour represented as an array of points of shape (N, 1, 2).
+
+    Returns:
+        list: A list of tuples representing direction vectors (dx, dy) for each point in the contour.
+    """
+    # Extract the points from the contour
+    points = contour  # Shape becomes (N, 2)
+
+    # Compute the direction vector
+    direction_vector = []
+    num_points = len(points)
+    for i in range(num_points):
+        # Compute the difference between consecutive points
+        dx = points[(i + 1) % num_points][0] - points[i][0]  # Next point wraps around
+        dy = points[(i + 1) % num_points][1] - points[i][1]
+        direction_vector.append((dx, dy))
+    angles = direction_vectors_to_angles(np.array(direction_vector))
+    smoothed_angles = smooth_directions_degrees(angles, window_size=10, sharpness_threshold=80)
+    # chart_utils.show_line_chart(smoothed_angles)
+
+    # # Compute the direction vector
+    # dv_2 = []
+    # num_points = len(points)
+    # for i in range(num_points):
+    #     # Compute the difference between consecutive points
+    #     dx = points[(i + 20) % num_points][0] - points[i][0]  # Next point wraps around
+    #     dy = points[(i + 20) % num_points][1] - points[i][1]
+    #     dv_2.append((dx, dy))
+    # angles_2 = direction_vectors_to_angles(np.array(dv_2))
+    # chart_utils.show_line_chart(angles_2)
+    return smoothed_angles

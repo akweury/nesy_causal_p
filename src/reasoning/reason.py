@@ -147,44 +147,59 @@ def remove_sementic_same_clauses(clause_list1, clause_list2, counter):
     return sementic_unique_clauses, sementic_unique_counter
 
 
-def get_all_clauses(img_clauses):
+def get_all_clauses(img_clauses, level):
     clauses = []
     for ic in img_clauses:
         for g in ic:
-            clauses.append(g["group_clauses"])
-            for obj_clause, _ in g["obj_clauses"].items():
-                clauses.append(obj_clause)
+            if level == "group":
+                for g_c, _ in g["group_clauses"].items():
+                    clauses.append(g_c)
+            else:
+                for obj_clause, _ in g["obj_clauses"].items():
+                    clauses.append(obj_clause)
     return clauses
 
 
 def create_ctt(image_clauses):
     # list all clauses
-    clauses = get_all_clauses(image_clauses)
+    g_clauses = get_all_clauses(image_clauses, "group")
+    o_clauses = get_all_clauses(image_clauses, "object")
 
     img_num = len(image_clauses)
-    group_c_num = [len(igs) for igs in image_clauses]
-    obj_num = [len(ig["obj_clauses"]) for igs in image_clauses for ig in igs]
-    obj_c_num = [oc_count for igs in image_clauses for ig in igs for oc, oc_count in ig["obj_clauses"].items()]
-    c_num = sum(obj_c_num) + sum(group_c_num)
+    g_num = [len(igs) for igs in image_clauses]
+    gc_num = [len(ig["group_clauses"]) for igs in image_clauses for ig in igs]
+
+    oc_num = [len(ig["obj_clauses"]) for igs in image_clauses for ig in igs]
+
+    clause_num = sum(oc_num) + sum(gc_num)
+
     # calculate clause truth table
-    ctt = torch.zeros(c_num, img_num, max(group_c_num), max(obj_num)).to(torch.bool)
-    ctt_count = torch.zeros(c_num, img_num, max(group_c_num), max(obj_num))
-    g_ctt = torch.zeros(c_num, img_num, max(group_c_num)).to(torch.bool)
-    for c_i in range(c_num):
+    ctt = torch.zeros(sum(oc_num), img_num, max(g_num), max(oc_num)).to(torch.bool)
+    ctt_count = torch.zeros(sum(oc_num), img_num, max(g_num), max(oc_num))
+    g_ctt = torch.zeros(sum(gc_num), img_num, max(g_num), max(gc_num)).to(torch.bool)
+    g_ctt_count = torch.zeros(sum(gc_num), img_num, max(g_num), max(gc_num))
+
+    # fulfill the ctt
+    for c_i in range(sum(oc_num)):
+        for i_i, img_c in enumerate(image_clauses):
+            for g_i, group in enumerate(img_c):
+                for oc_i, (obj_clause, c_count) in enumerate(group["obj_clauses"].items()):
+                    ctt_count[c_i, i_i, g_i, oc_i] = c_count
+                    if (sementical_same_clause(obj_clause, o_clauses[c_i])):
+                        ctt[c_i, i_i, g_i, oc_i] = True
+    # fulfill the g_ctt
+    for c_i in range(sum(gc_num)):
         for i_i, img_c in enumerate(image_clauses):
             for g_i, group in enumerate(img_c):
                 # group clause truth
-                group_clause = group["group_clauses"]
-                if (sementical_same_clause(group_clause, clauses[c_i])):
-                    g_ctt[c_i, i_i, g_i] = True
-                for o_i, (obj_clause, c_count) in enumerate(group["obj_clauses"].items()):
-                    ctt_count[c_i, i_i, g_i, o_i] = c_count
-                    if (sementical_same_clause(obj_clause, clauses[c_i])):
-                        ctt[c_i, i_i, g_i, o_i] = True
-    return ctt, ctt_count, g_ctt
+                for gc_i, (gc, gc_count) in enumerate(group["group_clauses"].items()):
+                    g_ctt_count[c_i, i_i, g_i, gc_i] = gc_count
+                    if (sementical_same_clause(gc, g_clauses[gc_i])):
+                        g_ctt[c_i, i_i, g_i, gc_i] = True
+    return ctt, ctt_count, g_ctt, g_ctt_count
 
 
-def in_all_image(g_ctt, ctt, ctt_count, clauses):
+def in_all_image(g_ctt, ctt, ctt_count, clauses, level):
     """
     for each clause, check if it is true in each image
 
@@ -196,22 +211,19 @@ def in_all_image(g_ctt, ctt, ctt_count, clauses):
     """
     # true in group
     # counter for each group
-    counter_group = ctt.sum(dim=-1)
-    # counter for each image
-    counter_img = counter_group.sum(dim=-1)
+    if level == "object":
+        counter_group = ctt.sum(dim=-1)
+        counter_img = counter_group.sum(dim=-1)
+        true_in_all_image = ctt.any(dim=-1).any(dim=-1).all(dim=-1)
+        valid_clauses = [clauses[i] for i in range(len(clauses)) if true_in_all_image[i]]
+        counter = [counter_img[i] for i in range(len(clauses)) if true_in_all_image[i]]
+    else:
+        tt = g_ctt.any(dim=-1).any(dim=-1).all(dim=-1)
+        valid_clauses = [clauses[i] for i in range(len(clauses)) if tt[i]]
+        counter_img_group_level = g_ctt.sum(dim=-1)
+        counter = [counter_img_group_level[i] for i in range(len(clauses)) if tt[i]]
 
-    true_in_all_image = ctt.any(dim=-1).any(dim=-1).all(dim=-1)
-    true_in_all_image_cs = [clauses[i] for i in range(len(clauses)) if true_in_all_image[i]]
-    counter = [counter_img[i] for i in range(len(clauses)) if true_in_all_image[i]]
-
-    true_in_all_image_g_level = g_ctt.any(dim=-1).all(dim=-1)
-    true_in_all_image_g_level_clauses = [clauses[i] for i in range(len(clauses)) if true_in_all_image_g_level[i]]
-    counter_img_group_level = g_ctt.sum(dim=-1)
-    counter_group_level = [counter_img_group_level[i] for i in range(len(clauses)) if true_in_all_image_g_level[i]]
-
-    true_clauses = true_in_all_image_cs + true_in_all_image_g_level_clauses
-    true_counter = counter + counter_group_level
-    return true_in_all_image_cs, true_in_all_image_g_level_clauses, counter, counter_group_level
+    return valid_clauses, counter
 
 
 def in_all_group(ctt, ctt_count, clauses):
@@ -254,35 +266,28 @@ def find_common_rules(image_clauses_pos, image_clauses_neg):
     # I: image number
     # G: group number
     # O: object number
-
-    clauses_pos = get_all_clauses(image_clauses_pos)
-    clauses_neg = get_all_clauses(image_clauses_neg)
+    g_clauses_pos = get_all_clauses(image_clauses_pos, "group")
+    o_clauses_pos = get_all_clauses(image_clauses_pos, "object")
+    g_clauses_neg = get_all_clauses(image_clauses_neg, "group")
+    o_clauses_neg = get_all_clauses(image_clauses_neg, "object")
 
     # create clause truth table
-    ctt_pos, ctt_count_pos, g_ctt_pos = create_ctt(image_clauses_pos)
-    ctt_neg, ctt_count_neg, g_ctt_neg = create_ctt(image_clauses_neg)
+    ctt_pos, ctt_count_pos, g_ctt_pos, g_ctt_count_pos = create_ctt(image_clauses_pos)
+    ctt_neg, ctt_count_neg, g_ctt_neg, g_ctt_count_neg = create_ctt(image_clauses_neg)
 
     # reason if clauses are truth in all images
-    img_c, img_g_c, count_pos_c, counter_pos_g_c = in_all_image(g_ctt_pos, ctt_pos, ctt_count_pos, clauses_pos)
-    # true_all_image_clauses_neg, counter_img_neg = in_all_image(g_ctt_neg, ctt_neg, ctt_count_neg, clauses_neg)
+    img_c, count_pos_c = in_all_image(g_ctt_pos, ctt_pos, ctt_count_pos, g_clauses_pos, "object")
+    img_g_c, counter_pos_g_c = in_all_image(g_ctt_pos, ctt_pos, ctt_count_pos, g_clauses_pos, "group")
+
     # remove clauses that exist in both pos and neg
-    img_c_pos_only, counter_img_c_pos_only = remove_sementic_same_clauses(img_c, clauses_neg, count_pos_c)
-    img_g_c_pos_only, counter_img_g_c_pos_only = remove_sementic_same_clauses(img_g_c, clauses_neg, counter_pos_g_c)
+    img_c_pos_only, counter_img_c_pos_only = remove_sementic_same_clauses(img_c, o_clauses_neg, count_pos_c)
+    img_g_c_pos_only, counter_img_g_c_pos_only = remove_sementic_same_clauses(img_g_c, g_clauses_neg, counter_pos_g_c)
 
     # reason if clauses are truth in all groups in all images
-    true_all_group, true_all_group_clauses, counter_group_pos = in_all_group(ctt_pos, ctt_count_pos, clauses_pos)
-    true_all_group_neg, true_all_group_clauses_neg, counter_group_neg = in_all_group(ctt_neg, ctt_count_neg,
-                                                                                     clauses_neg)
+    true_all_group, true_all_group_clauses, counter_group_pos = in_all_group(ctt_pos, ctt_count_pos, o_clauses_pos)
     true_all_group_clauses_pos_only, counter_all_group_pos_only = remove_sementic_same_clauses(true_all_group_clauses,
-                                                                                               clauses_neg,
+                                                                                               o_clauses_neg,
                                                                                                counter_group_pos)
-
-    # reason if clauses are truth in at most one group in all images
-    # true_exact_one_group, true_exact_one_group_clauses = in_exact_one_group(ctt_pos, ctt_count_pos, clauses_pos)
-    # true_exact_one_group_neg, true_exact_one_group_clauses_neg = in_exact_one_group(ctt_neg, ctt_count_neg, clauses_neg)
-    # true_exact_one_group_clauses_pos_only, counter_exact_one_group_pos_only = remove_sementic_same_clauses(
-    #     true_exact_one_group_clauses,
-    #     true_exact_one_group_clauses_neg)
     common_rues = []
     for c_i, c in enumerate(img_c_pos_only):
         common_rues.append({

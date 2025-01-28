@@ -233,6 +233,9 @@ def rewrite_clauses(args, rules, principle, task_id):
                                          "group")
         elif rule["type"] == "true_all_group_g":
             rewrite_true_all_group_rules(rule["rule"], name_dict, rule_explanations, principle, rule["counter"])
+        elif rule["type"] == "true_all_image":
+            rewrite_true_all_image_rules(rule["rule"], name_dict, rule_explanations, principle, rule["counter"],
+                                         "image")
         else:
             raise ValueError
 

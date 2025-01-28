@@ -163,6 +163,7 @@ def df_search(args, lang, C, FC, group):
     extended_nodes = sorted(extended_nodes) + sorted(base_nodes)
     lang.clauses += extended_nodes
     clauses = lang.clauses
+    return clauses
     if len(clauses) > 1:
 
         lang.reset_lang(g_num=1)
@@ -314,34 +315,45 @@ def alpha(args, groups, mode):
             gcm = group["gcm"]
             obj_clauses = {}
             for o_i, ocm in enumerate(ocms):
-                clause = df_search(args, lang, C, FC, ocm.unsqueeze(0))
-                clause = clause_op.change_clause_obj_id(clause, args, o_i, bk.variable_symbol_obj)
-                if clause is None:
+                clauses = df_search(args, lang, C, FC, ocm.unsqueeze(0))
+                if clauses is None:
                     continue
-                if clause not in obj_clauses:
-                    obj_clauses[clause] = 1
-                else:
-                    obj_clauses[clause] += 1
+
+                for clause in clauses:
+                    clause = clause_op.change_clause_obj_id(clause, args, o_i, bk.variable_symbol_obj)
+                    if clause not in obj_clauses:
+                        obj_clauses[clause] = 1
+                    else:
+                        obj_clauses[clause] += 1
             group_clauses = df_search(args, lang, C, FC, gcm)
-            group_clauses = clause_op.change_clause_obj_id(group_clauses, args, g_i, bk.variable_symbol_group)
-            group_data = {"group_clauses": group_clauses, "obj_clauses": obj_clauses}
+            gcs = {}
+            for clause in group_clauses:
+                clause = clause_op.change_clause_obj_id(clause, args, g_i, bk.variable_symbol_group)
+                if clause not in gcs:
+                    gcs[clause] = 1
+                else:
+                    gcs[clause] += 1
+            group_data = {"group_clauses": gcs, "obj_clauses": obj_clauses}
             example_groups.append(group_data)
         all_groups.append(example_groups)
     lang.all_groups = all_groups
     # update language consts, atoms
-    clauses = []
+    g_clauses = []
+    o_clauses = []
     for ic in all_groups:
         for g in ic:
-            g_clause = g["group_clauses"]
-            if g_clause not in clauses:
-                clauses.append(g_clause)
+            for g_clause, _ in g["group_clauses"].items():
+                if g_clause not in g_clauses:
+                    g_clauses.append(g_clause)
             for obj_clause, _ in g["obj_clauses"].items():
-                if obj_clause not in clauses:
-                    clauses.append(obj_clause)
-    lang.update_consts(clauses)
-    lang.generate_atoms(clauses)
-    lang.update_predicates(clauses)
-    lang.clauses = clauses
+                if obj_clause not in o_clauses:
+                    o_clauses.append(obj_clause)
+    lang.update_consts(g_clauses + o_clauses)
+
+    lang.generate_atoms(g_clauses + o_clauses)
+
+    lang.update_predicates(g_clauses + o_clauses)
+    lang.clauses = g_clauses + o_clauses
 
     save_lang(args, lang, mode)
     return lang

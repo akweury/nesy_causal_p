@@ -202,7 +202,6 @@ def shadow_obj(img, obj_tensor, label, action):
                 fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=1, thickness=2,
                 lineType=cv2.LINE_AA)
 
-
     return img
 
 
@@ -233,6 +232,53 @@ def visual_rl_step(task_img, ocms, output_labels, action, reward):
     return output_imgs
 
 
-def show_line_chart(data):
+def show_line_chart(data, title=""):
     plt.plot(data)
+    # Beautify the plot
+    plt.title(title)
+    plt.xlabel("Index")
+    plt.ylabel("Value")
+    plt.grid(True)
     plt.show()
+
+
+def visual_multiple_segments(labels, data):
+    # Visualize the segments
+    plt.figure(figsize=(10, 6))
+
+    for i, segment in enumerate(labels):
+        indices = segment
+        values = data[indices]
+        if len(values) > 10:
+            color = bk.color_large[i]
+        else:
+            color = 'k'  # Edge case (single-point segment)
+            label = 'Single point'
+        plt.plot(indices, values, color=color)
+    # Beautify the plot
+    plt.title("Segments of Tensor Trends")
+    plt.xlabel("Index")
+    plt.ylabel("Value")
+    plt.grid(True)
+    plt.show()
+
+
+def visual_labeled_contours(width, all_contour_segs, contour_points, contour_labels):
+    rgb_colors = [
+        (1.0, 0.0, 0.0),  # Red
+        (0.0, 1.0, 0.0),  # Green
+        (0.0, 0.0, 1.0),  # Blue
+        (1.0, 1.0, 0.0),  # Yellow
+        (0.0, 1.0, 1.0),  # Cyan
+        (1.0, 0.0, 1.0)  # Magenta
+    ]
+    seg_img = np.zeros((width, width, 3))
+    for contour_i, contour_segs in enumerate(all_contour_segs):
+        for seg_i, seg in enumerate(contour_segs):
+            points = contour_points[contour_i][seg]
+            label = contour_labels[contour_i][seg_i]
+            color = rgb_colors[0] if label == "line" else rgb_colors[1]
+            # Color the given positions
+            for pos in points:
+                seg_img[pos[1] - 1:pos[1] + 2, pos[0] - 1:pos[0] + 2] = color
+    van(seg_img)
