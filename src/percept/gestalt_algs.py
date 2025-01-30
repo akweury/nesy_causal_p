@@ -6,9 +6,9 @@ import matplotlib.pyplot as plt
 from sklearn.cluster import DBSCAN
 from src.utils import data_utils
 from src import bk
-from src.utils.chart_utils import van
+from src.utils import chart_utils
 from src.memory import recall
-from src.neural import models
+from src.neural import models, merge_lines, percept_lines
 from src.reasoning import reason
 
 
@@ -127,7 +127,54 @@ def cluster_by_similarity(ocms, mode):
     return preds
 
 
-def algo_closure(args, segments, input_groups):
+def update_assigned_mask(point_num, all_lines):
+    assigned_mask = np.zeros(point_num, dtype=bool)
+    assigned_mask[:] = False
+    for line in all_lines:
+        assigned_mask[list(line["indices"])] = True
+    return assigned_mask
+
+
+def algo_closure_position(args, input_groups):
+    """ group input groups to output groups, which are high level groups """
+    # each object assigned a group id as its label
+    args.obj_fm_size = 32
+
+    points = np.stack([group.pos for group in input_groups])
+    assigned_mask = np.zeros(len(points), dtype=bool)
+    all_lines = []
+    all_arcs = []
+    max_iterations = 5
+    for iteration in range(max_iterations):
+        # Step 1: compute hull of unassigned points
+        unassigned_indices = [i for i in range(len(points)) if not assigned_mask[i]]
+        unassigned_points = points[unassigned_indices]
+        if len(unassigned_points) == 0:
+            break
+        group_lines = percept_lines.detect_lines(tuple(unassigned_points.tolist()))
+        group_lines = percept_lines.update_lines(group_lines, tuple(unassigned_points.tolist()))
+        group_arcs = []
+
+        all_lines.extend(group_lines)
+        all_arcs.extend(group_arcs)
+        assigned_mask = update_assigned_mask(len(points), all_lines)
+    #
+    hull_imgs = []
+    for gl_i in range(len(all_lines)):
+        hull_imgs.append(chart_utils.show_convex_hull(np.array(points), np.array(all_lines[gl_i]["points"])))
+    if len(hull_imgs) > 0:
+        chart_utils.van(hull_imgs)
+
+    lines_data = percept_lines.get_line_data(all_lines)
+    # find polygons or circles
+    labels = torch.zeros(len(input_groups))
+    group_labels = []
+    labels, hasTriangle, group_labels = models.find_triangles(lines_data, all_lines, labels, group_labels)
+    labels, hasSquare, group_labels = models.find_squares(lines_data, all_lines, labels, group_labels)
+    return labels, group_labels
+
+
+def algo_closure(args, segments):
     """ group input groups to output groups, which are high level groups """
     # each object assigned a group id as its label
     bk_shapes = bk.load_bk_fms(args, bk.bk_shapes)
@@ -166,12 +213,13 @@ def cluster_by_closure(args, segments, obj_groups):
     for example_i in range(len(segments)):
         segment = segments[example_i]
         obj_group = obj_groups[example_i]
-        labels, shapes = algo_closure(args, segment, obj_group)
+        if len(obj_group) > 5:
+            labels, shapes = algo_closure_position(args, obj_group)
+        else:
+            labels, shapes = algo_closure(args, segment)
+
         group_lengths.append(len(labels.unique()))
         all_labels.append(labels)
         all_shapes.append(shapes)
-
-    # same_group_num = len(torch.tensor(group_lengths).unique()) == 1
-    # same_group_label = len(torch.tensor(all_shapes).unique()) == 1
 
     return all_labels, all_shapes

@@ -89,7 +89,7 @@ class Group():
         y_size = (nonzero_indices[:, 1].max() - nonzero_indices[:, 1].min()) / self.input.shape[1]
         obj_size = max(x_size, y_size)
         if pos.max() > 1:
-            pos = pos / 512
+            pos = pos / self.input.shape[0]
         return pos, obj_size
 
 
@@ -145,14 +145,15 @@ def group2tensor(group):
     return tensor
 
 
-def gcm_encoder(labels, ocms, group_shape=0):
-    shape = bk.bk_shapes[group_shape[0]]
+def gcm_encoder(labels, ocms, all_shapes=None):
     groups = []
     for example_i in range(len(ocms)):
         ocm = ocms[example_i]
         example_labels = labels[example_i]
         example_groups = []
+        example_shapes = all_shapes[example_i]
         for l_i, label in enumerate(example_labels.unique()):
+            group_shape = example_shapes[l_i]
             group_ocms = ocm[example_labels == label]
             parent_positions = group_ocms[:, :2]
             x = parent_positions[:, 0]
@@ -167,9 +168,9 @@ def gcm_encoder(labels, ocms, group_shape=0):
                 color_r = 0
                 color_g = 0
                 color_b = 0
-                shape_tri = 1 if shape == "triangle" else 0
-                shape_sq = 1 if shape == "square" else 0
-                shape_cir = 1 if shape == "circle" else 0
+                shape_tri = 1 if group_shape == 1 else 0
+                shape_sq = 1 if group_shape == 2 else 0
+                shape_cir = 1 if group_shape == 3 else 0
                 gcm = gen_group_tensor(group_x, group_y, group_size, obj_num, color_r, color_g, color_b,
                                        shape_tri, shape_sq, shape_cir)
             group_ocms = group_ocms.reshape(-1, 10)

@@ -4,6 +4,7 @@
 import matplotlib.pyplot as plt
 import cv2
 import numpy as np
+import torch
 
 from src import bk
 
@@ -137,7 +138,10 @@ def visual_np_array(array):
 
 
 def van(array):
-    if len(array.shape) == 2:
+    if isinstance(array, list):
+        hconcat = hconcat_imgs(array)
+        visual_np_array(hconcat.squeeze())
+    elif len(array.shape) == 2:
         visual_np_array(array.squeeze())
     elif len(array.shape) == 3:
         visual_np_array(array.squeeze())
@@ -282,3 +286,45 @@ def visual_labeled_contours(width, all_contour_segs, contour_points, contour_lab
             for pos in points:
                 seg_img[pos[1] - 1:pos[1] + 2, pos[0] - 1:pos[0] + 2] = color
     van(seg_img)
+
+
+def show_convex_hull(points, hull_points):
+    width = 400
+    points_integer = (points * width).astype(np.int32)
+    hull_points_integer = (hull_points * width).astype(np.int32)
+    # Create a blank (black) image; adjust size as needed
+    # Here, we assume the coordinates fit in a 400x400 region
+    img = np.zeros((width, width, 3), dtype=np.uint8)
+
+    # Draw original points in white
+    for i, (x, y) in enumerate(points_integer):
+        cv2.circle(img, (x, y), 4, (255, 255, 255), -1)
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.4
+        color = (255, 255, 255)  # White color (B, G, R)
+        thickness = 1
+        # Add text to the image
+        cv2.putText(img, str(i), (x + 10, y - 10), font, font_scale, color, thickness)
+
+    # Convert the hull array to the correct shape for polylines
+    # hull is already Nx1x2 in shape if directly from cv2.convexHull
+    # but to be safe in polylines, we can reshape:
+    hull_reshaped = hull_points_integer.reshape(-1, 1, 2)
+
+    # Draw the hull polygon in green with thickness of 2
+    cv2.polylines(img, [hull_reshaped], isClosed=True, color=(0, 255, 0), thickness=2)
+
+    for x, y in hull_points_integer:
+        cv2.circle(img, (x, y), 4, (255, 0, 0), -1)
+    van(img)
+    return img
+
+
+def add_lines_to_img(img, lines):
+    for line in lines:
+        points = (line["points"] * img.shape[0]).astype(np.int32)
+        current_start = min(points, key=lambda p: (p[0], p[1]))
+        current_end = max(points, key=lambda p: (p[0], p[1]))
+        cv2.line(img, (current_start[0], current_start[1]), (current_end[0], current_end[1]), (255, 0, 0), 2)
+    van(img)
+    return img

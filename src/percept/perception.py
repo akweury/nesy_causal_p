@@ -691,7 +691,7 @@ def percept_gestalt_groups(args, ocms, segments, obj_groups, dtype, principle):
     elif principle == "closure":
         labels_closure, shape_closure = gestalt_algs.cluster_by_closure(args, segments, obj_groups)
         if labels_closure is not None:
-            gcm = gestalt_group.gcm_encoder(labels_closure, ocms, group_shape=shape_closure)
+            gcm = gestalt_group.gcm_encoder(labels_closure, ocms, shape_closure)
             return gcm, labels_closure, shape_closure
 
     return None, None, None
@@ -718,8 +718,8 @@ def cluster_by_principle(args, imgs, mode, prin):
     ocm_neg, obj_g_neg = ocm_encoder(args, seg_neg, f"{mode}_neg")
     # percept groups based on gestalt principles
 
-    group_neg, labels_neg, others_neg = percept_gestalt_groups(args, ocm_neg, seg_neg, obj_g_neg, "neg", prin)
     group_pos, labels_pos, others_pos = percept_gestalt_groups(args, ocm_pos, seg_pos, obj_g_pos, "pos", prin)
+    group_neg, labels_neg, others_neg = percept_gestalt_groups(args, ocm_neg, seg_neg, obj_g_neg, "neg", prin)
 
     groups = {
         "group_pos": group_pos, "label_pos": labels_pos,

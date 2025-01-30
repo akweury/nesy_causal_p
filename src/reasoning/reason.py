@@ -276,7 +276,7 @@ def find_common_rules(image_clauses_pos, image_clauses_neg):
     ctt_neg, ctt_count_neg, g_ctt_neg, g_ctt_count_neg = create_ctt(image_clauses_neg)
 
     # reason if clauses are truth in all images
-    img_c, count_pos_c = in_all_image(g_ctt_pos, ctt_pos, ctt_count_pos, g_clauses_pos, "object")
+    img_c, count_pos_c = in_all_image(g_ctt_pos, ctt_pos, ctt_count_pos, o_clauses_pos, "object")
     img_g_c, counter_pos_g_c = in_all_image(g_ctt_pos, ctt_pos, ctt_count_pos, g_clauses_pos, "group")
 
     # remove clauses that exist in both pos and neg
@@ -310,11 +310,16 @@ def find_common_rules(image_clauses_pos, image_clauses_neg):
     return common_rues
 
 
-def check_true_in_image(group_scores, th=0.8):
+def check_true_in_image(group_scores, level, th=0.8):
     pred = False
     group_preds = []
     for group in group_scores:
-        group_pred = max(group) > th
+        # if level == "group":
+        #     group_pred = max(group) > th
+        # else:
+        group_pred = False
+        for g in group:
+            group_pred = torch.bitwise_or(group_pred, max(g) > th)
         group_preds.append(group_pred)
 
         pred = torch.bitwise_or(pred, group_pred)
@@ -341,7 +346,7 @@ def check_true_exact_one_group(group_scores, th=0.8):
     return pred, group_preds
 
 
-def reason_test_results(clause_scores, label):
+def reason_test_results(clause_scores, label, level="group"):
     preds = torch.zeros(len(clause_scores), dtype=torch.bool)
     pred_details = []
     for example_i in range(len(clause_scores)):
@@ -350,7 +355,7 @@ def reason_test_results(clause_scores, label):
         if len(clause_scores[example_i]) == 0:
             ex_pred = False
         if label in ["true_all_image", "true_all_image_g"]:
-            clause_pred, group_preds = check_true_in_image(clause_scores[example_i])
+            clause_pred, group_preds = check_true_in_image(clause_scores[example_i], level)
             ex_pred_details.append(group_preds)
             ex_pred = torch.bitwise_and(clause_pred, ex_pred)
         elif bk.rule_logic_types[label] == "true_all_group":

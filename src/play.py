@@ -51,7 +51,7 @@ def main():
     # perception.test_fms(args, data_loader)
 
     for task_id, (train_data, test_data, principle) in enumerate(data_loader):
-        if task_id in [0, 1, 2]:
+        if task_id != 8:
             continue
         args.output_file_prefix = config.models / f"t{task_id}_"
         imgs_train = train_data["img"]

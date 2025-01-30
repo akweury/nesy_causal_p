@@ -197,6 +197,15 @@ def check_clause(args, lang, rules, imgs_test, principle):
             preds_pos.append(pred_pos)
             preds_neg.append(pred_neg)
             all_details.append(details)
+        elif r_type == "true_all_image":
+            c_scores_pos = alpha.alpha_test(args, groups["group_pos"], lang, [c], "object")
+            c_scores_neg = alpha.alpha_test(args, groups["group_neg"], lang, [c], "object")
+
+            pred_pos, _ = reason.reason_test_results(c_scores_pos, r_type, "object")
+            pred_neg, details = reason.reason_test_results(c_scores_neg, r_type)
+            preds_pos.append(pred_pos)
+            preds_neg.append(pred_neg)
+            all_details.append(details)
     preds_pos = torch.stack(preds_pos).reshape(-1, 3).prod(dim=0)
     preds_neg = torch.stack(preds_neg).reshape(-1, 3).prod(dim=0)
     preds = torch.cat((preds_pos, preds_neg))
