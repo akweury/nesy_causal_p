@@ -318,7 +318,6 @@ def alpha(args, groups, mode):
                 clauses = df_search(args, lang, C, FC, ocm.unsqueeze(0))
                 if clauses is None:
                     continue
-
                 for clause in clauses:
                     clause = clause_op.change_clause_obj_id(clause, args, o_i, bk.variable_symbol_obj)
                     if clause not in obj_clauses:

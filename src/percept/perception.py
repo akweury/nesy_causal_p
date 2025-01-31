@@ -674,9 +674,9 @@ def percept_gestalt_groups(args, ocms, segments, obj_groups, dtype, principle):
     other: either thresholds (proximity) or the grouping shape (closure)
     """
     if principle == "proximity":
-        labels_prox, ths = gestalt_algs.cluster_by_proximity(ocms)
+        labels_prox, ths, shape_proximity = gestalt_algs.cluster_by_proximity(ocms)
         if labels_prox is not None:
-            gcm = gestalt_group.gcm_encoder(labels_prox, ocms, group_shape=0)
+            gcm = gestalt_group.gcm_encoder(labels_prox, ocms, all_shapes=shape_proximity)
             return gcm, labels_prox, ths
     elif principle == "similarity_shape":
         labels_simi_shape = gestalt_algs.cluster_by_similarity(ocms, "shape")
@@ -684,9 +684,9 @@ def percept_gestalt_groups(args, ocms, segments, obj_groups, dtype, principle):
             gcm = gestalt_group.gcm_encoder(labels_simi_shape, ocms, group_shape=0)
             return gcm, labels_simi_shape, None
     elif principle == "similarity_color":
-        labels_simi_color = gestalt_algs.cluster_by_similarity(ocms, "color")
+        labels_simi_color, shape_similarity = gestalt_algs.cluster_by_similarity(ocms, "color")
         if labels_simi_color is not None:
-            gcm = gestalt_group.gcm_encoder(labels_simi_color, ocms, group_shape=0)
+            gcm = gestalt_group.gcm_encoder(labels_simi_color, ocms, all_shapes=shape_similarity)
             return gcm, labels_simi_color, None
     elif principle == "closure":
         labels_closure, shape_closure = gestalt_algs.cluster_by_closure(args, segments, obj_groups)

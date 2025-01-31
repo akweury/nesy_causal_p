@@ -86,11 +86,12 @@ def cluster_by_proximity(ocms):
 
     th = 0.2
     preds = []
+    shapes = []
     for ocm in ocms:
         pred = algo_proximity(ocm[:, :2], th)
         preds.append(pred)
-
-    return preds, th
+        shapes.append(len(np.unique(pred)) * [0])
+    return preds, th, shapes
 
 
 def algo_similarity(ocm, mode):
@@ -120,11 +121,13 @@ def algo_similarity(ocm, mode):
 def cluster_by_similarity(ocms, mode):
     th_clusters = []
     preds = []
+    shapes = []
     for ocm in ocms:
         pred = algo_similarity(ocm, mode)
         th_clusters.append(len(pred.unique()))
         preds.append(pred)
-    return preds
+        shapes.append(len(np.unique(preds)) * [0])
+    return preds, shapes
 
 
 def update_assigned_mask(point_num, all_lines):

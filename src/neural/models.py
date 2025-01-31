@@ -297,7 +297,7 @@ def extract_line_curves(angles, seg_var_th=1e-8):
     """
 
     circular_variances = calculate_circular_variance(angles)
-    # chart_utils.show_line_chart(circular_variances, "circular_variances")
+    chart_utils.show_line_chart(circular_variances, "circular_variances")
 
     all_seg = []
     check_list = []
@@ -364,12 +364,13 @@ def find_contours(input_array):
 
     all_points = np.concatenate(contour_points)
 
-    contour_img = np.zeros((input_array.shape[0], input_array.shape[0], 3))
+    contour_img = np.zeros((input_array.shape[0], input_array.shape[0], 3), dtype=np.uint8)
+    line_width = 3
     from src import bk
     for i in range(len(all_points)):
         pos = all_points[i]
-        contour_img[pos[1], pos[0]] = [255, 255, 255]
-    # chart_utils.van(contour_img)
+        contour_img[pos[1] - line_width:pos[1] + line_width, pos[0] - line_width:pos[0] + line_width] = [255, 255, 255]
+    chart_utils.van(contour_img, config.output / "contour.png")
     return contour_points
 
 
@@ -400,7 +401,7 @@ def get_contour_segs(img):
         all_labels.append(seg_labels)
 
     # visualize the segments on the original contour image
-    # chart_utils.visual_labeled_contours(bw_img.shape[0], all_segments, contour_points, all_labels)
+    chart_utils.visual_labeled_contours(bw_img.shape[0], all_segments, contour_points, all_labels)
     return contour_points, all_segments, all_labels
 
 
@@ -485,9 +486,10 @@ def draw_line_on_array(array, start, end, color):
     sx = 1 if x1 < x2 else -1
     sy = 1 if y1 < y2 else -1
     err = dx - dy
-
+    line_width = 5
     while True:
-        array[y1 - 1:y1 + 2, x1 - 1:x1 + 2] = torch.tensor(color)  # Set the pixel value at the current point
+        array[y1 - line_width:y1 + line_width, x1 - line_width:x1 + line_width] = torch.tensor(
+            color)  # Set the pixel value at the current point
 
         if (x1, y1) == (x2, y2):
             break
@@ -615,12 +617,12 @@ def draw_arc_on_image(image, center, radius, start_angle, end_angle, color=(255,
     # Calculate x and y coordinates of the arc
     x_coords = np.round(x_center + radius * np.cos(angles)).astype(int)
     y_coords = np.round(y_center + radius * np.sin(angles)).astype(int)
-
+    line_width = 5
     # Draw the arc on the array
     for x, y in zip(x_coords, y_coords):
         if 0 <= x < image.shape[1] and 0 <= y < image.shape[0]:  # Check bounds
-            image[y - 1:y + 2, x - 1:x + 2] = color
-    # chart_utils.van(image)
+            image[y - line_width:y + line_width, x - line_width:x + line_width] = color
+    chart_utils.van(image, file_name=config.output / "closure_arc_segs.png")
     return image
 
 
@@ -672,7 +674,7 @@ def get_curves(contour_points, contour_segs, contour_seg_labels, width):
     for c_i, cir in enumerate(circles):
         cir_img = draw_arc_on_image(cir_img, cir["center"], cir["radius"], cir["start_angle"], cir["end_angle"],
                                     colors[1], 2, cir["direction"])
-    # chart_utils.van(cir_img)
+    chart_utils.van(cir_img, config.output / "closure_arc_segs.png")
 
     return circles
 
@@ -693,7 +695,7 @@ def get_line_groups(contour_points, contour_segs, contour_seg_labels, width):
     line_img = torch.zeros(width, width, 3)
     for l_i, line in enumerate(lines):
         line_img = draw_line_on_array(line_img, line[1], line[2], colors[0])
-    # chart_utils.van(line_img)
+    chart_utils.van(line_img.numpy().astype(np.uint8), file_name=config.output / "closure_line_segs.png")
 
     # merge all the line_segs
     merged_lines = merge_similar_lines(lines, slope_tolerance=0.9, distance_tolerance=1e-2, vertical_th=8)
@@ -701,7 +703,7 @@ def get_line_groups(contour_points, contour_segs, contour_seg_labels, width):
     merged_line_img = torch.zeros(width, width, 3)
     for l_i, line in enumerate(merged_lines):
         merged_line_img = draw_line_on_array(merged_line_img, line[1], line[2], colors[l_i])
-    # chart_utils.van(merged_line_img)
+    chart_utils.van(merged_line_img.numpy().astype(np.uint8), file_name=config.output / "closure_merged_lines.png")
 
     return merged_lines
 

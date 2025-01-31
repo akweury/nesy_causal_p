@@ -5,7 +5,9 @@ import matplotlib.pyplot as plt
 import cv2
 import numpy as np
 import torch
+from PIL import Image
 
+import config
 from src import bk
 
 
@@ -131,22 +133,28 @@ def vconcat_imgs(img_list):
     return img
 
 
-def visual_np_array(array):
+def visual_np_array(array, filename=None):
+    if filename is not None:
+        # save the image
+        # Convert array to image
+        image = Image.fromarray(array)
+        # Save as PNG
+        image.save(filename)
     plt.imshow(array)
     plt.axis('off')
     plt.show()
 
 
-def van(array):
+def van(array, file_name=None):
     if isinstance(array, list):
         hconcat = hconcat_imgs(array)
-        visual_np_array(hconcat.squeeze())
+        visual_np_array(hconcat.squeeze(), file_name)
     elif len(array.shape) == 2:
-        visual_np_array(array.squeeze())
+        visual_np_array(array.squeeze(), file_name)
     elif len(array.shape) == 3:
-        visual_np_array(array.squeeze())
+        visual_np_array(array.squeeze(), file_name)
     elif len(array.shape) == 4:
-        visual_np_array(array[0].squeeze())
+        visual_np_array(array[0].squeeze(), file_name)
 
 
 def get_black_img():
@@ -236,15 +244,19 @@ def visual_rl_step(task_img, ocms, output_labels, action, reward):
     return output_imgs
 
 
-def show_line_chart(data, title=""):
+def show_line_chart(data, title="", file_name=None):
     plt.plot(data)
     # Beautify the plot
     plt.title(title)
     plt.xlabel("Index")
     plt.ylabel("Value")
     plt.grid(True)
+    # Customize the plot
+    plt.legend()
+    # Save as a PDF
+    if file_name is not None:
+        plt.savefig(file_name, format="pdf")
     plt.show()
-
 
 def visual_multiple_segments(labels, data):
     # Visualize the segments
@@ -277,6 +289,7 @@ def visual_labeled_contours(width, all_contour_segs, contour_points, contour_lab
         (1.0, 0.0, 1.0)  # Magenta
     ]
     seg_img = np.zeros((width, width, 3))
+    lind_width = 5
     for contour_i, contour_segs in enumerate(all_contour_segs):
         for seg_i, seg in enumerate(contour_segs):
             points = contour_points[contour_i][seg]
@@ -284,8 +297,10 @@ def visual_labeled_contours(width, all_contour_segs, contour_points, contour_lab
             color = rgb_colors[0] if label == "line" else rgb_colors[1]
             # Color the given positions
             for pos in points:
-                seg_img[pos[1] - 1:pos[1] + 2, pos[0] - 1:pos[0] + 2] = color
-    van(seg_img)
+                seg_img[pos[1] - lind_width:pos[1] + lind_width, pos[0] - lind_width:pos[0] + lind_width] = color
+
+    seg_img = (seg_img * 255).astype(np.uint8)
+    van(seg_img, file_name=config.output / "contour_segs.png")
 
 
 def show_convex_hull(points, hull_points):
