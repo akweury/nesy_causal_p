@@ -654,7 +654,7 @@ def contour_to_direction_vector(contour):
         direction_vector.append((dx, dy))
     angles = direction_vectors_to_angles(np.array(direction_vector))
     smoothed_angles = smooth_directions_degrees(angles, window_size=10, sharpness_threshold=80)
-    chart_utils.show_line_chart(smoothed_angles, file_name=config.output/ f"dv_angles_{10}_{80}.pdf")
+    # chart_utils.show_line_chart(smoothed_angles, file_name=config.output/ f"dv_angles_{10}_{80}.pdf")
 
     # # Compute the direction vector
     # dv_2 = []

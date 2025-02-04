@@ -88,25 +88,32 @@ class Language(object):
             self.lp_atom = Lark(grammar.read(), start="atom")
 
         # load BK predicates and constants
-        self.predicates = self.load_preds()
+        self.obj_predicates = self.load_preds("object")
+        self.group_predicates = self.load_preds("group")
 
-    def load_preds(self):
+    def load_preds(self, level):
         # load all the bk predicates
         predicates = []
-        for pred_config in bk.predicate_configs.values():
-            predicates.append(self.parse_pred(pred_config))
+        if level == "object":
+            for pred_config in bk.predicate_configs.values():
+                predicates.append(self.parse_pred(pred_config))
+        elif level =="group":
+            for pred_config in bk.group_predicate_configs.values():
+                predicates.append(self.parse_pred(pred_config))
+        else:
+            raise Exception("Invalid predicate level")
         return predicates
 
-    def reset_lang(self, g_num):
+    def reset_lang(self, g_num, level):
         self.done = False
-        self.consts, self.min_consts = self.load_consts(self.number, 1, self.phi_num,
+        self.consts, self.min_consts = self.load_consts(self.number, g_num, self.phi_num,
                                                         self.rho_num, 1)
         self.group_vars = [
             Var(f"{self.variable_group_symbol}_{v_i}", bk.var_dtypes["group"]) for
             v_i in range(g_num)]
         self.group_variable_num = g_num
         # update predicates
-        self.predicates = self.load_preds()
+        self.predicates = self.load_preds(level)
         self.clauses = []
         self.generate_atoms()
         # update language
@@ -192,6 +199,36 @@ class Language(object):
         self.atoms = spec_atoms + sorted(atoms) + sorted(bk_pi_atoms) + sorted(
             pi_atoms)
 
+    def unique_combinations_filter(self, list_of_lists):
+        """
+        Given a list of lists, return all combinations where one element is chosen from each list,
+        while discarding:
+          - Combinations that contain repeated elements.
+          - Combinations that are duplicates up to ordering (i.e. same set of elements).
+
+        Args:
+            list_of_lists (list of lists): Input lists.
+
+        Returns:
+            list of tuples: Unique combinations (one element per list) meeting the above criteria.
+        """
+        seen = set()  # to track canonical forms (sorted tuples)
+        valid_combos = []  # to store the valid combinations
+
+        for combo in itertools.product(*list_of_lists):
+            # Discard if any element is repeated.
+            if len(set(combo)) != len(combo):
+                continue
+
+            # Create a canonical representation by sorting the tuple.
+            # This representation will be the same for combinations with the same elements.
+            canonical = tuple(sorted(combo))
+
+            if canonical not in seen:
+                seen.add(canonical)
+                valid_combos.append(combo)
+
+        return valid_combos
     def generate_atoms(self, clauses=None):
         p_ = Predicate('.', 1, [DataType('spec,?')])
         false = Atom(p_, [Const('__F__', dtype=DataType('spec,?'))])
@@ -202,7 +239,13 @@ class Language(object):
         for pred in self.predicates:
             dtypes = pred.dtypes
             consts_list = [self.get_by_dtype(dtype) for dtype in dtypes]
-            args_list = list(set(itertools.product(*consts_list)))
+            args_list = self.unique_combinations_filter(consts_list)
+            # # Generate all possible combinations (Cartesian product)
+            # args_list = itertools.product(*consts_list)
+            # # Filter out combinations that contain duplicate elements
+            # args_list = list(set([combo for combo in args_list if len(set(combo)) == len(combo)]))
+            #
+            # args_list = list(set(itertools.product(*consts_list)))
             if isinstance(pred, NeuralPredicate):
                 for args in args_list:
                     atoms.append(Atom(pred, args))
@@ -258,10 +301,10 @@ class Language(object):
 
         return grounded_atoms, ungrounded_atoms
 
-    def load_init_clauses(self):
+    def load_obj_init_clauses(self):
         """Read lines and parse to Atom objects.
         """
-        group_clauses_str = []
+        obj_clauses_str = []
         var_pattern = bk.variable['pattern']
         pred_target = bk.predicate_configs["predicate_target"].split(':')[0]
         pred_pattern_in = bk.predicate_configs["predicate_in_pattern"].split(':')[0]
@@ -272,6 +315,28 @@ class Language(object):
         body += f"{pred_pattern_in}({self.group_vars[0]},{var_pattern}),"
         for o_i in range(self.obj_variable_num):
             body += f"{pred_group_in}({self.obj_vars[o_i]},{self.group_vars[0]},{var_pattern}),"
+        obj_clauses_str.append(head + body[:-1] + ".")
+        obj_clauses = []
+        for group_clause_str in obj_clauses_str:
+            tree = self.lp_clause.parse(group_clause_str)
+            group_clause = ExpTree(self).transform(tree)
+            obj_clauses.append(group_clause)
+        return obj_clauses
+
+    def load_group_init_clauses(self):
+        """Read lines and parse to Atom objects.
+        """
+        group_clauses_str = []
+        var_pattern = bk.variable['pattern']
+        pred_target = bk.predicate_configs["predicate_target"].split(':')[0]
+        pred_pattern_in = bk.predicate_configs["predicate_in_pattern"].split(':')[0]
+
+        head = f"{pred_target}({var_pattern}):-"
+        body = ""
+        for var in self.group_vars:
+            body += f"{pred_pattern_in}({var},{var_pattern}),"
+        # for var in self.group_vars:
+        #     body += f"{pred_pattern_in}({var},{var_pattern}),"
         group_clauses_str.append(head + body[:-1] + ".")
         group_clauses = []
         for group_clause_str in group_clauses_str:

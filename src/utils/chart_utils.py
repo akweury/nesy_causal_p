@@ -140,12 +140,11 @@ def visual_np_array(array, filename=None):
         image = Image.fromarray(array)
         # Save as PNG
         image.save(filename)
-    plt.imshow(array)
     plt.axis('off')
-    plt.show()
 
 
 def van(array, file_name=None):
+    plt.clf()  # Clear current figure
     if isinstance(array, list):
         hconcat = hconcat_imgs(array)
         visual_np_array(hconcat.squeeze(), file_name)

@@ -160,7 +160,7 @@ def visual_group_on_the_image(img_np, obj_tensors, color):
 def visual_negative_image(check_results, imgs):
     negative_details = check_results["negative_details"]
 
-    for img_i in range(len(negative_details)):
+    for img_i in range(len(imgs)):
         img = imgs[img_i]
         labeled_img = img.clone().squeeze().numpy()
         group_colors = random.sample(list(bk.color_matplotlib.values()), 10)
@@ -174,7 +174,7 @@ def visual_negative_image(check_results, imgs):
             cv2.imwrite(str(config.models / "visual" / f"neg_{img_i}_c{c_i}.png"), labeled_img)
 
 
-def check_clause(args, lang, rules, imgs_test, principle):
+def check_clause(args, lang_obj, lang_group, rules, imgs_test, principle):
     # first three images are positive, last three images are negative
     preds_pos = []
     preds_neg = []
@@ -189,18 +189,17 @@ def check_clause(args, lang, rules, imgs_test, principle):
         r_type = rule["type"]
         counter = rule["counter"]
         if r_type == "true_all_image_g":
-            c_scores_pos = alpha.alpha_test(args, groups["group_pos"], lang, [c], "group")
-            c_scores_neg = alpha.alpha_test(args, groups["group_neg"], lang, [c], "group")
+            c_scores_pos = alpha.alpha_test(args, groups["group_pos"], lang_group, [c], "group")
+            c_scores_neg = alpha.alpha_test(args, groups["group_neg"], lang_group, [c], "group")
 
             pred_pos, _ = reason.reason_test_results(c_scores_pos, r_type)
             pred_neg, details = reason.reason_test_results(c_scores_neg, r_type)
             preds_pos.append(pred_pos)
             preds_neg.append(pred_neg)
             all_details.append(details)
-        elif r_type == "true_all_image":
-            c_scores_pos = alpha.alpha_test(args, groups["group_pos"], lang, [c], "object")
-            c_scores_neg = alpha.alpha_test(args, groups["group_neg"], lang, [c], "object")
-
+        elif r_type in ["true_all_image", "true_all_group"]:
+            c_scores_pos = alpha.alpha_test(args, groups["group_pos"], lang_obj, [c], "object")
+            c_scores_neg = alpha.alpha_test(args, groups["group_neg"], lang_obj, [c], "object")
             pred_pos, _ = reason.reason_test_results(c_scores_pos, r_type, "object")
             pred_neg, details = reason.reason_test_results(c_scores_neg, r_type)
             preds_pos.append(pred_pos)

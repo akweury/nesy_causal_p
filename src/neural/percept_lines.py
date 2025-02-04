@@ -26,7 +26,7 @@ def detect_lines(points, min_points=4):
         line_points = {(i1, p1), (i2, p2)}
 
         for i3, p3 in indexed_points:
-            if (i3, p3) not in line_points and are_collinear(p1, p2, p3, th=1e-4):
+            if (i3, p3) not in line_points and are_collinear(p1, p2, p3, th=1e-3):
                 line_points.add((i3, p3))
 
         if len(line_points) >= min_points:

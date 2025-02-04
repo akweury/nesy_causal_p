@@ -296,7 +296,7 @@ def get_task_names(principle):
 
 def gen_and_save(path, width, mode):
     max_length = 64
-    example_num = 3
+    example_num = 100
     all_tensors = {"positive": [], "negative": []}
     task_counter = 0
     principles = bk.gestalt_principles

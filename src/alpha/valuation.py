@@ -101,6 +101,9 @@ class FCNNValuationModule(nn.Module):
             # group_data = group_data[group_idx]
             term_data = group_data
             term_name = "group_data"
+        elif term_name == "group_objects_data":
+            term_data = group_data
+            term_name = "group_objects_data"
         elif term_name == "object":
             term_data = self.lang.term_index(term)
         elif term_name in [bk.const_dtype_object_color, bk.const_dtype_object_shape, bk.const_dtype_group,
@@ -109,9 +112,6 @@ class FCNNValuationModule(nn.Module):
                 term_data = term
             except KeyError:
                 raise KeyError
-        # elif term_name in bk.attr_names:
-        #     # return the standard attribute code
-        #     term_data = self.attrs[term]
         elif term_name == 'pattern':
             # return the image
             term_data = group_data
@@ -415,7 +415,7 @@ class VFCount(nn.Module):
         self.name = name
 
     def forward(self, args_dict):
-        group_data = args_dict[bk.var_dtype_group]
+        group_data = args_dict[bk.var_dtype_group]["gcms"]
         if group_data is None or group_data[0, bk.prop_idx_dict["obj_num"]] == 1:
             return 0.0
         num_name_gt = args_dict[bk.const_dtype_obj_num]
@@ -449,6 +449,86 @@ class VFGShape(nn.Module):
         group_shape = group_data[:, shape_indices].argmax() + 1
         has_label = float(group_shape_gt == group_shape)
         return has_label
+
+
+class VFGClosure(nn.Module):
+    """The function v_in.
+    """
+
+    def __init__(self, name):
+        super(VFGClosure, self).__init__()
+        self.name = name
+
+    def forward(self, args_dict):
+        group_data = args_dict[bk.var_dtype_group]["gcms"]
+        group_shape_gt = args_dict[bk.const_dtype_group]
+
+        if group_data is None:
+            return 0.0
+        shape_indices = [bk.prop_idx_dict["shape_tri"],
+                         bk.prop_idx_dict["shape_sq"],
+                         bk.prop_idx_dict["shape_cir"]]
+        obj_num_index = bk.prop_idx_dict["obj_num"]
+        if group_data[:, shape_indices].sum() == 0 or group_data[0, obj_num_index] == 1:
+            return 0.0
+
+        group_shape = group_data[:, shape_indices].argmax() + 1
+        has_label = float(group_shape_gt == group_shape)
+        return has_label
+
+
+class VFGSymmetryColor(nn.Module):
+    """The function v_in.
+    """
+
+    def __init__(self, name):
+        super(VFGSymmetryColor, self).__init__()
+        self.name = name
+
+    def forward(self, args_dict):
+        group_data = args_dict[bk.var_dtype_group_objs]["ocms"]
+
+        sorted_ocms =[]
+        for g_ocm in group_data:
+            indices = torch.sort(g_ocm[:,1])[1]
+            sorted_ocms.append(g_ocm[indices])
+        sorted_ocms = torch.stack(sorted_ocms, dim=0)
+        if len(group_data) != 2:
+            return 0.0
+        shape_indices = [bk.prop_idx_dict["rgb_r"], bk.prop_idx_dict["rgb_g"], bk.prop_idx_dict["rgb_b"]]
+        all_same = 1
+        for i in range(sorted_ocms.shape[1]):
+            same_shape = torch.equal(sorted_ocms[1, i, [shape_indices]], sorted_ocms[0, i, [shape_indices]])
+            all_same = all_same * same_shape
+
+        return float(all_same)
+
+
+class VFGSymmetryShape(nn.Module):
+    """The function v_in.
+    """
+
+    def __init__(self, name):
+        super(VFGSymmetryShape, self).__init__()
+        self.name = name
+
+    def forward(self, args_dict):
+        group_data = args_dict[bk.var_dtype_group_objs]["ocms"]
+        sorted_ocms =[]
+        for g_ocm in group_data:
+            indices = torch.sort(g_ocm[:,1])[1]
+            sorted_ocms.append(g_ocm[indices])
+        sorted_ocms = torch.stack(sorted_ocms, dim=0)
+
+        if len(group_data) != 2:
+            return 0.0
+        shape_indices = [bk.prop_idx_dict["shape_tri"], bk.prop_idx_dict["shape_sq"], bk.prop_idx_dict["shape_cir"]]
+        all_same = True
+        for i in range(sorted_ocms.shape[1]):
+            same_shape = torch.equal(sorted_ocms[1, i, [shape_indices]], sorted_ocms[0, i, [shape_indices]])
+            all_same = all_same * same_shape
+
+        return float(all_same)
 
 
 class VFInG(nn.Module):
@@ -708,9 +788,18 @@ def get_valuation_module(args, lang):
     pred_funs = [VFInP(bk.pred_names["in_pattern"]),
                  VFInG(bk.pred_names["in_group"]),
                  VFColor(bk.pred_names["has_color"]),
-                 VFShape(bk.pred_names["has_shape"]),
-                 VFGShape(bk.pred_names["group_shape"]),
+                 VFShape(bk.pred_names["has_shape"])
+                 ]
+    VM = FCNNValuationModule(pred_funs, lang=lang, device=args.device)
+    return VM
+
+
+def get_group_valuation_module(args, lang):
+    pred_funs = [VFInP(bk.pred_names["in_pattern"]),
+                 VFGClosure(bk.pred_names["group_shape"]),
                  VFCount(bk.pred_names["object_num"]),
+                 VFGSymmetryColor(bk.pred_names["symmetry_color"]),
+                 VFGSymmetryShape(bk.pred_names["symmetry_shape"]),
                  ]
     VM = FCNNValuationModule(pred_funs, lang=lang, device=args.device)
     return VM
@@ -721,6 +810,16 @@ valuation_modules = {
     bk.pred_names["in_group"]: VFInG(bk.pred_names["in_group"]),
     bk.pred_names["has_color"]: VFColor(bk.pred_names["has_color"]),
     bk.pred_names["has_shape"]: VFShape(bk.pred_names["has_shape"]),
-    bk.pred_names["group_shape"]: VFGShape(bk.pred_names["group_shape"]),
+    bk.pred_names["object_num"]: VFCount(bk.pred_names["object_num"]),
+    bk.pred_names["group_shape"]: VFGClosure(bk.pred_names["group_shape"]),
+    bk.pred_names["symmetry_color"]: VFGSymmetryColor(bk.pred_names["symmetry_color"]),
+    bk.pred_names["symmetry_shape"]: VFGSymmetryShape(bk.pred_names["symmetry_shape"]),
+}
+
+valuation_modules_group = {
+    bk.pred_names["in_pattern"]: VFInP(bk.pred_names["in_pattern"]),
+    bk.pred_names["group_shape"]: VFGClosure(bk.pred_names["group_shape"]),
+    bk.pred_names["symmetry_color"]: VFGSymmetryColor(bk.pred_names["symmetry_color"]),
+    bk.pred_names["symmetry_shape"]: VFGSymmetryShape(bk.pred_names["symmetry_shape"]),
     bk.pred_names["object_num"]: VFCount(bk.pred_names["object_num"]),
 }

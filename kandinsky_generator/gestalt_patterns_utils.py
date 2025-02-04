@@ -68,6 +68,75 @@ def generate_evenly_distributed_points(p, n, r):
     return points
 
 
+def generate_clusters(th, min_cluster_center_distance=0.2):
+    """
+    Generate clusters of points in the unit square [0,1] x [0,1] with:
+      - Each point at least 'th' away from the border.
+      - Each cluster (1 to 3 points) generated around a cluster center.
+      - Cluster centers are forced to be at least 'min_cluster_center_distance' apart,
+        ensuring that clusters are well separated.
+
+    Parameters:
+      th: float
+         Minimum distance from any point to the border.
+      min_cluster_center_distance: float
+         Minimum allowed distance between any two cluster centers.
+
+    Returns:
+      clusters: list of lists, where each inner list contains the points (as NumPy arrays)
+                belonging to one cluster.
+    """
+    clusters = []
+    safe_length = 1 - 2 * th  # length of the safe interval in each dimension
+
+    # Choose the maximum spread for points within a cluster.
+    # We want this spread to be small compared to both the safe region and the separation between clusters.
+    max_cluster_spread = min(safe_length / 10.0, min_cluster_center_distance / 3.0)
+
+    # Decide on a random number of clusters (between 1 and 5)
+    num_clusters = random.randint(2, 4)
+    centers = []
+
+    # To ensure that the cluster (with its maximum spread) does not violate the border constraint,
+    # we choose centers from the reduced safe region:
+    safe_lower = th + max_cluster_spread
+    safe_upper = 1 - th - max_cluster_spread
+
+    # Use rejection sampling to generate cluster centers that are at least min_cluster_center_distance apart.
+    attempts = 0
+    max_attempts = 1000
+    while len(centers) < num_clusters and attempts < max_attempts:
+        candidate = np.array([
+            random.uniform(safe_lower, safe_upper),
+            random.uniform(safe_lower, safe_upper)
+        ])
+        if all(np.linalg.norm(candidate - c) >= min_cluster_center_distance for c in centers):
+            centers.append(candidate)
+        attempts += 1
+
+    if len(centers) < num_clusters:
+        print("Warning: Only generated", len(centers), "clusters instead of", num_clusters,
+              "with the specified separation.")
+
+    # For each cluster center, generate 1-3 points close to the center.
+    for center in centers:
+        num_points = random.randint(2, 3)
+        cluster_points = []
+        # For this cluster, choose a spread r that is at most max_cluster_spread.
+        r = random.uniform(0, max_cluster_spread)
+        for _ in range(num_points):
+            # Each coordinate offset is chosen uniformly from [-r, r]
+            offset = np.array([random.uniform(-r*0.5, r*0.5), random.uniform(-r*0.5, r*0.5)])
+            point = center + offset
+            # Clamp the point (as a precaution) to the safe region [th, 1-th]
+            point[0] = min(max(point[0], th), 1 - th)
+            point[1] = min(max(point[1], th), 1 - th)
+            cluster_points.append(point)
+        clusters.append(cluster_points)
+
+    return clusters
+
+
 def generate_points(center, radius, n, min_distance):
     points = []
     attempts = 0

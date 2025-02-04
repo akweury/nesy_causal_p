@@ -138,6 +138,7 @@ class FactsConverter(nn.Module):
                     #     pred_args[term_name] = term_data
                     module_name = atom.pred.sub_preds[a_i].name
                     # valuating via the predicate mechanics
+
                     module = valuation.valuation_modules[module_name]
                     module_res = module(pred_args)
                     try:

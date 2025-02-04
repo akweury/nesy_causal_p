@@ -6,6 +6,7 @@ from src.utils import log_utils
 from src.alpha import valuation, facts_converter, nsfr, pruning, clause_op
 from src.alpha.fol import language, refinement
 from src import bk
+from itertools import combinations
 
 
 def init_ilp(args, obj_num):
@@ -125,9 +126,9 @@ def beam_search(args, lang, C, FC, objs):
     return clauses
 
 
-def df_search(args, lang, C, FC, group):
+def df_search(args, lang, C, FC, group, group_num, level):
     # node evaluation
-    lang.reset_lang(g_num=1)
+    lang.reset_lang(g_num=group_num, level=level)
     atom_C = extension(args, lang, C)
     NSFR = nsfr.get_nsfr_model(args, lang, FC, atom_C)
     target_preds = list(set([c.head.pred.name for c in atom_C]))
@@ -164,19 +165,15 @@ def df_search(args, lang, C, FC, group):
     lang.clauses += extended_nodes
     clauses = lang.clauses
     return clauses
-    if len(clauses) > 1:
 
-        lang.reset_lang(g_num=1)
-        atom_C = extension(args, lang, C)
-        NSFR = nsfr.get_nsfr_model(args, lang, FC, atom_C)
-        target_preds = list(set([c.head.pred.name for c in atom_C]))
-        # clause evaluation
-        ils, dls = evaluation(args, NSFR, target_preds, group)
-        raise ValueError
-    else:
-        return clauses[0]
-
-
+def align_ocms(ocms):
+    aligned_ocms = []
+    max_len = max([len(ocm) for ocm in ocms])
+    for ocm in ocms:
+        if len(ocm)<max_len:
+            ocm = torch.cat((ocm, torch.zeros(max_len - len(ocm), 10)))
+        aligned_ocms.append(ocm)
+    return aligned_ocms
 def eval_task(args, lang, FC, images_data, all_clauses, level):
     """
     return: true, if all the clauses are satisfied, else false.
@@ -190,18 +187,28 @@ def eval_task(args, lang, FC, images_data, all_clauses, level):
             NSFR = nsfr.get_nsfr_model(args, lang, FC, [clause])
             clause_preds = []
             for g_i, group in enumerate(images_data[example_i]):
-                if level == "group":
-                    gcm = group["gcm"]
-                    ils, _ = evaluation(args, NSFR, target_preds, gcm)
-                    clause_pred = ils.squeeze()
+                clause_preds = []
+                if level=="group":
+                    enum_example_groups = []
+                    for g_i, g in enumerate(images_data[example_i]):
+                        enum_example_groups.append([g_i, g])
+                    group_combs = list(itertools.combinations(enum_example_groups, 2))
+                    for groups in group_combs:
+                        gcms = torch.cat([group[1]["gcm"] for group in groups], dim=0)
+                        ocms =[group[1]["ocm"] for group in groups]
+                        ocms_aligned = align_ocms(ocms)
+                        group_indices = [group[0] for group in groups]
+                        data = {"gcms": gcms, "ocms": ocms_aligned}
+                        ils, _ = evaluation(args, NSFR, target_preds, data)
+                        clause_pred = [ils.squeeze()]
+                        clause_preds.append(clause_pred)
                 else:
                     ocms = group["ocm"]
                     clause_pred = []
                     for o_i, ocm in enumerate(ocms):
                         ils, _ = evaluation(args, NSFR, target_preds, ocm.unsqueeze(0))
                         clause_pred.append(ils.squeeze())
-
-                clause_preds.append(clause_pred)
+                    clause_preds.append(clause_pred)
             example_preds.append(clause_preds)
         preds.append(example_preds)
     return preds
@@ -232,29 +239,29 @@ def remove_trivial_atoms(args, lang, FC, clauses, objs, data):
     return non_trivial_atoms
 
 
-def search_clauses(args, ocm, gcm, groups):
-    lang = None
-    example_num = len(groups)
-    principle_num = groups.shape[1]
-    all_clauses = []
-    for a_i in range(principle_num):
-        principle_clauses = []
-        principle_gcm = [gcm[i][a_i] for i in range(len(gcm))]
-        same_length = all([len(_gcm) == len(principle_gcm[0]) for _gcm in principle_gcm])
-        if not same_length:
-            continue
-
-        for e_i in range(example_num):
-            # reasoning clauses
-            lang = alpha(args, ocm[e_i], principle_gcm[e_i], groups[e_i, a_i, :len(ocm[e_i])])
-            if len(lang.clauses) == 0:
-                break
-            principle_clauses += lang.clauses
-        # remove infrequent clauses
-        if len(principle_clauses) > 0:
-            principle_clauses, lang = filter_infrequent_clauses(principle_clauses, lang, example_num)
-        all_clauses += principle_clauses
-    return lang
+# def search_clauses(args, ocm, gcm, groups):
+#     lang = None
+#     example_num = len(groups)
+#     principle_num = groups.shape[1]
+#     all_clauses = []
+#     for a_i in range(principle_num):
+#         principle_clauses = []
+#         principle_gcm = [gcm[i][a_i] for i in range(len(gcm))]
+#         same_length = all([len(_gcm) == len(principle_gcm[0]) for _gcm in principle_gcm])
+#         if not same_length:
+#             continue
+#
+#         for e_i in range(example_num):
+#             # reasoning clauses
+#             lang = alpha(args, ocm[e_i], principle_gcm[e_i], groups[e_i, a_i, :len(ocm[e_i])])
+#             if len(lang.clauses) == 0:
+#                 break
+#             principle_clauses += lang.clauses
+#         # remove infrequent clauses
+#         if len(principle_clauses) > 0:
+#             principle_clauses, lang = filter_infrequent_clauses(principle_clauses, lang, example_num)
+#         all_clauses += principle_clauses
+#     return lang
 
 
 def common_elements(lists):
@@ -285,7 +292,7 @@ def search_common_clauses(all_groups):
                 common_group_clauses.append(group_clause)
 
 
-def save_lang(args, lang, mode):
+def save_lang(args, lang, mode, level):
     lang_dict = {
         "all_groups": lang.all_groups,
         "atoms": lang.atoms,
@@ -295,7 +302,7 @@ def save_lang(args, lang, mode):
         "g_num": lang.group_variable_num,
         "attrs": lang.attrs,
     }
-    torch.save(lang_dict, str(args.output_file_prefix) + f'learned_lang_{mode}.pkl')
+    torch.save(lang_dict, str(args.output_file_prefix) + f'learned_lang_{mode}_{level}.pkl')
 
 
 def alpha(args, groups, mode):
@@ -304,7 +311,7 @@ def alpha(args, groups, mode):
     lang.reset_lang(g_num=1)
     VM = valuation.get_valuation_module(args, lang)
     FC = facts_converter.FactsConverter(args, lang, VM)
-    C = lang.load_init_clauses()
+    C = lang.load_obj_init_clauses()
 
     example_num = len(groups)
     all_groups = []
@@ -348,9 +355,7 @@ def alpha(args, groups, mode):
                 if obj_clause not in o_clauses:
                     o_clauses.append(obj_clause)
     lang.update_consts(g_clauses + o_clauses)
-
     lang.generate_atoms(g_clauses + o_clauses)
-
     lang.update_predicates(g_clauses + o_clauses)
     lang.clauses = g_clauses + o_clauses
 
@@ -358,11 +363,137 @@ def alpha(args, groups, mode):
     return lang
 
 
-def alpha_test(args, groups, lang, all_clauses, level):
+def alpha_object(args, all_matrix, mode):
+    obj_num = 1
+    lang = init_ilp(args, obj_num)
+    lang.reset_lang(g_num=1, level="object")
     VM = valuation.get_valuation_module(args, lang)
+    FC = facts_converter.FactsConverter(args, lang, VM)
+    C = lang.load_obj_init_clauses()
+    example_num = len(all_matrix)
+    all_groups = []
+    for example_i in range(example_num):
+        example_groups = []
+        for g_i, group in enumerate(all_matrix[example_i]):
+            ocms = group["ocm"]
+            # gcm = group["gcm"]
+            obj_clauses = {}
+            for o_i, ocm in enumerate(ocms):
+                clauses = df_search(args, lang, C, FC, ocm.unsqueeze(0), 1, level="object")
+                if clauses is None:
+                    continue
+                for clause in clauses:
+                    clause = clause_op.change_clause_obj_id(clause, args, o_i, bk.variable_symbol_obj)
+                    if clause not in obj_clauses:
+                        obj_clauses[clause] = 1
+                    else:
+                        obj_clauses[clause] += 1
+            group_data = {"obj_clauses": obj_clauses}
+            example_groups.append(group_data)
+        all_groups.append(example_groups)
+    lang.all_groups = all_groups
+    # update language consts, atoms
+    o_clauses = []
+    for ic in all_groups:
+        for g in ic:
+            for obj_clause, _ in g["obj_clauses"].items():
+                if obj_clause not in o_clauses:
+                    o_clauses.append(obj_clause)
+    lang.update_consts(o_clauses)
+    lang.generate_atoms(o_clauses)
+    lang.update_predicates(o_clauses)
+    lang.clauses = o_clauses
+    save_lang(args, lang, mode, "object")
+    return lang
+
+
+def alpha_group(args, all_matrix, mode):
+    group_num = len(all_matrix[0])
+    lang = init_ilp(args, group_num)
+    lang.reset_lang(g_num=group_num, level="group")
+    VM = valuation.get_group_valuation_module(args, lang)
+    FC = facts_converter.FactsConverter(args, lang, VM)
+    C = lang.load_group_init_clauses()
+
+    example_num = len(all_matrix)
+    all_clauses = []
+    for example_i in range(example_num):
+        example_clauses = []
+        example_groups = all_matrix[example_i]
+        enum_example_groups = []
+        for g_i, g in enumerate(example_groups):
+            enum_example_groups.append([g_i, g])
+        group_combs = list(itertools.combinations(enum_example_groups, 2))
+        for groups in group_combs:
+            gcms = torch.cat([group[1]["gcm"] for group in groups], dim=0)
+            ocms = torch.stack([group[1]["ocm"] for group in groups])
+            group_indices = [group[0] for group in groups]
+            data = {"gcms": gcms, "ocms": ocms}
+            group_clauses = df_search(args, lang, C, FC, data, group_num, level="group")
+            gcs = {}
+            for clause in group_clauses:
+                # clause = clause_op.change_clause_obj_id(clause, args, group_indices, bk.variable_symbol_group)
+                if clause not in gcs:
+                    gcs[clause] = 1
+                else:
+                    gcs[clause] += 1
+            group_data = {"group_clauses": gcs}
+            example_clauses.append(group_data)
+        all_clauses.append(example_clauses)
+    removed_all_clauses = remove_trivial_clauses(all_clauses)
+    lang.all_groups = removed_all_clauses
+    # update language consts, atoms
+    g_clauses = []
+
+    for ic in removed_all_clauses:
+        for g in ic:
+            for g_clause, _ in g["group_clauses"].items():
+                if g_clause not in g_clauses:
+                    g_clauses.append(g_clause)
+    lang.update_consts(g_clauses)
+    lang.generate_atoms(g_clauses)
+    lang.update_predicates(g_clauses)
+    lang.clauses = g_clauses
+    save_lang(args, lang, mode, "group")
+
+    return lang
+
+
+def alpha_test(args, groups, lang, all_clauses, level):
+    if level == "object":
+        VM = valuation.get_valuation_module(args, lang)
+    else:
+        VM = valuation.get_group_valuation_module(args, lang)
     FC = facts_converter.FactsConverter(args, lang, VM, given_attrs=lang.attrs)
     pred = eval_task(args, lang, FC, groups, all_clauses, level)
     return pred
+
+
+def is_trivial_clause(c):
+    is_trivial = False
+
+    for atom in c.body:
+        name = []
+        for t in atom.terms:
+            if t.name not in name:
+                name.append(t.name)
+            else:
+                is_trivial = True
+    return is_trivial
+
+
+def remove_trivial_clauses(all_clauses):
+    non_trivial_clauses = []
+    for img_i in range(len(all_clauses)):
+        img_clauses = []
+        for g_i in range(len(all_clauses[img_i])):
+            group_clauses = {"group_clauses": {}}
+            for c, count in all_clauses[img_i][g_i]["group_clauses"].items():
+                if not is_trivial_clause(c):
+                    group_clauses["group_clauses"][c] = count
+            img_clauses.append(group_clauses)
+        non_trivial_clauses.append(img_clauses)
+    return non_trivial_clauses
 
 
 def filter_infrequent_clauses(all_clauses, lang, example_num):

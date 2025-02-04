@@ -56,13 +56,13 @@ def load_data(args, image_path):
     return img, patch
 
 
-def load_lang(args, mode):
-    lang_file = str(args.output_file_prefix) + f'learned_lang_{mode}.pkl'
+def load_lang(args, mode, level):
+    lang_file = str(args.output_file_prefix) + f'learned_lang_{mode}_{level}.pkl'
     if os.path.exists(lang_file):
         lang_data = torch.load(lang_file)
         if lang_data is not None:
-            lang = alpha.init_ilp(args, 1)
-            lang.reset_lang(lang_data["g_num"])
+            lang = alpha.init_ilp(args, lang_data["g_num"])
+            lang.reset_lang(lang_data["g_num"], level)
             lang.clauses = lang_data["clauses"]
             lang.predicates = lang_data["preds"]
             lang.consts = lang_data["consts"]
@@ -90,36 +90,27 @@ def load_lang(args, mode):
     return None
 
 
-def save_lang(args, lang, rules):
-    lang_dict = {
-        "atoms": lang.atoms,
-        "clauses": lang.clauses,
-        "consts": lang.consts,
-        "preds": lang.predicates,
-        "g_num": lang.group_variable_num,
-        "attrs": lang.attrs,
-        # "llm_clauses": lang.llm_clauses,
-        # "name_dict": lang.name_dict,
-        "true_all_image": rules["true_all_image"],
-        "true_all_group": rules["true_all_group"],
-        "true_exact_one_group": rules["true_exact_one_group"],
-    }
-    torch.save(lang_dict, str(args.output_file_prefix) + f'learned_lang.pkl')
-
-
 def train_clauses(args, groups):
     args.step_counter += 1
-    lang_pos = load_lang(args, "positive")
-    lang_neg = load_lang(args, "negative")
-    if lang_pos is None:
-        # reasoning clauses
-        lang_pos = alpha.alpha(args, groups["group_pos"], "positive")
-    if lang_neg is None:
-        lang_neg = alpha.alpha(args, groups["group_neg"], "negative")
+    lang_pos_object = load_lang(args, "positive", "object")
+    lang_pos_group = load_lang(args, "positive", "group")
+    lang_neg_object = load_lang(args, "negative","object")
+    lang_neg_group = load_lang(args, "negative","group")
+    if lang_pos_object is None:
+        lang_pos_object = alpha.alpha_object(args, groups["group_pos"], "positive")
+    if lang_pos_group is None:
+        lang_pos_group = alpha.alpha_group(args, groups["group_pos"], "positive")
+    if lang_neg_object is None:
+        lang_neg_object = alpha.alpha_object(args, groups["group_neg"], "negative")
+    if lang_neg_group is None:
+        lang_neg_group = alpha.alpha_group(args, groups["group_neg"], "negative")
 
-    rules = reason.find_common_rules(lang_pos.all_groups, lang_neg.all_groups)
+    rules = reason.find_common_rules(lang_pos_group.all_groups,
+                                     lang_pos_object.all_groups,
+                                     lang_neg_group.all_groups,
+                                     lang_neg_object.all_groups)
 
-    return lang_pos, rules
+    return lang_pos_object, lang_pos_group, rules
 
 
 if __name__ == "__main__":

@@ -149,29 +149,47 @@ def llama_rewrite_clause(principle, rule_level, facts, obj_num):
     return response
 
 
-def rewrite_true_all_group_rules(rules, name_dict, natural_language_explanations, principle, counter):
+def rewrite_true_all_group_rules(rule, natural_language_explanations):
     """
     :return: natural langauge explanations of each rule
     """
-    facts = []
-    for r_i, rule in enumerate(rules):
-        if rule in natural_language_explanations["true_all_group"]:
-            continue
-        obj_props = []
-        for term in rule.body[0].terms:
-            if isinstance(term, Const) and "object" in term.dtype.name:
-                obj_props.append(term.name)
-        if tuple(obj_props) not in name_dict:
-            obj_str = ",".join(obj_props)
-            obj_desc = llama_rename_term(obj_str)
-            name_dict[tuple(obj_props)] = obj_desc
-        else:
-            obj_desc = name_dict[tuple(obj_props)]
-        facts.append(obj_desc)
-        freq = counter[r_i].min()
-        # rewrite the whole clause
-        final_clause = llama_rewrite_clause(principle, "group", obj_desc, freq)
-        natural_language_explanations["true_all_group"][rule] = final_clause
+    # facts = []
+    # obj_props = []
+    # if rule_type in ["true_all_group"]:
+    #     level = "object"
+    # else:
+    #     raise ValueError
+    # for term in rule.body[0].terms:
+    #     if isinstance(term, Const) and "object" in term.dtype.name:
+    #         obj_props.append(term.name)
+    # if tuple(obj_props) not in name_dict:
+    #     obj_str = ",".join(obj_props)
+    #     obj_desc = llama_rename_term(obj_str, level)
+    #     name_dict[tuple(obj_props)] = obj_desc
+
+    prompt = (f"The natural language converter M_nlc maps the logical rules R into a human readable textual description T. "
+              f"We define:  T = M_nlc(R) where T is a sequence of tokens (t_1, t_2,..., t_m) in a target language (e.g. English). "
+              f"This mapping often relies on predefined templates or trained language-generation models "
+              f"that interpret logical constructs and translate them into coherent sentences. "
+              f"For example, if r_i is a constraint stating "
+              f"img(I):-exist_obj_shape(circle,O_0,G_0,I),in_group(O_0,G_0,I),in_pattern(G_0,I)."
+              f"the converter might produce a sentence such as :"
+              f"There is a group (G_0) of objects in the pattern (I), "
+              f"the group (G_0) contains object (O_0) with shape of circle (properties)."
+              f"Thus, the natural language converter bridges the gap between symbolic logic rules and human-friendly explanations, "
+              f"enabling users to readily understand the system's inferred patterns or constraints."
+              f"More examples:"
+              f"if r_i is a constraint stating "
+              f"target(I):-exist_obj_color_exist_obj_shape(purple,square,O_1,G_0),in_group(O_1,G_0,I),in_pattern(G_0,I).,"
+              f"the converter might produce a sentence such as :"
+              f"There is a group (G_0) of objects in the pattern (I), "
+              f"the group (G_0) contains object (O_0), which is a purple square (properties)."
+              f"Now given a clause {str(rule)}, convert it to natural language. "
+              f"Only answer with the converted sentences."
+              )
+
+    final_clause = llama3(prompt)
+    natural_language_explanations["true_all_group"][rule] = final_clause
 
     return natural_language_explanations
 
@@ -228,17 +246,7 @@ def rewrite_clauses(args, rules, principle, task_id):
     rule_explanations, name_dict = load_llm_responses(task_id)
     # true all image rules
     for rule in rules:
-        if rule["type"] == "true_all_image_g":
-            rewrite_true_all_image_rules(rule["rule"], name_dict, rule_explanations, principle, rule["counter"],
-                                         "group")
-        elif rule["type"] == "true_all_group_g":
-            rewrite_true_all_group_rules(rule["rule"], name_dict, rule_explanations, principle, rule["counter"])
-        elif rule["type"] == "true_all_image":
-            rewrite_true_all_image_rules(rule["rule"], name_dict, rule_explanations, principle, rule["counter"],
-                                         "image")
-        else:
-            raise ValueError
-
+        rewrite_true_all_group_rules(rule["rule"], rule_explanations)
     args.logger.debug(
         "\n =============== LLM: Rename terms =============== " + "".join(
             [f"\n{k} -> {v}" for k, v in name_dict.items()]))

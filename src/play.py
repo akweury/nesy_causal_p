@@ -51,7 +51,7 @@ def main():
     # perception.test_fms(args, data_loader)
 
     for task_id, (train_data, test_data, principle) in enumerate(data_loader):
-        if task_id != 0:
+        if task_id != 4:
             continue
         args.output_file_prefix = config.models / f"t{task_id}_"
         imgs_train = train_data["img"]
@@ -59,9 +59,9 @@ def main():
         # grouping objects
         groups = perception.cluster_by_principle(args, imgs_train, "train", principle[0])
         # Learn Clauses from Training Data
-        lang, rules = train_nsfr.train_clauses(args, groups)
+        lang_obj, lang_group, rules = train_nsfr.train_clauses(args, groups)
         # Test Patterns, statistic the accuracy
-        check_results = check_clause(args, lang, rules, imgs_test, principle[0])
+        check_results = check_clause(args, lang_obj, lang_group, rules, imgs_test, principle[0])
         # convert to natural language
         natural_rules = llama_call.convert_to_final_clauses(args, rules, check_results, principle[0], task_id)
 

@@ -297,7 +297,7 @@ def extract_line_curves(angles, seg_var_th=1e-8):
     """
 
     circular_variances = calculate_circular_variance(angles)
-    chart_utils.show_line_chart(circular_variances, "circular_variances")
+    # chart_utils.show_line_chart(circular_variances, "circular_variances")
 
     all_seg = []
     check_list = []
@@ -370,7 +370,7 @@ def find_contours(input_array):
     for i in range(len(all_points)):
         pos = all_points[i]
         contour_img[pos[1] - line_width:pos[1] + line_width, pos[0] - line_width:pos[0] + line_width] = [255, 255, 255]
-    chart_utils.van(contour_img, config.output / "contour.png")
+    # chart_utils.van(contour_img, config.output / "contour.png")
     return contour_points
 
 
@@ -401,7 +401,7 @@ def get_contour_segs(img):
         all_labels.append(seg_labels)
 
     # visualize the segments on the original contour image
-    chart_utils.visual_labeled_contours(bw_img.shape[0], all_segments, contour_points, all_labels)
+    # chart_utils.visual_labeled_contours(bw_img.shape[0], all_segments, contour_points, all_labels)
     return contour_points, all_segments, all_labels
 
 
@@ -626,11 +626,15 @@ def draw_arc_on_image(image, center, radius, start_angle, end_angle, color=(255,
     return image
 
 
-def merge_similar_lines(lines, slope_tolerance, distance_tolerance, vertical_th=8):
+def merge_similar_lines(lines, line_obj_indices, slope_tolerance, distance_tolerance, vertical_th=8):
     used = np.zeros(len(lines))
     similar_lines = []
-
+    line_group_data = []
     for l_i, line in enumerate(lines):
+        merged_line_obj_indices = [
+            line_obj_indices[l_i]
+        ]
+
         current_line = line
         if used[l_i]:
             continue
@@ -638,22 +642,31 @@ def merge_similar_lines(lines, slope_tolerance, distance_tolerance, vertical_th=
             if used[l_i] == 0:
                 used[l_i] = 1
                 similar_lines.append(line)
+                merged_line_obj_indices.append(line_obj_indices[l_i])
         for l2_i in range(l_i + 1, len(lines)):
             l2 = lines[l2_i]
             k1 = line[0]
             k2 = l2[0]
-            slope_similar = np.abs(k1 - k2) < slope_tolerance
+            # Convert slopes to angles (in radians)
+            theta1 = math.atan(k1)
+            theta2 = math.atan(k2)
+            # Compute the absolute difference in angles
+            angle_diff = abs(theta1 - theta2)
+            slope_similar = angle_diff < slope_tolerance
             all_vertical = np.abs(k2) >= vertical_th and np.abs(k1) >= vertical_th
             collinearity = is_collinear(current_line[1], current_line[2], l2[1], distance_tolerance)
             if (slope_similar or all_vertical) and collinearity:
                 used[l_i] = 1
                 used[l2_i] = 1
                 # Update the start and end to cover both lines
-                current_start = min(current_line[1], l2[1], key=lambda p: (p[0], p[1]))
-                current_end = max(current_line[2], l2[2], key=lambda p: (p[0], p[1]))
+                current_start = min(current_line[1], current_line[2], l2[1], l2[2], key=lambda p: (p[0], p[1]))
+                current_end = max(current_line[1], current_line[2], l2[1], l2[2], key=lambda p: (p[0], p[1]))
                 current_line = [current_line[0], current_start, current_end]
-                similar_lines.append(current_line)
-    return similar_lines
+                merged_line_obj_indices.append(line_obj_indices[l2_i])
+        similar_lines.append(current_line)
+        line_group_data.append(np.unique(merged_line_obj_indices))
+
+    return similar_lines, line_group_data
 
 
 def get_curves(contour_points, contour_segs, contour_seg_labels, width):
@@ -670,25 +683,37 @@ def get_curves(contour_points, contour_segs, contour_seg_labels, width):
 
     colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 0, 255), (0, 0, 128), (255, 0, 128)]
     # visual circles
-    cir_img = np.zeros((width, width, 3), dtype=np.uint8)
-    for c_i, cir in enumerate(circles):
-        cir_img = draw_arc_on_image(cir_img, cir["center"], cir["radius"], cir["start_angle"], cir["end_angle"],
-                                    colors[1], 2, cir["direction"])
-    chart_utils.van(cir_img, config.output / "closure_arc_segs.png")
+    # cir_img = np.zeros((width, width, 3), dtype=np.uint8)
+    # for c_i, cir in enumerate(circles):
+    #     cir_img = draw_arc_on_image(cir_img, cir["center"], cir["radius"], cir["start_angle"], cir["end_angle"],
+    #                                 colors[1], 2, cir["direction"])
+    # chart_utils.van(cir_img, config.output / "closure_arc_segs.png")
 
     return circles
 
 
 def get_line_groups(contour_points, contour_segs, contour_seg_labels, width):
     line_segs = []
+    line_obj_indices = []
     for contour_i, contour_seg in enumerate(contour_segs):
         for seg_i, seg in enumerate(contour_seg):
             if contour_seg_labels[contour_i][seg_i] == "line":
                 line_segs.append(contour_points[contour_i][seg])
+                line_obj_indices.append(contour_i)
+
     lines = []
     for line_seg in line_segs:
         slope, start, end = calculate_line_properties(line_seg)
-        lines.append([slope, start, end])
+        if np.abs(start[0] - end[0]) < 5:
+            end[0] = start[0]
+        if np.abs(start[1] - end[1]) < 5:
+            end[1] = start[1]
+        ends = sorted([start, end], key=lambda p: (p[0], p[1]))
+        # start = start.astype(np.float32)
+        # start/=width
+        # end = end.astype(np.float32)
+        # end/=width
+        lines.append([slope, ends[0], ends[1]])
 
     # visual lines
     colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 0, 255), (0, 0, 128), (255, 0, 128)]
@@ -698,14 +723,16 @@ def get_line_groups(contour_points, contour_segs, contour_seg_labels, width):
     chart_utils.van(line_img.numpy().astype(np.uint8), file_name=config.output / "closure_line_segs.png")
 
     # merge all the line_segs
-    merged_lines = merge_similar_lines(lines, slope_tolerance=0.9, distance_tolerance=1e-2, vertical_th=8)
-    # visual lines
-    merged_line_img = torch.zeros(width, width, 3)
-    for l_i, line in enumerate(merged_lines):
-        merged_line_img = draw_line_on_array(merged_line_img, line[1], line[2], colors[l_i])
-    chart_utils.van(merged_line_img.numpy().astype(np.uint8), file_name=config.output / "closure_merged_lines.png")
+    merged_lines, line_group_data = merge_similar_lines(lines, line_obj_indices, slope_tolerance=0.5,
+                                                        distance_tolerance=1e-2, vertical_th=8)
+    # # visual lines
+    # colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 0, 255), (0, 0, 128), (255, 0, 128)]
+    # merged_line_img = torch.zeros(width, width, 3)
+    # for l_i, line in enumerate(merged_lines):
+    #     merged_line_img = draw_line_on_array(merged_line_img, line[1], line[2], colors[l_i])
+    # chart_utils.van(merged_line_img.numpy().astype(np.uint8), file_name=config.output / "closure_merged_lines.png")
 
-    return merged_lines
+    return merged_lines, line_group_data
 
 
 def distance(point1, point2):
@@ -713,7 +740,7 @@ def distance(point1, point2):
     return math.sqrt((point1[0] - point2[0]) ** 2 + (point1[1] - point2[1]) ** 2)
 
 
-def forms_closed_figure(line_ends, max_distance=10):
+def forms_closed_figure(line_ends, max_distance=1e-2):
     """
     Check if a set of lines forms a closed figure allowing a distance up to max_distance.
 
@@ -744,9 +771,9 @@ def forms_closed_figure(line_ends, max_distance=10):
     return closed
 
 
-def find_triangles(lines, line_data, labels, group_labels):
+def find_triangles(lines, line_groups, obj_group_labels, group_labels):
     if len(lines) < 3:
-        return None, False
+        return obj_group_labels, False, group_labels
 
         # Create a list from 0 to n
     comb_lists = list(combinations(list(range(len(lines))), 3))  # Get all combinations of length 3
@@ -759,25 +786,25 @@ def find_triangles(lines, line_data, labels, group_labels):
         for line in triangle_lines:
             end_points.append([line[1], line[2]])
         end_points = np.array(end_points)
-        close = forms_closed_figure(end_points, max_distance=1e-3)
+        close = forms_closed_figure(end_points, max_distance=0.1)
         triangle = None
         if close:
             triangles.append(comb_list)
 
-    label_id = labels.max()
+    label_id = obj_group_labels.max()
     hasTriangle = False
     for triangle in triangles:
         hasTriangle = True
         group_labels.append(1)
         label_id += 1
         for line_i in triangle:
-            labels[list(line_data[line_i]["indices"])] = label_id
-    return labels, hasTriangle, group_labels
+            obj_group_labels[list(line_groups[line_i])] = label_id
+    return obj_group_labels, hasTriangle, group_labels
 
 
-def find_squares(lines, line_data, labels, group_labels):
+def find_squares(lines, line_groups, obj_group_labels, group_labels):
     if len(lines) < 4:
-        return None, False
+        return obj_group_labels, False, group_labels
 
     # check slopes
     comb_lists = list(combinations(list(range(len(lines))), 4))  # Get all combinations of length 3
@@ -788,19 +815,19 @@ def find_squares(lines, line_data, labels, group_labels):
         for line in square_lines:
             end_points.append([line[1], line[2]])
         end_points = np.array(end_points)
-        close = forms_closed_figure(end_points, max_distance=1e-2)
+        close = forms_closed_figure(end_points, max_distance=0.1)
         if close:
             squares.append(comb_list)
 
-    label_id = labels.max()
+    label_id = obj_group_labels.max()
     hasSquare = False
     for square in squares:
         group_labels.append(2)
         hasSquare = True
         label_id += 1
         for line_i in square:
-            labels[list(line_data[line_i]["indices"])] = label_id
-    return labels, hasSquare, group_labels
+            obj_group_labels[list(line_groups[line_i])] = label_id
+    return obj_group_labels, hasSquare, group_labels
 
 
 def find_circles(curves, circle_data, labels):

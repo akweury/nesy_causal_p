@@ -76,6 +76,61 @@ def algo_proximity(ocm, th):
             current_label += 1
     return labels
 
+def algo_symmetry(points, tol=0.05):
+    """
+    Check if an Nx2 numpy array of points (with x, y in [0,1]) is roughly symmetric
+    about the vertical axis x = 0.5, and return labels for each point.
+
+    A point is considered symmetric if:
+      - It lies close to the vertical axis (|x - 0.5| <= tol), or
+      - There is another point whose coordinates are close to (1 - x, y) (within tol).
+
+    Additionally, each point is labeled as:
+      - 0 if x < 0.5 (left side)
+      - 1 if x >= 0.5 (right side)
+
+    Args:
+        points (np.ndarray): An Nx2 array of points.
+        tol (float): Tolerance for symmetry matching.
+
+    Returns:
+        tuple:
+          - is_symmetric (bool): True if the points are roughly symmetric.
+          - labels (np.ndarray): An array of length N with values 0 (left) or 1 (right).
+    """
+    # Compute labels using vectorized operations:
+    labels = np.where(points[:, 0] < 0.5, 0, 1)
+
+    # For the symmetry check, work with a list (so we can remove matched points)
+    # Each point is represented as a [x, y] list.
+    points_list = points.tolist()
+
+    while points_list:
+        # Pop the first point from the list
+        x, y = points_list.pop(0)
+
+        # If the point lies near the vertical axis, it's symmetric on its own.
+        if abs(x - 0.5) <= tol:
+            continue
+
+        # Calculate the expected mirror point: (1 - x, y)
+        mirror_x = 1 - x
+
+        # Search for a matching mirror point in the remaining points.
+        found_match = False
+        for i, (xx, yy) in enumerate(points_list):
+            if abs(xx - mirror_x) <= tol and abs(yy - y) <= tol:
+                found_match = True
+                # Remove the mirror point so that it isn't reused.
+                points_list.pop(i)
+                break
+
+        # If no mirror is found, the points are not symmetric.
+        if not found_match:
+            return False, labels
+
+    # All points have either been matched or lie close to the symmetry axis.
+    return True, labels
 
 def cluster_by_proximity(ocms):
     """ Function to compute distance or difference
@@ -126,7 +181,7 @@ def cluster_by_similarity(ocms, mode):
         pred = algo_similarity(ocm, mode)
         th_clusters.append(len(pred.unique()))
         preds.append(pred)
-        shapes.append(len(np.unique(preds)) * [0])
+        shapes.append(len(np.unique(pred)) * [0])
     return preds, shapes
 
 
@@ -172,8 +227,9 @@ def algo_closure_position(args, input_groups):
     # find polygons or circles
     labels = torch.zeros(len(input_groups))
     group_labels = []
-    labels, hasTriangle, group_labels = models.find_triangles(lines_data, all_lines, labels, group_labels)
-    labels, hasSquare, group_labels = models.find_squares(lines_data, all_lines, labels, group_labels)
+    line_group_data = [line["indices"] for line in all_lines]
+    labels, hasTriangle, group_labels = models.find_triangles(lines_data, line_group_data, labels, group_labels)
+    labels, hasSquare, group_labels = models.find_squares(lines_data, line_group_data, labels, group_labels)
     return labels, group_labels
 
 
@@ -191,21 +247,21 @@ def algo_closure(args, segments):
 
     # base on the segments, what shape can you recall by considering closure principle
     # find line groups
-    lines = models.get_line_groups(contour_points, contour_segs, contour_seg_labels, img.shape[0])
+    lines, line_group_data = models.get_line_groups(contour_points, contour_segs, contour_seg_labels, img.shape[0])
     curves = models.get_curves(contour_points, contour_segs, contour_seg_labels, img.shape[0])
-    # find polygons or circles
-    triangles = models.find_triangles(lines)
-    squares = models.find_squares(lines)
-    # circles = models.find_circles(curves)
-    if triangles:
-        group_label = 1
-    elif squares:
-        group_label = 2
-    else:
-        group_label = 3
-    labels = labels + 1
 
-    return labels, group_label
+    normed_similar_lines = []
+    for line in lines:
+        normed_similar_lines.append([line[0], line[1].astype(np.float32) / 1024, line[2].astype(np.float32) / 1024])
+
+    obj_labels = torch.zeros(len(segments))
+    group_labels = []
+    # find polygons or circles
+    labels, hasTriangle, group_labels = models.find_triangles(normed_similar_lines, line_group_data, obj_labels,
+                                                              group_labels)
+    labels, hasSquare, group_labels = models.find_squares(normed_similar_lines, line_group_data, obj_labels,
+                                                          group_labels)
+    return labels, group_labels
 
 
 def cluster_by_closure(args, segments, obj_groups):
@@ -226,3 +282,14 @@ def cluster_by_closure(args, segments, obj_groups):
         all_shapes.append(shapes)
 
     return all_labels, all_shapes
+
+
+def cluster_by_symmetry(ocms):
+    th = 0.05
+    preds = []
+    shapes = []
+    for ocm in ocms:
+        is_symmetry, pred = algo_symmetry(ocm[:, :2].numpy(), th)
+        preds.append(pred)
+        shapes.append(len(np.unique(pred)) * [0])
+    return preds, th, shapes

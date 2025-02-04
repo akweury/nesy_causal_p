@@ -16,7 +16,8 @@ variable_symbol_obj = "O"
 var_dtypes = {
     "pattern": "pattern",
     "group": "group_data",
-    "object": "object"
+    "object": "object",
+    "group_objects": "group_data"
 }
 
 const_dtypes = {
@@ -40,11 +41,15 @@ pred_names = {
     "has_color": "exist_obj_color",
     "has_shape": "exist_obj_shape",
     "group_shape": "exist_group_shape",
-    "object_num": "has_obj_num"
+    "object_num": "has_obj_num",
+    "symmetry_color": "symmetry_color",
+    "symmetry_shape": "symmetry_shape",
+
 }
 
 var_dtype_obj = var_dtypes["object"]
 var_dtype_group = var_dtypes["group"]
+var_dtype_group_objs = var_dtypes["group_objects"]
 var_dtype_pattern = var_dtypes["pattern"]
 
 const_dtype_object_color = const_dtypes["object_color"]
@@ -89,15 +94,50 @@ predicate_configs["predicate_shape"] = create_predicate_config("has_shape", [
     f"{var_dtype_group},+",
     f"{var_dtype_pattern},+",
 ])
-predicate_configs["predicate_g_shape"] = create_predicate_config("group_shape", [
+# predicate_configs["predicate_g_shape"] = create_predicate_config("group_shape", [
+#     f"{const_dtype_group},#",
+#     f"{var_dtype_group},+",
+#     f"{var_dtype_pattern},+",
+# ])
+#
+# predicate_configs["predicate_obj_num"] = create_predicate_config("object_num", [
+#     f"{const_dtype_obj_num},#",
+#     f"{var_dtype_group},+",
+#     f"{var_dtype_pattern},+",
+# ])
+
+group_predicate_configs = {}
+
+group_predicate_configs["predicate_target"] = create_predicate_config('target', [
+    f"{var_dtype_pattern},+"
+])
+
+group_predicate_configs["predicate_in_pattern"] = create_predicate_config('in_pattern', [
+    f"{var_dtype_group},-",
+    f"{var_dtype_pattern},+"
+])
+
+group_predicate_configs["predicate_g_closure"] = create_predicate_config("group_shape", [
     f"{const_dtype_group},#",
     f"{var_dtype_group},+",
     f"{var_dtype_pattern},+",
 ])
 
-predicate_configs["predicate_obj_num"] = create_predicate_config("object_num", [
+group_predicate_configs["predicate_obj_num"] = create_predicate_config("object_num", [
     f"{const_dtype_obj_num},#",
     f"{var_dtype_group},+",
+    f"{var_dtype_pattern},+",
+])
+
+group_predicate_configs["predicate_symmetry_color"] = create_predicate_config("symmetry_color", [
+    f"{var_dtype_group_objs},+",
+    f"{var_dtype_group_objs},+",
+    f"{var_dtype_pattern},+",
+])
+
+group_predicate_configs["predicate_symmetry_shape"] = create_predicate_config("symmetry_shape", [
+    f"{var_dtype_group_objs},+",
+    f"{var_dtype_group_objs},+",
     f"{var_dtype_pattern},+",
 ])
 
@@ -105,6 +145,7 @@ const_dict = {
     f'{var_dtypes["pattern"]},+': "pattern",
     f'{var_dtypes["group"]},+': 'amount_group',
     f'{var_dtypes["object"]},+': 'amount_object',
+    f'{var_dtypes["group_objects"]},+': 'amount_group',
     f'{const_dtypes["object_color"]},+': 'enum',
     f'{const_dtypes["object_shape"]},+': 'enum',
     f'{const_dtypes["group_label"]},+': 'enum',
@@ -197,7 +238,7 @@ def load_bk_fms(args, bk_shapes):
             "kernel_size": kernel_size,
             # "kernels": kernels,
             "fm_repo": fms,
-            "contour":contours,
+            "contour": contours,
             "labels": labels,
         })
     return bk

@@ -106,7 +106,8 @@ def get_mode_declarations_bk(preds):
         dtypes = pred.dtypes
         recall = bk.mode_recall
         mode_terms = get_mode_data(dtypes)
-        modeb_list.append(ModeDeclaration('body', recall, get_pred_by_name(preds, pred_name), mode_terms))
+        modeb_list.append(
+            ModeDeclaration('body', recall, get_pred_by_name(preds, pred_name), mode_terms, ordered=True))
     return modeb_list
 
 
@@ -123,7 +124,6 @@ def get_pi_mode_declarations(inv_preds, obj_num):
 
 
 def get_mode_declarations(predicates):
-
     basic_mode_declarations = get_mode_declarations_bk(predicates)
     # pi_model_declarations = get_pi_mode_declarations(inv_predicates, e)
     return basic_mode_declarations  # + pi_model_declarations

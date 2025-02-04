@@ -81,32 +81,32 @@ def group2ocm(data, groups):
     return group_ocms
 
 
-def percept_gestalt_pattern(args, image_paths, out_path):
-    group_bk = load_bk(args, bk.group_name_solid)
+# def percept_gestalt_pattern(args, image_paths, out_path):
+#     group_bk = load_bk(args, bk.group_name_solid)
+#
+#     for idx in range(min(2, len(image_paths))):
+#         args.logger.debug(f"\n =========== Analysis Image {idx + 1}/{min(2, len(image_paths))} ==============")
+#         file_name, file_extension = image_paths[idx].split(".")
+#         data = file_utils.load_json(f"{file_name}.json")
+#         img, img_resized = load_data(args, image_paths[idx])
+#         # img_resized = 1-img_resized
+#
+#         group_saved_file = f"{out_path}/group_2nd.pt"
+#         if os.path.exists(group_saved_file):
+#             pixel_groups_2nd = torch.load(group_saved_file)
+#         else:
+#             output_file_prefix = str(out_path / f'img_{idx}')
+#             pixel_groups = train_common_features.percept_feature_groups(args, group_bk, img, output_file_prefix)
+#             pixel_groups_2nd = train_common_features.percept_objects(args, pixel_groups, group_bk, img,
+#                                                                      output_file_prefix)
+#             torch.save(pixel_groups_2nd, group_saved_file)
+#
+#         lang = alpha.alpha(args, pixel_groups_2nd)
 
-    for idx in range(min(2, len(image_paths))):
-        args.logger.debug(f"\n =========== Analysis Image {idx + 1}/{min(2, len(image_paths))} ==============")
-        file_name, file_extension = image_paths[idx].split(".")
-        data = file_utils.load_json(f"{file_name}.json")
-        img, img_resized = load_data(args, image_paths[idx])
-        # img_resized = 1-img_resized
-
-        group_saved_file = f"{out_path}/group_2nd.pt"
-        if os.path.exists(group_saved_file):
-            pixel_groups_2nd = torch.load(group_saved_file)
-        else:
-            output_file_prefix = str(out_path / f'img_{idx}')
-            pixel_groups = train_common_features.percept_feature_groups(args, group_bk, img, output_file_prefix)
-            pixel_groups_2nd = train_common_features.percept_objects(args, pixel_groups, group_bk, img,
-                                                                     output_file_prefix)
-            torch.save(pixel_groups_2nd, group_saved_file)
-
-        lang = alpha.alpha(args, pixel_groups_2nd)
-
-
-if __name__ == "__main__":
-    logger = args_utils.init_logger()
-    args = args_utils.get_args(logger)
-    image_paths = file_utils.get_all_files(config.kp_dataset / args.exp_name, "png", False)[:500]
-    out_path = config.output / args.exp_name
-    percept_gestalt_pattern(args, image_paths, out_path)
+#
+# if __name__ == "__main__":
+#     logger = args_utils.init_logger()
+#     args = args_utils.get_args(logger)
+#     image_paths = file_utils.get_all_files(config.kp_dataset / args.exp_name, "png", False)[:500]
+#     out_path = config.output / args.exp_name
+#     percept_gestalt_pattern(args, image_paths, out_path)

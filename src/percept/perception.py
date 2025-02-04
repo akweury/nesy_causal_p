@@ -679,9 +679,9 @@ def percept_gestalt_groups(args, ocms, segments, obj_groups, dtype, principle):
             gcm = gestalt_group.gcm_encoder(labels_prox, ocms, all_shapes=shape_proximity)
             return gcm, labels_prox, ths
     elif principle == "similarity_shape":
-        labels_simi_shape = gestalt_algs.cluster_by_similarity(ocms, "shape")
+        labels_simi_shape, shape_similarity = gestalt_algs.cluster_by_similarity(ocms, "shape")
         if labels_simi_shape is not None:
-            gcm = gestalt_group.gcm_encoder(labels_simi_shape, ocms, group_shape=0)
+            gcm = gestalt_group.gcm_encoder(labels_simi_shape, ocms, all_shapes=shape_similarity)
             return gcm, labels_simi_shape, None
     elif principle == "similarity_color":
         labels_simi_color, shape_similarity = gestalt_algs.cluster_by_similarity(ocms, "color")
@@ -694,6 +694,12 @@ def percept_gestalt_groups(args, ocms, segments, obj_groups, dtype, principle):
             gcm = gestalt_group.gcm_encoder(labels_closure, ocms, shape_closure)
             return gcm, labels_closure, shape_closure
 
+    elif principle == "symmetry":
+        labels_symmetry, th, shape_symmetry = gestalt_algs.cluster_by_symmetry(ocms)
+        labels_symmetry = [torch.from_numpy(lst) for lst in labels_symmetry]
+        if labels_symmetry is not None:
+            gcm = gestalt_group.gcm_encoder(labels_symmetry, ocms, shape_symmetry)
+            return gcm, labels_symmetry, shape_symmetry
     return None, None, None
 
 

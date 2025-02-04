@@ -175,6 +175,61 @@ def proximity_red_triangle(so, dtype):
     return objs
 
 
+def proximity_one_shape(so, dtype):
+    """
+    positive pattern :
+    + 2 clusters of objects, each cluster has size 2~4
+    + each cluster has at least one red triangle
+
+    negative pattern:
+    - 2 clusters of objects, each cluster has size 2~4
+    - at most one cluster as at least one red triangle
+    """
+
+    objs = []
+    cluster_dist = 0.2
+    neighbour_dist = 0.1
+    group_sizes = [2, 3]
+    group_nums = random.choice([2, 3])
+    group_anchors = [[0.3, 0.3], [0.7, 0.7], [0.8, 0.3]]
+    group_anchors = group_anchors[:group_nums]
+    group_radius = 0.1
+
+    # positive
+    if dtype:
+        for a_i in range(len(group_anchors)):
+            group_size = random.choice(group_sizes)
+            neighbour_points = [generate_points(anchor, group_radius, group_size, neighbour_dist) for
+                                anchor in group_anchors]
+            for i in range(group_size):
+                if i == 0:
+                    shape = "triangle"
+                    color = "red"
+                else:
+                    shape = random.choice(bk.bk_shapes[1:])
+                    color = random.choice(bk.color_large_exclude_gray)
+                x = neighbour_points[a_i][i][0]
+                y = neighbour_points[a_i][i][1]
+                objs.append(kandinskyShape(color=color, shape=shape, size=so, x=x, y=y, line_width=-1, solid=True))
+    # negative
+    else:
+        for a_i in range(len(group_anchors)):
+            group_size = random.choice(group_sizes)
+            neighbour_points = [generate_points(anchor, group_radius, group_size, neighbour_dist) for anchor in
+                                group_anchors]
+            for i in range(group_size):
+                shape = random.choice(bk.bk_shapes[1:])
+                color = random.choice(bk.color_large_exclude_gray)
+                if (i == 0 and a_i == 0) or (group_nums == 3 and a_i == 1 and i == 0):
+                    shape = "triangle"
+                    color = "red"
+                x = neighbour_points[a_i][i][0]
+                y = neighbour_points[a_i][i][1]
+                objs.append(kandinskyShape(color=color, shape=shape, size=so, x=x, y=y, line_width=-1, solid=True))
+
+    return objs
+
+
 def similarity_two_colors(so, dtype):
     """
         positive pattern :
@@ -623,6 +678,8 @@ def gen_patterns(pattern_name, dtype):
     overlap_patterns = ["gestalt_triangle", "gestalt_circle", "gestalt_square"]
     if pattern_name == "proximity_red_triangle":
         g = lambda so, truth: proximity_red_triangle(so, dtype)
+    elif pattern_name == "proximity_one_shape":
+        g = lambda so, truth: proximity_one_shape(so, dtype)
     elif pattern_name == "similarity_triangle_circle":
         g = lambda so, truth: similarity_two_colors(so, dtype)
     elif pattern_name == "similarity_two_pairs":
