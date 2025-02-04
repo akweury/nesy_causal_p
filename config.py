@@ -10,14 +10,15 @@ output = storage / 'output'
 lark_file = root / "src" / "alpha" / "exp.lark"
 models = storage / "models"
 model_visual = models / "visual"
+if not os.path.exists(models):
+    os.mkdir(models)
 if not os.path.exists(model_visual):
     os.mkdir(model_visual)
 if not os.path.exists(storage):
     os.mkdir(storage)
 if not os.path.exists(output):
     os.mkdir(output)
-if not os.path.exists(models):
-    os.mkdir(models)
+
 
 code_group_relation = {
     "a_eq_b": 0,

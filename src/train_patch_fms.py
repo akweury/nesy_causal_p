@@ -149,6 +149,7 @@ def train_fm_stack():
 def train_fm_cloud(bk_shape):
     args = args_utils.get_args()
     args.exp_name = bk_shape
+    args.bk_shape = bk_shape
 
     save_path = config.output / f"{args.exp_name}"
     os.makedirs(save_path, exist_ok=True)

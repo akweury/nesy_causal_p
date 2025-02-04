@@ -5,6 +5,7 @@ from scipy import ndimage
 import itertools
 import matplotlib.pyplot as plt
 from sklearn.cluster import DBSCAN
+
 from tqdm import tqdm
 import torch.nn.functional as F  # Import F for functional operations
 from PIL import Image, ImageDraw
@@ -21,7 +22,7 @@ import config
 
 # -----------------------------------------------------------------------------------
 
-def get_most_frequent_color(img):
+def get_most_frequent_color(args,img):
     assert img.ndim == 3
 
     # Find the most frequent color in the list
@@ -31,7 +32,7 @@ def get_most_frequent_color(img):
     color_counts = img.reshape(3, -1).permute(1, 0).unique(return_counts=True, dim=0)
     color_sorted = sorted(zip(color_counts[0], color_counts[1]),
                           key=lambda x: x[1], reverse=True)
-    if torch.all(color_sorted[0][0] == torch.tensor(bk.color_matplotlib["lightgray"])):
+    if torch.all(color_sorted[0][0] == torch.tensor(bk.color_matplotlib["lightgray"]).to(args.device)):
         most_frequent = color_sorted[1][0]
     else:
         most_frequent = color_sorted[0][0]
@@ -41,7 +42,7 @@ def get_most_frequent_color(img):
     smallest_distance = float('inf')
     distances = []
     for color_name, color_rgb in bk.color_matplotlib.items():
-        distance = torch.sqrt(sum((most_frequent - torch.tensor(color_rgb)) ** 2))
+        distance = torch.sqrt((most_frequent.to(torch.uint8) - torch.tensor(color_rgb).to(args.device)).sum() ** 2)
         distances.append(distance)
         if distance < smallest_distance:
             smallest_distance = distance
@@ -63,15 +64,15 @@ def crop_to_valid_area(image, threshold=10):
         tuple: (x_min, y_min, x_max, y_max) coordinates of the cropped region.
     """
     # Find non-zero areas
-    valid_rows = np.any(image > threshold, axis=1)
-    valid_cols = np.any(image > threshold, axis=0)
+    valid_rows = torch.any(image > threshold, dim=1)
+    valid_cols = torch.any(image > threshold, dim=0)
 
-    if not np.any(valid_rows) or not np.any(valid_cols):
+    if not torch.any(valid_rows) or not torch.any(valid_cols):
         # No valid area
         return image, (0, 0, image.shape[1], image.shape[0])
 
-    y_min, y_max = np.where(valid_rows)[0][[0, -1]]
-    x_min, x_max = np.where(valid_cols)[0][[0, -1]]
+    y_min, y_max = torch.where(valid_rows)[0][[0, -1]]
+    x_min, x_max = torch.where(valid_cols)[0][[0, -1]]
 
     # Include bordering cases by padding
     padding = 0  # Add padding to account for partial patches
@@ -85,6 +86,60 @@ def crop_to_valid_area(image, threshold=10):
 
 
 from scipy.spatial.distance import cdist
+
+
+def find_best_matches(padded_image, dataset_flat, vertex_labels, shape_labels, threshold, half_size):
+    """
+    Finds the best matches for patches in a test image against a dataset using squared Euclidean distance.
+
+    Parameters:
+        padded_image (torch.Tensor): The padded input image (H, W) or (C, H, W) on GPU.
+        dataset_flat (torch.Tensor): Flattened dataset patches of shape (N, D) on GPU.
+        vertex_labels (list): List of vertex labels for dataset patches.
+        shape_labels (list): List of shape labels for dataset patches.
+        threshold (float): Distance threshold for matching.
+        half_size (int): Half-size of the patch.
+
+    Returns:
+        list: A list of matching results.
+    """
+    device = padded_image.device  # Ensure everything is on the same device
+    matches = []
+
+    # Extract all possible patches using unfold (optimized way instead of loops)
+    if padded_image.dim() == 2:  # Grayscale Image (H, W)
+        padded_image = padded_image.unsqueeze(0)  # Convert to (1, H, W) for consistency
+
+    C, H, W = padded_image.shape
+    patch_size = 2 * half_size  # Full patch size
+
+    # Use unfold to extract all patches (faster than looping)
+    patches = padded_image.unfold(1, patch_size, 1).unfold(2, patch_size, 1)
+    patches = patches.permute(1, 2, 0, 3, 4).reshape(-1, C * patch_size * patch_size)  # Shape: (num_patches, D)
+
+    # Compute squared Euclidean distances for all patches at once (batch-wise)
+    distances = torch.cdist(patches.float(), dataset_flat.float(), p=2) ** 2  # Shape: (num_patches, N)
+
+    # Find the best matches
+    min_distances, best_match_indices = distances.min(dim=1)
+
+    # Filter matches based on the threshold
+    match_indices = torch.where(min_distances < threshold)[0]
+
+    # Prepare final match results
+    for idx in match_indices:
+        y = idx // (W - patch_size + 1)
+        x = idx % (W - patch_size + 1)
+        best_match_idx = best_match_indices[idx].item()
+        matches.append({
+            "vertex_label": vertex_labels[best_match_idx],
+            "position": (x, y),
+            "shape_label": shape_labels[best_match_idx],
+            "distance": min_distances[idx].item()
+        })
+
+    return matches
+
 
 
 def find_similar_patches(test_image, dataset_patches, vertex_labels, shape_labels, patch_size=32, threshold=1000):
@@ -107,33 +162,37 @@ def find_similar_patches(test_image, dataset_patches, vertex_labels, shape_label
     # Crop the image to the valid area
     cropped_image, (x_offset, y_offset, _, _) = crop_to_valid_area(test_image, 0)
     # Pad the test image to handle boundary cases
-    padded_image = np.pad(cropped_image, ((half_size, half_size), (half_size, half_size)), mode='constant',
-                          constant_values=0)
+    padded_image= F.pad(cropped_image, (half_size, half_size, half_size, half_size), mode='constant', value=0)
+    # padded_image = np.pad(cropped_image, ((half_size, half_size), (half_size, half_size)), mode='constant',
+    #                       constant_values=0)
     # Pre-compute flattened dataset patches for faster distance computation
-    dataset_flat = np.array([p.flatten() for p in dataset_patches])
-
-    # Iterate through every possible patch in the test image
-    for y in range(half_size, cropped_image.shape[0] + half_size):
-        for x in range(half_size, cropped_image.shape[1] + half_size):
-            # Extract the patch from the test image
-            patch = padded_image[y - half_size:y + half_size, x - half_size:x + half_size]
-            # Compute distances to all dataset patches
-            distances = cdist(patch.flatten()[np.newaxis], dataset_flat, metric='sqeuclidean')[0]
-
-            # # Flatten the patch and compute distances to all dataset patches
-            # patch_flat = patch.flatten()
-            # dataset_flat = [p.flatten() for p in dataset_patches]
-            # distances = cdist([patch_flat], dataset_flat, metric='sqeuclidean')[0]
-
-            # Find the most similar patch in the dataset
-            min_distance = np.min(distances)
-            if min_distance < threshold:
-                best_match_idx = np.argmin(distances)
-                label = vertex_labels[best_match_idx]
-                shape_label = shape_labels[best_match_idx]
-                matches.append({"vertex_label": label, "position": (x - half_size, y - half_size),
-                                "shape_label": shape_label,
-                                "distance": min_distance})
+    dataset_flat = dataset_patches.view(dataset_patches.shape[0], -1)
+    # dataset_flat = np.array([p.flatten() for p in dataset_patches])
+    matches = find_best_matches(padded_image, dataset_flat, vertex_labels, shape_labels, threshold, half_size)
+    # # Iterate through every possible patch in the test image
+    # for y in range(half_size, cropped_image.shape[0] + half_size):
+    #     for x in range(half_size, cropped_image.shape[1] + half_size):
+    #         # Extract the patch from the test image
+    #         patch = padded_image[y - half_size:y + half_size, x - half_size:x + half_size]
+    #         # Compute distances to all dataset patches
+    #         patch_flat = patch.flatten().unsqueeze(0)  # Shape: (1, D)
+    #         distances = torch.sum((dataset_flat - patch_flat) ** 2, dim=1)
+    #         # distances = cdist(patch.flatten()[np.newaxis], dataset_flat, metric='sqeuclidean')[0]
+    #
+    #         # # Flatten the patch and compute distances to all dataset patches
+    #         # patch_flat = patch.flatten()
+    #         # dataset_flat = [p.flatten() for p in dataset_patches]
+    #         # distances = cdist([patch_flat], dataset_flat, metric='sqeuclidean')[0]
+    #
+    #         # Find the most similar patch in the dataset
+    #         min_distance = torch.min(distances)
+    #         if min_distance < threshold:
+    #             best_match_idx = torch.argmin(distances)
+    #             label = vertex_labels[best_match_idx]
+    #             shape_label = shape_labels[best_match_idx]
+    #             matches.append({"vertex_label": label, "position": (x - half_size, y - half_size),
+    #                             "shape_label": shape_label,
+    #                             "distance": min_distance})
     return matches
 
 
@@ -168,7 +227,7 @@ def extract_most_frequent_label_matches(matches):
 def percept_feature_groups(args, bk_shapes, segment):
     """ recall the memory features from the given segments """
     feature_groups = []
-    seg_color = get_most_frequent_color(segment.permute(2, 0, 1))
+    seg_color = get_most_frequent_color(args, segment.permute(2, 0, 1))
     # rgb segment to resized bw image
 
     # recall the memory
@@ -176,12 +235,16 @@ def percept_feature_groups(args, bk_shapes, segment):
     recalled_fms_all = []
     all_in_fms = []
     # Example test image
+    # Define the grayscale conversion weights
+    weights = torch.tensor([0.2989, 0.5870, 0.1140], device=segment.device)
+    # Convert to grayscale using the dot product
+    test_image = torch.tensordot(segment.float(), weights, dims=([-1], [0])).round().clamp(0,255).to(torch.uint8) # Shape: (1, H, W)
 
-    test_image = np.array(Image.fromarray(segment.numpy().astype('uint8')).convert("L"))
+    # test_image = torch.tensor(Image.fromarray(segment.numpy().astype('uint8')).convert("L"))
     test_image[test_image == 211] = 0
     test_image[test_image > 0] = 1
     # Find similar patches
-    dataset_patches = torch.cat([bk_shapes[i]["fm_repo"] for i in range(len(bk_shapes))], dim=0)
+    dataset_patches = torch.cat([bk_shapes[i]["fm_repo"] for i in range(len(bk_shapes))], dim=0).to(args.device)
     dataset_patches[dataset_patches > 0] = 1
     vertex_labels = [bk_shapes[i]["labels"] for i in range(len(bk_shapes))]
     vertex_labels = torch.cat([vertex_labels[i] for i in range(len(vertex_labels))])
@@ -385,29 +448,27 @@ def ocm_encoder(args, segments, dtype):
 
 def detect_connected_regions(args, input_array, pixel_num=50):
     # Find unique colors
-    unique_colors, inverse = np.unique(input_array.squeeze().reshape(-1, 3), axis=0,
-                                       return_inverse=True)
+    unique_colors, inverse = input_array.squeeze().reshape(-1, 3).unique(dim=0, return_inverse=True)
     labeled_regions = []
 
     width = input_array.shape[1]
     for color_idx, color in enumerate(unique_colors):
-        if np.equal(color, np.array(bk.color_matplotlib["lightgray"],
-                                    dtype=np.uint8)).all():
+        gray_color = torch.tensor(bk.color_matplotlib["lightgray"], dtype=torch.uint8).to(args.device)
+        if torch.equal(color, gray_color):
             continue
         # Create a mask for the current color
         mask = (inverse == color_idx).reshape(width, width)
 
         # Label connected components in the mask
-        labeled_mask, num_features = ndimage.label(mask)
+        labeled_mask, num_features = ndimage.label(mask.to("cpu").numpy())
 
         for region_id in range(1, num_features + 1):
             # Isolate a single region
-            region_mask = (labeled_mask == region_id)
+            region_mask = torch.from_numpy(labeled_mask == region_id).to(args.device)
             if region_mask.sum() > pixel_num:
                 # Add the region to the labeled regions
-                region_tensor = np.zeros((3, width, width), dtype=np.float32)
-                region_tensor += np.array(
-                    (bk.color_matplotlib["lightgray"])).reshape(3, 1, 1)
+                region_tensor = torch.zeros((3, width, width), dtype=torch.uint8).to(args.device)
+                region_tensor += torch.tensor((bk.color_matplotlib["lightgray"])).reshape(3, 1, 1).to(args.device)
                 for channel in range(3):
                     region_tensor[channel][region_mask] = color[channel]
                 labeled_regions.append(region_tensor)
@@ -415,7 +476,7 @@ def detect_connected_regions(args, input_array, pixel_num=50):
     # Stack all labeled regions into a single tensor
     if len(labeled_regions) == 0:
         print('')
-    output_tensor = torch.tensor(np.stack(labeled_regions), dtype=torch.float32).permute(0, 2, 3, 1)
+    output_tensor = torch.stack(labeled_regions).permute(0, 2, 3, 1)
 
     args.logger.debug(f"detected connected regions: {output_tensor.shape[0]}")
 
@@ -711,9 +772,12 @@ def test_od_accuracy(args, train_data):
     obj_indices = [bk.prop_idx_dict["shape_tri"], bk.prop_idx_dict["shape_sq"], bk.prop_idx_dict["shape_cir"]]
 
     seg_pos = percept_segments(args, imgs, f"train_pos")
-    seg_neg = percept_segments(args, imgs, f"train_neg")
-    ocm_pos, obj_g_pos = ocm_encoder(args, seg_pos, f"train_pos")
-    ocm_neg, obj_g_neg = ocm_encoder(args, seg_neg, f"train_neg")
+    ocm, obj_g = ocm_encoder(args, seg_pos, f"train_pos")
+    ocm_pos = ocm[:10]
+    ocm_neg = ocm[10:]
+    obj_g_pos = obj_g[:10]
+    obj_g_neg = obj_g[10:]
+    # ocm_neg, obj_g_neg = ocm_encoder(args, seg_neg, f"train_neg")
 
     preds_pos = []
     for i in range(10):

@@ -3,6 +3,7 @@
 import argparse
 import os
 import colorlog
+import logging
 
 import config
 from . import log_utils
@@ -31,7 +32,7 @@ def init_logger():
     logger.addHandler(handler)
     # Prevent logs from propagating to the root logger
     logger.propagate = False
-    logger.setLevel(colorlog.DEBUG)
+    logger.setLevel(logging.DEBUG)
     return logger
 
 
