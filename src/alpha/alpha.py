@@ -166,14 +166,17 @@ def df_search(args, lang, C, FC, group, group_num, level):
     clauses = lang.clauses
     return clauses
 
+
 def align_ocms(ocms):
     aligned_ocms = []
     max_len = max([len(ocm) for ocm in ocms])
     for ocm in ocms:
-        if len(ocm)<max_len:
+        if len(ocm) < max_len:
             ocm = torch.cat((ocm, torch.zeros(max_len - len(ocm), 10)))
         aligned_ocms.append(ocm)
     return aligned_ocms
+
+
 def eval_task(args, lang, FC, images_data, all_clauses, level):
     """
     return: true, if all the clauses are satisfied, else false.
@@ -187,28 +190,28 @@ def eval_task(args, lang, FC, images_data, all_clauses, level):
             NSFR = nsfr.get_nsfr_model(args, lang, FC, [clause])
             clause_preds = []
             for g_i, group in enumerate(images_data[example_i]):
-                clause_preds = []
-                if level=="group":
+                group_preds = []
+                if level == "group":
                     enum_example_groups = []
                     for g_i, g in enumerate(images_data[example_i]):
                         enum_example_groups.append([g_i, g])
                     group_combs = list(itertools.combinations(enum_example_groups, 2))
                     for groups in group_combs:
                         gcms = torch.cat([group[1]["gcm"] for group in groups], dim=0)
-                        ocms =[group[1]["ocm"] for group in groups]
+                        ocms = [group[1]["ocm"] for group in groups]
                         ocms_aligned = align_ocms(ocms)
                         group_indices = [group[0] for group in groups]
                         data = {"gcms": gcms, "ocms": ocms_aligned}
                         ils, _ = evaluation(args, NSFR, target_preds, data)
-                        clause_pred = [ils.squeeze()]
-                        clause_preds.append(clause_pred)
+                        group_pred = [ils.squeeze()]
+                        group_preds.append(group_pred)
                 else:
                     ocms = group["ocm"]
-                    clause_pred = []
+
                     for o_i, ocm in enumerate(ocms):
                         ils, _ = evaluation(args, NSFR, target_preds, ocm.unsqueeze(0))
-                        clause_pred.append(ils.squeeze())
-                    clause_preds.append(clause_pred)
+                        group_preds.append(ils.squeeze())
+                clause_preds.append(group_preds)
             example_preds.append(clause_preds)
         preds.append(example_preds)
     return preds
@@ -408,16 +411,15 @@ def alpha_object(args, all_matrix, mode):
 
 
 def alpha_group(args, all_matrix, mode):
-    group_num = len(all_matrix[0])
-    lang = init_ilp(args, group_num)
-    lang.reset_lang(g_num=group_num, level="group")
-    VM = valuation.get_group_valuation_module(args, lang)
-    FC = facts_converter.FactsConverter(args, lang, VM)
-    C = lang.load_group_init_clauses()
-
     example_num = len(all_matrix)
     all_clauses = []
     for example_i in range(example_num):
+        group_num = len(all_matrix[0])
+        lang = init_ilp(args, group_num)
+        lang.reset_lang(g_num=group_num, level="group")
+        VM = valuation.get_group_valuation_module(args, lang)
+        FC = facts_converter.FactsConverter(args, lang, VM)
+        C = lang.load_group_init_clauses()
         example_clauses = []
         example_groups = all_matrix[example_i]
         enum_example_groups = []
@@ -426,7 +428,15 @@ def alpha_group(args, all_matrix, mode):
         group_combs = list(itertools.combinations(enum_example_groups, 2))
         for groups in group_combs:
             gcms = torch.cat([group[1]["gcm"] for group in groups], dim=0)
-            ocms = torch.stack([group[1]["ocm"] for group in groups])
+            max_o_num = max([len(g[1]["ocm"]) for g in groups])
+            ocms = []
+            for group in groups:
+                if len(group[1]["ocm"]) < max_o_num:
+                    ocms.append(
+                        torch.cat((group[1]["ocm"], torch.zeros((max_o_num - len(group[1]["ocm"]), 10))), dim=0))
+                else:
+                    ocms.append(group[1]["ocm"])
+            ocms = torch.stack(ocms)
             group_indices = [group[0] for group in groups]
             data = {"gcms": gcms, "ocms": ocms}
             group_clauses = df_search(args, lang, C, FC, data, group_num, level="group")

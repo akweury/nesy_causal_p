@@ -703,6 +703,37 @@ def percept_gestalt_groups(args, ocms, segments, obj_groups, dtype, principle):
     return None, None, None
 
 
+def test_od_accuracy(args, train_data):
+
+
+    imgs = train_data["img"]
+    labels = torch.cat((train_data["pos"], train_data["neg"]), dim=1)
+    obj_indices = [bk.prop_idx_dict["shape_tri"], bk.prop_idx_dict["shape_sq"], bk.prop_idx_dict["shape_cir"]]
+
+    seg_pos = percept_segments(args, imgs, f"train_pos")
+    seg_neg = percept_segments(args, imgs, f"train_neg")
+    ocm_pos, obj_g_pos = ocm_encoder(args, seg_pos, f"train_pos")
+    ocm_neg, obj_g_neg = ocm_encoder(args, seg_neg, f"train_neg")
+
+    preds_pos = []
+    for i in range(10):
+        obj_num = len(ocm_pos[i])
+        indices = torch.sort(labels[0,i,:obj_num,0])[1]
+        gt = labels[0,i,:obj_num][indices][:,obj_indices]
+        pred_indices = torch.sort(ocm_pos[i][:,0])[1]
+        pred_obj =  ocm_pos[i][pred_indices][:, obj_indices]
+        preds_pos += torch.all(pred_obj == gt, dim=-1)
+    preds_neg = []
+    for i in range(10):
+        obj_num = len(ocm_neg[i])
+        indices = torch.sort(labels[0,i+10,:obj_num,0])[1]
+        gt = labels[0,i+10,:obj_num][indices][:,obj_indices]
+        pred_indices = torch.sort(ocm_neg[i][:,0])[1]
+        pred_obj =  ocm_neg[i][pred_indices][:, obj_indices]
+        preds_neg += torch.all(pred_obj == gt, dim=-1)
+    acc = (sum(preds_neg) + sum(preds_pos))/(len(preds_neg) + len(preds_pos))
+    print(acc)
+
 def cluster_by_principle(args, imgs, mode, prin):
     """ evaluate gestalt scores, decide grouping based on which strategy
 
@@ -712,8 +743,9 @@ def cluster_by_principle(args, imgs, mode, prin):
 
     """
     # segmentation the images
-    imgs_pos = imgs[:3]
-    imgs_neg = imgs[3:]
+    train_size = len(imgs) // 2
+    imgs_pos = imgs[:train_size]
+    imgs_neg = imgs[train_size:]
     seg_pos = percept_segments(args, imgs_pos, f"{mode}_pos")
     seg_neg = percept_segments(args, imgs_neg, f"{mode}_neg")
     group_label_pos = [torch.zeros(len(seg)) for seg in seg_pos]

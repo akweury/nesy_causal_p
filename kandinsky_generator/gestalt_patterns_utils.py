@@ -140,7 +140,7 @@ def generate_clusters(th, min_cluster_center_distance=0.2):
 def generate_points(center, radius, n, min_distance):
     points = []
     attempts = 0
-    max_attempts = n * 100  # To prevent infinite loops
+    max_attempts = n * 300  # To prevent infinite loops
 
     while len(points) < n and attempts < max_attempts:
         # Generate random point in polar coordinates

@@ -106,9 +106,11 @@ def get_var_type(var_str):
 def orgnize_inv_pred_dtypes(dtypes):
     reorgnized_dtypes = []
     for dt in dtypes:
-        reorgnized_dtypes.append(dt[0])
-    reorgnized_dtypes.append(dtypes[0][1])
-    reorgnized_dtypes.append(dtypes[0][2])
+        reorgnized_dtypes +=dt
+        # reorgnized_dtypes.append(dt[0])
+    # reorgnized_dtypes.append(dtypes[0][1])
+    # reorgnized_dtypes.append(dtypes[0][2])
+    # reorgnized_dtypes =
     return reorgnized_dtypes
 
 

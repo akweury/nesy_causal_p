@@ -136,7 +136,7 @@ def proximity_red_triangle(so, dtype):
 
     objs = []
     cluster_dist = 0.2
-    neighbour_dist = 0.1
+    neighbour_dist = 0.05
     group_sizes = [2, 3]
     group_nums = random.choice([2, 3])
     group_anchors = [[0.3, 0.3], [0.7, 0.7], [0.8, 0.3]]
@@ -228,6 +228,147 @@ def proximity_one_shape(so, dtype):
                 objs.append(kandinskyShape(color=color, shape=shape, size=so, x=x, y=y, line_width=-1, solid=True))
 
     return objs
+
+
+def generate_random_clustered_circles(so, dtype,
+                                      grid_size=3, min_circles=3, max_circles=5, diameter=0.1, image_size=(1, 1)):
+    diameter = 0.08
+    radius = diameter / 2
+    centers = set()
+    objs = []
+
+    # Define grid spacing to place cluster centers evenly
+    grid_spacing = image_size[0] / (grid_size + 1)
+    cluster_centers = [(grid_spacing * (i + 1), grid_spacing * (j + 1)) for i in range(grid_size) for j in
+                       range(grid_size)]
+    random.shuffle(cluster_centers)
+
+    yellow_clusters = cluster_centers[:4]
+    blue_clusters = cluster_centers[4:8]
+    total = 30
+    yellow_counter = 0
+    blue_counter = 0
+    total = random.randint(10, 20)
+    # Generate circles within each cluster
+    while yellow_counter < total:
+        cluster_x, cluster_y = random.choice(cluster_centers)
+        cluster_color = "yellow"
+        num_circles = np.random.randint(min_circles, max_circles + 1)
+        cluster_points = [(cluster_x, cluster_y)]
+        centers.add((cluster_x, cluster_y))
+        if yellow_counter > total:
+            break
+        for _ in range(num_circles - 1):
+            # Possible movement directions (8 directions: up, down, left, right, and diagonals)
+            directions = [
+                (diameter, 0), (-diameter, 0), (0, diameter), (0, -diameter),  # Right, Left, Up, Down
+                (diameter, diameter), (-diameter, -diameter), (diameter, -diameter), (-diameter, diameter)  # Diagonals
+            ]
+
+            np.random.shuffle(directions)  # Shuffle directions to try random placements
+
+            for dx, dy in directions:
+                if yellow_counter > total:
+                    break
+                new_x, new_y = cluster_points[-1][0] + dx, cluster_points[-1][1] + dy
+                if (0.05 < new_x < image_size[0]) and (0.05 < new_y < image_size[1]) and all(
+                        (new_x - cx) ** 2 + (new_y - cy) ** 2 >= diameter ** 2 for cx, cy in centers):
+                    cluster_points.append((new_x, new_y))
+                    centers.add((new_x, new_y))
+
+                    yellow_counter += 1
+                    objs.append(kandinskyShape(color=cluster_color, shape="circle", size=so, x=new_x,
+                                               y=new_y, line_width=-1, solid=True))
+                    break
+    if not dtype:
+        yellow_counter  += random.randint(1, 5)
+    # Generate circles within each cluster
+    while blue_counter < yellow_counter:
+        cluster_x, cluster_y = random.choice(cluster_centers)
+        cluster_color = "blue"
+        num_circles = np.random.randint(min_circles, max_circles + 1)
+        cluster_points = [(cluster_x, cluster_y)]
+        centers.add((cluster_x, cluster_y))
+
+        for _ in range(num_circles - 1):
+            if blue_counter > yellow_counter:
+                break
+            # Possible movement directions (8 directions: up, down, left, right, and diagonals)
+            directions = [
+                (diameter, 0), (-diameter, 0), (0, diameter), (0, -diameter),  # Right, Left, Up, Down
+                (diameter, diameter), (-diameter, -diameter), (diameter, -diameter), (-diameter, diameter)  # Diagonals
+            ]
+
+            np.random.shuffle(directions)  # Shuffle directions to try random placements
+
+            for dx, dy in directions:
+                new_x, new_y = cluster_points[-1][0] + dx, cluster_points[-1][1] + dy
+                if (0.05 < new_x < image_size[0]) and (0.05 < new_y < image_size[1]) and all(
+                        (new_x - cx) ** 2 + (new_y - cy) ** 2 >= diameter ** 2 for cx, cy in centers):
+                    cluster_points.append((new_x, new_y))
+                    centers.add((new_x, new_y))
+                    blue_counter += 1
+                    objs.append(kandinskyShape(color=cluster_color, shape="circle", size=so, x=new_x,
+                                               y=new_y, line_width=-1, solid=True))
+                    break
+    # aa = list(centers)
+    # import matplotlib.pyplot as plt
+    # fig, ax = plt.subplots(figsize=(5, 5))
+    # ax.set_xlim(0, 1)
+    # ax.set_ylim(0, 1)
+    # ax.set_aspect('equal')
+    # ax.set_facecolor('gray')
+    # for obj in objs:
+    #     circle = plt.Circle((obj.x, obj.y), 0.03, color=obj.color)
+    #     ax.add_patch(circle)
+    # plt.show()
+
+    return objs
+
+
+def fixed_number(so, dtype):
+    objs = []
+    color = ["yellow", "blue"]
+    radius = so / 10
+    centers = []
+    num_circles = 30
+    non_overlapping_clustered_centers = generate_random_clustered_circles()
+
+    if dtype:
+
+        row_space = 1 / (row_num + 1)
+        col_space = 1 / (col_num + 1)
+        for x in range(row_num):
+            for y in range(col_num):
+                color = random.choice(["blue", "red"])
+                shape = "triangle" if color == "red" else "square"
+                objs.append(kandinskyShape(color=color, shape=shape, size=so, x=(x + 1) * row_space,
+                                           y=(y + 1) * col_space, line_width=-1, solid=True))
+
+    else:
+        row_num = random.randint(3, 5)
+        col_num = random.randint(3, 5)
+        diff_row_id = random.randint(0, row_num - 1)
+        row_space = 1 / (row_num + 1)
+        col_space = 1 / (col_num + 1)
+        colors = random.choice([["red", "yellow"], ["blue", "yellow"]])
+        for x in range(row_num):
+            for y in range(col_num):
+                color = random.choice(colors)
+                if color == "red":
+                    shape = "triangle"
+                elif color == "blue":
+                    shape = "square"
+                elif colors == ["red", "yellow"]:
+                    shape = "square"
+                else:
+                    shape = "triangle"
+                objs.append(kandinskyShape(color=color, shape=shape, size=so, x=(x + 1) * row_space,
+                                           y=(y + 1) * col_space, line_width=-1, solid=True))
+
+    return objs
+
+    pass
 
 
 def similarity_two_colors(so, dtype):
@@ -682,6 +823,8 @@ def gen_patterns(pattern_name, dtype):
         g = lambda so, truth: proximity_one_shape(so, dtype)
     elif pattern_name == "similarity_triangle_circle":
         g = lambda so, truth: similarity_two_colors(so, dtype)
+    elif pattern_name == "fixed_number":
+        g = lambda so, truth: generate_random_clustered_circles(so, dtype)
     elif pattern_name == "similarity_two_pairs":
         g = lambda so, truth: similarity_two_pairs(so, dtype)
     elif pattern_name == "gestalt_triangle":

@@ -21,7 +21,7 @@ def inv_pred_merge_bodies(bodies):
             preds.append(atom.pred)
         elif isinstance(atom, InvAtom):
             preds += atom.pred.sub_preds
-    preds = list(set(preds))
+    preds = list(preds)
 
     if len(preds) <= 1:
         return None

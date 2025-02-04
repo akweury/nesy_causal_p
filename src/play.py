@@ -51,11 +51,12 @@ def main():
     # perception.test_fms(args, data_loader)
 
     for task_id, (train_data, test_data, principle) in enumerate(data_loader):
-        if task_id != 4:
+        if task_id != 1:
             continue
         args.output_file_prefix = config.models / f"t{task_id}_"
         imgs_train = train_data["img"]
         imgs_test = test_data["img"]
+        perception.test_od_accuracy(args, train_data)
         # grouping objects
         groups = perception.cluster_by_principle(args, imgs_train, "train", principle[0])
         # Learn Clauses from Training Data

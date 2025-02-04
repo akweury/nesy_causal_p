@@ -274,7 +274,8 @@ def get_task_names(principle):
     elif principle == "proximity":
         task_names = ["proximity_red_triangle", ]
     elif principle == "similarity_shape":
-        task_names = ["similarity_triangle_circle"]
+        task_names = ["similarity_triangle_circle",
+                      "fixed_number"]
     elif principle == "similarity_color":
         task_names = ["similarity_two_pairs"]
     elif principle == "closure":
@@ -296,7 +297,7 @@ def get_task_names(principle):
 
 def gen_and_save(path, width, mode):
     max_length = 64
-    example_num = 100
+    example_num = 10
     all_tensors = {"positive": [], "negative": []}
     task_counter = 0
     principles = bk.gestalt_principles

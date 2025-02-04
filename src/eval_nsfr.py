@@ -179,7 +179,8 @@ def check_clause(args, lang_obj, lang_group, rules, imgs_test, principle):
     preds_pos = []
     preds_neg = []
     image_label = torch.zeros(len(imgs_test))
-    image_label[:3] += 1
+    half_size = len(image_label)//2
+    image_label[:half_size] += 1
 
     # group_bk = load_bk(args, bk.bk_shapes)
     groups = perception.cluster_by_principle(args, imgs_test, "test", principle)
@@ -205,8 +206,8 @@ def check_clause(args, lang_obj, lang_group, rules, imgs_test, principle):
             preds_pos.append(pred_pos)
             preds_neg.append(pred_neg)
             all_details.append(details)
-    preds_pos = torch.stack(preds_pos).reshape(-1, 3).prod(dim=0)
-    preds_neg = torch.stack(preds_neg).reshape(-1, 3).prod(dim=0)
+    preds_pos = torch.stack(preds_pos).reshape(-1, half_size).prod(dim=0)
+    preds_neg = torch.stack(preds_neg).reshape(-1, half_size).prod(dim=0)
     preds = torch.cat((preds_pos, preds_neg))
     acc = (preds == image_label).sum() / len(preds)
 
@@ -217,7 +218,7 @@ def check_clause(args, lang_obj, lang_group, rules, imgs_test, principle):
         "principle": groups["principle"]
     }
 
-    visual_negative_image(check_results, imgs_test[3:])
+    visual_negative_image(check_results, imgs_test[half_size:])
     return check_results
     # logger
     # satisfied_clause_indices = torch.nonzero(clauses_conf[idx] >= args.valid_rule_th).reshape(-1)
