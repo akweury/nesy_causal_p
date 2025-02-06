@@ -10,7 +10,7 @@ from src import bk
 
 class kandinskyShape:
     def __init__(self, shape="", color="", x=0.5, y=0.5, size=0.5, line_width=1.0,
-                 solid=False):
+                 solid=False, start_angle=0, end_angle=math.pi*2 / 3,):
         self.shape = shape
         self.color = color
         self.x = x
@@ -18,6 +18,8 @@ class kandinskyShape:
         self.size = size
         self.line_width = line_width
         self.solid = solid
+        self.start_angle = start_angle
+        self.end_angle = end_angle
 
     def __str__(self):
         return self.color + " " + self.shape + " (" + \
@@ -54,6 +56,12 @@ def triangle(d, cx, cy, s, f):
     dx = s * math.cos(r)
     dy = s * math.sin(r)
     d.polygon([(cx, cy - s), (cx + dx, cy + dy), (cx - dx, cy + dy)], fill=f)
+
+
+def pac_man(d, cx, cy, s, f):
+    # correct the size to  the same area as an square
+    s = 0.6 * math.sqrt(4 * s * s / math.pi)
+    d.ellipse(((cx - s / 2, cy - s / 2), (cx + s / 2, cy + s / 2)), fill=f)
 
 
 def diamond(d, cx, cy, size, f=True):
@@ -147,6 +155,19 @@ def draw_star(image, center, size, color, thickness=-1):
     cv2.polylines(image, [star_points], isClosed=True, color=color, thickness=2)
     if thickness == -1:
         cv2.fillPoly(image, [star_points], color=color)
+
+
+def draw_pac_man(img, center_pos, obj_size, color, start_angle, end_angle):
+    # Pac-Man parameters
+    thickness = -1  # Filled shape
+    mouth_angle = 60  # Total mouth opening angle in degrees
+
+    # Calculate start and end angles.
+    # OpenCV measures angles in degrees starting from the positive x-axis (to the right) and going clockwise.
+    # To have the mouth centered to the right, we remove a wedge of "mouth_angle" centered at 0°.
+
+    # Draw Pac-Man as a filled ellipse (which will draw a pie slice)
+    cv2.ellipse(img, center_pos, (obj_size, obj_size), 0, start_angle, end_angle, color, thickness)
 
 
 def draw_diamond(image, center, size, color, thickness=-1):
@@ -273,7 +294,12 @@ def kandinskyFigureAsImage(shapes, width=600, subsampling=1):
                 cv2.rectangle(img, (xs, ys), (xe, ye),
                               bk.color_matplotlib["lightgray"],
                               thickness=-1)
+        elif s.shape == "pac_man":
+            cx = round(w * s.x)
+            cy = round(w * s.y)
+            size = round(0.5 * 0.6 * math.sqrt(4 * w * s.size * w * s.size / math.pi))
 
+            draw_pac_man(img, (cx, cy), size, rgbcolorvalue, s.start_angle, s.end_angle)
         elif s.shape == "star":
             size = 0.7 * math.sqrt(3) * w * s.size / 3
             draw_star(img, (s.x, s.y), size, rgbcolorvalue)

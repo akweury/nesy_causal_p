@@ -187,7 +187,7 @@ def kf2data(kf, width):
                      "color_r": bk.color_matplotlib[obj.color][0],
                      "color_g": bk.color_matplotlib[obj.color][1],
                      "color_b": bk.color_matplotlib[obj.color][2],
-                     "shape": bk.bk_shapes.index(obj.shape),
+                     "shape": 0,
                      "width": width
                      })
     return data
@@ -279,7 +279,8 @@ def get_task_names(principle):
     elif principle == "similarity_color":
         task_names = ["similarity_two_pairs"]
     elif principle == "closure":
-        task_names = ["gestalt_triangle",
+        task_names = ["gestalt_triangle_and_noise",
+                      "gestalt_triangle",
                       "gestalt_square",
                       "gestalt_circle",
                       "tri_group",

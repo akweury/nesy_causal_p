@@ -281,7 +281,7 @@ def generate_random_clustered_circles(so, dtype,
                                                y=new_y, line_width=-1, solid=True))
                     break
     if not dtype:
-        yellow_counter  += random.randint(1, 5)
+        yellow_counter += random.randint(1, 5)
     # Generate circles within each cluster
     while blue_counter < yellow_counter:
         cluster_x, cluster_y = random.choice(cluster_centers)
@@ -386,40 +386,102 @@ def similarity_two_colors(so, dtype):
         """
     objs = []
     color = random.choice(bk.color_large_exclude_gray)
+
     if dtype:
-        row_num = random.randint(3, 5)
-        col_num = random.randint(3, 5)
-        diff_row_id = random.randint(0, row_num - 1)
-        row_space = 1 / (row_num + 1)
-        col_space = 1 / (col_num + 1)
-        for x in range(row_num):
-            for y in range(col_num):
-                color = random.choice(["blue", "red"])
-                shape = "triangle" if color == "red" else "square"
-                objs.append(kandinskyShape(color=color, shape=shape, size=so, x=(x + 1) * row_space,
-                                           y=(y + 1) * col_space, line_width=-1, solid=True))
+        cluster = random.randint(1, 3)
+        if cluster == 1:
+            obj_num = 10
+            color = random.choice(bk.color_large_exclude_gray)
+            shape = random.choice(["triangle", "square", "circle"])
+            for i in range(obj_num):
+                objs.append(kandinskyShape(color=color, shape=shape, size=so, x=random.random(), y=random.random(),
+                                           line_width=-1, solid=True))
+            objs.append(kandinskyShape(color="red", shape=shape, size=so, x=random.random(), y=random.random(),
+                                       line_width=-1, solid=True))
 
+        elif cluster == 2:
+            obj_num = 6
+            color = random.sample(bk.color_large_exclude_gray, 2)
+            shape = random.sample(["triangle", "square", "circle"], 2)
+            for i in range(obj_num):
+                objs.append(
+                    kandinskyShape(color=color[0], shape=shape[0], size=so, x=random.random(), y=random.random(),
+                                   line_width=-1, solid=True))
+            objs.append(kandinskyShape(color="red", shape=shape[0], size=so, x=random.random(), y=random.random(),
+                                       line_width=-1, solid=True))
+            for i in range(obj_num):
+                objs.append(
+                    kandinskyShape(color=color[1], shape=shape[1], size=so, x=random.random(), y=random.random(),
+                                   line_width=-1, solid=True))
+            objs.append(kandinskyShape(color="red", shape=shape[1], size=so, x=random.random(), y=random.random(),
+                                       line_width=-1, solid=True))
+        elif cluster == 3:
+            obj_num = 3
+            color = random.sample(bk.color_large_exclude_gray, 3)
+            shape = random.sample(["triangle", "square", "circle"], 3)
+            for i in range(obj_num):
+                objs.append(
+                    kandinskyShape(color=color[0], shape=shape[0], size=so, x=random.random(), y=random.random(),
+                                   line_width=-1, solid=True))
+            objs.append(kandinskyShape(color="red", shape=shape[0], size=so, x=random.random(), y=random.random(),
+                                       line_width=-1, solid=True))
+            for i in range(obj_num):
+                objs.append(
+                    kandinskyShape(color=color[1], shape=shape[1], size=so, x=random.random(), y=random.random(),
+                                   line_width=-1, solid=True))
+            objs.append(kandinskyShape(color="red", shape=shape[1], size=so, x=random.random(), y=random.random(),
+                                       line_width=-1, solid=True))
+            for i in range(obj_num):
+                objs.append(
+                    kandinskyShape(color=color[2], shape=shape[2], size=so, x=random.random(), y=random.random(),
+                                   line_width=-1, solid=True))
+            objs.append(kandinskyShape(color="red", shape=shape[2], size=so, x=random.random(), y=random.random(),
+                                       line_width=-1, solid=True))
     else:
-        row_num = random.randint(3, 5)
-        col_num = random.randint(3, 5)
-        diff_row_id = random.randint(0, row_num - 1)
-        row_space = 1 / (row_num + 1)
-        col_space = 1 / (col_num + 1)
-        colors = random.choice([["red", "yellow"], ["blue", "yellow"]])
-        for x in range(row_num):
-            for y in range(col_num):
-                color = random.choice(colors)
-                if color == "red":
-                    shape = "triangle"
-                elif color == "blue":
-                    shape = "square"
-                elif colors == ["red", "yellow"]:
-                    shape = "square"
-                else:
-                    shape = "triangle"
-                objs.append(kandinskyShape(color=color, shape=shape, size=so, x=(x + 1) * row_space,
-                                           y=(y + 1) * col_space, line_width=-1, solid=True))
-
+        cluster = random.randint(1, 3)
+        if cluster == 1:
+            obj_num = 10
+            color = random.choice(bk.color_large_exclude_gray)
+            shape = random.choice(["triangle", "square", "circle"])
+            for i in range(obj_num):
+                objs.append(kandinskyShape(color=color, shape=shape, size=so, x=random.random(), y=random.random(),
+                                           line_width=-1, solid=True))
+        elif cluster == 2:
+            obj_num = 5
+            color = random.sample(bk.color_large_exclude_gray, 2)
+            shape = random.sample(["triangle", "square", "circle"], 2)
+            for i in range(obj_num):
+                objs.append(
+                    kandinskyShape(color=color[0], shape=shape[0], size=so, x=random.random(), y=random.random(),
+                                   line_width=-1, solid=True))
+            objs.append(kandinskyShape(color="red", shape=shape[0], size=so, x=random.random(), y=random.random(),
+                                       line_width=-1, solid=True))
+            for i in range(obj_num):
+                objs.append(
+                    kandinskyShape(color=color[1], shape=shape[1], size=so, x=random.random(), y=random.random(),
+                                   line_width=-1, solid=True))
+        elif cluster == 3:
+            obj_num = 3
+            color = random.sample(bk.color_large_exclude_gray, 3)
+            shape = random.sample(["triangle", "square", "circle"], 3)
+            for i in range(obj_num):
+                objs.append(
+                    kandinskyShape(color=color[0], shape=shape[0], size=so, x=random.random(), y=random.random(),
+                                   line_width=-1, solid=True))
+            for i in range(obj_num):
+                objs.append(
+                    kandinskyShape(color=color[1], shape=shape[1], size=so, x=random.random(), y=random.random(),
+                                   line_width=-1, solid=True))
+            if random.random() > 0.5:
+                objs.append(kandinskyShape(color="red", shape=shape[1], size=so, x=random.random(), y=random.random(),
+                                           line_width=-1, solid=True))
+            for i in range(obj_num):
+                objs.append(
+                    kandinskyShape(color=color[2], shape=shape[2], size=so, x=random.random(), y=random.random(),
+                                   line_width=-1, solid=True))
+            if random.random() > 0.5:
+                objs.append(kandinskyShape(color="red", shape=shape[2], size=so, x=random.random(), y=random.random(),
+                                           line_width=-1, solid=True))
     return objs
 
 
@@ -526,6 +588,57 @@ def closure_classic_triangle(so, dtype):
         objs.append(kandinskyShape(color="lightgray",
                                    shape="square", size=so, x=xs, y=ys, line_width=-1, solid=True))
 
+    return objs
+
+
+def closure_classic_triangle_and_noise(so, dtype):
+    objs = []
+    x = 0.5  # + random.random() * 0.8
+    y = 0.8  # + random.random() * 0.8
+    r = 0.3 - min(abs(0.5 - x), abs(0.5 - y)) * 0.5
+    xs = x
+    ys = y - r
+
+    so = 0.4 + random.random() * 0.5
+    cir_so = so * (0.3 + random.random() * 0.15)
+
+    # correct the size to  the same area as an square
+    s = 0.7 * math.sqrt(3) * so / 3
+    dx = s * math.cos(math.radians(30))
+    dy = s * math.sin(math.radians(30))
+
+    if dtype:
+        # draw circles
+        objs.append(kandinskyShape(color=random.choice(["blue"]),
+                                   shape="pac_man", size=cir_so, x=xs, y=ys - s, line_width=-1, solid=True,
+                                   start_angle=120,
+                                   end_angle=420, ))
+
+        objs.append(kandinskyShape(color=random.choice(["blue"]),
+                                   shape="pac_man", size=cir_so, x=xs + dx, y=ys + dy, line_width=-1, solid=True,
+                                   start_angle=240, end_angle=540))
+
+        objs.append(kandinskyShape(color=random.choice(["blue"]),
+                                   shape="pac_man", size=cir_so, x=xs - dx, y=ys + dy, line_width=-1, solid=True,
+                                   start_angle=0, end_angle=300))
+
+        objs.append(kandinskyShape(color=random.choice(["green", "blue"]),
+                                   shape="pac_man", size=cir_so, x=xs + random.random() * 0.3,
+                                   y=(ys - s) + random.random() * 0.3, line_width=-1, solid=True,
+                                   start_angle=120, end_angle=420))
+        objs.append(kandinskyShape(color=random.choice(["green", "blue"]),
+                                   shape="pac_man", size=cir_so, x=xs - random.random() * 0.3,
+                                   y=(ys - s) + random.random() * 0.3, line_width=-1, solid=True,
+                                   start_angle=180, end_angle=480))
+
+    else:
+        # draw circles
+        for i in range(5):
+            start_angle = random.randint(0, 100)
+            objs.append(kandinskyShape(color=random.choice(["blue", "green"]),
+                                       shape="pac_man", size=cir_so, x=random.random(),
+                                       y=random.random(), line_width=-1, solid=True,
+                                       start_angle=start_angle, end_angle=start_angle + 300))
     return objs
 
 
@@ -829,6 +942,8 @@ def gen_patterns(pattern_name, dtype):
         g = lambda so, truth: similarity_two_pairs(so, dtype)
     elif pattern_name == "gestalt_triangle":
         g = lambda so, truth: closure_classic_triangle(so, dtype)
+    elif pattern_name == "gestalt_triangle_and_noise":
+        g = lambda so, truth: closure_classic_triangle_and_noise(so, dtype)
     elif pattern_name == "gestalt_square":
         g = lambda so, truth: closure_classic_square(so, dtype)
     elif pattern_name == "gestalt_circle":

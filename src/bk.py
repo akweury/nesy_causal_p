@@ -193,7 +193,14 @@ color_large = [k for k, v in list(color_matplotlib.items())]
 color_large_exclude_gray = [item for item in color_large if item != "lightgray"]
 bk_shapes = ["none", "triangle", "square", "circle"]
 
-gestalt_principles = ["proximity", "similarity_shape", "similarity_color", 'closure', "continuity", "symmetry"]
+gestalt_principles = [
+    # 'closure',
+    # "proximity",
+    "symmetry",
+    "similarity_shape",
+    "similarity_color",
+    # "continuity",
+]
 
 rule_logic_types = [
     "true_all_image",
