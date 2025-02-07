@@ -280,6 +280,7 @@ def get_task_names(principle):
         task_names = ["similarity_two_pairs"]
     elif principle == "closure":
         task_names = ["gestalt_triangle_and_noise",
+                      "closure_square_red_yellow",
                       "gestalt_triangle",
                       "gestalt_square",
                       "gestalt_circle",
