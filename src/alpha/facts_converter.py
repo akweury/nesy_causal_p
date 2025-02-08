@@ -90,7 +90,7 @@ class FactsConverter(nn.Module):
             term_data = group_data
             term_name = "group_data"
         elif term_name == "object":
-            term_data = self.lang.term_index(term)
+            term_data = group_data
         elif term_name in [bk.const_dtype_object_color, bk.const_dtype_object_shape, bk.const_dtype_group,
                            bk.const_dtype_obj_num]:
             term_data = term

@@ -250,7 +250,12 @@ class Language(object):
                 for args in args_list:
                     atoms.append(Atom(pred, args))
             elif isinstance(pred, InventedPredicate):
-                for args in args_list:
+                dtypes = pred.dtypes
+                consts_list = [self.get_by_dtype(dtype) for dtype in dtypes]
+                all_combs = list(itertools.product(*consts_list))
+
+                # args_list = self.unique_combinations_filter(consts_list)
+                for args in all_combs:
                     atoms.append(InvAtom(pred, args))
         if clauses is not None:
             for clause in clauses:

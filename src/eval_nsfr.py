@@ -218,7 +218,7 @@ def check_clause(args, lang_obj, lang_group, rules, imgs_test, principle):
         "principle": groups["principle"]
     }
 
-    visual_negative_image(check_results, imgs_test[half_size:])
+    # visual_negative_image(check_results, imgs_test[half_size:])
     return check_results
     # logger
     # satisfied_clause_indices = torch.nonzero(clauses_conf[idx] >= args.valid_rule_th).reshape(-1)

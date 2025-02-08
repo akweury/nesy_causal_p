@@ -76,6 +76,7 @@ def algo_proximity(ocm, th):
             current_label += 1
     return labels
 
+
 def algo_symmetry(points, tol=0.05):
     """
     Check if an Nx2 numpy array of points (with x, y in [0,1]) is roughly symmetric
@@ -131,6 +132,7 @@ def algo_symmetry(points, tol=0.05):
 
     # All points have either been matched or lie close to the symmetry axis.
     return True, labels
+
 
 def cluster_by_proximity(ocms):
     """ Function to compute distance or difference
@@ -233,7 +235,15 @@ def algo_closure_position(args, input_groups):
     return labels, group_labels
 
 
-def algo_closure(args, segments):
+def find_center_of_segment(segment):
+    segment[segment == [211, 211, 211]] = 0
+    nonzero_indices = torch.argwhere(torch.any(segment > 0, dim=-1))
+    center_y, center_x = torch.mean(nonzero_indices.float(), dim=0)
+
+    return (int(center_x), int(center_y))
+
+
+def algo_closure(args, segments, obj_groups):
     """ group input groups to output groups, which are high level groups """
     # each object assigned a group id as its label
     bk_shapes = bk.load_bk_fms(args, bk.bk_shapes)
@@ -245,22 +255,24 @@ def algo_closure(args, segments):
     group_label = 0
     contour_points, contour_segs, contour_seg_labels = models.get_contour_segs(img)
 
+    obj_centers = [group.pos for group in obj_groups]
     # base on the segments, what shape can you recall by considering closure principle
     # find line groups
-    lines, line_group_data = models.get_line_groups(contour_points, contour_segs, contour_seg_labels, img.shape[0])
+    rectangle_lines = models.get_line_groups(contour_points, contour_segs, contour_seg_labels, img.shape[0])
     curves = models.get_curves(contour_points, contour_segs, contour_seg_labels, img.shape[0])
 
-    normed_similar_lines = []
-    for line in lines:
-        normed_similar_lines.append([line[0], line[1].astype(np.float32) / 1024, line[2].astype(np.float32) / 1024])
+    # normed_similar_lines = []
+    # for line in lines:
+    #     normed_similar_lines.append([line[0], line[1].astype(np.float32) / 1024, line[2].astype(np.float32) / 1024])
 
     obj_labels = torch.zeros(len(segments))
+
     group_labels = []
     # find polygons or circles
-    labels, hasTriangle, group_labels = models.find_triangles(normed_similar_lines, line_group_data, obj_labels,
-                                                              group_labels)
-    labels, hasSquare, group_labels = models.find_squares(normed_similar_lines, line_group_data, obj_labels,
-                                                          group_labels)
+    # labels, hasTriangle, group_labels = models.find_triangles(normed_similar_lines, line_group_data, obj_labels,
+    #                                                           group_labels)
+    labels, group_labels = models.find_squares(rectangle_lines, obj_centers, obj_labels,
+                                               group_labels)
     return labels, group_labels
 
 
@@ -272,10 +284,10 @@ def cluster_by_closure(args, segments, obj_groups):
     for example_i in range(len(segments)):
         segment = segments[example_i]
         obj_group = obj_groups[example_i]
-        if len(obj_group) > 5:
+        if len(obj_group) > 8:
             labels, shapes = algo_closure_position(args, obj_group)
         else:
-            labels, shapes = algo_closure(args, segment)
+            labels, shapes = algo_closure(args, segment, obj_group)
 
         group_lengths.append(len(labels.unique()))
         all_labels.append(labels)

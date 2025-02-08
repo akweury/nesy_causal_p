@@ -732,7 +732,10 @@ def closure_square_red_yellow(so, dtype):
                                    shape="square", size=so, x=xs, y=ys, line_width=-1, solid=True))
 
     else:
-        color = random.sample(bk.color_large_exclude_gray, 3) + ["red"]
+        if random.random() > 0.5:
+            color = random.sample(bk.color_large_exclude_gray, 2) + ["red", "red"]
+        else:
+            color = random.sample(bk.color_large_exclude_gray, 2) + ["green", "green"]
         # first square
         random.shuffle(color)
         xs = 0.25
@@ -755,7 +758,10 @@ def closure_square_red_yellow(so, dtype):
                                    shape="square", size=so, x=xs, y=ys, line_width=-1, solid=True))
 
         # second square
-        color = random.sample(bk.color_large_exclude_gray, 3) + ["green"]
+        if random.random() > 0.5:
+            color = random.sample(bk.color_large_exclude_gray, 2) + ["red", "green"]
+        else:
+            color = random.sample(bk.color_large_exclude_gray, 3) + ["green"]
         # shuffle the list: color
         random.shuffle(color)
         xs = 0.75

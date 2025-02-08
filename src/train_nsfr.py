@@ -11,7 +11,7 @@ from src import llama_call, bk
 from percept import perception
 from reasoning import reason
 from src.neural import models
-
+from src.alpha.fol.logic import InvAtom
 
 def load_bk(args, bk_shapes):
     # load background knowledge
@@ -67,12 +67,13 @@ def load_lang(args, mode, level):
             lang.predicates = lang_data["preds"]
             lang.consts = lang_data["consts"]
             lang.atoms = lang_data["atoms"]
+            inv_atoms = [atom for atom in lang.atoms if  isinstance(atom, InvAtom)]
             lang.attrs = lang_data["attrs"]
             lang.all_groups = lang_data["all_groups"]
             # lang.llm_clauses = lang_data["llm_clauses"]
             # lang.name_dict = lang_data["name_dict"]
             lang.generate_atoms()
-
+            # lang.generate_inv_atoms(lang.predicates)
             # rules = {
             #     "true_all_image": lang_data["true_all_image"],
             #     "true_all_group": lang_data["true_all_group"],

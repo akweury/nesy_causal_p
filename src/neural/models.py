@@ -18,6 +18,8 @@ from src.utils import chart_utils, data_utils
 
 import config
 from src import bk
+from collections import defaultdict
+from sklearn.cluster import DBSCAN
 
 
 # Define the Autoencoder
@@ -626,47 +628,178 @@ def draw_arc_on_image(image, center, radius, start_angle, end_angle, color=(255,
     return image
 
 
-def merge_similar_lines(lines, line_obj_indices, slope_tolerance, distance_tolerance, vertical_th=8):
-    used = np.zeros(len(lines))
-    similar_lines = []
-    line_group_data = []
-    for l_i, line in enumerate(lines):
-        merged_line_obj_indices = [
-            line_obj_indices[l_i]
-        ]
+# def is_collinear(p1, p2, p3, distance_tolerance):
+#     """
+#     Checks if point p3 is collinear with line segment (p1, p2)
+#     """
+#     area = abs((p2[0] - p1[0]) * (p3[1] - p1[1]) - (p3[0] - p1[0]) * (p2[1] - p1[1]))
+#     return area < distance_tolerance
 
-        current_line = line
-        if used[l_i]:
+
+def euclidean_distance(p1, p2):
+    return np.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2)
+
+
+def cluster_lines_by_proximity(lines, eps=10):
+    """
+    Clusters line segments based on the proximity of their endpoints.
+    """
+    endpoints = [(line[1] + line[2]) / 2 / 1024 for line in lines]
+    # endpoints = [tuple(line[1]) for line in lines] + [tuple(line[2]) for line in lines]
+    clustering = DBSCAN(eps=0.05, min_samples=1).fit(endpoints)
+
+    clusters = defaultdict(list)
+    for idx, label in enumerate(clustering.labels_):
+        clusters[label].append([lines[idx]])
+
+    return clusters
+
+
+def label_corners(clusters):
+    """
+    Labels clusters as left_top, left_bottom, right_top, right_bottom.
+    """
+    labeled_clusters = {}
+
+    for label, points in clusters.items():
+        # xs = [p[0] for p in points]
+        # ys = [p[1] for p in points]
+
+        # min_x, max_x = min(xs), max(xs)
+        # min_y, max_y = min(ys), max(ys)
+        points_np = np.array([[points[0][0][1], points[0][0][2]], [
+            points[1][0][1], points[1][0][2]]])
+        centers = points_np.mean(axis=1)
+        if centers[:, 1].argmax() == centers[:, 0].argmax():
+            # left_bottom or right top
+
+            # left_bottom: if the horizontal line on the right side
+            if np.abs(points[centers[:, 1].argmax()][0][0]) < 0.5:
+                labeled_clusters[label] = ('left_bottom', {"lines": points, "pos": centers.mean(axis=0)})
+            else:
+                labeled_clusters[label] = ('right_top', {"lines": points, "pos": centers.mean(axis=0)})
+        else:
+            if np.abs(points[centers[:, 1].argmax()][0][0]) < 0.5:
+                labeled_clusters[label] = ('right_bottom', {"lines": points, "pos": centers.mean(axis=0)})
+            else:
+                labeled_clusters[label] = ('left_top', {"lines": points, "pos": centers.mean(axis=0)})
+    return labeled_clusters
+
+
+def group_corners_to_rectangles(labeled_clusters):
+    """
+    Groups four corners into rectangle clusters.
+    """
+    grouped_rectangles = []
+    used = set()
+
+    left_tops = {k: v for k, v in labeled_clusters.items() if v[0] == 'left_top'}
+    right_tops = {k: v for k, v in labeled_clusters.items() if v[0] == 'right_top'}
+    left_bottoms = {k: v for k, v in labeled_clusters.items() if v[0] == 'left_bottom'}
+    right_bottoms = {k: v for k, v in labeled_clusters.items() if v[0] == 'right_bottom'}
+
+    for lt_label, (lt_type, lt_points) in left_tops.items():
+        best_rt_label = None
+        min_dist = float('inf')
+
+        for rt_label, (rt_type, rt_points) in right_tops.items():
+            if rt_label in used:
+                continue
+            if rt_points["pos"][0] > lt_points["pos"][0]:
+                if abs(rt_points["pos"][1] - lt_points["pos"][1]) < 20:  # Same height check
+                    dist = abs(rt_points["pos"][0] - lt_points["pos"][0])
+                    if dist < min_dist:
+                        min_dist = dist
+                        best_rt_label = rt_label
+
+        if best_rt_label is None:
             continue
-        if l_i == len(lines):
-            if used[l_i] == 0:
-                used[l_i] = 1
-                similar_lines.append(line)
-                merged_line_obj_indices.append(line_obj_indices[l_i])
-        for l2_i in range(l_i + 1, len(lines)):
-            l2 = lines[l2_i]
-            k1 = line[0]
-            k2 = l2[0]
-            # Convert slopes to angles (in radians)
-            theta1 = math.atan(k1)
-            theta2 = math.atan(k2)
-            # Compute the absolute difference in angles
-            angle_diff = abs(theta1 - theta2)
-            slope_similar = angle_diff < slope_tolerance
-            all_vertical = np.abs(k2) >= vertical_th and np.abs(k1) >= vertical_th
-            collinearity = is_collinear(current_line[1], current_line[2], l2[1], distance_tolerance)
-            if (slope_similar or all_vertical) and collinearity:
-                used[l_i] = 1
-                used[l2_i] = 1
-                # Update the start and end to cover both lines
-                current_start = min(current_line[1], current_line[2], l2[1], l2[2], key=lambda p: (p[0], p[1]))
-                current_end = max(current_line[1], current_line[2], l2[1], l2[2], key=lambda p: (p[0], p[1]))
-                current_line = [current_line[0], current_start, current_end]
-                merged_line_obj_indices.append(line_obj_indices[l2_i])
-        similar_lines.append(current_line)
-        line_group_data.append(np.unique(merged_line_obj_indices))
 
-    return similar_lines, line_group_data
+        best_lb_label = None
+        min_dist = float('inf')
+        for lb_label, (lb_type, lb_points) in left_bottoms.items():
+
+            if lb_label in used:
+                continue
+            if lb_points["pos"][1] > lt_points["pos"][1]:  # higher y-axis
+                if abs(lb_points["pos"][0] - lt_points["pos"][0]) < 20:  # Same x-axis
+                    dist = abs(lb_points["pos"][1] - lt_points["pos"][1])
+                    if dist < min_dist:
+                        min_dist = dist
+                        best_lb_label = lb_label
+
+        best_rb_label = None
+        min_dist = float('inf')
+        for rb_label, (rb_type, rb_points) in right_bottoms.items():
+            if rb_label in used:
+                continue
+            if rb_points["pos"][1] > lt_points["pos"][1] and rb_points["pos"][0] > lt_points["pos"][0]:
+                dist = abs(rb_points["pos"][1] - lt_points["pos"][1]) + abs(rb_points["pos"][0] - lt_points["pos"][0])
+                if dist < min_dist:
+                    min_dist = dist
+                    best_rb_label = rb_label
+
+        grouped_rectangles.append({
+            'left_top': lt_points,
+            'right_top': labeled_clusters[best_rt_label][1],
+            'left_bottom': labeled_clusters[best_lb_label][1],
+            'right_bottom': labeled_clusters[best_rb_label][1],
+        })
+
+        used.update([lt_label, best_rt_label, best_lb_label, best_rb_label])
+
+    return grouped_rectangles
+
+
+def merge_rectangles(lines):
+    clusters = cluster_lines_by_proximity(lines)
+    labeled_clusters = label_corners(clusters)
+    rectangles = group_corners_to_rectangles(labeled_clusters)
+    return rectangles
+
+
+#
+# def merge_similar_lines(lines, line_obj_indices, slope_tolerance, distance_tolerance, vertical_th=8):
+#     used = np.zeros(len(lines))
+#     similar_lines = []
+#     line_group_data = []
+#     for l_i, line in enumerate(lines):
+#         merged_line_obj_indices = [
+#             line_obj_indices[l_i]
+#         ]
+#
+#         current_line = line
+#         if used[l_i]:
+#             continue
+#         if l_i == len(lines):
+#             if used[l_i] == 0:
+#                 used[l_i] = 1
+#                 similar_lines.append(line)
+#                 merged_line_obj_indices.append(line_obj_indices[l_i])
+#         for l2_i in range(l_i + 1, len(lines)):
+#             l2 = lines[l2_i]
+#             k1 = line[0]
+#             k2 = l2[0]
+#             # Convert slopes to angles (in radians)
+#             theta1 = math.atan(k1)
+#             theta2 = math.atan(k2)
+#             # Compute the absolute difference in angles
+#             angle_diff = abs(theta1 - theta2)
+#             slope_similar = angle_diff < slope_tolerance
+#             all_vertical = np.abs(k2) >= vertical_th and np.abs(k1) >= vertical_th
+#             collinearity = is_collinear(current_line[1], current_line[2], l2[1], distance_tolerance)
+#             if (slope_similar or all_vertical) and collinearity:
+#                 used[l_i] = 1
+#                 used[l2_i] = 1
+#                 # Update the start and end to cover both lines
+#                 current_start = min(current_line[1], current_line[2], l2[1], l2[2], key=lambda p: (p[0], p[1]))
+#                 current_end = max(current_line[1], current_line[2], l2[1], l2[2], key=lambda p: (p[0], p[1]))
+#                 current_line = [current_line[0], current_start, current_end]
+#                 merged_line_obj_indices.append(line_obj_indices[l2_i])
+#         similar_lines.append(current_line)
+#         line_group_data.append(np.unique(merged_line_obj_indices))
+#
+#     return similar_lines, line_group_data
 
 
 def get_curves(contour_points, contour_segs, contour_seg_labels, width):
@@ -723,8 +856,7 @@ def get_line_groups(contour_points, contour_segs, contour_seg_labels, width):
     chart_utils.van(line_img.numpy().astype(np.uint8), file_name=config.output / "closure_line_segs.png")
 
     # merge all the line_segs
-    merged_lines, line_group_data = merge_similar_lines(lines, line_obj_indices, slope_tolerance=0.5,
-                                                        distance_tolerance=1e-2, vertical_th=8)
+    rectangles = merge_rectangles(lines)
     # # visual lines
     # colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 0, 255), (0, 0, 128), (255, 0, 128)]
     # merged_line_img = torch.zeros(width, width, 3)
@@ -732,7 +864,7 @@ def get_line_groups(contour_points, contour_segs, contour_seg_labels, width):
     #     merged_line_img = draw_line_on_array(merged_line_img, line[1], line[2], colors[l_i])
     # chart_utils.van(merged_line_img.numpy().astype(np.uint8), file_name=config.output / "closure_merged_lines.png")
 
-    return merged_lines, line_group_data
+    return rectangles
 
 
 def distance(point1, point2):
@@ -802,32 +934,20 @@ def find_triangles(lines, line_groups, obj_group_labels, group_labels):
     return obj_group_labels, hasTriangle, group_labels
 
 
-def find_squares(lines, line_groups, obj_group_labels, group_labels):
-    if len(lines) < 4:
-        return obj_group_labels, False, group_labels
-
-    # check slopes
-    comb_lists = list(combinations(list(range(len(lines))), 4))  # Get all combinations of length 3
-    squares = []
-    for comb_list in comb_lists:
-        square_lines = [lines[i] for i in comb_list]
-        end_points = []
-        for line in square_lines:
-            end_points.append([line[1], line[2]])
-        end_points = np.array(end_points)
-        close = forms_closed_figure(end_points, max_distance=0.1)
-        if close:
-            squares.append(comb_list)
-
-    label_id = obj_group_labels.max()
-    hasSquare = False
-    for square in squares:
+def find_squares(rect_lines, center_points, obj_group_labels, group_labels):
+    # if len(lines) < 4:
+    #     return obj_group_labels, False, group_labels
+    group_id = 0
+    for rect_group in rect_lines:
+        group_id += 1
         group_labels.append(2)
-        hasSquare = True
-        label_id += 1
-        for line_i in square:
-            obj_group_labels[list(line_groups[line_i])] = label_id
-    return obj_group_labels, hasSquare, group_labels
+        for k, v in rect_group.items():
+            pos = v["pos"]/1024
+            dists = [euclidean_distance(pos, cp) for cp in center_points]
+            index = dists.index(min(dists))
+            obj_group_labels[index] = group_id
+
+    return obj_group_labels, group_labels
 
 
 def find_circles(curves, circle_data, labels):
