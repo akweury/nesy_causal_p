@@ -425,7 +425,7 @@ def alpha_group(args, all_matrix, mode):
         enum_example_groups = []
         for g_i, g in enumerate(example_groups):
             enum_example_groups.append([g_i, g])
-        group_combs = list(itertools.combinations(enum_example_groups, 2))
+        group_combs = list(itertools.combinations(enum_example_groups, 1))
         for groups in group_combs:
             gcms = torch.cat([group[1]["gcm"] for group in groups], dim=0)
             max_o_num = max([len(g[1]["ocm"]) for g in groups])

@@ -284,7 +284,7 @@ def cluster_by_closure(args, segments, obj_groups):
     for example_i in range(len(segments)):
         segment = segments[example_i]
         obj_group = obj_groups[example_i]
-        if len(obj_group) > 8:
+        if len(obj_group) > 20:
             labels, shapes = algo_closure_position(args, obj_group)
         else:
             labels, shapes = algo_closure(args, segment, obj_group)

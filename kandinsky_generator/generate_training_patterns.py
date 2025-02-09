@@ -281,6 +281,7 @@ def get_task_names(principle):
     elif principle == "closure":
         task_names = ["gestalt_triangle_and_noise",
                       "closure_square_red_yellow",
+                      "closure_four_squares",
                       "gestalt_triangle",
                       "gestalt_square",
                       "gestalt_circle",
