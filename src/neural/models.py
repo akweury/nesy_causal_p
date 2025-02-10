@@ -646,7 +646,7 @@ def cluster_lines_by_proximity(lines, eps=10):
     """
     endpoints = [(line[1] + line[2]) / 2 / 1024 for line in lines]
     # endpoints = [tuple(line[1]) for line in lines] + [tuple(line[2]) for line in lines]
-    clustering = DBSCAN(eps=0.05, min_samples=1).fit(endpoints)
+    clustering = DBSCAN(eps=0.1, min_samples=1).fit(endpoints)
 
     clusters = defaultdict(list)
     for idx, label in enumerate(clustering.labels_):
@@ -758,6 +758,108 @@ def merge_rectangles(lines):
     return rectangles
 
 
+def label_triangle_corners(clusters):
+    """
+    Labels clusters as left_top, left_bottom, right_top, right_bottom.
+    """
+    labeled_clusters = {}
+
+    for label, points in clusters.items():
+        # xs = [p[0] for p in points]
+        # ys = [p[1] for p in points]
+
+        # min_x, max_x = min(xs), max(xs)
+        # min_y, max_y = min(ys), max(ys)
+        points_np = np.array([[points[0][0][1], points[0][0][2]], [
+            points[1][0][1], points[1][0][2]]])
+        centers = points_np.mean(axis=1)
+        if np.abs(points[0][0][0]) < 0.5:
+            if points[1][0][0] > 0:
+                labeled_clusters[label] = ('left_bottom', {"lines": points, "pos": centers.mean(axis=0)})
+            else:
+                labeled_clusters[label] = ('right_bottom', {"lines": points, "pos": centers.mean(axis=0)})
+        elif np.abs(points[1][0][0]) < 0.5:
+            if points[0][0][0] > 0:
+                labeled_clusters[label] = ('left_bottom', {"lines": points, "pos": centers.mean(axis=0)})
+            else:
+                labeled_clusters[label] = ('right_bottom', {"lines": points, "pos": centers.mean(axis=0)})
+        else:
+            labeled_clusters[label] = ('top', {"lines": points, "pos": centers.mean(axis=0)})
+    return labeled_clusters
+
+
+def group_corners_to_triangles(labeled_clusters):
+    """
+    Groups four corners into rectangle clusters.
+    """
+    grouped_rectangles = []
+    used = set()
+
+    left_bottoms = {k: v for k, v in labeled_clusters.items() if v[0] == 'left_bottom'}
+    right_bottoms = {k: v for k, v in labeled_clusters.items() if v[0] == 'right_bottom'}
+    tops = {k: v for k, v in labeled_clusters.items() if v[0] == 'top'}
+
+    for t_label, (t_type, t_points) in tops.items():
+        best_rb_label = None
+        min_dist = float('inf')
+
+        for rb_label, (rb_type, rb_points) in right_bottoms.items():
+            if rb_label in used:
+                continue
+            if rb_points["pos"][0] < t_points["pos"][0]:
+                rb_line_index = torch.tensor((rb_points["lines"][0][0][0], rb_points["lines"][1][0][0])).argmin()
+                t_line_index = torch.tensor((t_points["lines"][0][0][0], t_points["lines"][1][0][0])).argmin()
+                valid = is_collinear(t_points["lines"][t_line_index][0][1].astype(np.float32),
+                                     t_points["lines"][t_line_index][0][2].astype(np.float32),
+                                     rb_points["lines"][rb_line_index][0][1].astype(np.float32),
+                                     tolerance=1e-3)
+                if valid:
+                    dist = abs(rb_points["pos"][0] - t_points["pos"][0])
+                    if dist < min_dist:
+                        min_dist = dist
+                        best_rb_label = rb_label
+
+        if best_rb_label is None:
+            continue
+
+        best_lb_label = None
+        min_dist = float('inf')
+        for lb_label, (lb_type, lb_points) in left_bottoms.items():
+            if lb_label in used:
+                continue
+            if lb_points["pos"][1] > t_points["pos"][1]:  # higher y-axis
+                lb_line_index = torch.tensor((lb_points["lines"][0][0][0], lb_points["lines"][1][0][0])).argmax()
+                t_line_index = torch.tensor((t_points["lines"][0][0][0], t_points["lines"][1][0][0])).argmax()
+                valid = is_collinear(
+                    t_points["lines"][t_line_index][0][1].astype(np.float32),
+                    t_points["lines"][t_line_index][0][2].astype(np.float32),
+                    lb_points["lines"][lb_line_index][0][1].astype(np.float32),
+                    tolerance=1e-3)
+                if valid:
+                    dist = abs(lb_points["pos"][1] - t_points["pos"][1])
+                    if dist < min_dist:
+                        min_dist = dist
+                        best_lb_label = lb_label
+
+        grouped_rectangles.append({
+            'top': t_points,
+            'right_bottom': labeled_clusters[best_rb_label][1],
+            'left_bottom': labeled_clusters[best_lb_label][1],
+
+        })
+
+        used.update([t_label, best_rb_label, best_lb_label])
+
+    return grouped_rectangles
+
+
+def merge_triangles(lines):
+    clusters = cluster_lines_by_proximity(lines)
+    labeled_clusters = label_triangle_corners(clusters)
+    triangles = group_corners_to_triangles(labeled_clusters)
+    return triangles
+
+
 #
 # def merge_similar_lines(lines, line_obj_indices, slope_tolerance, distance_tolerance, vertical_th=8):
 #     used = np.zeros(len(lines))
@@ -867,6 +969,44 @@ def get_line_groups(contour_points, contour_segs, contour_seg_labels, width):
     return rectangles
 
 
+def get_triangle_groups(contour_points, contour_segs, contour_seg_labels, width):
+    line_segs = []
+    line_obj_indices = []
+    for contour_i, contour_seg in enumerate(contour_segs):
+        for seg_i, seg in enumerate(contour_seg):
+            if contour_seg_labels[contour_i][seg_i] == "line":
+                line_segs.append(contour_points[contour_i][seg])
+                line_obj_indices.append(contour_i)
+
+    lines = []
+    for line_seg in line_segs:
+        slope, start, end = calculate_line_properties(line_seg)
+        if np.abs(start[0] - end[0]) < 5:
+            end[0] = start[0]
+        if np.abs(start[1] - end[1]) < 5:
+            end[1] = start[1]
+        ends = sorted([start, end], key=lambda p: (p[0], p[1]))
+        lines.append([slope, ends[0], ends[1]])
+
+    # visual lines
+    colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 0, 255), (0, 0, 128), (255, 0, 128)]
+    line_img = torch.zeros(width, width, 3)
+    for l_i, line in enumerate(lines):
+        line_img = draw_line_on_array(line_img, line[1], line[2], colors[0])
+    chart_utils.van(line_img.numpy().astype(np.uint8), file_name=config.output / "closure_line_segs.png")
+
+    # merge all the line_segs
+    triangles = merge_triangles(lines)
+    # # visual lines
+    # colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 0, 255), (0, 0, 128), (255, 0, 128)]
+    # merged_line_img = torch.zeros(width, width, 3)
+    # for l_i, line in enumerate(merged_lines):
+    #     merged_line_img = draw_line_on_array(merged_line_img, line[1], line[2], colors[l_i])
+    # chart_utils.van(merged_line_img.numpy().astype(np.uint8), file_name=config.output / "closure_merged_lines.png")
+
+    return triangles
+
+
 def distance(point1, point2):
     # Calculate the Euclidean distance between two points
     return math.sqrt((point1[0] - point2[0]) ** 2 + (point1[1] - point2[1]) ** 2)
@@ -903,35 +1043,48 @@ def forms_closed_figure(line_ends, max_distance=1e-2):
     return closed
 
 
-def find_triangles(lines, line_groups, obj_group_labels, group_labels):
-    if len(lines) < 3:
-        return obj_group_labels, False, group_labels
+def find_triangles(triangle_lines, center_points, obj_group_labels, group_labels):
+    # if len(lines) < 4:
+    #     return obj_group_labels, False, group_labels
 
-        # Create a list from 0 to n
-    comb_lists = list(combinations(list(range(len(lines))), 3))  # Get all combinations of length 3
-    # check closed lines
-    # check slopes
-    triangles = []
-    for comb_list in comb_lists:
-        triangle_lines = [lines[i] for i in comb_list]
-        end_points = []
-        for line in triangle_lines:
-            end_points.append([line[1], line[2]])
-        end_points = np.array(end_points)
-        close = forms_closed_figure(end_points, max_distance=0.1)
-        triangle = None
-        if close:
-            triangles.append(comb_list)
-
-    label_id = obj_group_labels.max()
-    hasTriangle = False
-    for triangle in triangles:
-        hasTriangle = True
+    group_id = 0
+    for tri_group in triangle_lines:
+        group_id += 1
         group_labels.append(1)
-        label_id += 1
-        for line_i in triangle:
-            obj_group_labels[list(line_groups[line_i])] = label_id
-    return obj_group_labels, hasTriangle, group_labels
+        for k, v in tri_group.items():
+            pos = v["pos"] / 1024
+            dists = [euclidean_distance(pos, cp) for cp in center_points]
+            index = dists.index(min(dists))
+            obj_group_labels[index] = group_id
+    #
+    # if len(lines) < 3:
+    #     return obj_group_labels, False, group_labels
+    #
+    #     # Create a list from 0 to n
+    # comb_lists = list(combinations(list(range(len(lines))), 3))  # Get all combinations of length 3
+    # # check closed lines
+    # # check slopes
+    # triangles = []
+    # for comb_list in comb_lists:
+    #     triangle_lines = [lines[i] for i in comb_list]
+    #     end_points = []
+    #     for line in triangle_lines:
+    #         end_points.append([line[1], line[2]])
+    #     end_points = np.array(end_points)
+    #     close = forms_closed_figure(end_points, max_distance=0.1)
+    #     triangle = None
+    #     if close:
+    #         triangles.append(comb_list)
+    #
+    # label_id = obj_group_labels.max()
+    # hasTriangle = False
+    # for triangle in triangles:
+    #     hasTriangle = True
+    #     group_labels.append(1)
+    #     label_id += 1
+    #     for line_i in triangle:
+    #         obj_group_labels[list(line_groups[line_i])] = label_id
+    return obj_group_labels, group_labels
 
 
 def find_squares(rect_lines, center_points, obj_group_labels, group_labels):
@@ -942,7 +1095,7 @@ def find_squares(rect_lines, center_points, obj_group_labels, group_labels):
         group_id += 1
         group_labels.append(2)
         for k, v in rect_group.items():
-            pos = v["pos"]/1024
+            pos = v["pos"] / 1024
             dists = [euclidean_distance(pos, cp) for cp in center_points]
             index = dists.index(min(dists))
             obj_group_labels[index] = group_id

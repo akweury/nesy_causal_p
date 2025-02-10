@@ -272,22 +272,26 @@ def get_task_names(principle):
                       "good_figure_three_groups",
                       "good_figure_always_three"]
     elif principle == "proximity":
-        task_names = ["proximity_red_triangle", ]
+        task_names = [
+            "proximity_red_triangle"
+        ]
     elif principle == "similarity_shape":
-        task_names = ["similarity_triangle_circle",
-                      "fixed_number"]
-    elif principle == "similarity_color":
-        task_names = ["similarity_two_pairs"]
+        task_names = [
+            "similarity_triangle_circle",
+            "fixed_number"
+        ]
+    # elif principle == "similarity_color":
+    #     task_names = ["similarity_two_pairs"]
     elif principle == "closure":
-        task_names = ["gestalt_triangle_and_noise",
-                      "closure_square_red_yellow",
-                      "closure_four_squares",
-                      "gestalt_triangle",
-                      "gestalt_square",
-                      "gestalt_circle",
-                      "tri_group",
-                      "square_group",
-                      "triangle_square"]
+        task_names = [
+            # "gestalt_triangle_and_noise",
+            "closure_square_red_yellow",
+            "closure_four_squares",
+            "gestalt_triangle",
+            "tri_group",
+            "square_group",
+            "triangle_square"
+        ]
     elif principle == "continuity":
         task_names = ["continuity_one_splits_two",
                       "continuity_one_splits_three"]
@@ -300,7 +304,7 @@ def get_task_names(principle):
 
 def gen_and_save(path, width, mode):
     max_length = 64
-    example_num = 3
+    example_num = 10
     all_tensors = {"positive": [], "negative": []}
     task_counter = 0
     principles = bk.gestalt_principles

@@ -258,7 +258,8 @@ def algo_closure(args, segments, obj_groups):
     obj_centers = [group.pos for group in obj_groups]
     # base on the segments, what shape can you recall by considering closure principle
     # find line groups
-    rectangle_lines = models.get_line_groups(contour_points, contour_segs, contour_seg_labels, img.shape[0])
+    # rectangle_lines = models.get_line_groups(contour_points, contour_segs, contour_seg_labels, img.shape[0])
+    triangle_lines = models.get_triangle_groups(contour_points, contour_segs, contour_seg_labels, img.shape[0])
     curves = models.get_curves(contour_points, contour_segs, contour_seg_labels, img.shape[0])
 
     # normed_similar_lines = []
@@ -269,10 +270,10 @@ def algo_closure(args, segments, obj_groups):
 
     group_labels = []
     # find polygons or circles
-    # labels, hasTriangle, group_labels = models.find_triangles(normed_similar_lines, line_group_data, obj_labels,
-    #                                                           group_labels)
-    labels, group_labels = models.find_squares(rectangle_lines, obj_centers, obj_labels,
-                                               group_labels)
+    labels, group_labels = models.find_triangles(triangle_lines, obj_centers, obj_labels,
+                                                              group_labels)
+    # labels, group_labels = models.find_squares(rectangle_lines, obj_centers, obj_labels,
+    #                                            group_labels)
     return labels, group_labels
 
 

@@ -195,9 +195,9 @@ bk_shapes = ["none", "triangle", "square", "circle"]
 
 gestalt_principles = [
     'closure',
-    # "proximity",
-    # "symmetry",
-    # "similarity_shape",
+    "proximity",
+    "symmetry",
+    "similarity_shape",
     # "similarity_color",
     # "continuity",
 ]
