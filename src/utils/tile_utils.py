@@ -1,4 +1,4 @@
-# Created by jing at 17.06.24
+# Created by X at 17.06.24
 
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view

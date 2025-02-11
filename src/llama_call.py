@@ -1,4 +1,4 @@
-# Created by jing at 16.07.24
+# Created by X at 16.07.24
 import os.path
 
 import requests

@@ -1,4 +1,4 @@
-# Created by jing at 17.06.24
+# Created by X at 17.06.24
 
 import numpy as np
 from scipy.ndimage import label

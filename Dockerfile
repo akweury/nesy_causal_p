@@ -10,7 +10,7 @@ RUN pip install opencv-python==4.8.0.74
 # Add qt5
 WORKDIR  /ARC/
 ADD .ssh/ /root/.ssh/
-RUN git clone git@github.com:akweury/nesy_causal_p.git
+RUN git clone git@github.com:xxx/xxxxxxx
 # Install Python requirements
 #COPY ../ARC/requirements.txt ./requirements.txt
 RUN pip install --upgrade pip
