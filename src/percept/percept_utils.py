@@ -1,4 +1,4 @@
-# Created by jing at 10.12.24
+# Created by X at 10.12.24
 import os
 import cv2
 import numpy as np

@@ -1,4 +1,4 @@
-# Created by jing at 29.01.25
+# Created by x at 29.01.25
 import itertools
 from collections import defaultdict
 import numpy as np

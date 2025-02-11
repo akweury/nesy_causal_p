@@ -1,4 +1,4 @@
-# Created by jing at 22.10.24
+# Created by X at 22.10.24
 import os
 
 import config

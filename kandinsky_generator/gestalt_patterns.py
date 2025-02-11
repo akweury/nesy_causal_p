@@ -1,4 +1,4 @@
-# Created by jing at 10.01.25
+# Created by X at 10.01.25
 import random
 
 from kandinsky_generator.src.kp import KandinskyUniverse

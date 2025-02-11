@@ -1,4 +1,4 @@
-# Created by jing at 10.12.24
+# Created by x at 10.12.24
 import numpy as np
 import torch
 

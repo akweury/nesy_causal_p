@@ -1,4 +1,4 @@
-# Created by jing at 03.02.25
+# Created by X at 03.02.25
 
 from PIL import Image, ImageDraw
 import numpy as np

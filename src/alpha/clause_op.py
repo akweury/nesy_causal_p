@@ -1,4 +1,4 @@
-# Created by jing at 11.10.24
+# Created by X at 11.10.24
 
 from src.alpha.fol.logic import Var, Clause, InventedPredicate, Atom, InvAtom
 from src import bk
