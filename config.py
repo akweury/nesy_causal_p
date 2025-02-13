@@ -56,6 +56,7 @@ color_tiles = [
 kp_base_dataset = storage / "dataset" / "basic"
 kp_challenge_dataset = storage / "dataset" / "challenge"
 kp_gestalt_dataset = storage / "dataset" / "gestalt"
+os.makedirs(kp_gestalt_dataset, exist_ok=True)
 kp_gestalt_dataset_all = storage / "dataset" / "gestalt_all"
 data_file_train_cha = storage / "dataset" / "arc-prize-2024" / "arc-agi_training_challenges.json"
 data_file_train_sol = storage / "dataset" / "arc-prize-2024" / "arc-agi_training_solutions.json"

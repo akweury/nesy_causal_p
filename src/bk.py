@@ -249,3 +249,6 @@ def load_bk_fms(args, bk_shapes):
             "labels": labels,
         })
     return bk
+
+def gen_group_tensor(x, y, size, obj_num, r, g, b, tri, sq, cir):
+    return torch.tensor([x, y, size, obj_num, r, g, b, tri, sq, cir])
