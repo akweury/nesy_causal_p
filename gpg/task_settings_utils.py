@@ -2,7 +2,7 @@
 
 import math
 import random
-
+from src import bk
 
 class kandinskyShape:
     def __init__(self, shape="", color="", x=0.5, y=0.5, size=0.5, line_width=1.0,
@@ -49,3 +49,47 @@ def generate_points(center, radius, n, min_distance):
         print(f"Warning: Only generated {len(points)} points after {max_attempts} attempts.")
 
     return points
+
+
+def feature_closure_square(colors, cir_so, xs,ys,dx, dy):
+    objs = []
+    # draw circles
+    objs.append(kandinskyShape(color=colors[0],
+                               shape="pac_man", size=cir_so, x=xs - dx, y=ys - dy, line_width=-1, solid=True,
+                               start_angle=90, end_angle=360))
+
+    objs.append(kandinskyShape(color=colors[1],
+                               shape="pac_man", size=cir_so, x=xs + dx, y=ys + dy, line_width=-1, solid=True,
+                               start_angle=270, end_angle=540))
+
+    objs.append(kandinskyShape(color=colors[2],
+                               shape="pac_man", size=cir_so, x=xs - dx, y=ys + dy, line_width=-1, solid=True,
+                               start_angle=0, end_angle=270))
+
+    objs.append(kandinskyShape(color=colors[3],
+                               shape="pac_man", size=cir_so, x=xs + dx, y=ys - dy, line_width=-1, solid=True,
+                               start_angle=180, end_angle=450))
+
+    return objs
+
+def feature_closure_triangle(colors, cir_so, xs,ys,dx, dy, s):
+    objs = []
+    objs.append(kandinskyShape(color=colors[0],
+                               shape="pac_man", size=cir_so, x=xs, y=ys - s, line_width=-1, solid=True,
+                               start_angle=120,
+                               end_angle=420, ))
+
+    objs.append(kandinskyShape(color=colors[1],
+                               shape="pac_man", size=cir_so, x=xs + dx, y=ys + dy, line_width=-1, solid=True,
+                               start_angle=240, end_angle=540))
+
+    objs.append(kandinskyShape(color=colors[2],
+                               shape="pac_man", size=cir_so, x=xs - dx, y=ys + dy, line_width=-1, solid=True,
+                               start_angle=0, end_angle=300))
+
+def random_colors(random_color_num, specific_colors=None):
+    color = random.sample(bk.color_large_exclude_gray, random_color_num)
+    if specific_colors is not None:
+        color += specific_colors
+    random.shuffle(color)
+    return color

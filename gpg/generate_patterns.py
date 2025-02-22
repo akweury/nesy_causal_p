@@ -13,26 +13,63 @@ from src.utils import args_utils
 from gpg import task_settings
 from gpg.generate_patterns_utils import *
 from gpg.task_settings import *
+from gpg import same_numbers
 
 
 def gen_patterns(pattern_name, dtype):
     so = 0.1
-    overlap_patterns = ["gestalt_triangle", "gestalt_circle", "gestalt_square", "closure_square_red_yellow",
-                        "closure_four_squares"]
+    overlap_patterns = ["feature_proximity_circle_two", "feature_proximity_circle_three",
+                        "feature_proximity_circle_four"]
 
     # proximity
-    if pattern_name == "proximity_red_triangle":
-        g = lambda so, truth: proximity_red_triangle(so, dtype)
+    if pattern_name == "position_proximity_red_triangle_one":
+        g = lambda so, truth: proximity_red_triangle(so, dtype, cluster_num=1)
+    elif pattern_name == "position_proximity_red_triangle_two":
+        g = lambda so, truth: proximity_red_triangle(so, dtype, cluster_num=2)
+    elif pattern_name == "position_proximity_red_triangle_three":
+        g = lambda so, truth: proximity_red_triangle(so, dtype, cluster_num=3)
+    elif pattern_name == "feature_proximity_circle_two":
+        so = 0.05
+        g = lambda so, truth: proximity_circle(so, dtype, cluster_num=2)
+    elif pattern_name == "feature_proximity_circle_three":
+        so = 0.05
+        g = lambda so, truth: proximity_circle(so, dtype, cluster_num=3)
+    elif pattern_name == "feature_proximity_circle_four":
+        so = 0.05
+        g = lambda so, truth: proximity_circle(so, dtype, cluster_num=4)
+    elif pattern_name == "grid_2":
+        g = lambda so, truth: proximity_grid(so, dtype, cluster_num=2)
+    elif pattern_name == "grid_3":
+        g = lambda so, truth: proximity_grid(so, dtype, cluster_num=3)
+    elif pattern_name == "grid_4":
+        g = lambda so, truth: proximity_grid(so, dtype, cluster_num=4)
     elif pattern_name == "proximity_one_shape":
         g = lambda so, truth: proximity_one_shape(so, dtype)
 
+    # similarity
+    elif pattern_name == "fixed_number_two":
+        # Example for three groups: yellow, blue, and red.
+        g = lambda so, truth: same_numbers.generate_scene(so, dtype, g_num=2, grid_size=3, min_circles=3,
+                                                          max_circles=5, diameter=0.08, image_size=(1, 1))
+    elif pattern_name == "fixed_number_three":
+        g = lambda so, truth: same_numbers.generate_scene(so, dtype, g_num=3, grid_size=3, min_circles=3,
+                                                          max_circles=5, diameter=0.08, image_size=(1, 1))
+    elif pattern_name == "fixed_number_four":
+        g = lambda so, truth: same_numbers.generate_scene(so, dtype, g_num=4, grid_size=3, min_circles=3,
+                                                          max_circles=5, diameter=0.08, image_size=(1, 1))
+    elif pattern_name == "similarity_pacman_one":
+        g = lambda so, truth: similarity_pacman(so, dtype, clu_num=1)
+    elif pattern_name == "similarity_pacman_two":
+        g = lambda so, truth: similarity_pacman(so, dtype, clu_num=2)
+    elif pattern_name == "similarity_pacman_three":
+        g = lambda so, truth: similarity_pacman(so, dtype, clu_num=3)
     # feature closures
-    elif pattern_name == "gestalt_square":
+    elif pattern_name == "feature_closure_one_square":
         g = lambda so, truth: closure_classic_square(so, dtype)
-    elif pattern_name == "closure_square_red_yellow":
-        g = lambda so, truth: closure_square_red_yellow(so, dtype)
-    elif pattern_name == "closure_four_squares":
-        g = lambda so, truth: closure_four_squares(so, dtype)
+    elif pattern_name == "feature_closure_two_squares":
+        g = lambda so, truth: feature_closure_two_squares(so, dtype)
+    elif pattern_name == "feature_closure_four_squares":
+        g = lambda so, truth: feature_closure_four_squares(so, dtype)
 
     elif pattern_name == "gestalt_triangle_and_noise":
         g = lambda so, truth: closure_classic_triangle_and_noise(so, dtype)
@@ -52,10 +89,8 @@ def gen_patterns(pattern_name, dtype):
     #     so = 0.1
     #     g = lambda so, truth: closure_big_square(so, dtype) + closure_big_triangle(so, dtype)
 
-
     # similarity
-    # elif pattern_name == "fixed_number":
-    #     g = lambda so, truth: generate_random_clustered_circles(so, dtype)
+
     # elif pattern_name == "similarity_triangle_circle":
     #     g = lambda so, truth: similarity_two_colors(so, dtype)
     #
@@ -68,7 +103,6 @@ def gen_patterns(pattern_name, dtype):
     #     g = lambda so, truth: continuity_one_splits_n(so, dtype, n=2)
     # elif pattern_name == "continuity_one_splits_three":
     #     g = lambda so, truth: continuity_one_splits_n(so, dtype, n=3)
-
 
     else:
         raise ValueError
@@ -112,11 +146,14 @@ def genGestaltTraining(args):
         for mode in ['train', "test"]:
             data_path = base_path / mode
             os.makedirs(data_path, exist_ok=True)
-            tensor_file = data_path / f"{mode}.pt"
-            if os.path.exists(tensor_file):
-                continue
+            os.makedirs(data_path / task_principle, exist_ok=True)
+            os.makedirs(data_path / task_principle / task_name, exist_ok=True)
+            tensor_file = data_path / task_principle / task_name / f"{mode}_{task_name}.pt"
+            # if os.path.exists(tensor_file):
+            #     continue
             tensors = gen_and_save(args, data_path, task_name, task_principle)
             torch.save(tensors, tensor_file)
+
     print("all patterns generated")
 
 
@@ -129,8 +166,6 @@ if __name__ == "__main__":
         'closure',
         "proximity",
         "symmetry",
-        "similarity_shape",
-        # "similarity_color",
-        # "continuity",
+        "similarity_shape"
     ]
     genGestaltTraining(args)

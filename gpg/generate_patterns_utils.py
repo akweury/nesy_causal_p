@@ -47,16 +47,14 @@ def kf2tensor(kf, max_length):
 
 def save_img(path, task_name, principle, img_data, images):
     # save image
-
-    os.makedirs(path / f"{task_name}", exist_ok=True)
     for img_i in range(len(images)):
         Image.fromarray(images[img_i]).save(
-            path / f"{task_name}" / f"{img_i:06d}.png")
+            path / principle / f"{task_name}" / f"{img_i:06d}.png")
     images = chart_utils.hconcat_imgs(images)
-    Image.fromarray(images).save(path / f"{task_name}.png")
+    Image.fromarray(images).save(path / principle / f"{task_name}.png")
     # save data
     data = {"principle": principle, "img_data": img_data}
-    with open(path / f"{task_name}.json", 'w') as f:
+    with open(path / principle / f"{task_name}.json", 'w') as f:
         json.dump(data, f)
 
 
