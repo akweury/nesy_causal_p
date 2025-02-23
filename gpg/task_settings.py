@@ -278,6 +278,134 @@ def proximity_grid(so, dtype, cluster_num=1):
     return objs
 
 
+def closure_big_triangle(so, dtype):
+    objs = []
+    x = 0.4 + random.random() * 0.2
+    y = 0.4 + random.random() * 0.2
+    r = 0.3 - min(abs(0.5 - x), abs(0.5 - y))
+    n = 15
+    innerdegree = math.radians(30)
+    dx = r * math.cos(innerdegree)
+    dy = r * math.sin(innerdegree)
+    n = round(n / 3)
+    xs = x
+    ys = y - r
+    xe = x + dx
+    ye = y + dy
+    dxi = (xe - xs) / n
+    dyi = (ye - ys) / n
+
+    for i in range(n + 1):
+        color = random.choice(["yellow", "green"])
+        if dtype:
+            shape = "square" if color == "yellow" else "circle"
+        else:
+            shape = "circle" if color == "yellow" else "square"
+        objs.append(kandinskyShape(color=color, shape=shape, size=so, x=xs + i * dxi,
+                                   y=ys + i * dyi, line_width=-1, solid=True))
+    xs = x + dx
+    ys = y + dy
+    xe = x - dx
+    ye = y + dy
+    dxi = (xe - xs) / n
+    dyi = (ye - ys) / n
+    for i in range(n):
+        color = random.choice(["yellow", "green"])
+        if dtype:
+            shape = "square" if color == "yellow" else "circle"
+        else:
+            shape = "circle" if color == "yellow" else "square"
+        objs.append(kandinskyShape(color=color, shape=shape, size=so,
+                                   x=xs + (i + 1) * dxi, y=ys + (i + 1) * dyi, line_width=-1, solid=True))
+    xs = x - dx
+    ys = y + dy
+    xe = x
+    ye = y - r
+    dxi = (xe - xs) / n
+    dyi = (ye - ys) / n
+    for i in range(n - 1):
+        color = random.choice(["yellow", "green"])
+        if dtype:
+            shape = "square" if color == "yellow" else "circle"
+        else:
+            shape = "circle" if color == "yellow" else "square"
+        objs.append(kandinskyShape(color=color, shape=shape, size=so,
+                                   x=xs + (i + 1) * dxi, y=ys + (i + 1) * dyi, line_width=-1, solid=True))
+    return objs
+
+
+def closure_big_square(so, dtype):
+    objs = []
+    x = 0.4 + random.random() * 0.5
+    y = 0.4 + random.random() * 0.5
+    r = 0.4 - min(abs(0.5 - x), abs(0.5 - y))
+    m = 20
+
+    minx = x - r / 2
+    maxx = x + r / 2
+    miny = y - r / 2
+    maxy = y + r / 2
+    n = int(m / 4)
+    dx = r / n
+    for i in range(n + 1):
+        color = random.choice(["blue", "red"])
+        if dtype:
+            shape = "circle" if color == "blue" else "triangle"
+        else:
+            shape = "triangle" if color == "blue" else "circle"
+        objs.append(kandinskyShape(color=color, shape=shape, size=so,
+                                   x=minx + i * dx, y=miny, line_width=-1, solid=True))
+
+        color = random.choice(["blue", "red"])
+        if dtype:
+            shape = "circle" if color == "blue" else "triangle"
+        else:
+            shape = "triangle" if color == "blue" else "circle"
+        objs.append(kandinskyShape(color=color, shape=shape, size=so,
+                                   x=minx + i * dx, y=maxy, line_width=-1, solid=True))
+
+    for i in range(n - 1):
+        color = random.choice(["blue", "red"])
+        if dtype:
+            shape = "circle" if color == "blue" else "triangle"
+        else:
+            shape = "triangle" if color == "blue" else "circle"
+        objs.append(kandinskyShape(color=color, shape=shape, size=so,
+                                   x=minx, y=miny + (i + 1) * dx, line_width=-1, solid=True))
+
+        color = random.choice(["blue", "red"])
+        if dtype:
+            shape = "circle" if color == "blue" else "triangle"
+        else:
+            shape = "triangle" if color == "blue" else "circle"
+        objs.append(kandinskyShape(color=color, shape=shape, size=so,
+                                   x=maxx, y=miny + (i + 1) * dx, line_width=-1, solid=True))
+
+    return objs
+
+
+def closure_big_circle(so, t):
+    objs = []
+    x = 0.4 + random.random() * 0.2
+    y = 0.4 + random.random() * 0.2
+    r = 0.3 - min(abs(0.5 - x), abs(0.5 - y))
+    n = int(2 * r * math.pi / 0.2)
+
+    random_rotate_rad = random.random()
+    for i in range(n):
+        d = (i + random_rotate_rad) * 2 * math.pi / n
+        if t:
+            color = random.choice(["blue", "yellow"])
+            shape = random.choice(["square", "triangle"])
+        else:
+            color = random.choice(bk.color_large_exclude_gray)
+            shape = random.choice(bk.bk_shapes[1:])
+        objs.append(kandinskyShape(color=color, shape=shape, size=so,
+                                   x=x + r * math.cos(d), y=y + r * math.sin(d), line_width=-1, solid=True))
+
+    return objs
+
+
 def closure_classic_square(so, dtype):
     objs = []
     x = 0.5  # + random.random() * 0.8
@@ -396,6 +524,204 @@ def feature_closure_four_squares(so, dtype):
         fixed_colors = ["red", "red"] if random.random() > 0.5 else ["green", "green"]
     color = random_colors(2, fixed_colors)
     objs += feature_closure_square(color, cir_so, xs, ys, dx, dy)
+
+    return objs
+
+
+def feature_closure_circle_one(so, dtype):
+    objs = []
+    x = 0.5  # + random.random() * 0.8
+    y = 0.8  # + random.random() * 0.8
+    r = 0.3 - min(abs(0.5 - x), abs(0.5 - y)) * 0.5
+    xs = x
+    ys = y - r
+
+    so = 0.5 + random.random() * 0.3
+    cir_so = so * (0.6 + random.random() * 0.2)
+
+    # correct the size to  the same area as an square
+    s = 0.7 * math.sqrt(3) * so / 3
+    dx = s * math.cos(math.radians(30))
+    dy = s * math.cos(math.radians(30))
+    colors = random.sample(bk.color_large_exclude_gray, 4)
+    if dtype:
+        objs += feature_closure_circle(colors, so, cir_so, xs, ys, dx, dy)
+    else:
+        objs += feature_closure_circle(colors, so, cir_so, xs, ys, dx, dy)
+    return objs
+
+
+def feature_closure_circle_two(so, dtype):
+    objs = []
+    x = 0.5  # + random.random() * 0.8
+    y = 0.8  # + random.random() * 0.8
+    r = 0.3 - min(abs(0.5 - x), abs(0.5 - y)) * 0.5
+    ys = y - r
+
+    so = random.random() * 0.1 + 0.3
+    cir_so = random.random() * 0.1 + 0.1
+
+    # correct the size to  the same area as an square
+    s = so * 0.3
+    dx = s * math.cos(math.radians(30))
+    dy = s * math.cos(math.radians(30))
+    colors = random.sample(bk.color_large_exclude_gray, 4)
+    # second square
+    xs = 0.25
+    if dtype:
+        objs += feature_closure_circle(colors, so, cir_so, xs, ys, dx, dy)
+    else:
+        objs += feature_closure_circle(colors, so, cir_so, xs, ys, dx, dy)
+
+    xs = 0.75
+    if dtype:
+        objs += feature_closure_circle(colors, so, cir_so, xs, ys, dx, dy)
+    else:
+        objs += feature_closure_circle(colors, so, cir_so, xs, ys, dx, dy)
+    return objs
+
+
+def feature_closure_circle_three(so, dtype):
+    objs = []
+    x = 0.5  # + random.random() * 0.8
+    y = 0.8  # + random.random() * 0.8
+    r = 0.3 - min(abs(0.5 - x), abs(0.5 - y)) * 0.5
+    ys = y - r
+
+    so = random.random() * 0.1 + 0.3
+    cir_so = random.random() * 0.1 + 0.1
+
+    # correct the size to  the same area as an square
+    s = so * 0.3
+    dx = s * math.cos(math.radians(30))
+    dy = s * math.cos(math.radians(30))
+    colors = random.sample(bk.color_large_exclude_gray, 4)
+
+    # second square
+    xs = 0.5
+    ys = 0.25
+    if dtype:
+        objs += feature_closure_circle(colors, so, cir_so, xs, ys, dx, dy)
+    else:
+        objs += feature_closure_circle(colors, so, cir_so, xs, ys, dx, dy)
+
+    xs = 0.25
+    ys = 0.75
+    if dtype:
+        objs += feature_closure_circle(colors, so, cir_so, xs, ys, dx, dy)
+    else:
+        objs += feature_closure_circle(colors, so, cir_so, xs, ys, dx, dy)
+
+    xs = 0.75
+    ys = 0.75
+    if dtype:
+        objs += feature_closure_circle(colors, so, cir_so, xs, ys, dx, dy)
+    else:
+        objs += feature_closure_circle(colors, so, cir_so, xs, ys, dx, dy)
+
+    return objs
+
+
+def feature_closure_triangle_one(so, dtype):
+    objs = []
+    x = 0.5  # + random.random() * 0.8
+    y = 0.8  # + random.random() * 0.8
+    r = 0.3 - min(abs(0.5 - x), abs(0.5 - y)) * 0.5
+    xs = x
+    ys = y - r
+
+    so = 0.4 + random.random() * 0.3
+    cir_so = so * (0.4 + random.random() * 0.2)
+
+    # correct the size to  the same area as an square
+    s = 0.7 * math.sqrt(3) * so / 3
+    dx = s * math.cos(math.radians(30))
+    dy = s * math.cos(math.radians(30))
+    colors = random.sample(bk.color_large_exclude_gray, 4)
+    if dtype:
+        objs += feature_closure_triangle(colors, cir_so, xs, ys, dx, dy, s)
+    else:
+        objs += feature_closure_triangle(colors, cir_so, xs, ys, dx, dy, s)
+    return objs
+
+
+def feature_closure_triangle_two(so, dtype):
+    objs = []
+    x = 0.5  # + random.random() * 0.8
+    y = 0.8  # + random.random() * 0.8
+    r = 0.3 - min(abs(0.5 - x), abs(0.5 - y)) * 0.5
+    xs = x
+    ys = y - r
+
+    so = 0.4 + random.random() * 0.1
+    cir_so = so * (0.4 + random.random() * 0.2)
+
+    #
+    # so = random.random()*0.1 + 0.3
+    # cir_so = random.random()*0.1 + 0.1
+
+    # correct the size to  the same area as an square
+    s = 0.7 * math.sqrt(3) * so / 3
+    dx = s * math.cos(math.radians(30))
+    dy = s * math.cos(math.radians(30))
+    colors = random.sample(bk.color_large_exclude_gray, 4)
+
+    xs = 0.25
+    if dtype:
+        objs += feature_closure_triangle(colors, cir_so, xs, ys, dx, dy, s)
+    else:
+        objs += feature_closure_triangle(colors, cir_so, xs, ys, dx, dy, s)
+
+    xs = 0.75
+    if dtype:
+        objs += feature_closure_triangle(colors, cir_so, xs, ys, dx, dy, s)
+    else:
+        objs += feature_closure_triangle(colors, cir_so, xs, ys, dx, dy, s)
+
+    return objs
+
+
+def feature_closure_triangle_three(so, dtype):
+    objs = []
+    x = 0.5  # + random.random() * 0.8
+    y = 0.8  # + random.random() * 0.8
+    r = 0.3 - min(abs(0.5 - x), abs(0.5 - y)) * 0.5
+    xs = x
+    ys = y - r
+
+    so = 0.4 + random.random() * 0.1
+    cir_so = so * (0.4 + random.random() * 0.1)
+
+    #
+    # so = random.random()*0.1 + 0.3
+    # cir_so = random.random()*0.1 + 0.1
+
+    # correct the size to  the same area as an square
+    s = 0.7 * math.sqrt(3) * so / 3
+    dx = s * math.cos(math.radians(30))
+    dy = s * math.cos(math.radians(30))
+    colors = random.sample(bk.color_large_exclude_gray, 4)
+
+    xs = 0.5
+    ys=0.25
+    if dtype:
+        objs += feature_closure_triangle(colors, cir_so, xs, ys, dx, dy, s)
+    else:
+        objs += feature_closure_triangle(colors, cir_so, xs, ys, dx, dy, s)
+
+    xs = 0.25
+    ys = 0.75
+    if dtype:
+        objs += feature_closure_triangle(colors, cir_so, xs, ys, dx, dy, s)
+    else:
+        objs += feature_closure_triangle(colors, cir_so, xs, ys, dx, dy, s)
+
+    xs = 0.75
+    ys = 0.75
+    if dtype:
+        objs += feature_closure_triangle(colors, cir_so, xs, ys, dx, dy, s)
+    else:
+        objs += feature_closure_triangle(colors, cir_so, xs, ys, dx, dy, s)
 
     return objs
 
@@ -622,6 +948,58 @@ def similarity_fixed_number_three(so, dtype, grid_size=3, min_circles=3, max_cir
     return objs
 
 
+def continuity_one_splits_n(so, dtype):
+    objs = []
+    main_road_length = 5
+    split_road_length = 4
+    dx = 0.08
+    dy = 0.08
+    main_y = 0.5
+
+    # draw the main road
+    colors = random.sample(bk.color_large_exclude_gray, 3)
+    shape = random.choice(bk.bk_shapes[1:])
+    minx = 0.1
+    for i in range(main_road_length):
+        objs.append(kandinskyShape(color=colors[0], shape=shape, size=so,
+                                   x=minx + i * dx, y=main_y, line_width=-1, solid=True))
+
+    # draw the split roads
+    minx = minx + main_road_length * dx
+    mode = random.choice([0, 1])
+    for i in range(split_road_length):
+        if dtype:
+            if mode == 0:
+                # same branch
+                objs.append(kandinskyShape(color=colors[0], shape=shape, size=so,
+                                           x=minx + i * dx, y=main_y + (i + 1) * dy, line_width=-1, solid=True))
+                # different branch
+                objs.append(kandinskyShape(color=colors[1], shape=shape, size=so,
+                                           x=minx + i * dx, y=main_y - (i + 1) * dy, line_width=-1, solid=True))
+            else:
+                # diff branch
+                objs.append(kandinskyShape(color=colors[1], shape=shape, size=so,
+                                           x=minx + i * dx, y=main_y + (i + 1) * dy, line_width=-1, solid=True))
+                # same branch
+                objs.append(kandinskyShape(color=colors[0], shape=shape, size=so,
+                                           x=minx + i * dx, y=main_y - (i + 1) * dy, line_width=-1, solid=True))
+        else:
+            if mode == 0:
+                # diff branch
+                objs.append(kandinskyShape(color=colors[1], shape=shape, size=so,
+                                           x=minx + i * dx, y=main_y + (i + 1) * dy, line_width=-1, solid=True))
+                # different branch
+                objs.append(kandinskyShape(color=colors[2], shape=shape, size=so,
+                                           x=minx + i * dx, y=main_y - (i + 1) * dy, line_width=-1, solid=True))
+            else:
+                # same branch
+                objs.append(kandinskyShape(color=colors[0], shape=shape, size=so,
+                                           x=minx + i * dx, y=main_y + (i + 1) * dy, line_width=-1, solid=True))
+                # same branch
+                objs.append(kandinskyShape(color=colors[0], shape=shape, size=so,
+                                           x=minx + i * dx, y=main_y - (i + 1) * dy, line_width=-1, solid=True))
+    return objs
+
 from scipy.spatial.distance import cdist
 
 
@@ -665,7 +1043,7 @@ def get_task_names():
         # "good_figure_three_groups": "good_figure",
         # "good_figure_always_three": "good_figure",
 
-        # proximity
+        # symbolic proximity
         # "position_proximity_red_triangle_one": "proximity",
         # "position_proximity_red_triangle_two": "proximity",
         # "position_proximity_red_triangle_three": "proximity",
@@ -673,37 +1051,46 @@ def get_task_names():
         # "grid_3": "proximity",
         # "grid_4": "proximity",
 
-        # feature proximity
+        # neural feature proximity
         # "feature_proximity_circle_two": "feature_proximity",
         # "feature_proximity_circle_three": "feature_proximity",
         # "feature_proximity_circle_four": "feature_proximity",
 
-        # similarity shape
-        # "similarity_triangle_circle": "similarity_shape",
-
-        # similarity color
+        # symbolic feature similarity
         # "fixed_number_two": "similarity_color",
         # "fixed_number_three": "similarity_color",
         # "fixed_number_four": "similarity_color",
 
-        # feature similarity
+        # neural feature similarity
         # "similarity_pacman_one": "feature_similarity",
         # "similarity_pacman_two": "feature_similarity",
         # "similarity_pacman_three": "feature_similarity"
 
-        # feature closure
+        # symbolic feature closure
+        # "tri_group_one": "position_closure",
+        # "tri_group_two": "position_closure",
+        # "tri_group_three": "position_closure",
+        # "square_group_one": "position_closure",
+        # "square_group_two": "position_closure",
+        # "square_group_three": "position_closure",
+        # "circle_group_one": "position_closure",
+        # "circle_group_two": "position_closure",
+        # "circle_group_three": "position_closure",
+
+        # neural feature closure
         # "feature_closure_one_square": "feature_closure",
         # "feature_closure_two_squares": "feature_closure",
         # "feature_closure_four_squares": "feature_closure",
-
-        # # position closure
-        # "tri_group": "position_closure",
-        # "square_group": "position_closure",
-        # "triangle_square": "position_closure",
+        # "feature_closure_one_circle": "feature_closure",
+        # "feature_closure_two_circles": "feature_closure",
+        # "feature_closure_three_circles": "feature_closure",
+        # "feature_closure_one_triangle": "feature_closure",
+        # "feature_closure_two_triangles": "feature_closure",
+        # "feature_closure_three_triangles": "feature_closure",
 
         # # continuity
-        # "continuity_one_splits_two": "continuity",
-        # "continuity_one_splits_three": "continuity",
+        "continuity_one_splits_two": "position_continuity",
+        "continuity_one_splits_three": "position_continuity",
 
         # symmetry
         # "symmetry_pattern": "symmetry"

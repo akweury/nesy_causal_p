@@ -19,7 +19,8 @@ from gpg import same_numbers
 def gen_patterns(pattern_name, dtype):
     so = 0.1
     overlap_patterns = ["feature_proximity_circle_two", "feature_proximity_circle_three",
-                        "feature_proximity_circle_four"]
+                        "feature_proximity_circle_four",
+                        "feature_closure_one_circle", "feature_closure_two_circles", "feature_closure_three_circles"]
 
     # proximity
     if pattern_name == "position_proximity_red_triangle_one":
@@ -63,6 +64,36 @@ def gen_patterns(pattern_name, dtype):
         g = lambda so, truth: similarity_pacman(so, dtype, clu_num=2)
     elif pattern_name == "similarity_pacman_three":
         g = lambda so, truth: similarity_pacman(so, dtype, clu_num=3)
+
+    # symbolic feature closure
+    elif pattern_name == "tri_group_one":
+        g = lambda so, truth: closure_big_triangle(so, dtype)
+    elif pattern_name == "tri_group_two":
+        g = lambda so, truth: closure_big_triangle(so, dtype) + closure_big_triangle(so, dtype)
+    elif pattern_name == "tri_group_three":
+        so = 0.05
+        g = lambda so, truth: closure_big_triangle(so, dtype) + closure_big_triangle(so, dtype) + closure_big_triangle(
+            so, dtype)
+
+    elif pattern_name == "square_group_one":
+        g = lambda so, truth: closure_big_square(so, dtype)
+    elif pattern_name == "square_group_two":
+        so = 0.05
+        g = lambda so, truth: closure_big_square(so, dtype) + closure_big_square(so, dtype)
+    elif pattern_name == "square_group_three":
+        so = 0.05
+        g = lambda so, truth: closure_big_square(so, dtype) + closure_big_square(so, dtype) + closure_big_square(
+            so, dtype)
+    elif pattern_name == "circle_group_one":
+        g = lambda so, truth: closure_big_circle(so, dtype)
+    elif pattern_name == "circle_group_two":
+        so = 0.05
+        g = lambda so, truth: closure_big_circle(so, dtype) + closure_big_circle(so, dtype)
+    elif pattern_name == "circle_group_three":
+        so = 0.05
+        g = lambda so, truth: closure_big_circle(so, dtype) + closure_big_circle(so, dtype) + closure_big_circle(
+            so, dtype)
+
     # feature closures
     elif pattern_name == "feature_closure_one_square":
         g = lambda so, truth: closure_classic_square(so, dtype)
@@ -70,39 +101,30 @@ def gen_patterns(pattern_name, dtype):
         g = lambda so, truth: feature_closure_two_squares(so, dtype)
     elif pattern_name == "feature_closure_four_squares":
         g = lambda so, truth: feature_closure_four_squares(so, dtype)
+    elif pattern_name == "feature_closure_four_squares":
+        g = lambda so, truth: feature_closure_four_squares(so, dtype)
 
-    elif pattern_name == "gestalt_triangle_and_noise":
-        g = lambda so, truth: closure_classic_triangle_and_noise(so, dtype)
-    # elif pattern_name == "gestalt_circle":
-    #     g = lambda so, truth: closure_classic_circle(so, dtype)
-    # elif pattern_name == "gestalt_triangle":
-    #     g = lambda so, truth: closure_classic_triangle(so, dtype)
+    elif pattern_name == "feature_closure_one_circle":
+        g = lambda so, truth: feature_closure_circle_one(so, dtype)
+    elif pattern_name == "feature_closure_two_circles":
+        g = lambda so, truth: feature_closure_circle_two(so, dtype)
+    elif pattern_name == "feature_closure_three_circles":
+        g = lambda so, truth: feature_closure_circle_three(so, dtype)
 
-    # position closures
-    # elif pattern_name == "square_group":
-    #     so = 0.1
-    #     g = lambda so, truth: closure_big_square(so, dtype)
-    # elif pattern_name == "tri_group":
-    #     so = 0.1
-    #     g = lambda so, truth: closure_big_triangle(so, dtype)
-    # elif pattern_name == "triangle_square":
-    #     so = 0.1
-    #     g = lambda so, truth: closure_big_square(so, dtype) + closure_big_triangle(so, dtype)
+    elif pattern_name == "feature_closure_one_triangle":
+        g = lambda so, truth: feature_closure_triangle_one(so, dtype)
+    elif pattern_name == "feature_closure_two_triangles":
+        g = lambda so, truth: feature_closure_triangle_two(so, dtype)
+    elif pattern_name == "feature_closure_three_triangles":
+        g = lambda so, truth: feature_closure_triangle_three(so, dtype)
 
-    # similarity
-
-    # elif pattern_name == "similarity_triangle_circle":
-    #     g = lambda so, truth: similarity_two_colors(so, dtype)
-    #
     # # symmetry
     # elif pattern_name == "symmetry_pattern":
     #     g = lambda so, truth: symmetry_pattern(so, dtype)
 
     # continuity
-    # elif pattern_name == "continuity_one_splits_two":
-    #     g = lambda so, truth: continuity_one_splits_n(so, dtype, n=2)
-    # elif pattern_name == "continuity_one_splits_three":
-    #     g = lambda so, truth: continuity_one_splits_n(so, dtype, n=3)
+    elif pattern_name == "continuity_one_splits_two":
+        g = lambda so, truth: continuity_one_splits_n(so, dtype)
 
     else:
         raise ValueError
