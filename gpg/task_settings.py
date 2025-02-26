@@ -1,9 +1,5 @@
 # Created by X at 13.02.25
-import random
 
-import numpy as np
-
-from src import bk
 from gpg.task_settings_utils import *
 
 
@@ -168,13 +164,34 @@ def get_surrounding_positions(center, radius, num_points=2):
     for _ in range(num_points):
         angle_offset = random.uniform(-0.2, 0.2)  # Small random variation
         angle = math.atan2(center[1] - 0.5, center[0] - 0.5) + angle_offset
-        x = 0.5 + radius * math.cos(angle)
-        y = 0.5 + radius * math.sin(angle)
+        if random.random() < 0.5:
+            x = 0.5 + radius * math.cos(angle)
+            y = 0.5 + radius * math.sin(angle)
+        else:
+            x = 0.5 - radius * math.cos(angle)
+            y = 0.5 - radius * math.sin(angle)
         positions.append((x, y))
     return positions
 
 
-def symmetry_circle(so, dtype, cluster_num=1):
+
+
+
+def get_symmetry_on_cir_positions(angle, radius, num_points=2):
+    """
+    Generate multiple points near the given center, ensuring they remain on the circumference.
+    """
+    positions = []
+    for p_i in range(num_points):
+        angle_offset = 0.3 * p_i
+        shifted_angle = angle + angle_offset
+        x = 0.5 + radius * math.cos(shifted_angle)
+        y = 0.5 + radius * math.sin(shifted_angle)
+        positions.append((x, y))
+    return positions
+
+
+def symmetry_solar_sys(so, dtype, cluster_num=1):
     objs = []
 
     shape = "circle"
@@ -186,12 +203,36 @@ def symmetry_circle(so, dtype, cluster_num=1):
     group_centers = get_circumference_points(cluster_num, 0.5, 0.5, cir_so)
 
     for a_i in range(cluster_num):
-        group_size = random.randint(1, 3)
         shape = random.choice(bk.bk_shapes[1:])
+        if dtype:
+            group_size = random.randint(1, 3)
+            positions = get_symmetry_on_cir_positions(group_centers[a_i], cir_so, group_size)
+        else:
+            group_size = random.randint(2, 4)
+            # Get multiple nearby positions along the circumference
+            positions = get_surrounding_positions(group_centers[a_i], cir_so, group_size)
 
-        # Get multiple nearby positions along the circumference
-        positions = get_surrounding_positions(group_centers[a_i], cir_so, group_size)
+        for x, y in positions:
+            objs.append(kandinskyShape(color=color, shape=shape, size=so, x=x, y=y, line_width=-1, solid=True))
 
+    return objs
+
+
+def feature_symmetry_circle(so, dtype, cluster_num=1):
+    objs = []
+    shape = "circle"
+    color = random.choice(bk.color_large_exclude_gray)
+    cir_so = 0.3 + random.random() * 0.5
+    objs.append(kandinskyShape(color=color, shape=shape, size=cir_so, x=0.5, y=0.5, line_width=-1, solid=True))
+
+    # Generate evenly distributed group centers on the circumference
+    angles = get_circumference_angles(cluster_num)
+
+    for a_i in range(cluster_num):
+        shape = random.choice(bk.bk_shapes[1:])
+        group_size = random.randint(2, 4)
+
+        positions = get_symmetry_surrounding_positions(angles[a_i], cir_so / 2 * 0.66,dtype, group_size)
         for x, y in positions:
             objs.append(kandinskyShape(color=color, shape=shape, size=so, x=x, y=y, line_width=-1, solid=True))
 
@@ -230,7 +271,6 @@ def proximity_circle(so, dtype, cluster_num=1):
         positions = get_circumference_positions(angles[a_i], cir_so / 2 * 0.66, group_size)
         for x, y in positions:
             objs.append(kandinskyShape(color=color, shape=shape, size=so, x=x, y=y, line_width=-1, solid=True))
-
     return objs
 
 
@@ -703,7 +743,7 @@ def feature_closure_triangle_three(so, dtype):
     colors = random.sample(bk.color_large_exclude_gray, 4)
 
     xs = 0.5
-    ys=0.25
+    ys = 0.25
     if dtype:
         objs += feature_closure_triangle(colors, cir_so, xs, ys, dx, dy, s)
     else:
@@ -944,7 +984,6 @@ def similarity_fixed_number_three(so, dtype, grid_size=3, min_circles=3, max_cir
                     objs.append(kandinskyShape(color=cluster_color, shape="circle", size=so, x=new_x,
                                                y=new_y, line_width=-1, solid=True))
                     break
-
     return objs
 
 
@@ -1000,22 +1039,115 @@ def continuity_one_splits_n(so, dtype):
                                            x=minx + i * dx, y=main_y - (i + 1) * dy, line_width=-1, solid=True))
     return objs
 
-from scipy.spatial.distance import cdist
+
+def position_continuity_two_splines(so, dtype):
+    objs = []
+
+    # draw the main road
+    colors = random.sample(bk.color_large_exclude_gray, 3)
+    shape = random.choice(bk.bk_shapes[1:])
+    center_point = [random.uniform(0.4, 0.6), random.uniform(0.4, 0.6)]
+
+    line1_key_points = np.array([
+        [random.random() * 0.1 + 0.1, random.random() * 0.1 + 0.7],  # start point
+        center_point,
+        [random.uniform(0.7, 0.8), random.uniform(0.1, 0.3)]
+    ])
+
+    line2_key_points = np.array([
+        [random.random() * 0.1 + 0.1, random.uniform(0.1, 0.3)],  # start point
+        center_point,
+        [random.uniform(0.7, 0.8), random.uniform(0.7, 0.8)]
+    ])
+
+    line1_points = get_spline_points(line1_key_points, 7)
+    line2_points = get_spline_points(line2_key_points, 7)
+
+    for i in range(len(line1_points)):
+        objs.append(kandinskyShape(color=colors[0], shape=shape, size=so, x=line1_points[i][0], y=line1_points[i][1],
+                                   line_width=-1, solid=True))
+    for i in range(len(line2_points)):
+        objs.append(kandinskyShape(color=colors[0], shape=shape, size=so, x=line2_points[i][0], y=line2_points[i][1],
+                                   line_width=-1, solid=True))
+    return objs
 
 
-def generate_positions(n, m, t=0.1, min_range=0.1, max_range=0.9):
-    num_points = n * m
-    positions = []
+def position_continuity_a_splines(so, dtype):
+    objs = []
 
-    while len(positions) < num_points:
-        candidate = np.random.uniform(min_range, max_range, size=(1, 2))
+    # draw the main road
+    colors = random.sample(bk.color_large_exclude_gray, 3)
+    shape = random.choice(bk.bk_shapes[1:])
+    center_point = [random.uniform(0.4, 0.6), random.uniform(0.4, 0.6)]
 
-        if len(positions) == 0 or np.min(cdist(positions, candidate)) >= t:
-            positions.append(candidate[0])
+    line1_key_points = np.array([
+        [random.uniform(0.1, 0.2), random.uniform(0.4, 0.6)],  # start point
+        center_point,
+        [random.uniform(0.8, 0.9), random.uniform(0.4, 0.6)]
+    ])
 
-    positions = np.array(positions)
+    line2_key_points = np.array([
+        [random.uniform(0.1, 0.2), random.uniform(0.7, 0.8)],  # start point
+        [random.uniform(0.4, 0.6), random.uniform(0.1, 0.2)],  # start point,
+        [random.uniform(0.8, 0.9), random.uniform(0.8, 0.9)]
+    ])
+    objs += get_spline_objs(line1_key_points, colors[0], shape, so, 8)
+    objs += get_spline_objs(line2_key_points, colors[0], shape, so, 12)
 
-    return positions.reshape(n, m, 2)
+    return objs
+
+
+def position_continuity_u_splines(so, dtype):
+    objs = []
+
+    # draw the main road
+    colors = random.sample(bk.color_large_exclude_gray, 3)
+    shape = random.choice(bk.bk_shapes[1:])
+    center_point = [random.uniform(0.4, 0.6), random.uniform(0.4, 0.6)]
+
+    line1_key_points = np.array([
+        [random.uniform(0.1, 0.2), random.uniform(0.4, 0.6)],  # start point
+        center_point,
+        [random.uniform(0.8, 0.9), random.uniform(0.4, 0.6)]
+    ])
+
+    line2_key_points = np.array([
+        [random.uniform(0.1, 0.2), random.uniform(0.1, 0.2)],  # start point
+        [random.uniform(0.4, 0.6), random.uniform(0.8, 0.9)],  # start point,
+        [random.uniform(0.8, 0.9), random.uniform(0.1, 0.2)]
+    ])
+    objs += get_spline_objs(line1_key_points, colors[0], shape, so, 8)
+    objs += get_spline_objs(line2_key_points, colors[0], shape, so, 12)
+
+    return objs
+
+
+def feature_continuity_x_splines(so, dtype):
+    objs = []
+
+    # draw the main road
+    colors = random.sample(bk.color_large_exclude_gray, 3)
+    shape = random.choice(bk.bk_shapes[1:])
+    center_point = [random.uniform(0.4, 0.6), random.uniform(0.4, 0.6)]
+
+    line1_key_points = np.array([
+        [random.uniform(0.1, 0.2), random.uniform(0.1, 0.2)],  # start point
+        center_point,
+        [random.uniform(0.8, 0.9), random.uniform(0.8, 0.9)]
+    ])
+
+    line2_key_points = np.array([
+        [random.uniform(0.1, 0.2), random.uniform(0.8, 0.9)],  # start point
+        center_point,
+        [random.uniform(0.8, 0.9), random.uniform(0.1, 0.2)]
+    ])
+    dx = random.uniform(0.005, 0.03)
+    dy = random.uniform(-0.03, -0.005)
+
+    objs += get_shaded_spline_objs(line1_key_points, colors[0], shape, so, dx, dy, colors[1], 8)
+    objs += get_spline_objs(line2_key_points, colors[0], shape, so, 12)
+
+    return objs
 
 
 def similarity_pacman(so, dtype, clu_num=1):
@@ -1044,12 +1176,12 @@ def get_task_names():
         # "good_figure_always_three": "good_figure",
 
         # symbolic proximity
-        # "position_proximity_red_triangle_one": "proximity",
-        # "position_proximity_red_triangle_two": "proximity",
-        # "position_proximity_red_triangle_three": "proximity",
-        # "grid_2": "proximity",
-        # "grid_3": "proximity",
-        # "grid_4": "proximity",
+        # "position_proximity_red_triangle_one": "position_proximity",
+        # "position_proximity_red_triangle_two": "position_proximity",
+        # "position_proximity_red_triangle_three": "position_proximity",
+        # "grid_2": "position_proximity",
+        # "grid_3": "position_proximity",
+        # "grid_4": "position_proximity",
 
         # neural feature proximity
         # "feature_proximity_circle_two": "feature_proximity",
@@ -1057,9 +1189,9 @@ def get_task_names():
         # "feature_proximity_circle_four": "feature_proximity",
 
         # symbolic feature similarity
-        # "fixed_number_two": "similarity_color",
-        # "fixed_number_three": "similarity_color",
-        # "fixed_number_four": "similarity_color",
+        "fixed_number_two": "position_similarity",
+        "fixed_number_three": "position_similarity",
+        "fixed_number_four": "position_similarity",
 
         # neural feature similarity
         # "similarity_pacman_one": "feature_similarity",
@@ -1088,11 +1220,17 @@ def get_task_names():
         # "feature_closure_two_triangles": "feature_closure",
         # "feature_closure_three_triangles": "feature_closure",
 
-        # # continuity
-        "continuity_one_splits_two": "position_continuity",
-        "continuity_one_splits_three": "position_continuity",
+        # position continuity
+        # "continuity_one_splits_two": "position_continuity",
+        # "position_continuity_x_splines": "position_continuity",
+        # "position_continuity_a_splines": "position_continuity",
+        # "position_continuity_u_splines": "position_continuity",
+
+        # feature continuity
+        # "feature_continuity_x_splines": "feature_continuity",
 
         # symmetry
-        # "symmetry_pattern": "symmetry"
+        # "position_symmetry_solar": "position_symmetry",
+        # "feature_symmetry_circle": "feature_symmetry"
 
     }

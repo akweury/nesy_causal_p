@@ -20,7 +20,8 @@ def gen_patterns(pattern_name, dtype):
     so = 0.1
     overlap_patterns = ["feature_proximity_circle_two", "feature_proximity_circle_three",
                         "feature_proximity_circle_four",
-                        "feature_closure_one_circle", "feature_closure_two_circles", "feature_closure_three_circles"]
+                        "feature_closure_one_circle", "feature_closure_two_circles", "feature_closure_three_circles",
+                        "feature_continuity_x_splines", "feature_symmetry_circle"]
 
     # proximity
     if pattern_name == "position_proximity_red_triangle_one":
@@ -119,12 +120,24 @@ def gen_patterns(pattern_name, dtype):
         g = lambda so, truth: feature_closure_triangle_three(so, dtype)
 
     # # symmetry
-    # elif pattern_name == "symmetry_pattern":
-    #     g = lambda so, truth: symmetry_pattern(so, dtype)
+    elif pattern_name == "position_symmetry_solar":
+        g = lambda so, truth: symmetry_solar_sys(so, dtype, cluster_num=1)
+    elif pattern_name == "feature_symmetry_circle":
+        g = lambda so, truth: feature_symmetry_circle(so, dtype, cluster_num=1)
+
 
     # continuity
     elif pattern_name == "continuity_one_splits_two":
         g = lambda so, truth: continuity_one_splits_n(so, dtype)
+    elif pattern_name == "position_continuity_x_splines":
+        g = lambda so, truth: position_continuity_two_splines(so, dtype)
+    elif pattern_name == "position_continuity_a_splines":
+        g = lambda so, truth: position_continuity_a_splines(so, dtype)
+    elif pattern_name == "position_continuity_u_splines":
+        g = lambda so, truth: position_continuity_u_splines(so, dtype)
+    elif pattern_name == "feature_continuity_x_splines":
+        g = lambda so, truth: feature_continuity_x_splines(so, dtype)
+
 
     else:
         raise ValueError

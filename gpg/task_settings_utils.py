@@ -2,6 +2,12 @@
 
 import math
 import random
+
+import numpy as np
+from scipy.spatial.distance import cdist
+
+from scipy.interpolate import make_interp_spline, interp1d
+
 from src import bk
 
 
@@ -110,9 +116,117 @@ def feature_closure_triangle(colors, cir_so, xs, ys, dx, dy, s):
                                start_angle=0, end_angle=300))
 
     return objs
+
+
 def random_colors(random_color_num, specific_colors=None):
     color = random.sample(bk.color_large_exclude_gray, random_color_num)
     if specific_colors is not None:
         color += specific_colors
     random.shuffle(color)
     return color
+
+
+import matplotlib.pyplot as plt
+
+
+def get_spline_points(points, n):
+    # Separate the points into x and y coordinates
+    x = points[:, 0]
+    y = points[:, 1]
+    # Generate a smooth spline curve (use k=3 for cubic spline interpolation)
+    # Spline interpolation
+    spl_x = make_interp_spline(np.linspace(0, 1, len(x)), x, k=2)
+    spl_y = make_interp_spline(np.linspace(0, 1, len(y)), y, k=2)
+
+    # Dense sampling to approximate arc-length
+    dense_t = np.linspace(0, 1, 1000)
+    dense_x, dense_y = spl_x(dense_t), spl_y(dense_t)
+
+    # Calculate cumulative arc length
+    arc_lengths = np.sqrt(np.diff(dense_x) ** 2 + np.diff(dense_y) ** 2)
+    cum_arc_length = np.insert(np.cumsum(arc_lengths), 0, 0)
+
+    # Interpolate to find points equally spaced by arc-length
+    equal_distances = np.linspace(0, cum_arc_length[-1], n)
+    interp_t = interp1d(cum_arc_length, dense_t)(equal_distances)
+
+    # Get equally spaced points
+    equal_x, equal_y = spl_x(interp_t), spl_y(interp_t)
+    # # Plot results
+    # plt.figure(figsize=(8, 5))
+    # plt.plot(x, y, 'o', label='Original Points')
+    # plt.plot(dense_x, dense_y, '-', alpha=0.4, label='Spline Curve')
+    # plt.plot(equal_x, equal_y, 'ro', label='Equally Spaced Points')
+    # plt.legend()
+    # plt.title(f'Spline Curve with {n} Equally Spaced Points')
+    # plt.xlabel('X')
+    # plt.ylabel('Y')
+    # plt.grid(True)
+    # plt.axis('equal')
+    # plt.show()
+    positions = np.stack([equal_x, equal_y], axis=-1)
+    return positions
+
+
+def get_spline_objs(line_key_points, color, shape, so, sample_num=8):
+    line_points = get_spline_points(line_key_points, sample_num)
+    objs = []
+    for i in range(len(line_points)):
+        objs.append(kandinskyShape(color=color, shape=shape, size=so,
+                                   x=float(line_points[i, 0]),
+                                   y=float(line_points[i, 1]),
+                                   line_width=-1, solid=True))
+
+    return objs
+
+
+def get_shaded_spline_objs(line_key_points, color, shape, so, dx, dy, d_color, sample_num=8):
+    line_points = get_spline_points(line_key_points, sample_num)
+    objs = []
+    for i in range(len(line_points)):
+        objs.append(kandinskyShape(color=color, shape=shape, size=so,
+                                   x=float(line_points[i, 0]),
+                                   y=float(line_points[i, 1]),
+                                   line_width=-1, solid=True))
+        objs.append(kandinskyShape(color=d_color, shape=shape, size=so,
+                                   x=float(line_points[i, 0]) + dx,
+                                   y=float(line_points[i, 1]) + dy,
+                                   line_width=-1, solid=True))
+
+    return objs
+
+
+def generate_positions(n, m, t=0.1, min_range=0.1, max_range=0.9):
+    num_points = n * m
+    positions = []
+
+    while len(positions) < num_points:
+        candidate = np.random.uniform(min_range, max_range, size=(1, 2))
+
+        if len(positions) == 0 or np.min(cdist(positions, candidate)) >= t:
+            positions.append(candidate[0])
+
+    positions = np.array(positions)
+
+    return positions.reshape(n, m, 2)
+
+
+def get_symmetry_surrounding_positions(angle, radius,dtype, num_points=2):
+    """
+    Generate multiple points near the given center, ensuring they remain on the circumference.
+    """
+    positions = []
+    for p_i in range(num_points):
+        angle_offset = 0.3 * p_i
+        shifted_angle = angle + angle_offset
+        x = 0.5 + radius * math.cos(shifted_angle)
+        y = 0.5 + radius * math.sin(shifted_angle)
+        if dtype:
+            x_symmetry = 0.5 - radius * math.cos(shifted_angle)
+
+        else:
+            x_symmetry = 0.5 - radius * math.sin(shifted_angle)
+        positions.append((x, y))
+        positions.append((x_symmetry, y))
+
+    return positions
