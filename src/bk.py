@@ -1,6 +1,5 @@
 # Created by X at 24/06/2024
 import random
-
 import matplotlib
 import torch
 import config
@@ -195,9 +194,9 @@ bk_shapes = ["none", "triangle", "square", "circle"]
 
 gestalt_principles = [
     'closure',
-    "proximity",
-    "symmetry",
-    "similarity_shape",
+    # "proximity",
+    # "symmetry",
+    # "similarity_shape",
     # "similarity_color",
     # "continuity",
 ]

@@ -3,6 +3,7 @@ import torch
 from torch import nn as nn
 
 from src import bk
+from src.alpha.fol.logic import Var
 
 
 class FCNNValuationModule(nn.Module):
@@ -92,7 +93,10 @@ class FCNNValuationModule(nn.Module):
             Return:
                 The tensor representation of the input term.
         """
-        term_name = term.dtype.name
+        if isinstance(term, Var):
+            term_name = term.var_type
+        else:
+            term_name = term.dtype.name
         term_data = None
         self.group_indices = None
         if term_name == "group_data":

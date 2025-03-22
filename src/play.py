@@ -4,12 +4,10 @@ import os
 import config
 import train_nsfr
 from eval_nsfr import check_clause
-from kandinsky_generator import generate_training_patterns, generate_task_patterns
+from kandinsky_generator import generate_training_patterns
 from utils import args_utils
-from src import dataset, bk
-from src.neural import models
+from src import dataset
 from src.percept import perception
-from src.utils.chart_utils import van
 from src import llama_call
 
 

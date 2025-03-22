@@ -6,7 +6,6 @@ from src.utils import log_utils
 from src.alpha import valuation, facts_converter, nsfr, pruning, clause_op
 from src.alpha.fol import language, refinement
 from src import bk
-from itertools import combinations
 
 
 def init_ilp(args, obj_num):

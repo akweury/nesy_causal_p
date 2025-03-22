@@ -103,14 +103,6 @@ class RefinementGenerator(object):
                 assignments = self.lang.get_by_dtype(mt.dtype)
 
             assignments_list.append(assignments)
-        # generate all combinations by cartesian product
-        # e.g. [[O2], [red,blue,yellow]]
-        # -> [[O2,red],[O2,blue],[O2,yellow]]
-        ##print(assignments_list)
-        ##print(list(itertools.product(*assignments_list)))
-        ##print(clause, modeb, assignments_list)
-        # print(clause, modeb)
-        # print(assignments_list)
         if modeb.ordered:
             return list(itertools.product(*assignments_list))
         else:

@@ -163,3 +163,36 @@ def generate_points(center, radius, n, min_distance):
         print(f"Warning: Only generated {len(points)} points after {max_attempts} attempts.")
 
     return points
+
+
+def euclidean_distance(anchor, existing):
+    return math.sqrt((anchor[0] - existing[0]) ** 2 + (anchor[1] - existing[1]) ** 2)
+
+def generate_random_anchor(existing_anchors, cluster_dist=0.1, x_min=0.4, x_max=0.7, y_min=0.4, y_max=0.7):
+    # Increased to ensure clear separation
+    while True:
+        anchor = [random.uniform(x_min, x_max), random.uniform(y_min, y_max)]
+        if all(euclidean_distance(anchor, existing) > cluster_dist for existing in existing_anchors):
+            return anchor
+
+def get_feature_square_positions(anchor, clu_size):
+    positions = []
+
+    x = anchor[0]
+    y = anchor[1]
+
+    r = 0.3 - min(abs(0.5 - x), abs(0.5 - y)) * 0.5
+    xs = x
+    ys = y - r
+
+    # correct the size to  the same area as an square
+    s = 0.7 * math.sqrt(3) * clu_size / 3
+    dx = s * math.cos(math.radians(30))
+    dy = s * math.cos(math.radians(30))
+
+    positions.append([xs - dx, ys - dy])
+    positions.append([xs + dx, ys + dy])
+    positions.append([xs - dx, ys + dy])
+    positions.append([xs + dx, ys - dy])
+
+    return positions

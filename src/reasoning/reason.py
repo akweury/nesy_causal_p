@@ -1,5 +1,4 @@
 # Created by X at 25/07/2024
-import torch
 
 from src.reasoning.reason_utils import *
 import torch.nn.functional as F  # Import F for functional operations

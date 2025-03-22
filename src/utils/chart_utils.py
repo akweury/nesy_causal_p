@@ -244,6 +244,8 @@ def visual_rl_step(task_img, ocms, output_labels, action, reward):
 
 
 def show_line_chart(data, title="", file_name=None):
+    plt.clf()  # Clear current figure
+
     plt.plot(data)
     # Beautify the plot
     plt.title(title)

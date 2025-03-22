@@ -111,7 +111,6 @@ def gen_patterns(pattern_name, dtype):
         g = lambda so, truth: feature_closure_circle_two(so, dtype)
     elif pattern_name == "feature_closure_three_circles":
         g = lambda so, truth: feature_closure_circle_three(so, dtype)
-
     elif pattern_name == "feature_closure_one_triangle":
         g = lambda so, truth: feature_closure_triangle_one(so, dtype)
     elif pattern_name == "feature_closure_two_triangles":
@@ -119,12 +118,12 @@ def gen_patterns(pattern_name, dtype):
     elif pattern_name == "feature_closure_three_triangles":
         g = lambda so, truth: feature_closure_triangle_three(so, dtype)
 
+
     # # symmetry
     elif pattern_name == "position_symmetry_solar":
         g = lambda so, truth: symmetry_solar_sys(so, dtype, cluster_num=1)
     elif pattern_name == "feature_symmetry_circle":
         g = lambda so, truth: feature_symmetry_circle(so, dtype, cluster_num=1)
-
 
     # continuity
     elif pattern_name == "continuity_one_splits_two":

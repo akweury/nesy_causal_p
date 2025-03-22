@@ -286,21 +286,9 @@ def calculate_circular_variance(angles, wrap_size=20):
 
 
 def extract_line_curves(angles, seg_var_th=1e-8):
-    """
-    Segments a series of angles into increasing, decreasing, or constant segments by checking the trends of future angles.
-
-    Args:
-        angles (array-like): Input angles in degrees.
-        tolerance (float): Fluctuation tolerance to consider as 'constant' (in degrees).
-        future_steps (tuple): Steps ahead to check (e.g., 5th and 10th angles).
-
-    Returns:
-        list of dict: Each dict contains the start index, end index, and segment type ('increasing', 'decreasing', 'constant').
-    """
-
-    circular_variances = calculate_circular_variance(angles)
-    # chart_utils.show_line_chart(circular_variances, "circular_variances")
-
+    circular_variances = calculate_circular_variance(angles, wrap_size=10)
+    # chart_utils.van(circular_variances, file_name=config.output/"circular_image.png")
+    # chart_utils.show_line_chart(circular_variances,file_name=config.output/"circular_image.png")
     all_seg = []
     check_list = []
     current_seg = []
@@ -308,30 +296,21 @@ def extract_line_curves(angles, seg_var_th=1e-8):
     future_step = 5
     # Find the first index where the smoothed trend stops decreasing
     for i in range(len(angles) - future_step):
-        # post_variance = torch.var_mean(angles[i:i + future_step])[0]
-        # if i < future_step:
-        #     prev_variance = torch.var_mean(torch.cat((angles[-(future_step - i):], angles[:i])))[0]
-        # else:
-        #     prev_variance = torch.var_mean(angles[i - future_step:i])[0]
-        if circular_variances[i] < 0.1:
+        if circular_variances[i] < 0.05:
             current_seg.append(i)
             check_list.append(i)
         else:
-            if len(current_seg) > 10:
+            if len(current_seg) > 20:
                 seg_var = torch.var(circular_variances[current_seg[10:-10]])
                 if seg_var < seg_var_th:
                     segment_labels.append("line")
                 else:
                     segment_labels.append("circle")
-                # chart_utils.show_line_chart(circular_variances[current_seg], "seg_var")
-                # chart_utils.show_line_chart(angles[current_seg], "angles")
-                # print("seg_var", seg_var)
-                # print("")
                 all_seg.append(current_seg)
             current_seg = []
             current_seg.append(i)
             check_list.append(i)
-    if len(current_seg) > 10:
+    if len(current_seg) > 20:
         all_seg.append(current_seg)
         seg_var = torch.var(circular_variances[current_seg[10:-10]])
         if seg_var < seg_var_th:
@@ -345,8 +324,8 @@ def extract_line_curves(angles, seg_var_th=1e-8):
         merged_seg = all_seg[-1] + all_seg[0]
         all_seg = all_seg[1:-1] + [merged_seg]
         segment_labels = segment_labels[1:-1] + [segment_labels[0]]
-    if len(all_seg) != len(segment_labels):
-        print("")
+    if segment_labels.count("line") !=2:
+        raise ValueError
     return all_seg, segment_labels
 
 
@@ -645,7 +624,7 @@ def cluster_lines_by_proximity(lines, eps=10):
     Clusters line segments based on the proximity of their endpoints.
     """
     endpoints = [(line[1] + line[2]) / 2 / 1024 for line in lines]
-    # endpoints = [tuple(line[1]) for line in lines] + [tuple(line[2]) for line in lines]
+
     clustering = DBSCAN(eps=0.1, min_samples=1).fit(endpoints)
 
     clusters = defaultdict(list)
@@ -662,13 +641,11 @@ def label_corners(clusters):
     labeled_clusters = {}
 
     for label, points in clusters.items():
-        # xs = [p[0] for p in points]
-        # ys = [p[1] for p in points]
-
-        # min_x, max_x = min(xs), max(xs)
-        # min_y, max_y = min(ys), max(ys)
-        points_np = np.array([[points[0][0][1], points[0][0][2]], [
-            points[1][0][1], points[1][0][2]]])
+        try:
+            points_np = np.array([[points[0][0][1], points[0][0][2]], [
+                points[1][0][1], points[1][0][2]]])
+        except IndexError:
+            raise IndexError
         centers = points_np.mean(axis=1)
         if centers[:, 1].argmax() == centers[:, 0].argmax():
             # left_bottom or right top
@@ -738,14 +715,15 @@ def group_corners_to_rectangles(labeled_clusters):
                 if dist < min_dist:
                     min_dist = dist
                     best_rb_label = rb_label
-
-        grouped_rectangles.append({
-            'left_top': lt_points,
-            'right_top': labeled_clusters[best_rt_label][1],
-            'left_bottom': labeled_clusters[best_lb_label][1],
-            'right_bottom': labeled_clusters[best_rb_label][1],
-        })
-
+        try:
+            grouped_rectangles.append({
+                'left_top': lt_points,
+                'right_top': labeled_clusters[best_rt_label][1],
+                'left_bottom': labeled_clusters[best_lb_label][1],
+                'right_bottom': labeled_clusters[best_rb_label][1],
+            })
+        except KeyError:
+            continue
         used.update([lt_label, best_rt_label, best_lb_label, best_rb_label])
 
     return grouped_rectangles

@@ -153,7 +153,10 @@ def gcm_encoder(labels, ocms, all_shapes=None):
         example_groups = []
         example_shapes = all_shapes[example_i]
         for l_i, label in enumerate(example_labels.unique()):
-            group_shape = example_shapes[l_i]
+            if l_i >= len(example_shapes):
+                group_shape = -1 # failed to find the shape of the group
+            else:
+                group_shape = example_shapes[l_i]
             group_ocms = ocm[example_labels == label]
             parent_positions = group_ocms[:, :2]
             x = parent_positions[:, 0]
