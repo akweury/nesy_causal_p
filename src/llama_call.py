@@ -4,7 +4,8 @@ import os.path
 import requests
 import torch
 
-import config, bk
+import config
+from src import bk
 from src.alpha.fol.logic import InvAtom
 from src.alpha.fol.logic import Const, Var
 
