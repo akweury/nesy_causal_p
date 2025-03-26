@@ -4,12 +4,11 @@ import torch
 import random
 
 import config
-from utils import file_utils, args_utils, data_utils
-from percept import perception
+from src.utils import file_utils, args_utils, data_utils
+from src.percept import perception
 from src.alpha import alpha
 from src import bk
 from src.reasoning import reason
-from src.utils.chart_utils import van
 
 
 def load_data(args, image_path):
