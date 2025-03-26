@@ -1,11 +1,11 @@
 # Created by X at 17.06.24
 
 import numpy as np
-from scipy.ndimage import label
+
 from tqdm import tqdm
 from collections import defaultdict
 
-from utils import tile_utils, file_utils, log_utils, args_utils
+from src.utils import tile_utils, file_utils, log_utils, args_utils
 import group_section
 
 

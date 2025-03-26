@@ -5,9 +5,8 @@ import cv2
 import os
 
 import config
-import train_common_features
-from utils import file_utils, args_utils, data_utils
-from src.alpha import alpha
+
+from src.utils import file_utils, args_utils, data_utils
 from src import bk
 
 

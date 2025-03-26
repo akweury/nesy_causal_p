@@ -5,9 +5,9 @@ import cv2
 import os
 
 import config
-from utils import file_utils, args_utils, data_utils
+from src.utils import file_utils, args_utils, data_utils
 from src.alpha import alpha
-from reasoning import reason
+from src.reasoning import reason
 from src.alpha.fol.logic import InvAtom
 
 def load_bk(args, bk_shapes):

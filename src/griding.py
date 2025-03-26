@@ -4,7 +4,7 @@ import numpy as np
 import torch
 
 import config
-from utils import file_utils,data_utils
+from src.utils import file_utils,data_utils
 def grid_kp(data):
     pass
 

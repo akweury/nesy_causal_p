@@ -11,7 +11,7 @@ import torch
 
 import config
 from kandinsky_generator import generate_training_patterns
-from utils import args_utils, chart_utils
+from src.utils import args_utils, chart_utils
 from utils.chart_utils import van
 from src import dataset
 from percept import perception

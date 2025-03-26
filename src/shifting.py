@@ -9,7 +9,7 @@ from PIL import Image, ImageDraw
 import torch.nn.functional as F
 
 import config
-from utils import chart_utils, args_utils
+from src.utils import chart_utils, args_utils
 
 
 def draw_triangle(points):
