@@ -1,15 +1,14 @@
 # Created by X at 22.10.24
 import os
-
+from pathlib import Path
 import config
-import train_nsfr
-from eval_nsfr import check_clause
-from kandinsky_generator import generate_training_patterns
-from utils import args_utils
+from src import train_nsfr
+from src.eval_nsfr import check_clause
+from src.utils import args_utils
 from src import dataset
 from src.percept import perception
 from src import llama_call
-
+from kandinsky_generator import generate_training_patterns
 
 def init_io_folders(args, data_folder):
     args.train_folder = data_folder / "train" / "task_true_pattern"

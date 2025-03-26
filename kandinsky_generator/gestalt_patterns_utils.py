@@ -196,3 +196,53 @@ def get_feature_square_positions(anchor, clu_size):
     positions.append([xs + dx, ys - dy])
 
     return positions
+
+
+def get_random_positions(obj_quantity, obj_size):
+    group_anchors = []
+    for _ in range(obj_quantity):
+        group_anchors.append(
+            generate_random_anchor(group_anchors, cluster_dist=obj_size, x_min=0.1, x_max=0.9, y_min=0.1, y_max=0.9))
+
+    return group_anchors
+
+
+def get_triangle_positions(obj_quantity, x, y):
+    positions = []
+
+    r = 0.3 - min(abs(0.5 - x), abs(0.5 - y))
+    n = {"s": 6, "m": 15, "l": 20}.get(obj_quantity, 2)
+    r = {"s": r * 0.8, "m": r, "l": r * 1.2}.get(obj_quantity, 2)
+    innerdegree = math.radians(30)
+    dx = r * math.cos(innerdegree)
+    dy = r * math.sin(innerdegree)
+    n = round(n / 3)
+    xs = x
+    ys = y - r
+    xe = x + dx
+    ye = y + dy
+    dxi = (xe - xs) / n
+    dyi = (ye - ys) / n
+
+    for i in range(n + 1):
+        positions.append([xs + i * dxi, ys + i * dyi])
+
+    xs = x + dx
+    ys = y + dy
+    xe = x - dx
+    ye = y + dy
+    dxi = (xe - xs) / n
+    dyi = (ye - ys) / n
+    for i in range(n):
+        positions.append([xs + (i + 1) * dxi, ys + (i + 1) * dyi])
+
+    xs = x - dx
+    ys = y + dy
+    xe = x
+    ye = y - r
+    dxi = (xe - xs) / n
+    dyi = (ye - ys) / n
+    for i in range(n - 1):
+        positions.append([xs + (i + 1) * dxi, ys + (i + 1) * dyi])
+
+    return positions

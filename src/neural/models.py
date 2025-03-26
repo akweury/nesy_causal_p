@@ -11,7 +11,7 @@ from PIL import Image, ImageDraw
 import math
 from scipy.spatial import ConvexHull
 from itertools import combinations
-
+import itertools
 from torch.utils.data import DataLoader, TensorDataset
 from src.neural.neural_utils import *
 from src.utils import chart_utils, data_utils
@@ -285,10 +285,68 @@ def calculate_circular_variance(angles, wrap_size=20):
     return variances
 
 
-def extract_line_curves(angles, seg_var_th=1e-8):
+def calculate_circular_difference(angles, wrap_size=20):
+    """
+    Computes the circular difference (range) for each sliding window of angles.
+
+    The circular difference is defined as the minimal arc that covers all the
+    angles in the window. This is computed as 2π minus the largest gap between
+    consecutive angles (after sorting), with the wrap-around gap included.
+
+    Args:
+        angles (torch.Tensor): A 1D tensor of angles in degrees.
+        wrap_size (int): Number of consecutive angles to consider in each window.
+
+    Returns:
+        torch.Tensor: A tensor of circular differences (in radians) for each window.
+    """
+    # Convert degrees to radians
+    angles_rad = angles * math.pi / 180
+
+    # Wrap the data for windowing (to account for wrapping around the end)
+    wrapped_radians = torch.cat([angles_rad, angles_rad[:wrap_size - 1]])
+
+    def circular_difference(window):
+        # Sort the angles in the window
+        sorted_angles, _ = torch.sort(window)
+        # Compute differences between adjacent sorted angles
+        diffs = sorted_angles[1:] - sorted_angles[:-1]
+        # Include the wrap-around difference: from the last angle to the first angle plus 2π
+        wrap_diff = (sorted_angles[0] + 2 * math.pi) - sorted_angles[-1]
+        # Combine all differences
+        all_diffs = torch.cat([diffs, wrap_diff.unsqueeze(0)])
+        # The circular difference (range) is the complement of the largest gap in a full circle
+        circ_range = 2 * math.pi - torch.max(all_diffs)
+        return circ_range
+
+    differences = []
+    for i in range(len(angles_rad)):
+        window = wrapped_radians[i:i + wrap_size]
+        diff_val = circular_difference(window)
+        differences.append(diff_val)
+
+    # Convert the list of differences into a tensor and return it
+    differences = torch.tensor(differences)
+    return differences
+
+
+def middle_values(value_list, cut_percent=0.1):
+    length = len(value_list)
+    head_cut_index = math.floor(length * cut_percent)
+    tail_cut_index = math.ceil(length * (1 - cut_percent))
+    return value_list[head_cut_index:tail_cut_index]
+
+
+def circular_var(values):
+    values[values > 10] = values[values > 10] - 360
+    return torch.var(values)
+
+
+def extract_line_curves(angles, seg_var_th=1e-7, seg_diff_th=2 * 1e-3, angle_var_th=1e+2):
     circular_variances = calculate_circular_variance(angles, wrap_size=10)
+    circular_difference = calculate_circular_difference(angles, wrap_size=10)
     # chart_utils.van(circular_variances, file_name=config.output/"circular_image.png")
-    # chart_utils.show_line_chart(circular_variances,file_name=config.output/"circular_image.png")
+
     all_seg = []
     check_list = []
     current_seg = []
@@ -302,7 +360,9 @@ def extract_line_curves(angles, seg_var_th=1e-8):
         else:
             if len(current_seg) > 20:
                 seg_var = torch.var(circular_variances[current_seg[10:-10]])
-                if seg_var < seg_var_th:
+                seg_diff = torch.var(circular_difference[current_seg[10:-10]])
+                seg_angle_var = circular_var(angles[current_seg[10:-10]])
+                if seg_angle_var < angle_var_th:
                     segment_labels.append("line")
                 else:
                     segment_labels.append("circle")
@@ -313,18 +373,33 @@ def extract_line_curves(angles, seg_var_th=1e-8):
     if len(current_seg) > 20:
         all_seg.append(current_seg)
         seg_var = torch.var(circular_variances[current_seg[10:-10]])
-        if seg_var < seg_var_th:
+        seg_diff = torch.var(circular_difference[current_seg[10:-10]])
+        seg_angle_var = circular_var(angles[current_seg[10:-10]])
+        if seg_angle_var < angle_var_th:
             segment_labels.append("line")
         else:
             segment_labels.append("circle")
     # Visual Segments
     # chart_utils.visual_multiple_segments(all_seg, angles)
+
     all_seg = [seg for seg in all_seg if len(seg) > 10]
-    if (len(angles) - all_seg[-1][-1]) < 10 and all_seg[0][0] < 10 and segment_labels[0] == segment_labels[-1]:
-        merged_seg = all_seg[-1] + all_seg[0]
-        all_seg = all_seg[1:-1] + [merged_seg]
-        segment_labels = segment_labels[1:-1] + [segment_labels[0]]
-    if segment_labels.count("line") !=2:
+    is_head_tail_connect = (all_seg[0][0] < 10) and (all_seg[-1][-1] > len(angles) - 10)
+    is_head_line = circular_var(angles[middle_values(all_seg[0])]) < 10
+    is_tail_line = circular_var(angles[middle_values(all_seg[-1])]) < 10
+    is_head_circle = circular_var(angles[middle_values(all_seg[0])]) > 10
+    is_tail_circle = circular_var(angles[middle_values(all_seg[-1])]) > 10
+    if is_head_tail_connect:
+        if is_head_line and is_tail_line or is_head_circle and is_tail_circle:
+            merged_seg = all_seg[-1] + all_seg[0]
+            if len(all_seg[-1]) > len(all_seg[0]):
+                label = segment_labels[-1]
+            else:
+                label = segment_labels[0]
+            all_seg = all_seg[1:-1] + [merged_seg]
+            segment_labels = segment_labels[1:-1] + [label]
+    if segment_labels.count("line") != 2:
+        chart_utils.show_line_chart(circular_variances, file_name=config.output / "circular_image.png")
+        chart_utils.show_line_chart(angles, file_name=config.output / "circular_difference_image.png")
         raise ValueError
     return all_seg, segment_labels
 
@@ -357,11 +432,17 @@ def find_contours(input_array):
 
 def calculate_dvs(contour_points):
     dvs = []
+    shifted_contour_points = []
     for contour_list in contour_points:
         direction_vector = data_utils.contour_to_direction_vector(contour_list)
         direction_vector = torch.tensor(direction_vector)
-        dvs.append(direction_vector)
-    return dvs
+        # direction_vector[direction_vector > 350] = 360 - direction_vector[direction_vector > 350]
+        direction_vector_shifted, contour_list_shifted = data_utils.shift_by_largest_gap_tensor(direction_vector,
+                                                                                                torch.from_numpy(
+                                                                                                    contour_list))
+        dvs.append(direction_vector_shifted)
+        shifted_contour_points.append(contour_list_shifted.numpy())
+    return dvs, shifted_contour_points
 
 
 def get_contour_segs(img):
@@ -372,12 +453,13 @@ def get_contour_segs(img):
     # bw_img = resize_img(bw_img, 64)
     contour_points = find_contours(bw_img)
 
-    dvs = calculate_dvs(contour_points)
+    dvs, contour_points = calculate_dvs(contour_points)
+
     all_segments = []
     all_labels = []
     # find out the segments, and their labels (curve or line)
     for dv in dvs:
-        segments, seg_labels = extract_line_curves(dv, seg_var_th=1e-8)
+        segments, seg_labels = extract_line_curves(dv, seg_var_th=1e-7)
         all_segments.append(segments)
         all_labels.append(seg_labels)
 
@@ -645,7 +727,7 @@ def label_corners(clusters):
             points_np = np.array([[points[0][0][1], points[0][0][2]], [
                 points[1][0][1], points[1][0][2]]])
         except IndexError:
-            raise IndexError
+            return {}
         centers = points_np.mean(axis=1)
         if centers[:, 1].argmax() == centers[:, 0].argmax():
             # left_bottom or right top
@@ -748,8 +830,11 @@ def label_triangle_corners(clusters):
 
         # min_x, max_x = min(xs), max(xs)
         # min_y, max_y = min(ys), max(ys)
-        points_np = np.array([[points[0][0][1], points[0][0][2]], [
-            points[1][0][1], points[1][0][2]]])
+        try:
+            points_np = np.array([[points[0][0][1], points[0][0][2]], [
+                points[1][0][1], points[1][0][2]]])
+        except IndexError:
+            return {}
         centers = points_np.mean(axis=1)
         if np.abs(points[0][0][0]) < 0.5:
             if points[1][0][0] > 0:
@@ -1079,6 +1164,167 @@ def find_squares(rect_lines, center_points, obj_group_labels, group_labels):
             obj_group_labels[index] = group_id
 
     return obj_group_labels, group_labels
+
+
+def assign_cluster(pt, clusters, tolerance):
+    """
+    Assigns a point to an existing cluster if it's close enough (within tolerance);
+    otherwise, creates a new cluster.
+    """
+    for i, cl in enumerate(clusters):
+        if distance(pt, cl) < tolerance:
+            return i
+    clusters.append(pt)
+    return len(clusters) - 1
+
+
+def find_position_closure_triangles(lines, line_group_data, labels, group_labels, tolerance=0.05):
+    """
+    Given a list of lines (each represented as [slope, (x1, y1), (x2, y2)]),
+    returns a list where each element is a list of line indices that together form a triangle.
+
+    For a set of three lines to form a triangle:
+      1. The endpoints (allowing for gaps) must cluster into exactly 3 distinct vertices.
+      2. Each line should connect two different clusters.
+      3. Each vertex should be connected exactly twice.
+
+    Parameters:
+      lines (list): List of lines.
+      tolerance (float): Maximum distance to consider two endpoints as the same vertex.
+
+    Returns:
+      List[List[int]]: Each inner list contains the indices of lines that form a triangle.
+    """
+    triangles = []
+    n = len(lines)
+
+    # Check every combination of three lines
+    for combo in itertools.combinations(range(n), 3):
+        clusters = []  # Will store representative points for vertices
+        line_assignments = []  # List of tuples: (cluster_index of endpoint1, cluster_index of endpoint2)
+        valid = True
+
+        # Process each line in the combination
+        for idx in combo:
+            p1 = lines[idx][1]
+            p2 = lines[idx][2]
+            c1 = assign_cluster(p1, clusters, tolerance)
+            c2 = assign_cluster(p2, clusters, tolerance)
+
+            # If both endpoints are in the same cluster, it's not a valid edge for a triangle.
+            if c1 == c2:
+                valid = False
+                break
+            line_assignments.append((c1, c2))
+
+        if not valid:
+            continue
+
+        # For a triangle, there should be exactly 3 distinct vertices.
+        if len(clusters) != 3:
+            continue
+
+        # Count the occurrence of each vertex in the edges.
+        vertex_count = {}
+        for (c1, c2) in line_assignments:
+            vertex_count[c1] = vertex_count.get(c1, 0) + 1
+            vertex_count[c2] = vertex_count.get(c2, 0) + 1
+
+        # In a proper triangle, each of the three vertices should appear exactly twice.
+        if sorted(vertex_count.values()) != [2, 2, 2]:
+            continue
+
+        # If we passed all the tests, add this combination as a triangle.
+        triangles.append(list(combo))
+    for tri_line_indices in triangles:
+        group_labels.append(1)
+        group_id = max(labels) + 1
+        for line_index in tri_line_indices:
+            point_indices = line_group_data[line_index]
+            for point_index in point_indices:
+                labels[point_index] = group_id
+    return labels, group_labels
+
+
+def find_position_closure_squares(lines, line_group_data, labels, group_labels, tolerance=0.05):
+    """
+    Given a list of lines (each represented as [slope, (x1, y1), (x2, y2)]),
+    finds all combinations of four lines that together form a square based on position closure.
+
+    For a set of four lines to form a square:
+      1. The endpoints (allowing for gaps) must cluster into exactly 4 distinct vertices.
+      2. Each line should connect two different clusters.
+      3. Each vertex should be connected exactly twice.
+
+    After a square is found, the function assigns the square group label (2) to the points
+    associated with the lines forming the square. The group label is updated in the provided
+    labels list, and the group_labels list is appended with 2 for each square.
+
+    Parameters:
+      lines (list): List of lines.
+      line_group_data (list): Mapping from each line index to the list of associated point indices.
+      labels (list): List of labels for each point.
+      group_labels (list): List of group labels already assigned.
+      tolerance (float): Maximum distance to consider two endpoints as the same vertex.
+
+    Returns:
+      Tuple: Updated (labels, group_labels).
+    """
+    import itertools
+
+    squares = []
+    n = len(lines)
+
+    # Check every combination of four lines
+    for combo in itertools.combinations(range(n), 4):
+        clusters = []          # Will store representative points for vertices
+        line_assignments = []  # List of tuples: (cluster_index of endpoint1, cluster_index of endpoint2)
+        valid = True
+
+        # Process each line in the combination
+        for idx in combo:
+            p1 = lines[idx][1]
+            p2 = lines[idx][2]
+            c1 = assign_cluster(p1, clusters, tolerance)
+            c2 = assign_cluster(p2, clusters, tolerance)
+
+            # If both endpoints fall into the same cluster, this line is degenerate for closure.
+            if c1 == c2:
+                valid = False
+                break
+            line_assignments.append((c1, c2))
+
+        if not valid:
+            continue
+
+        # For a square, there should be exactly 4 distinct vertices.
+        if len(clusters) != 4:
+            continue
+
+        # Count the occurrence of each vertex in the edges.
+        vertex_count = {}
+        for (c1, c2) in line_assignments:
+            vertex_count[c1] = vertex_count.get(c1, 0) + 1
+            vertex_count[c2] = vertex_count.get(c2, 0) + 1
+
+        # In a proper square, each of the four vertices should appear exactly twice.
+        if sorted(vertex_count.values()) != [2, 2, 2, 2]:
+            continue
+
+        # If we passed all the tests, add this combination as a square.
+        squares.append(list(combo))
+
+    # Update the labels and group_labels for each found square.
+    for square_line_indices in squares:
+        group_labels.append(2)
+        group_id = max(labels) + 1
+        for line_index in square_line_indices:
+            point_indices = line_group_data[line_index]
+            for point_index in point_indices:
+                labels[point_index] = group_id
+
+    return labels, group_labels
+
 
 
 def find_circles(curves, circle_data, labels):

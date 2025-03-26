@@ -667,3 +667,50 @@ def contour_to_direction_vector(contour):
     # angles_2 = direction_vectors_to_angles(np.array(dv_2))
     # chart_utils.show_line_chart(angles_2)
     return smoothed_angles
+
+
+def shift_by_largest_gap_tensor(list_a, list_b):
+    """
+    Given two PyTorch tensors, list_a (1D tensor) and list_b (2D tensor of points),
+    this function:
+      1. Computes the differences between consecutive elements in list_a.
+      2. Finds the largest gap between consecutive elements.
+      3. Circularly shifts both list_a and list_b so that the element following
+         the largest gap becomes the first element. This ensures that the largest
+         gap appears between the last and first elements in the shifted lists.
+
+    Args:
+        list_a (torch.Tensor): A 1D tensor of numeric values.
+        list_b (torch.Tensor): A 2D tensor of shape (N, D) where each row represents a point.
+
+    Returns:
+        tuple: A tuple (shifted_list_a, shifted_list_b) with the circularly shifted tensors.
+    """
+    # Check that list_a is 1D and list_b is 2D and they have the same number of elements
+    if list_a.dim() != 1:
+        raise ValueError("list_a must be a 1D tensor.")
+    if list_b.dim() != 2:
+        raise ValueError("list_b must be a 2D tensor.")
+    if list_a.size(0) != list_b.size(0):
+        raise ValueError("Both list_a and list_b must have the same number of elements.")
+
+    n = list_a.size(0)
+    if n < 2:
+        # No gap to calculate if there's only one element.
+        return list_a, list_b
+
+    # Compute differences between consecutive elements in list_a
+    differences = torch.abs(list_a[1:] - list_a[:-1]) % 360
+    compliment_diff = torch.abs(360 - differences) % 360
+    differences = torch.stack([differences, compliment_diff]).min(dim=0)[0]
+    # Find the index where the difference is maximum
+    max_diff_index = torch.argmax(differences).item()  # Convert tensor to Python int
+
+    # Determine the new starting point: the element immediately after the maximum gap becomes the first element
+    shift_point = max_diff_index + 1
+
+    # Perform the circular shift on both tensors
+    shifted_list_a = torch.cat((list_a[shift_point:], list_a[:shift_point]), dim=0)
+    shifted_list_b = torch.cat((list_b[shift_point:], list_b[:shift_point]), dim=0)
+
+    return shifted_list_a, shifted_list_b

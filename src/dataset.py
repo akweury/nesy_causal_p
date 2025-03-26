@@ -8,6 +8,7 @@ import config
 from src.utils import data_utils, file_utils, chart_utils
 import numpy as np
 
+
 class BasicShapeDataset(Dataset):
     def __init__(self, args, transform=None):
         self.transform = transform
@@ -17,7 +18,8 @@ class BasicShapeDataset(Dataset):
         self.device = args.device
         folder = config.kp_base_dataset / args.bk_shape
         self.image_paths = sorted(file_utils.get_all_files(folder, "png", False)[:1000])
-        self.vertices = data_utils.load_json(folder/'metadata.json')
+        self.vertices = data_utils.load_json(folder / 'metadata.json')
+
     def __len__(self):
         return len(self.image_paths)
 
@@ -44,6 +46,7 @@ class BasicShapeDataset(Dataset):
             patches.append(torch.from_numpy(patch).unsqueeze(0))
 
         return torch.cat(patches, dim=0)
+
     def __getitem__(self, idx):
         rgb_image = torch.from_numpy(cv2.imread(self.image_paths[idx]))
         vertices = self.vertices[idx]["vertices"]
@@ -131,7 +134,6 @@ class GSDataset(Dataset):
             "img": self.imgs_test[idx],
         }
 
-
         principle = file_utils.load_json(str(config.kp_gestalt_dataset / "train" / f"{idx:06d}.json"))["principle"]
         return train_data, test_data, principle
 
@@ -146,3 +148,36 @@ def load_dataset(args):
                              batch_size=args.batch_size,
                              shuffle=False)
     return data_loader
+
+
+import torchvision.transforms as transforms
+
+IMAGE_SIZE = 1024  # ViT default input size
+import torchvision.datasets as datasets
+import random
+from collections import defaultdict
+from torch.utils.data import DataLoader, Subset
+
+
+def get_dataloader(data_dir, label):
+    img_files = file_utils.get_all_files(data_dir/label, '.png')
+    img_files = sorted(img_files)
+    img_list = []
+    for file in img_files:
+        img = file_utils.load_img(file)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img_list.append(torch.from_numpy(img))
+    return img_list
+
+
+def get_imgs(dataloader, device):
+    imgs = []
+    for images, labels in dataloader:
+        imgs.extend(images.to(device))
+    return imgs
+
+
+def load_elvis_dataset(args):
+    principle_path = config.storage / "res_1024" / args.run_principle
+    pattern_folders = sorted([p for p in (principle_path / "train").iterdir() if p.is_dir()], key=lambda x: x.stem)
+    return pattern_folders

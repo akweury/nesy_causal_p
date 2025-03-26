@@ -141,10 +141,10 @@ def df_search(args, lang, C, FC, group, group_num, level):
     lang.generate_atoms()
 
     if len(base_nodes) == 0:
-        return
+        return []
     elif len(extended_nodes) == 1:
         lang.clauses += extended_nodes
-        return
+        return []
 
     extended_nodes = node_extension(args, lang, base_nodes, extended_nodes)
     NSFR = nsfr.get_nsfr_model(args, lang, FC, extended_nodes)
@@ -194,7 +194,7 @@ def eval_task(args, lang, FC, images_data, all_clauses, level):
                     enum_example_groups = []
                     for g_i, g in enumerate(images_data[example_i]):
                         enum_example_groups.append([g_i, g])
-                    group_combs = list(itertools.combinations(enum_example_groups, 2))
+                    group_combs = list(itertools.combinations(enum_example_groups, 1))
                     for groups in group_combs:
                         gcms = torch.cat([group[1]["gcm"] for group in groups], dim=0)
                         ocms = [group[1]["ocm"] for group in groups]
@@ -202,7 +202,7 @@ def eval_task(args, lang, FC, images_data, all_clauses, level):
                         group_indices = [group[0] for group in groups]
                         data = {"gcms": gcms, "ocms": ocms_aligned}
                         ils, _ = evaluation(args, NSFR, target_preds, data)
-                        group_pred = [ils.squeeze()]
+                        group_pred = ils.squeeze()
                         group_preds.append(group_pred)
                 else:
                     ocms = group["ocm"]

@@ -426,7 +426,7 @@ def ocm_encoder(args, segments, dtype):
         example_seg = segments[example_i]
         example_groups = []
         if os.path.exists(ocm_file) and os.path.exists(group_file):
-            example_ocm = torch.load(ocm_file)
+            example_ocm = torch.load(ocm_file).to(args.device)
             example_groups = torch.load(group_file)
         else:
             example_ocm = []
@@ -623,17 +623,6 @@ def collect_fms(args):
         args.bk_shape = bk_shape
         args.k_size = config.kernel_size
         os.makedirs(args.save_path, exist_ok=True)
-
-        # load data
-        train_loader, val_loader = prepare_data(args)
-
-        # # kernel identification
-        # kernel_file = args.save_path / f"kernel_patches_{args.k_size}.pt"
-        # if not os.path.exists(kernel_file):
-        #     kernels = identify_kernels(args, train_loader)
-        #     torch.save(kernels, kernel_file)
-        # else:
-        #     kernels = torch.load(kernel_file)
 
         # fm identification
         fm_file = args.save_path / f'fms_patches_{args.k_size}.pt'

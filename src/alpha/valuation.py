@@ -477,7 +477,8 @@ class VFGClosure(nn.Module):
             return 0.0
 
         group_shape = group_data[:, shape_indices].argmax() + 1
-        has_label = float(group_shape_gt == group_shape)
+
+        has_label = float(group_shape_gt.name == bk.bk_shapes[group_shape])
         return has_label
 
 

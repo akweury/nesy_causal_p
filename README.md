@@ -23,3 +23,11 @@ pip install -r requirements.txt
 ``` 
 python -m src.play
 ```
+
+docker run --gpus all -it -v /home/ml-jsha/storage/grm:/app/storage --rm grm 
+
+
+```
+python -m src.play --device 10
+
+```

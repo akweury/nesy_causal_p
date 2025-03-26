@@ -107,7 +107,6 @@ def train_clauses(args, groups):
                                      lang_pos_object.all_groups,
                                      lang_neg_group.all_groups,
                                      lang_neg_object.all_groups)
-
     return lang_pos_object, lang_pos_group, rules
 
 

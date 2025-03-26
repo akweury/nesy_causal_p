@@ -285,12 +285,12 @@ def get_task_names(principle):
     elif principle == "closure":
         task_names = [
             # "gestalt_triangle_and_noise",
-            "closure_square_red_yellow",
-            "closure_four_squares",
-            "gestalt_triangle",
-            "tri_group",
+            # "closure_square_red_yellow",
+            # "closure_four_squares",
+            # "gestalt_triangle",
+            # "tri_group",
             "square_group",
-            "triangle_square"
+            # "triangle_square"
         ]
     elif principle == "continuity":
         task_names = ["continuity_one_splits_two",
@@ -329,10 +329,10 @@ def gen_and_save(path, width, mode):
 
             # save image
             os.makedirs(path / ".." / f"{mode}_all", exist_ok=True)
-            os.makedirs(path / ".." / f"{mode}_all" / f"{task_counter}", exist_ok=True)
+            os.makedirs(path / ".." / f"{mode}_all" / f"{task_counter}_{task_name}", exist_ok=True)
             for img_i in range(len(images)):
                 Image.fromarray(images[img_i]).save(
-                    path / ".." / f"{mode}_all" / f"{task_counter}" / f"sep_{task_counter:06d}_{img_i}.png")
+                    path / ".." / f"{mode}_all" / f"{task_counter}_{task_name}" / f"sep_{task_counter:06d}_{img_i}.png")
             images = chart_utils.hconcat_imgs(images)
             Image.fromarray(images).save(path / f"{task_counter:06d}.png")
             # save data

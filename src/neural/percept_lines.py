@@ -14,7 +14,7 @@ def are_collinear(p1, p2, p3, th=1e-3):
     return np.abs(((y2 - y1) * (x3 - x1) - (y3 - y1) * (x2 - x1))) < th
 
 
-def detect_lines(points, min_points=4):
+def detect_lines(points, min_points=3):
     """Find all lines consisting of at least min_points from a set of points."""
     points = [tuple(point) for point in points]
     indexed_points = list(enumerate(points))  # [(index, (x, y)), ...]
@@ -39,7 +39,6 @@ def detect_lines(points, min_points=4):
                     "indices": [idx for idx, _ in line_points],
                     "points": [point for _, point in line_points]
                 })
-
     return lines
 
 
@@ -168,7 +167,7 @@ def update_lines(lines, points_to_check):
     unique_lines = []
     unique_lines_indices = []
     for line in lines:
-        if line["indices"] not in unique_lines_indices and len(line["indices"]) > 3:
+        if line["indices"] not in unique_lines_indices and len(line["indices"]) > 2:
             unique_lines.append(line)
             unique_lines_indices.append(line["indices"])
 

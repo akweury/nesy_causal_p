@@ -624,7 +624,12 @@ class Language(object):
         Returns:
             int: The index of the term.
         """
-        terms = self.get_by_dtype(term.dtype)
+        if (isinstance(term,Const)):
+            terms = self.get_by_dtype(term.dtype)
+        elif isinstance(term, Var):
+            terms = self.get_by_dtype(term.var_type)
+        else:
+            raise ValueError
         return terms.index(term)
 
     def get_const_by_name(self, const_name):

@@ -152,34 +152,37 @@ def gcm_encoder(labels, ocms, all_shapes=None):
         example_labels = labels[example_i]
         example_groups = []
         example_shapes = all_shapes[example_i]
-        for l_i, label in enumerate(example_labels.unique()):
-            if l_i >= len(example_shapes):
-                group_shape = -1 # failed to find the shape of the group
-            else:
-                group_shape = example_shapes[l_i]
-            group_ocms = ocm[example_labels == label]
-            parent_positions = group_ocms[:, :2]
-            x = parent_positions[:, 0]
-            y = parent_positions[:, 1]
-            group_x = x.mean()
-            group_y = y.mean()
-            obj_num = len(group_ocms)
-            if len(group_ocms) == 1:
-                gcm = group_ocms[0]
-            else:
-                group_size = 0.5 * (x.max() - x.min() + y.max() - y.min())
-                color_r = 0
-                color_g = 0
-                color_b = 0
-                shape_tri = 1 if group_shape == 1 else 0
-                shape_sq = 1 if group_shape == 2 else 0
-                shape_cir = 1 if group_shape == 3 else 0
-                gcm = gen_group_tensor(group_x, group_y, group_size, obj_num, color_r, color_g, color_b,
-                                       shape_tri, shape_sq, shape_cir)
-            group_ocms = group_ocms.reshape(-1, 10)
-            gcm = gcm.reshape(-1, 10)
-            group = {"gcm": gcm, "ocm": group_ocms}
-            example_groups.append(group)
+        if len(example_shapes) == 0:
+            example_groups.append({"gcm": torch.zeros(1, 10), "ocm": torch.zeros(1, 10)})
+        else:
+            for l_i, label in enumerate(example_labels.unique()):
+                if l_i >= len(example_shapes):
+                    group_shape = -1  # failed to find the shape of the group
+                else:
+                    group_shape = example_shapes[l_i]
+                group_ocms = ocm[example_labels == label]
+                parent_positions = group_ocms[:, :2]
+                x = parent_positions[:, 0]
+                y = parent_positions[:, 1]
+                group_x = x.mean()
+                group_y = y.mean()
+                obj_num = len(group_ocms)
+                if len(group_ocms) == 1:
+                    gcm = group_ocms[0]
+                else:
+                    group_size = 0.5 * (x.max() - x.min() + y.max() - y.min())
+                    color_r = 0
+                    color_g = 0
+                    color_b = 0
+                    shape_tri = 1 if group_shape == 1 else 0
+                    shape_sq = 1 if group_shape == 2 else 0
+                    shape_cir = 1 if group_shape == 3 else 0
+                    gcm = gen_group_tensor(group_x, group_y, group_size, obj_num, color_r, color_g, color_b,
+                                           shape_tri, shape_sq, shape_cir)
+                group_ocms = group_ocms.reshape(-1, 10)
+                gcm = gcm.reshape(-1, 10)
+                group = {"gcm": gcm, "ocm": group_ocms}
+                example_groups.append(group)
         groups.append(example_groups)
 
     return groups

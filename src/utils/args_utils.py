@@ -70,6 +70,8 @@ def get_args():
     parser.add_argument("--group_count_conf_th", type=float, default=0.6)
     parser.add_argument("--fm_th", type=float, default=1.5)
     parser.add_argument("--valid_rule_th", type=float, default=0.8)
+    parser.add_argument("--run_principle", type=str, default="closure")
+
 
     args = parser.parse_args()
     args.logger = init_logger()

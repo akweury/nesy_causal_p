@@ -195,43 +195,163 @@ def update_assigned_mask(point_num, all_lines):
     return assigned_mask
 
 
+import math
+import itertools
+
+import math
+import itertools
+
+
+def round_list(l, n):
+    return [round(value, n) for value in l]
+
+
+def find_lines_from_points(points, tolerance=0.05, min_points=3):
+    """
+    Given a list of 2D points, detects lines by grouping nearly-collinear points
+    using an error tolerance. A point may belong to more than one line if lines
+    intersect. Each detected line is returned as a list containing:
+      [slope, endpoint1, endpoint2],
+    where endpoint1 and endpoint2 are the extreme points among the inliers along the line.
+
+    The algorithm works as follows:
+      1. For every unique pair of points, compute the line in normalized form:
+           a*x + b*y + c = 0,
+         where (a, b) is the unit normal vector. We enforce a >= 0 for a unique representation.
+      2. For the candidate line, count all points whose perpendicular distance
+         from the line is within the given tolerance. These are the inliers.
+      3. If the number of inliers is at least min_points (the minimum number of points required to form a line),
+         project the inlier points onto the line’s direction (which is perpendicular to the normal) and compute
+         the two extreme projections. These become the endpoints of the line segment.
+      4. Compute the line's slope for output. For non-vertical lines (when |b| > 1e-6),
+         the slope is -a/b; otherwise it is considered vertical (represented as float('inf')).
+      5. To avoid duplicates (different pairs yielding essentially the same line),
+         a new candidate is only added if its normalized (a, b, c) parameters differ
+         from those of previously detected lines by at least the tolerance.
+
+    Parameters:
+      points (list): List of 2D points, where each point is a tuple (x, y).
+      tolerance (float): Maximum distance from the candidate line for a point to be
+                         considered an inlier, and also used for comparing line parameters.
+      min_points (int): Minimum number of inlier points required to accept a line.
+
+    Returns:
+      list: A list of detected lines. Each line is represented as:
+            [slope, endpoint1, endpoint2]
+    """
+    detected_lines = []
+    detected_lines_indices = []
+    n = len(points)
+
+    # Iterate over every unique pair of points
+    for i, j in itertools.combinations(range(n), 2):
+        p1 = points[i]
+        p2 = points[j]
+        # Skip nearly identical points
+        if math.isclose(p1[0], p2[0], abs_tol=tolerance) and math.isclose(p1[1], p2[1], abs_tol=tolerance):
+            continue
+
+        # Compute the line parameters in the form a*x + b*y + c = 0.
+        # Using two-point form: a = y2 - y1, b = x1 - x2.
+        a = p2[1] - p1[1]
+        b = p1[0] - p2[0]
+        norm = math.hypot(a, b)
+        if norm == 0:
+            continue
+        a /= norm
+        b /= norm
+        c = -(a * p1[0] + b * p1[1])
+        # Enforce a unique representation by ensuring a is non-negative.
+        if a < 0:
+            a, b, c = -a, -b, -c
+
+        # Determine inliers: points whose distance to the line is within tolerance.
+        inliers = []
+        inliers_indices = []
+        for p_i, p in enumerate(points):
+            distance = abs(a * p[0] + b * p[1] + c)
+            if distance <= tolerance:
+                inliers.append(p)
+                inliers_indices.append(p_i)
+
+        # Use the argument min_points to determine if enough inliers are present.
+        if len(inliers) < min_points:
+            continue
+
+        # Compute endpoints of the line segment from the inlier set.
+        # The line's direction vector is perpendicular to the normal: d = (-b, a).
+        dvec = (-b, a)
+        # Project each inlier onto the direction vector.
+        projections = [p[0] * dvec[0] + p[1] * dvec[1] for p in inliers]
+        min_proj = min(projections)
+        max_proj = max(projections)
+        endpoint1 = round_list(inliers[projections.index(min_proj)], 2)
+        endpoint2 = round_list(inliers[projections.index(max_proj)], 2)
+
+        # Compute slope for output.
+        # For non-vertical lines, slope is computed as -a/b.
+        if abs(b) > 5 * 1e-2:
+            slope = round(-a / b / 0.02) * 0.02
+        else:
+            slope = 10
+        # Check if a similar line has already been detected.
+        duplicate_found = False
+        for (a2, b2, c2, _, _, _) in detected_lines:
+            if abs(a - a2) < tolerance and abs(b - b2) < tolerance and abs(c - c2) < tolerance:
+                duplicate_found = True
+                break
+        if duplicate_found:
+            continue
+
+        if endpoint1[0] < endpoint2[0]:
+            detected_lines.append((a, b, c, slope, endpoint1, endpoint2))
+        else:
+            detected_lines.append((a, b, c, slope, endpoint2, endpoint1))
+        detected_lines_indices.append(inliers_indices)
+    # Return the detected lines in the specified format.
+    lines = [[slope, endpoint1, endpoint2] for (_, _, _, slope, endpoint1, endpoint2) in detected_lines]
+    unique_lines = []
+    unique_lines_indices = []
+    for l_i, line in enumerate(lines):
+        if line not in unique_lines:
+            unique_lines.append(line)
+            unique_lines_indices.append(detected_lines_indices[l_i])
+    return unique_lines, unique_lines_indices
+
+
+def algo_find_arcs(points):
+    all_arcs = []
+    return all_arcs
+
+
 def algo_closure_position(args, input_groups):
     """ group input groups to output groups, which are high level groups """
     # each object assigned a group id as its label
     args.obj_fm_size = 32
-
-    points = np.stack([group.pos for group in input_groups])
-    assigned_mask = np.zeros(len(points), dtype=bool)
-    all_lines = []
-    all_arcs = []
-    max_iterations = 5
-    for iteration in range(max_iterations):
-        # Step 1: compute hull of unassigned points
-        unassigned_indices = [i for i in range(len(points)) if not assigned_mask[i]]
-        unassigned_points = points[unassigned_indices]
-        if len(unassigned_points) == 0:
-            break
-        group_lines = percept_lines.detect_lines(tuple(unassigned_points.tolist()))
-        group_lines = percept_lines.update_lines(group_lines, tuple(unassigned_points.tolist()))
-        group_arcs = []
-
-        all_lines.extend(group_lines)
-        all_arcs.extend(group_arcs)
-        assigned_mask = update_assigned_mask(len(points), all_lines)
-    #
-    hull_imgs = []
-    for gl_i in range(len(all_lines)):
-        hull_imgs.append(chart_utils.show_convex_hull(np.array(points), np.array(all_lines[gl_i]["points"])))
-    if len(hull_imgs) > 0:
-        chart_utils.van(hull_imgs)
-
-    lines_data = percept_lines.get_line_data(all_lines)
     # find polygons or circles
     labels = torch.zeros(len(input_groups))
     group_labels = []
-    line_group_data = [line["indices"] for line in all_lines]
-    labels, hasTriangle, group_labels = models.find_triangles(lines_data, line_group_data, labels, group_labels)
-    labels, hasSquare, group_labels = models.find_squares(lines_data, line_group_data, labels, group_labels)
+
+    points = np.stack([group.pos for group in input_groups])
+    assigned_mask = np.zeros(len(points), dtype=bool)
+
+    all_lines, line_points = find_lines_from_points(points.tolist(), tolerance=0.01)
+    all_arcs = algo_find_arcs(points)
+
+    # hull_imgs = []
+    # for gl_i in range(len(all_lines)):
+    #     hull_imgs.append(chart_utils.show_convex_hull(np.array(points), np.array(all_lines[gl_i]["points"])))
+    # if len(hull_imgs) > 0:
+    #     chart_utils.van(hull_imgs)
+
+    # lines_data = percept_lines.get_line_data(all_lines)
+
+    # line_group_data = [line["indices"] for line in all_lines]
+
+    # determine which lines form the shape of triangles
+    labels, group_labels = models.find_position_closure_triangles(all_lines, line_points, labels, group_labels)
+    labels, group_labels = models.find_position_closure_squares(all_lines, line_points, labels, group_labels)
+
     return labels, group_labels
 
 
@@ -285,7 +405,7 @@ def cluster_by_closure(args, segments, obj_groups):
     for example_i in range(len(segments)):
         segment = segments[example_i]
         obj_group = obj_groups[example_i]
-        if len(obj_group) > 20:
+        if len(obj_group) > 5:
             labels, shapes = algo_closure_position(args, obj_group)
         else:
             labels, shapes = algo_closure(args, segment, obj_group)

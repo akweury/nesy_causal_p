@@ -544,6 +544,9 @@ def similarity_two_pairs(so, dtype):
 
 
 def closure_classic_triangle(so, dtype):
+    """
+    variation: group_shape, size,
+    """
     objs = []
     x = 0.5  # + random.random() * 0.8
     y = 0.8  # + random.random() * 0.8
@@ -559,38 +562,42 @@ def closure_classic_triangle(so, dtype):
     dx = s * math.cos(math.radians(30))
     dy = s * math.sin(math.radians(30))
 
+    start_angles = [120, 240, 0]
+    end_angles = [angle + 300 for angle in start_angles]
     if dtype:
-        # draw circles
         objs.append(kandinskyShape(color=random.choice(["blue", "green", "yellow"]),
-                                   shape="circle", size=cir_so, x=xs, y=ys - s, line_width=-1, solid=True))
+                                   shape="pac_man", size=cir_so * random.uniform(0.8, 1.2), x=xs, y=ys - s,
+                                   line_width=-1, solid=True,
+                                   start_angle=start_angles[0], end_angle=end_angles[0]))
 
         objs.append(kandinskyShape(color=random.choice(["blue", "green", "yellow"]),
-                                   shape="circle", size=cir_so, x=xs + dx, y=ys + dy, line_width=-1, solid=True))
+                                   shape="pac_man", size=cir_so * random.uniform(0.8, 1.2), x=xs + dx, y=ys + dy,
+                                   line_width=-1, solid=True,
+                                   start_angle=start_angles[1], end_angle=end_angles[1]))
 
         objs.append(kandinskyShape(color=random.choice(["blue", "green", "yellow"]),
-                                   shape="circle", size=cir_so, x=xs - dx, y=ys + dy, line_width=-1, solid=True))
-        # draw triangle
-        objs.append(kandinskyShape(color="lightgray",
-                                   shape="triangle", size=so, x=xs, y=ys, line_width=-1, solid=True))
+                                   shape="pac_man", size=cir_so * random.uniform(0.8, 1.2), x=xs - dx, y=ys + dy,
+                                   line_width=-1, solid=True,
+                                   start_angle=start_angles[2], end_angle=end_angles[2]))
+
     else:
-        dy = s * math.cos(math.radians(30))
-        so *= 1.2
-        # draw circles
-        objs.append(kandinskyShape(color=random.choice(["blue", "green", "yellow"]),
-                                   shape="circle", size=cir_so, x=xs - dx, y=ys - dy, line_width=-1, solid=True))
+        start_angles = random.sample(range(0, 360), 3)
+        end_angles = [angle + 300 for angle in start_angles]
 
         objs.append(kandinskyShape(color=random.choice(["blue", "green", "yellow"]),
-                                   shape="circle", size=cir_so, x=xs + dx, y=ys + dy, line_width=-1, solid=True))
+                                   shape="pac_man", size=cir_so * random.uniform(0.8, 1.2), x=xs, y=ys - s,
+                                   line_width=-1, solid=True,
+                                   start_angle=start_angles[0], end_angle=end_angles[0]))
 
         objs.append(kandinskyShape(color=random.choice(["blue", "green", "yellow"]),
-                                   shape="circle", size=cir_so, x=xs - dx, y=ys + dy, line_width=-1, solid=True))
+                                   shape="pac_man", size=cir_so * random.uniform(0.8, 1.2), x=xs + dx, y=ys + dy,
+                                   line_width=-1, solid=True,
+                                   start_angle=start_angles[1], end_angle=end_angles[1]))
 
         objs.append(kandinskyShape(color=random.choice(["blue", "green", "yellow"]),
-                                   shape="circle", size=cir_so, x=xs + dx, y=ys - dy, line_width=-1, solid=True))
-
-        # draw triangle
-        objs.append(kandinskyShape(color="lightgray",
-                                   shape="square", size=so, x=xs, y=ys, line_width=-1, solid=True))
+                                   shape="pac_man", size=cir_so * random.uniform(0.8, 1.2), x=xs - dx, y=ys + dy,
+                                   line_width=-1, solid=True,
+                                   start_angle=start_angles[2], end_angle=end_angles[2]))
 
     return objs
 
@@ -818,138 +825,94 @@ def closure_square_red_yellow(so, dtype):
     return objs
 
 
+def closure_unit_square(group_anchor, clu_size, color, cir_so, start_angles, end_angles):
+    objs = []
+    positions = get_feature_square_positions(group_anchor, clu_size)
+    objs.append(kandinskyShape(color=color[0],
+                               shape="pac_man", size=cir_so, x=positions[0][0], y=positions[0][1],
+                               line_width=-1, solid=True,
+                               start_angle=start_angles[0], end_angle=end_angles[0]))
+
+    objs.append(kandinskyShape(color=color[1],
+                               shape="pac_man", size=cir_so, x=positions[1][0], y=positions[1][1],
+                               line_width=-1, solid=True,
+                               start_angle=start_angles[1], end_angle=end_angles[1]))
+
+    objs.append(kandinskyShape(color=color[2],
+                               shape="pac_man", size=cir_so, x=positions[2][0], y=positions[2][1],
+                               line_width=-1, solid=True,
+                               start_angle=start_angles[2], end_angle=end_angles[2]))
+
+    objs.append(kandinskyShape(color=color[3],
+                               shape="pac_man", size=cir_so, x=positions[3][0], y=positions[3][1],
+                               line_width=-1, solid=True,
+                               start_angle=start_angles[3], end_angle=end_angles[3]))
+    return objs
+
+
 def closure_four_squares(so, dtype):
     objs = []
     x = 0.5  # + random.random() * 0.8
     y = 0.8  # + random.random() * 0.8
     r = 0.3 - min(abs(0.5 - x), abs(0.5 - y)) * 0.5
-    xs = x
-    ys = y - r
 
     so = 0.3 + random.random() * 0.1
     cir_so = so * (0.3 + random.random() * 0.1)
 
     # correct the size to  the same area as an square
     s = 0.7 * math.sqrt(3) * so / 3
-    dx = s * math.cos(math.radians(30))
-    dy = s * math.sin(math.radians(30))
+    start_angles = [90, 270, 0, 180]
+    end_angles = [angle + 270 for angle in start_angles]
+    cluster_dist = 0.2
+    x_min = 0.25
+    x_max = 0.75
+    y_min = 0.5
+    y_max = 0.95
+    clu_num = 4
 
+    group_anchors = []
+    for _ in range(clu_num):
+        group_anchors.append(generate_random_anchor(group_anchors, cluster_dist, x_min, x_max, y_min, y_max))
+
+    clu_size = ({1: 0.3 + random.random() * 0.2,
+                 2: 0.3 + random.random() * 0.1,
+                 3: 0.3 + random.random() * 0.1,
+                 4: 0.2 + random.random() * 0.1
+                 }.get(clu_num, 0.3))
+    cir_so = clu_size * (0.3 + random.random() * 0.1)
     if dtype:
-        color = random.sample(bk.color_large_exclude_gray, 2) + ["red", "green"]
-        # first square
-        random.shuffle(color)
-        xs = 0.25
-        ys = 0.25
-        dy = s * math.cos(math.radians(30))
         so *= 1.2
-        objs.append(kandinskyShape(color=color[0],
-                                   shape="circle", size=cir_so, x=xs - dx, y=ys - dy, line_width=-1, solid=True))
 
-        objs.append(kandinskyShape(color=color[1],
-                                   shape="circle", size=cir_so, x=xs + dx, y=ys + dy, line_width=-1, solid=True))
-
-        objs.append(kandinskyShape(color=color[2],
-                                   shape="circle", size=cir_so, x=xs - dx, y=ys + dy, line_width=-1, solid=True))
-
-        objs.append(kandinskyShape(color=color[3],
-                                   shape="circle", size=cir_so, x=xs + dx, y=ys - dy, line_width=-1, solid=True))
-
-        # draw square
-        objs.append(kandinskyShape(color="lightgray",
-                                   shape="square", size=so, x=xs, y=ys, line_width=-1, solid=True))
-
-        # second square
+        # 1st square
         color = random.sample(bk.color_large_exclude_gray, 2) + ["red", "green"]
-        # shuffle the list: color
         random.shuffle(color)
-        xs = 0.75
-        ys = 0.25
-        objs.append(kandinskyShape(color=color[0],
-                                   shape="circle", size=cir_so, x=xs - dx, y=ys - dy, line_width=-1, solid=True))
+        objs += closure_unit_square(group_anchors[0], clu_size, color, cir_so, start_angles, end_angles)
 
-        objs.append(kandinskyShape(color=color[1],
-                                   shape="circle", size=cir_so, x=xs + dx, y=ys + dy, line_width=-1, solid=True))
-
-        objs.append(kandinskyShape(color=color[2],
-                                   shape="circle", size=cir_so, x=xs - dx, y=ys + dy, line_width=-1, solid=True))
-
-        objs.append(kandinskyShape(color=color[3],
-                                   shape="circle", size=cir_so, x=xs + dx, y=ys - dy, line_width=-1, solid=True))
-
-        # draw square
-        objs.append(kandinskyShape(color="lightgray",
-                                   shape="square", size=so, x=xs, y=ys, line_width=-1, solid=True))
-
-        # second square
+        # 2nd square
         color = random.sample(bk.color_large_exclude_gray, 2) + ["red", "green"]
-        # shuffle the list: color
         random.shuffle(color)
-        xs = 0.25
-        ys = 0.75
-        objs.append(kandinskyShape(color=color[0],
-                                   shape="circle", size=cir_so, x=xs - dx, y=ys - dy, line_width=-1, solid=True))
+        objs += closure_unit_square(group_anchors[1], clu_size, color, cir_so, start_angles, end_angles)
 
-        objs.append(kandinskyShape(color=color[1],
-                                   shape="circle", size=cir_so, x=xs + dx, y=ys + dy, line_width=-1, solid=True))
-
-        objs.append(kandinskyShape(color=color[2],
-                                   shape="circle", size=cir_so, x=xs - dx, y=ys + dy, line_width=-1, solid=True))
-
-        objs.append(kandinskyShape(color=color[3],
-                                   shape="circle", size=cir_so, x=xs + dx, y=ys - dy, line_width=-1, solid=True))
-
-        # draw square
-        objs.append(kandinskyShape(color="lightgray",
-                                   shape="square", size=so, x=xs, y=ys, line_width=-1, solid=True))
-
-        # second square
+        # 3rd square
         color = random.sample(bk.color_large_exclude_gray, 2) + ["red", "green"]
-        # shuffle the list: color
         random.shuffle(color)
-        xs = 0.75
-        ys = 0.75
-        objs.append(kandinskyShape(color=color[0],
-                                   shape="circle", size=cir_so, x=xs - dx, y=ys - dy, line_width=-1, solid=True))
+        objs += closure_unit_square(group_anchors[2], clu_size, color, cir_so, start_angles, end_angles)
 
-        objs.append(kandinskyShape(color=color[1],
-                                   shape="circle", size=cir_so, x=xs + dx, y=ys + dy, line_width=-1, solid=True))
-
-        objs.append(kandinskyShape(color=color[2],
-                                   shape="circle", size=cir_so, x=xs - dx, y=ys + dy, line_width=-1, solid=True))
-
-        objs.append(kandinskyShape(color=color[3],
-                                   shape="circle", size=cir_so, x=xs + dx, y=ys - dy, line_width=-1, solid=True))
-
-        # draw square
-        objs.append(kandinskyShape(color="lightgray",
-                                   shape="square", size=so, x=xs, y=ys, line_width=-1, solid=True))
+        # 4th square
+        color = random.sample(bk.color_large_exclude_gray, 2) + ["red", "green"]
+        random.shuffle(color)
+        objs += closure_unit_square(group_anchors[3], clu_size, color, cir_so, start_angles, end_angles)
 
     else:
+        so *= 1.2
         if random.random() > 0.5:
             color = random.sample(bk.color_large_exclude_gray, 2) + ["red", "red"]
         else:
             color = random.sample(bk.color_large_exclude_gray, 2) + ["green", "green"]
+
         # first square
         random.shuffle(color)
-        xs = 0.25
-        ys = 0.25
-        dy = s * math.cos(math.radians(30))
-        so *= 1.2
-        objs.append(kandinskyShape(color=color[0],
-                                   shape="circle", size=cir_so, x=xs - dx, y=ys - dy, line_width=-1, solid=True))
-
-        objs.append(kandinskyShape(color=color[1],
-                                   shape="circle", size=cir_so, x=xs + dx, y=ys + dy, line_width=-1, solid=True))
-
-        objs.append(kandinskyShape(color=color[2],
-                                   shape="circle", size=cir_so, x=xs - dx, y=ys + dy, line_width=-1, solid=True))
-
-        objs.append(kandinskyShape(color=color[3],
-                                   shape="circle", size=cir_so, x=xs + dx, y=ys - dy, line_width=-1, solid=True))
-
-        # draw square
-        objs.append(kandinskyShape(color="lightgray",
-                                   shape="square", size=so, x=xs, y=ys, line_width=-1, solid=True))
+        objs += closure_unit_square(group_anchors[0], clu_size, color, cir_so, start_angles, end_angles)
 
         # second square
         if random.random() > 0.5:
@@ -958,23 +921,8 @@ def closure_four_squares(so, dtype):
             color = random.sample(bk.color_large_exclude_gray, 2) + ["green", "green"]
         # shuffle the list: color
         random.shuffle(color)
-        xs = 0.75
-        ys = 0.25
-        objs.append(kandinskyShape(color=color[0],
-                                   shape="circle", size=cir_so, x=xs - dx, y=ys - dy, line_width=-1, solid=True))
+        objs += closure_unit_square(group_anchors[1], clu_size, color, cir_so, start_angles, end_angles)
 
-        objs.append(kandinskyShape(color=color[1],
-                                   shape="circle", size=cir_so, x=xs + dx, y=ys + dy, line_width=-1, solid=True))
-
-        objs.append(kandinskyShape(color=color[2],
-                                   shape="circle", size=cir_so, x=xs - dx, y=ys + dy, line_width=-1, solid=True))
-
-        objs.append(kandinskyShape(color=color[3],
-                                   shape="circle", size=cir_so, x=xs + dx, y=ys - dy, line_width=-1, solid=True))
-
-        # draw square
-        objs.append(kandinskyShape(color="lightgray",
-                                   shape="square", size=so, x=xs, y=ys, line_width=-1, solid=True))
         # second square
         if random.random() > 0.5:
             color = random.sample(bk.color_large_exclude_gray, 2) + ["red", "red"]
@@ -982,47 +930,16 @@ def closure_four_squares(so, dtype):
             color = random.sample(bk.color_large_exclude_gray, 3) + ["green", "green"]
         # shuffle the list: color
         random.shuffle(color)
-        xs = 0.25
-        ys = 0.75
-        objs.append(kandinskyShape(color=color[0],
-                                   shape="circle", size=cir_so, x=xs - dx, y=ys - dy, line_width=-1, solid=True))
+        objs += closure_unit_square(group_anchors[2], clu_size, color, cir_so, start_angles, end_angles)
 
-        objs.append(kandinskyShape(color=color[1],
-                                   shape="circle", size=cir_so, x=xs + dx, y=ys + dy, line_width=-1, solid=True))
-
-        objs.append(kandinskyShape(color=color[2],
-                                   shape="circle", size=cir_so, x=xs - dx, y=ys + dy, line_width=-1, solid=True))
-
-        objs.append(kandinskyShape(color=color[3],
-                                   shape="circle", size=cir_so, x=xs + dx, y=ys - dy, line_width=-1, solid=True))
-
-        # draw square
-        objs.append(kandinskyShape(color="lightgray",
-                                   shape="square", size=so, x=xs, y=ys, line_width=-1, solid=True))
         if random.random() > 0.5:
             color = random.sample(bk.color_large_exclude_gray, 2) + ["red", "red"]
         else:
             color = random.sample(bk.color_large_exclude_gray, 2) + ["green", "green"]
         # first square
         random.shuffle(color)
-        xs = 0.75
-        ys = 0.75
-        dy = s * math.cos(math.radians(30))
-        objs.append(kandinskyShape(color=color[0],
-                                   shape="circle", size=cir_so, x=xs - dx, y=ys - dy, line_width=-1, solid=True))
+        objs += closure_unit_square(group_anchors[3], clu_size, color, cir_so, start_angles, end_angles)
 
-        objs.append(kandinskyShape(color=color[1],
-                                   shape="circle", size=cir_so, x=xs + dx, y=ys + dy, line_width=-1, solid=True))
-
-        objs.append(kandinskyShape(color=color[2],
-                                   shape="circle", size=cir_so, x=xs - dx, y=ys + dy, line_width=-1, solid=True))
-
-        objs.append(kandinskyShape(color=color[3],
-                                   shape="circle", size=cir_so, x=xs + dx, y=ys - dy, line_width=-1, solid=True))
-
-        # draw square
-        objs.append(kandinskyShape(color="lightgray",
-                                   shape="square", size=so, x=xs, y=ys, line_width=-1, solid=True))
     return objs
 
 
@@ -1128,60 +1045,75 @@ def closure_big_triangle(so, dtype):
     objs = []
     x = 0.4 + random.random() * 0.2
     y = 0.4 + random.random() * 0.2
-    r = 0.3 - min(abs(0.5 - x), abs(0.5 - y))
+    # r = 0.3 - min(abs(0.5 - x), abs(0.5 - y))
     # n = int(2 * r * math.pi / 0.25)
-    n = 15
-    innerdegree = math.radians(30)
-    dx = r * math.cos(innerdegree)
-    dy = r * math.sin(innerdegree)
+    # n = 15
+    # innerdegree = math.radians(30)
+    # dx = r * math.cos(innerdegree)
+    # dy = r * math.sin(innerdegree)
 
-    n = round(n / 3)
+    # n = round(n / 3)
+    #
+    # xs = x
+    # ys = y - r
+    # xe = x + dx
+    # ye = y + dy
+    # dxi = (xe - xs) / n
+    # dyi = (ye - ys) / n
 
-    xs = x
-    ys = y - r
-    xe = x + dx
-    ye = y + dy
-    dxi = (xe - xs) / n
-    dyi = (ye - ys) / n
+    positions = get_triangle_positions("s", x, y)
+    obj_num = len(positions)
 
-    for i in range(n + 1):
+    if not dtype and random.random() < 0.3:
+        positions = get_random_positions(obj_num, so)
+        dtype = True
+    for i in range(len(positions)):
         color = random.choice(["yellow", "green"])
         if dtype:
             shape = "square" if color == "yellow" else "circle"
         else:
             shape = "circle" if color == "yellow" else "square"
-        objs.append(kandinskyShape(color=color, shape=shape, size=so, x=xs + i * dxi,
-                                   y=ys + i * dyi, line_width=-1, solid=True))
 
-    xs = x + dx
-    ys = y + dy
-    xe = x - dx
-    ye = y + dy
-    dxi = (xe - xs) / n
-    dyi = (ye - ys) / n
-    for i in range(n):
-        color = random.choice(["yellow", "green"])
-        if dtype:
-            shape = "square" if color == "yellow" else "circle"
-        else:
-            shape = "circle" if color == "yellow" else "square"
-        objs.append(kandinskyShape(color=color, shape=shape, size=so,
-                                   x=xs + (i + 1) * dxi, y=ys + (i + 1) * dyi, line_width=-1, solid=True))
-
-    xs = x - dx
-    ys = y + dy
-    xe = x
-    ye = y - r
-    dxi = (xe - xs) / n
-    dyi = (ye - ys) / n
-    for i in range(n - 1):
-        color = random.choice(["yellow", "green"])
-        if dtype:
-            shape = "square" if color == "yellow" else "circle"
-        else:
-            shape = "circle" if color == "yellow" else "square"
-        objs.append(kandinskyShape(color=color, shape=shape, size=so,
-                                   x=xs + (i + 1) * dxi, y=ys + (i + 1) * dyi, line_width=-1, solid=True))
+        objs.append(kandinskyShape(color=color, shape=shape, size=so * random.uniform(0.8, 1.2),
+                                   x=positions[i][0], y=positions[i][1], line_width=-1, solid=True))
+    # for i in range(n + 1):
+    #     color = random.choice(["yellow", "green"])
+    #     if dtype:
+    #         shape = "square" if color == "yellow" else "circle"
+    #     else:
+    #         shape = "circle" if color == "yellow" else "square"
+    #     objs.append(kandinskyShape(color=color, shape=shape, size=so, x=xs + i * dxi,
+    #                                y=ys + i * dyi, line_width=-1, solid=True))
+    #
+    # xs = x + dx
+    # ys = y + dy
+    # xe = x - dx
+    # ye = y + dy
+    # dxi = (xe - xs) / n
+    # dyi = (ye - ys) / n
+    # for i in range(n):
+    #     color = random.choice(["yellow", "green"])
+    #     if dtype:
+    #         shape = "square" if color == "yellow" else "circle"
+    #     else:
+    #         shape = "circle" if color == "yellow" else "square"
+    #     objs.append(kandinskyShape(color=color, shape=shape, size=so * random.uniform(0.8, 1.2),
+    #                                x=xs + (i + 1) * dxi, y=ys + (i + 1) * dyi, line_width=-1, solid=True))
+    #
+    # xs = x - dx
+    # ys = y + dy
+    # xe = x
+    # ye = y - r
+    # dxi = (xe - xs) / n
+    # dyi = (ye - ys) / n
+    # for i in range(n - 1):
+    #     color = random.choice(["yellow", "green"])
+    #     if dtype:
+    #         shape = "square" if color == "yellow" else "circle"
+    #     else:
+    #         shape = "circle" if color == "yellow" else "square"
+    #     objs.append(kandinskyShape(color=color, shape=shape, size=so * random.uniform(0.8, 1.2),
+    #                                x=xs + (i + 1) * dxi, y=ys + (i + 1) * dyi, line_width=-1, solid=True))
     return objs
 
 
@@ -1313,8 +1245,7 @@ def symmetry_pattern(so, dtype):
 
 def gen_patterns(pattern_name, dtype):
     so = 0.1
-    overlap_patterns = ["gestalt_triangle", "gestalt_circle", "gestalt_square",
-                        "closure_four_squares"]
+    overlap_patterns = []
     if pattern_name == "proximity_red_triangle":
         g = lambda so, truth: proximity_red_triangle(so, dtype)
     elif pattern_name == "proximity_one_shape":

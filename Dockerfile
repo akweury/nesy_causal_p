@@ -1,18 +1,35 @@
-# Select the base image
-#FROM nvcr.io/nvidia/pytorch:21.06-py3
-FROM nvcr.io/nvidia/pytorch:23.04-py3
-# Select the working directory
-# Add cuda
-RUN apt-get update
-RUN echo ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true | debconf-set-selections
+# Use the official NVIDIA PyTorch image with CUDA support
+FROM nvcr.io/nvidia/pytorch:23.10-py3
+
+# Set the working directory inside the container
+WORKDIR /app
 RUN ln -snf /usr/share/zoneinfo/Etc/UTC /etc/localtime
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    && rm -rf /var/lib/apt/lists/*
+
+
+
+# Ensure SSH key has correct permissions (if using SSH cloning)
+#ADD .ssh/ /root/.ssh/
+ARG GITHUB_TOKEN
+RUN git clone https://$GITHUB_TOKEN@github.com/akweury/nesy_causal_p.git /app
+#
+#RUN chmod 600 /root/.ssh/id_ed25519 && ssh-keyscan github.com >> /root/.ssh/known_hosts
+
+
+## Clone the Gestalt Reasoning Benchmark repository
+#RUN git clone git@github.com:akweury/nesy_causal_p.git /app
+
+# Upgrade pip, setuptools, and wheel
+RUN pip install --upgrade pip setuptools wheel
+# Install Python dependencies with --no-cache-dir
+WORKDIR /app
+
 RUN pip install opencv-python==4.8.0.74
-# Add qt5
-WORKDIR  /ARC/
-ADD .ssh/ /root/.ssh/
-RUN git clone git@github.com:xxx/xxxxxxx
-# Install Python requirements
-#COPY ../ARC/requirements.txt ./requirements.txt
-RUN pip install --upgrade pip
-WORKDIR  /ARC/nesy_causal_p/
-RUN pip install -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+
+# Set the default command for training (adjust as needed)
+#CMD ["python", "scripts/main.py"]
+
