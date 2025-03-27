@@ -1,0 +1,15 @@
+version: '2.3'
+services:
+  app:
+    image: grm
+    working_dir: /app
+    volumes:
+      - /home/ml-jsha/storage/grm/nesy_causal_p:/app
+    ports:
+      - "5678:5678"
+    stdin_open: true
+    tty: true
+    restart: "no"          # behaves like --rm (but Compose doesn't auto-remove, so we disable restart)
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+#    runtime: nvidia        # may work if Docker supports it on your server

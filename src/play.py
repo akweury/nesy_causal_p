@@ -58,6 +58,8 @@ def main():
         groups = perception.cluster_by_principle(args, imgs_train, "train", principle[0])
         # Learn Clauses from Training Data
         lang_obj, lang_group, rules = train_nsfr.train_clauses(args, groups)
+        for rule in rules:
+            print("Rule:", rule)
         # Test Patterns, statistic the accuracy
         check_results = check_clause(args, lang_obj, lang_group, rules, imgs_test, principle[0])
         # convert to natural language
