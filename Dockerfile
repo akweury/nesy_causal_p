@@ -16,9 +16,10 @@ RUN apt-get update && apt-get install -y \
 #RUN chmod 600 /root/.ssh/id_ed25519 && ssh-keyscan github.com >> /root/.ssh/known_hosts
 
 
-## Clone the Gestalt Reasoning Benchmark repository
 ARG GITHUB_TOKEN
-RUN git clone https://$GITHUB_TOKEN@github.com:akweury/nesy_causal_p.git /app
+RUN apt update && apt install -y git
+RUN git clone https://$GITHUB_TOKEN@github.com/akweury/nesy_causal_p.git /app
+
 # Upgrade pip, setuptools, and wheel
 RUN pip install --upgrade pip setuptools wheel
 # Install Python dependencies with --no-cache-dir
