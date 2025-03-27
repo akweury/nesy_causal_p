@@ -17,8 +17,7 @@ RUN apt-get update && apt-get install -y \
 
 
 ## Clone the Gestalt Reasoning Benchmark repository
-RUN git clone git@github.com:akweury/nesy_causal_p.git /app
-
+RUN git clone https://$GITHUB_TOKEN@github.com:akweury/nesy_causal_p.git /app
 # Upgrade pip, setuptools, and wheel
 RUN pip install --upgrade pip setuptools wheel
 # Install Python dependencies with --no-cache-dir

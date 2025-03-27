@@ -31,7 +31,6 @@ docker run --gpus all -it -v /home/ml-jsha/storage/grm:/app/storage --rm grm
 ### Docker
 ```
 
-docker build -t grm .
 
 
 python -m src.play --device 10
