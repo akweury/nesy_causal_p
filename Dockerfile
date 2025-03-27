@@ -12,9 +12,7 @@ RUN apt-get update && apt-get install -y \
 
 # Ensure SSH key has correct permissions (if using SSH cloning)
 #ADD .ssh/ /root/.ssh/
-ARG GITHUB_TOKEN
-RUN git clone https://$GITHUB_TOKEN@github.com/akweury/nesy_causal_p.git /app
-#
+
 #RUN chmod 600 /root/.ssh/id_ed25519 && ssh-keyscan github.com >> /root/.ssh/known_hosts
 
 
