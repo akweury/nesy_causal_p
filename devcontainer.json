@@ -1,0 +1,16 @@
+{
+  "name": "grm",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "."
+  },
+  "runArgs": [
+    "--gpus",
+    "all"
+  ],
+  "settings": {
+    "python.pythonPath": "/usr/local/bin/python3"
+  },
+  "postCreateCommand": "pip install -r requirements.txt",
+  "remoteUser": "vscode"
+}
