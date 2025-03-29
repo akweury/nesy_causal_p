@@ -6,10 +6,10 @@ WORKDIR /app
 RUN ln -snf /usr/share/zoneinfo/Etc/UTC /etc/localtime
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
+    libgl1 \
+    mesa-utils \
     && rm -rf /var/lib/apt/lists/*
 
-RUN apt install libgl1
-RUN apt install mesa-utils
 RUN pip install --upgrade pip
 # Ensure SSH key has correct permissions (if using SSH cloning)
 #ADD .ssh/ /root/.ssh/
