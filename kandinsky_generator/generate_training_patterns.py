@@ -289,8 +289,8 @@ def get_task_names(principle):
             # "closure_four_squares",
             # "gestalt_triangle",
             # "tri_group",
-            "square_group",
-            # "triangle_square"
+            # "square_group",
+            "triangle_square"
         ]
     elif principle == "continuity":
         task_names = ["continuity_one_splits_two",

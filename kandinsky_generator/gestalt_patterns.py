@@ -1045,22 +1045,6 @@ def closure_big_triangle(so, dtype):
     objs = []
     x = 0.4 + random.random() * 0.2
     y = 0.4 + random.random() * 0.2
-    # r = 0.3 - min(abs(0.5 - x), abs(0.5 - y))
-    # n = int(2 * r * math.pi / 0.25)
-    # n = 15
-    # innerdegree = math.radians(30)
-    # dx = r * math.cos(innerdegree)
-    # dy = r * math.sin(innerdegree)
-
-    # n = round(n / 3)
-    #
-    # xs = x
-    # ys = y - r
-    # xe = x + dx
-    # ye = y + dy
-    # dxi = (xe - xs) / n
-    # dyi = (ye - ys) / n
-
     positions = get_triangle_positions("s", x, y)
     obj_num = len(positions)
 
@@ -1076,44 +1060,6 @@ def closure_big_triangle(so, dtype):
 
         objs.append(kandinskyShape(color=color, shape=shape, size=so * random.uniform(0.8, 1.2),
                                    x=positions[i][0], y=positions[i][1], line_width=-1, solid=True))
-    # for i in range(n + 1):
-    #     color = random.choice(["yellow", "green"])
-    #     if dtype:
-    #         shape = "square" if color == "yellow" else "circle"
-    #     else:
-    #         shape = "circle" if color == "yellow" else "square"
-    #     objs.append(kandinskyShape(color=color, shape=shape, size=so, x=xs + i * dxi,
-    #                                y=ys + i * dyi, line_width=-1, solid=True))
-    #
-    # xs = x + dx
-    # ys = y + dy
-    # xe = x - dx
-    # ye = y + dy
-    # dxi = (xe - xs) / n
-    # dyi = (ye - ys) / n
-    # for i in range(n):
-    #     color = random.choice(["yellow", "green"])
-    #     if dtype:
-    #         shape = "square" if color == "yellow" else "circle"
-    #     else:
-    #         shape = "circle" if color == "yellow" else "square"
-    #     objs.append(kandinskyShape(color=color, shape=shape, size=so * random.uniform(0.8, 1.2),
-    #                                x=xs + (i + 1) * dxi, y=ys + (i + 1) * dyi, line_width=-1, solid=True))
-    #
-    # xs = x - dx
-    # ys = y + dy
-    # xe = x
-    # ye = y - r
-    # dxi = (xe - xs) / n
-    # dyi = (ye - ys) / n
-    # for i in range(n - 1):
-    #     color = random.choice(["yellow", "green"])
-    #     if dtype:
-    #         shape = "square" if color == "yellow" else "circle"
-    #     else:
-    #         shape = "circle" if color == "yellow" else "square"
-    #     objs.append(kandinskyShape(color=color, shape=shape, size=so * random.uniform(0.8, 1.2),
-    #                                x=xs + (i + 1) * dxi, y=ys + (i + 1) * dyi, line_width=-1, solid=True))
     return objs
 
 
