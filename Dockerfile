@@ -28,7 +28,7 @@ WORKDIR /app
 
 RUN pip install opencv-python==4.8.0.74
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install -r requirements.txt
 RUN pip install debugpy
 RUN pip install pydevd-pycharm~=241.14494.241
 #CMD ["python3", "-m", "debugpy", "--wait-for-client", "--listen", "0.0.0.0:5678", "play.py"]
