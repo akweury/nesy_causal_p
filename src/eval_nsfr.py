@@ -209,7 +209,7 @@ def check_clause(args, lang_obj, lang_group, rules, imgs_test, principle):
     preds_neg = torch.stack(preds_neg).reshape(-1, half_size).prod(dim=0)
     preds = torch.cat((preds_pos, preds_neg))
     acc = (preds == image_label).sum() / len(preds)
-
+    print(f"acc: {acc}")
     check_results = {
         "acc": acc,
         "negative_details": all_details,
