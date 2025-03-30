@@ -1045,7 +1045,7 @@ def closure_big_triangle(so, dtype):
     objs = []
     x = 0.4 + random.random() * 0.2
     y = 0.4 + random.random() * 0.2
-    positions = get_triangle_positions("s", x, y)
+    positions = get_triangle_positions("m", x, y)
     obj_num = len(positions)
 
     if not dtype and random.random() < 0.3:
@@ -1068,7 +1068,7 @@ def closure_big_square(so, dtype):
     x = 0.4 + random.random() * 0.2
     y = 0.4 + random.random() * 0.2
     r = 0.4 - min(abs(0.5 - x), abs(0.5 - y))
-    m = 15
+    m = 20
 
     minx = x - r / 2
     maxx = x + r / 2

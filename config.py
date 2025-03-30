@@ -20,7 +20,7 @@ storage = root / 'storage'
 output = storage / 'output'
 lark_file = root / "src" / "alpha" / "exp.lark"
 models = storage / "models"
-clear_folder(models)
+# clear_folder(models)
 model_visual = models / "visual"
 if not os.path.exists(storage):
     os.mkdir(storage)
@@ -70,7 +70,7 @@ color_tiles = [
 kp_base_dataset = storage / "dataset" / "basic"
 kp_challenge_dataset = storage / "dataset" / "challenge"
 kp_gestalt_dataset = storage / "dataset" / "gestalt"
-clear_folder(kp_gestalt_dataset)
+# clear_folder(kp_gestalt_dataset)
 kp_gestalt_dataset_all = storage / "dataset" / "gestalt_all"
 data_file_train_cha = storage / "dataset" / "arc-prize-2024" / "arc-agi_training_challenges.json"
 data_file_train_sol = storage / "dataset" / "arc-prize-2024" / "arc-agi_training_solutions.json"

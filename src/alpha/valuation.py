@@ -379,6 +379,8 @@ class VFColor(nn.Module):
         color_indices = [bk.prop_idx_dict["rgb_r"], bk.prop_idx_dict["rgb_g"], bk.prop_idx_dict["rgb_b"]]
         color_data = (group_data[:, color_indices] * 255).to(torch.uint8)
         is_color = float((color_rgb_gt == color_data).all())
+        if is_color==1:
+            print("")
         return is_color
 
 

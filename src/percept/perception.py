@@ -21,6 +21,32 @@ import config
 
 
 # -----------------------------------------------------------------------------------
+def find_segment_color(image: torch.Tensor) -> list:
+    """
+    Given a 1024x1024x3 PyTorch tensor representing an RGB image where most pixels are gray [211,211,211],
+    this function finds and returns the RGB color (as a list) of the pure color connected segment.
+    """
+    # Create a mask for pixels that are not the gray background
+    # This mask is True for pixels where at least one channel is not 211.
+    mask = (image != 211).any(dim=-1)
+
+    # Extract non-gray pixels from the image using the mask.
+    non_gray_pixels = image[mask]
+
+    # If there are no non-gray pixels, raise an error.
+    if non_gray_pixels.numel() == 0:
+        raise ValueError("No non-gray segment found.")
+
+    # Since the segment is pure colored, all its pixels should have the same RGB value.
+    # Get the unique colors among the non-gray pixels.
+    unique_colors = non_gray_pixels.unique(dim=0)
+
+    # If we find more than one unique non-gray color, raise an error.
+    if unique_colors.size(0) != 1:
+        raise ValueError("Expected a single pure color segment, but found multiple non-gray colors.")
+
+    # Return the segment color as an RGB list.
+    return unique_colors[0].tolist()
 
 def get_most_frequent_color(args,img):
     assert img.ndim == 3
@@ -227,7 +253,9 @@ def extract_most_frequent_label_matches(matches):
 def percept_feature_groups(args, bk_shapes, segment):
     """ recall the memory features from the given segments """
     feature_groups = []
-    seg_color = get_most_frequent_color(args, segment.permute(2, 0, 1))
+    seg_color_rgb = find_segment_color(segment)
+    seg_color = bk.color_dict_rgb2name[tuple(seg_color_rgb)]
+    # seg_color = get_most_frequent_color(args, segment.permute(2, 0, 1))
     # rgb segment to resized bw image
 
     # recall the memory

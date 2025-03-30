@@ -206,7 +206,7 @@ def round_list(l, n):
     return [round(value, n) for value in l]
 
 
-def find_lines_from_points(points, tolerance=0.05, min_points=3):
+def find_lines_from_points(points, tolerance=0.05, min_points=3, slope_th=0.1):
     """
     Given a list of 2D points, detects lines by grouping nearly-collinear points
     using an error tolerance. A point may belong to more than one line if lines
@@ -291,7 +291,7 @@ def find_lines_from_points(points, tolerance=0.05, min_points=3):
         # Compute slope for output.
         # For non-vertical lines, slope is computed as -a/b.
         if abs(b) > 5 * 1e-2:
-            slope = round(-a / b / 0.02) * 0.02
+            slope = round(-a / b / slope_th) * slope_th
         else:
             slope = 10
         # Check if a similar line has already been detected.
@@ -335,7 +335,7 @@ def algo_closure_position(args, input_groups):
     points = np.stack([group.pos for group in input_groups])
     assigned_mask = np.zeros(len(points), dtype=bool)
 
-    all_lines, line_points = find_lines_from_points(points.tolist(), tolerance=0.01)
+    all_lines, line_points = find_lines_from_points(points.tolist(), tolerance=0.001, min_points=6)
     all_arcs = algo_find_arcs(points)
 
     # hull_imgs = []
