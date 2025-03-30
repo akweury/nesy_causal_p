@@ -31,6 +31,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install debugpy
 RUN pip install pydevd-pycharm~=241.14494.241
+CMD ["python3", "-m", "debugpy", "--wait-for-client", "--listen", "0.0.0.0:5678", "play.py"]
+
 # Set the default command for training (adjust as needed)
 #CMD ["python", "scripts/main.py"]
 

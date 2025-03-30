@@ -32,9 +32,19 @@ docker run --gpus all -it -v /home/ml-jsha/storage/grm:/app/storage --rm grm
 ```
 
 
+docker build -t grm:latest .
 
+docker run -it \
+  --gpus all
+  -w /app \
+  -p 5678:5678 \
+  --rm 
+  grm:latest
+  
+  
 python -m src.play --device 10
-
-
-docker run --gpus all --ulimit memlock=-1 --ulimit stack=67108864 -v /home/ml-jsha/storage/grm/nesy_causal_p:/app -w /app  -it --rm grm 
+ 
 ```
+
+
+
