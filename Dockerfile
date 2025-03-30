@@ -17,9 +17,9 @@ RUN pip install --upgrade pip
 #RUN chmod 600 /root/.ssh/id_ed25519 && ssh-keyscan github.com >> /root/.ssh/known_hosts
 
 
-ARG GITHUB_TOKEN
+#ARG GITHUB_TOKEN
 RUN apt update && apt install -y git
-RUN git clone https://$GITHUB_TOKEN@github.com/akweury/nesy_causal_p.git /app
+RUN #git clone https://$GITHUB_TOKEN@github.com/akweury/nesy_causal_p.git /app
 
 # Upgrade pip, setuptools, and wheel
 RUN pip install --upgrade pip setuptools wheel
@@ -31,7 +31,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install debugpy
 RUN pip install pydevd-pycharm~=241.14494.241
-CMD ["python3", "-m", "debugpy", "--wait-for-client", "--listen", "0.0.0.0:5678", "play.py"]
+#CMD ["python3", "-m", "debugpy", "--wait-for-client", "--listen", "0.0.0.0:5678", "play.py"]
 
 # Set the default command for training (adjust as needed)
 #CMD ["python", "scripts/main.py"]

@@ -34,14 +34,10 @@ docker run --gpus all -it -v /home/ml-jsha/storage/grm:/app/storage --rm grm
 
 docker build -t grm:latest .
 
-docker run -it \
-  --gpus all
-  -w /app \
-  -p 5678:5678 \
-  --rm 
-  grm:latest
+docker run -it --gpus all -p 5678:5678 -v /home/ml-jsha/nesy_causal_p:/app --rm grm:latest
   
-  
+python3 -m debugpy --wait-for-client --listen 0.0.0.0:5678 play.py
+
 python -m src.play --device 10
  
 ```

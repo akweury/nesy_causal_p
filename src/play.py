@@ -11,7 +11,8 @@ from src import llama_call
 from kandinsky_generator import generate_training_patterns
 
 import pydevd_pycharm
-pydevd_pycharm.settrace('172.17.0.1', port=44886, stdoutToServer=True, stderrToServer=True)
+pydevd_pycharm.settrace('localhost', port=6000, stdoutToServer=True, stderrToServer=True)
+
 
 def init_io_folders(args, data_folder):
     args.train_folder = data_folder / "train" / "task_true_pattern"
