@@ -1041,11 +1041,11 @@ def closure_classic_circle(so, dtype):
     return objs
 
 
-def closure_big_triangle(so, dtype):
+def closure_big_triangle(so, dtype, pattern_size):
     objs = []
     x = 0.4 + random.random() * 0.2
     y = 0.4 + random.random() * 0.2
-    positions = get_triangle_positions("m", x, y)
+    positions = get_triangle_positions(pattern_size, x, y)
     obj_num = len(positions)
 
     if not dtype and random.random() < 0.3:
@@ -1063,53 +1063,20 @@ def closure_big_triangle(so, dtype):
     return objs
 
 
-def closure_big_square(so, dtype):
+def closure_big_square(so, dtype, pattern_size):
     objs = []
     x = 0.4 + random.random() * 0.2
     y = 0.4 + random.random() * 0.2
-    r = 0.4 - min(abs(0.5 - x), abs(0.5 - y))
-    m = 20
+    positions = get_square_positions(pattern_size, x, y)
 
-    minx = x - r / 2
-    maxx = x + r / 2
-    miny = y - r / 2
-    maxy = y + r / 2
-    n = int(m / 4)
-    dx = r / n
-    for i in range(n + 1):
+    for i in range(len(positions)):
         color = random.choice(["blue", "red"])
         if dtype:
             shape = "circle" if color == "blue" else "triangle"
         else:
             shape = "triangle" if color == "blue" else "circle"
-        objs.append(kandinskyShape(color=color, shape=shape, size=so,
-                                   x=minx + i * dx, y=miny, line_width=-1, solid=True))
-
-        color = random.choice(["blue", "red"])
-        if dtype:
-            shape = "circle" if color == "blue" else "triangle"
-        else:
-            shape = "triangle" if color == "blue" else "circle"
-        objs.append(kandinskyShape(color=color, shape=shape, size=so,
-                                   x=minx + i * dx, y=maxy, line_width=-1, solid=True))
-
-    for i in range(n - 1):
-        color = random.choice(["blue", "red"])
-        if dtype:
-            shape = "circle" if color == "blue" else "triangle"
-        else:
-            shape = "triangle" if color == "blue" else "circle"
-        objs.append(kandinskyShape(color=color, shape=shape, size=so,
-                                   x=minx, y=miny + (i + 1) * dx, line_width=-1, solid=True))
-
-        color = random.choice(["blue", "red"])
-        if dtype:
-            shape = "circle" if color == "blue" else "triangle"
-        else:
-            shape = "triangle" if color == "blue" else "circle"
-        objs.append(kandinskyShape(color=color, shape=shape, size=so,
-                                   x=maxx, y=miny + (i + 1) * dx, line_width=-1, solid=True))
-
+        objs.append(kandinskyShape(color=color, shape=shape, size=so*random.uniform(0.8, 1.2),
+                                   x=positions[i][0], y=positions[i][1], line_width=-1, solid=True))
     return objs
 
 
@@ -1188,60 +1155,60 @@ def symmetry_pattern(so, dtype):
                                        x=0.5 + x_shift, y=ys[i], line_width=-1, solid=True))
     return objs
 
-
-def gen_patterns(pattern_name, dtype):
-    so = 0.1
-    overlap_patterns = []
-    if pattern_name == "proximity_red_triangle":
-        g = lambda so, truth: proximity_red_triangle(so, dtype)
-    elif pattern_name == "proximity_one_shape":
-        g = lambda so, truth: proximity_one_shape(so, dtype)
-    elif pattern_name == "similarity_triangle_circle":
-        g = lambda so, truth: similarity_two_colors(so, dtype)
-    elif pattern_name == "fixed_number":
-        g = lambda so, truth: generate_random_clustered_circles(so, dtype)
-    elif pattern_name == "similarity_two_pairs":
-        g = lambda so, truth: similarity_two_pairs(so, dtype)
-    elif pattern_name == "gestalt_triangle":
-        g = lambda so, truth: closure_classic_triangle(so, dtype)
-    elif pattern_name == "closure_square_red_yellow":
-        g = lambda so, truth: closure_square_red_yellow(so, dtype)
-    elif pattern_name == "closure_four_squares":
-        g = lambda so, truth: closure_four_squares(so, dtype)
-    elif pattern_name == "gestalt_triangle_and_noise":
-        g = lambda so, truth: closure_classic_triangle_and_noise(so, dtype)
-    elif pattern_name == "gestalt_square":
-        g = lambda so, truth: closure_classic_square(so, dtype)
-    elif pattern_name == "gestalt_circle":
-        g = lambda so, truth: closure_classic_circle(so, dtype)
-    elif pattern_name == "tri_group":
-        so = 0.1
-        g = lambda so, truth: closure_big_triangle(so, dtype)
-    elif pattern_name == "square_group":
-        so = 0.1
-        g = lambda so, truth: closure_big_square(so, dtype)
-    elif pattern_name == "triangle_square":
-        so = 0.1
-        g = lambda so, truth: closure_big_square(so, dtype) + closure_big_triangle(so, dtype)
-    elif pattern_name == "continuity_one_splits_two":
-        g = lambda so, truth: continuity_one_splits_n(so, dtype, n=2)
-    elif pattern_name == "continuity_one_splits_three":
-        g = lambda so, truth: continuity_one_splits_n(so, dtype, n=3)
-    elif pattern_name == "symmetry_pattern":
-        g = lambda so, truth: symmetry_pattern(so, dtype)
-
-    else:
-        raise ValueError
-    kf = g(so, dtype)
-    t = 0
-    tt = 0
-    max_try = 1000
-    if pattern_name not in overlap_patterns:
-        while (KandinskyUniverse.overlaps(kf) or KandinskyUniverse.overflow(kf)) and (t < max_try):
-            kf = g(so, dtype)
-            if tt > 10:
-                tt = 0
-                so = so * 0.90
-            tt = tt + 1
-            t = t + 1
-    return kf
+# def gen_patterns(pattern_name, dtype):
+#     so = 0.1
+#     overlap_patterns = []
+#     if pattern_name == "proximity_red_triangle":
+#         g = lambda so, truth: proximity_red_triangle(so, dtype)
+#     elif pattern_name == "proximity_one_shape":
+#         g = lambda so, truth: proximity_one_shape(so, dtype)
+#     elif pattern_name == "similarity_triangle_circle":
+#         g = lambda so, truth: similarity_two_colors(so, dtype)
+#     elif pattern_name == "fixed_number":
+#         g = lambda so, truth: generate_random_clustered_circles(so, dtype)
+#     elif pattern_name == "similarity_two_pairs":
+#         g = lambda so, truth: similarity_two_pairs(so, dtype)
+#     elif pattern_name == "gestalt_triangle":
+#         g = lambda so, truth: closure_classic_triangle(so, dtype)
+#     elif pattern_name == "closure_square_red_yellow":
+#         g = lambda so, truth: closure_square_red_yellow(so, dtype)
+#     elif pattern_name == "closure_four_squares":
+#         g = lambda so, truth: closure_four_squares(so, dtype)
+#     elif pattern_name == "gestalt_triangle_and_noise":
+#         g = lambda so, truth: closure_classic_triangle_and_noise(so, dtype)
+#     elif pattern_name == "gestalt_square":
+#         g = lambda so, truth: closure_classic_square(so, dtype)
+#     elif pattern_name == "gestalt_circle":
+#         g = lambda so, truth: closure_classic_circle(so, dtype)
+#     elif "tri_group" in pattern_name:
+#         pattern_size = pattern_name.split("_")[-1]
+#         so = 0.1
+#         g = lambda so, truth: closure_big_triangle(so, dtype, pattern_size)
+#     elif pattern_name == "square_group":
+#         so = 0.1
+#         g = lambda so, truth: closure_big_square(so, dtype)
+#     elif pattern_name == "triangle_square":
+#         so = 0.1
+#         g = lambda so, truth: closure_big_square(so, dtype) + closure_big_triangle(so, dtype)
+#     elif pattern_name == "continuity_one_splits_two":
+#         g = lambda so, truth: continuity_one_splits_n(so, dtype, n=2)
+#     elif pattern_name == "continuity_one_splits_three":
+#         g = lambda so, truth: continuity_one_splits_n(so, dtype, n=3)
+#     elif pattern_name == "symmetry_pattern":
+#         g = lambda so, truth: symmetry_pattern(so, dtype)
+#
+#     else:
+#         raise ValueError
+#     kf = g(so, dtype)
+#     t = 0
+#     tt = 0
+#     max_try = 1000
+#     if pattern_name not in overlap_patterns:
+#         while (KandinskyUniverse.overlaps(kf) or KandinskyUniverse.overflow(kf)) and (t < max_try):
+#             kf = g(so, dtype)
+#             if tt > 10:
+#                 tt = 0
+#                 so = so * 0.90
+#             tt = tt + 1
+#             t = t + 1
+#     return kf

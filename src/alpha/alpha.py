@@ -366,6 +366,7 @@ def alpha(args, groups, mode):
 
 
 def alpha_object(args, all_matrix, mode):
+
     obj_num = 1
     lang = init_ilp(args, obj_num)
     lang.reset_lang(g_num=1, level="object")

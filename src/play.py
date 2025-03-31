@@ -34,6 +34,8 @@ def init_io_folders(args, data_folder):
 
 def main():
     # load exp arguments
+
+
     args = args_utils.get_args()
     args.step_counter = 0
     args.total_step = 8
@@ -49,7 +51,7 @@ def main():
     # perception.test_fms(args, data_loader)
 
     for task_id, (train_data, test_data, principle) in enumerate(data_loader):
-        if task_id != 0:
+        if task_id != 1:
             continue
         args.output_file_prefix = config.models / f"t{task_id}_"
         imgs_train = train_data["img"]
@@ -64,7 +66,7 @@ def main():
         # Test Patterns, statistic the accuracy
         check_results = check_clause(args, lang_obj, lang_group, rules, imgs_test, principle[0])
         # convert to natural language
-        natural_rules = llama_call.convert_to_final_clauses(args, rules, check_results, principle[0], task_id)
+        # natural_rules = llama_call.convert_to_final_clauses(args, rules, check_results, principle[0], task_id)
 
     return
 

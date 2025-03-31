@@ -71,6 +71,9 @@ def get_args():
     parser.add_argument("--fm_th", type=float, default=1.5)
     parser.add_argument("--valid_rule_th", type=float, default=0.8)
     parser.add_argument("--run_principle", type=str, default="closure")
+    parser.add_argument("--line_min_size", type=int, default=6)
+    # parser.add_argument("--run_principle", type=str, default="closure")
+
 
 
     args = parser.parse_args()

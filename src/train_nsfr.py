@@ -10,6 +10,7 @@ from src.alpha import alpha
 from src.reasoning import reason
 from src.alpha.fol.logic import InvAtom
 
+
 def load_bk(args, bk_shapes):
     # load background knowledge
     bk = []
@@ -64,7 +65,7 @@ def load_lang(args, mode, level):
             lang.predicates = lang_data["preds"]
             lang.consts = lang_data["consts"]
             lang.atoms = lang_data["atoms"]
-            inv_atoms = [atom for atom in lang.atoms if  isinstance(atom, InvAtom)]
+            inv_atoms = [atom for atom in lang.atoms if isinstance(atom, InvAtom)]
             lang.attrs = lang_data["attrs"]
             lang.all_groups = lang_data["all_groups"]
             # lang.llm_clauses = lang_data["llm_clauses"]
@@ -90,10 +91,14 @@ def load_lang(args, mode, level):
 
 def train_clauses(args, groups):
     args.step_counter += 1
+    if groups["group_pos"] is None or groups["group_neg"] is None:
+        return None , None, []
+
     lang_pos_object = load_lang(args, "positive", "object")
     lang_pos_group = load_lang(args, "positive", "group")
-    lang_neg_object = load_lang(args, "negative","object")
-    lang_neg_group = load_lang(args, "negative","group")
+    lang_neg_object = load_lang(args, "negative", "object")
+    lang_neg_group = load_lang(args, "negative", "group")
+
     if lang_pos_object is None:
         lang_pos_object = alpha.alpha_object(args, groups["group_pos"], "positive")
     if lang_pos_group is None:

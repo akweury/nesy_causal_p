@@ -267,11 +267,11 @@ def genShapeOnShape(args):
 
 
 def get_task_names(principle):
-    if principle == "good_figure":
-        task_names = ["good_figure_two_groups",
-                      "good_figure_three_groups",
-                      "good_figure_always_three"]
-    elif principle == "proximity":
+    # if principle == "good_figure":
+    #     task_names = ["good_figure_two_groups",
+    #                   "good_figure_three_groups",
+    #                   "good_figure_always_three"]
+    if principle == "proximity":
         task_names = [
             "proximity_red_triangle"
         ]
@@ -282,24 +282,99 @@ def get_task_names(principle):
         ]
     # elif principle == "similarity_color":
     #     task_names = ["similarity_two_pairs"]
-    elif principle == "closure":
+    elif principle == "position_closure":
         task_names = [
-            # "gestalt_triangle_and_noise",
-            # "closure_square_red_yellow",
-            # "closure_four_squares",
-            # "gestalt_triangle",
-            # "tri_group",
-            # "square_group",
-            "triangle_square"
+            "tri_group_s",
+            "tri_group_m",
+            "tri_group_l",
+            "square_group_s",
+            "square_group_m",
+            "square_group_l",
+            "triangle_square_s",
+            "triangle_square_m",
+            "triangle_square_l"
         ]
-    elif principle == "continuity":
-        task_names = ["continuity_one_splits_two",
-                      "continuity_one_splits_three"]
+    elif principle == "feature_closure":
+        task_names = [
+            "gestalt_triangle_and_noise",
+            "closure_square_red_yellow",
+            "closure_four_squares",
+            "gestalt_triangle",
+        ]
+    # elif principle == "continuity":
+    #     task_names = ["continuity_one_splits_two",
+    #                   "continuity_one_splits_three"]
     elif principle == "symmetry":
         task_names = ["symmetry_pattern"]
     else:
         raise ValueError
     return task_names
+
+
+from kandinsky_generator.gestalt_patterns import *
+
+
+def gen_patterns(pattern_name, dtype):
+    so = 0.1
+    overlap_patterns = []
+    if pattern_name == "proximity_red_triangle":
+        g = lambda so, truth: proximity_red_triangle(so, dtype)
+    elif pattern_name == "proximity_one_shape":
+        g = lambda so, truth: proximity_one_shape(so, dtype)
+    elif pattern_name == "similarity_triangle_circle":
+        g = lambda so, truth: similarity_two_colors(so, dtype)
+    elif pattern_name == "fixed_number":
+        g = lambda so, truth: generate_random_clustered_circles(so, dtype)
+    elif pattern_name == "similarity_two_pairs":
+        g = lambda so, truth: similarity_two_pairs(so, dtype)
+    elif pattern_name == "gestalt_triangle":
+        g = lambda so, truth: closure_classic_triangle(so, dtype)
+    elif pattern_name == "closure_square_red_yellow":
+        g = lambda so, truth: closure_square_red_yellow(so, dtype)
+    elif pattern_name == "closure_four_squares":
+        g = lambda so, truth: closure_four_squares(so, dtype)
+    elif pattern_name == "gestalt_triangle_and_noise":
+        g = lambda so, truth: closure_classic_triangle_and_noise(so, dtype)
+    elif pattern_name == "gestalt_square":
+        g = lambda so, truth: closure_classic_square(so, dtype)
+    elif pattern_name == "gestalt_circle":
+        g = lambda so, truth: closure_classic_circle(so, dtype)
+    elif "tri_group" in pattern_name:
+        pattern_size = pattern_name.split("_")[-1]
+        so = 0.1
+        g = lambda so, truth: closure_big_triangle(so, dtype, pattern_size)
+    elif "square_group" in pattern_name:
+        pattern_size = pattern_name.split("_")[-1]
+        so = 0.1
+        g = lambda so, truth: closure_big_square(so, dtype, pattern_size)
+    elif "triangle_square" in pattern_name:
+        pattern_size = pattern_name.split("_")[-1]
+        so = 0.1
+        g = lambda so, truth: closure_big_square(so, dtype, pattern_size
+                                                 ) + closure_big_triangle(so, dtype,
+                                                                          pattern_size)
+    elif pattern_name == "continuity_one_splits_two":
+        g = lambda so, truth: continuity_one_splits_n(so, dtype, n=2)
+    elif pattern_name == "continuity_one_splits_three":
+        g = lambda so, truth: continuity_one_splits_n(so, dtype, n=3)
+    elif pattern_name == "symmetry_pattern":
+        g = lambda so, truth: symmetry_pattern(so, dtype)
+
+    else:
+        raise ValueError
+    kf = g(so, dtype)
+    t = 0
+    tt = 0
+    max_try = 1000
+    if pattern_name not in overlap_patterns:
+        while (KandinskyUniverse.overlaps(kf) or KandinskyUniverse.overflow(kf)) and (t < max_try):
+            kf = g(so, dtype)
+            if tt > 10:
+                tt = 0
+                so = so * 0.90
+            tt = tt + 1
+            t = t + 1
+    return kf
 
 
 def gen_and_save(path, width, mode):
@@ -317,7 +392,7 @@ def gen_and_save(path, width, mode):
             kfs = []
             for dtype in [True, False]:
                 for example_i in range(example_num):
-                    kfs.append(gestalt_patterns.gen_patterns(task_name, dtype))  # pattern generation
+                    kfs.append(gen_patterns(task_name, dtype))  # pattern generation
             tensors = []
             images = []
             for kf in kfs:

@@ -126,7 +126,7 @@ def generate_clusters(th, min_cluster_center_distance=0.2):
         r = random.uniform(0, max_cluster_spread)
         for _ in range(num_points):
             # Each coordinate offset is chosen uniformly from [-r, r]
-            offset = np.array([random.uniform(-r*0.5, r*0.5), random.uniform(-r*0.5, r*0.5)])
+            offset = np.array([random.uniform(-r * 0.5, r * 0.5), random.uniform(-r * 0.5, r * 0.5)])
             point = center + offset
             # Clamp the point (as a precaution) to the safe region [th, 1-th]
             point[0] = min(max(point[0], th), 1 - th)
@@ -168,12 +168,14 @@ def generate_points(center, radius, n, min_distance):
 def euclidean_distance(anchor, existing):
     return math.sqrt((anchor[0] - existing[0]) ** 2 + (anchor[1] - existing[1]) ** 2)
 
+
 def generate_random_anchor(existing_anchors, cluster_dist=0.1, x_min=0.4, x_max=0.7, y_min=0.4, y_max=0.7):
     # Increased to ensure clear separation
     while True:
         anchor = [random.uniform(x_min, x_max), random.uniform(y_min, y_max)]
         if all(euclidean_distance(anchor, existing) > cluster_dist for existing in existing_anchors):
             return anchor
+
 
 def get_feature_square_positions(anchor, clu_size):
     positions = []
@@ -244,5 +246,30 @@ def get_triangle_positions(obj_quantity, x, y):
     dyi = (ye - ys) / n
     for i in range(n - 1):
         positions.append([xs + (i + 1) * dxi, ys + (i + 1) * dyi])
+
+    return positions
+
+
+def get_square_positions(obj_quantity, x, y):
+    r = 0.4 - min(abs(0.5 - x), abs(0.5 - y))
+
+    m = {"s": 8, "m": 16, "l": 24}.get(obj_quantity, 2)
+    r = {"s": r * 0.8, "m": r, "l": r * 1.2}.get(obj_quantity, 2)
+
+    minx = x - r / 2
+    maxx = x + r / 2
+    miny = y - r / 2
+    maxy = y + r / 2
+    n = int(m / 4)
+    dx = r / n
+
+    positions = []
+    for i in range(n + 1):
+        positions.append([minx + i * dx, miny])
+        positions.append([minx + i * dx, maxy])
+
+    for i in range(n - 1):
+        positions.append([minx, miny + (i + 1) * dx])
+        positions.append([maxx, miny + (i + 1) * dx])
 
     return positions

@@ -334,8 +334,7 @@ def algo_closure_position(args, input_groups):
 
     points = np.stack([group.pos for group in input_groups])
     assigned_mask = np.zeros(len(points), dtype=bool)
-
-    all_lines, line_points = find_lines_from_points(points.tolist(), tolerance=0.001, min_points=6)
+    all_lines, line_points = find_lines_from_points(points.tolist(), tolerance=0.001, min_points=args.line_min_size)
     all_arcs = algo_find_arcs(points)
 
     # hull_imgs = []
@@ -397,7 +396,7 @@ def algo_closure(args, segments, obj_groups):
     return labels, group_labels
 
 
-def cluster_by_closure(args, segments, obj_groups):
+def cluster_by_feature_closure(args, segments, obj_groups):
     all_labels = []
     group_lengths = []
 
@@ -405,16 +404,26 @@ def cluster_by_closure(args, segments, obj_groups):
     for example_i in range(len(segments)):
         segment = segments[example_i]
         obj_group = obj_groups[example_i]
-        if len(obj_group) > 5:
-            labels, shapes = algo_closure_position(args, obj_group)
-        else:
-            labels, shapes = algo_closure(args, segment, obj_group)
-
+        labels, shapes = algo_closure(args, segment, obj_group)
         group_lengths.append(len(labels.unique()))
         all_labels.append(labels)
         all_shapes.append(shapes)
 
     return all_labels, all_shapes
+def cluster_by_position_closure(args, obj_groups):
+    all_labels = []
+    group_lengths = []
+
+    all_shapes = []
+    for example_i in range(len(obj_groups)):
+        obj_group = obj_groups[example_i]
+        labels, shapes = algo_closure_position(args, obj_group)
+        group_lengths.append(len(labels.unique()))
+        all_labels.append(labels)
+        all_shapes.append(shapes)
+
+    return all_labels, all_shapes
+
 
 
 def cluster_by_symmetry(ocms):

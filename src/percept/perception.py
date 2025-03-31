@@ -375,7 +375,7 @@ def load_bk(args, bk_shapes):
 def percept_segments(args, imgs, dtype):
     seg_file = str(args.output_file_prefix) + f"_segments_{dtype}.pt"
     if os.path.exists(seg_file):
-        segments = torch.load(seg_file)
+        segments = torch.load(seg_file, map_location=torch.device(args.device))
     else:
         segments = []
         for img in imgs:
@@ -454,8 +454,8 @@ def ocm_encoder(args, segments, dtype):
         example_seg = segments[example_i]
         example_groups = []
         if os.path.exists(ocm_file) and os.path.exists(group_file):
-            example_ocm = torch.load(ocm_file).to(args.device)
-            example_groups = torch.load(group_file)
+            example_ocm = torch.load(ocm_file, map_location=torch.device(args.device))
+            example_groups = torch.load(group_file, map_location=torch.device(args.device))
         else:
             example_ocm = []
             for segment in example_seg:
@@ -766,8 +766,13 @@ def percept_gestalt_groups(args, ocms, segments, obj_groups, dtype, principle):
         if labels_simi_color is not None:
             gcm = gestalt_group.gcm_encoder(labels_simi_color, ocms, all_shapes=shape_similarity)
             return gcm, labels_simi_color, None
-    elif principle == "closure":
-        labels_closure, shape_closure = gestalt_algs.cluster_by_closure(args, segments, obj_groups)
+    elif principle == "position_closure":
+        labels_closure, shape_closure = gestalt_algs.cluster_by_position_closure(args, obj_groups)
+        if labels_closure is not None:
+            gcm = gestalt_group.gcm_encoder(labels_closure, ocms, shape_closure)
+            return gcm, labels_closure, shape_closure
+    elif principle == "feature_closure":
+        labels_closure, shape_closure = gestalt_algs.cluster_by_feature_closure(args, segments, obj_groups)
         if labels_closure is not None:
             gcm = gestalt_group.gcm_encoder(labels_closure, ocms, shape_closure)
             return gcm, labels_closure, shape_closure
