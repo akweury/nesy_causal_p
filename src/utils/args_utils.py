@@ -72,6 +72,8 @@ def get_args():
     parser.add_argument("--valid_rule_th", type=float, default=0.8)
     parser.add_argument("--run_principle", type=str, default="closure")
     parser.add_argument("--line_min_size", type=int, default=6)
+    parser.add_argument("--task_id", type=int, default=0)
+
     # parser.add_argument("--run_principle", type=str, default="closure")
 
 

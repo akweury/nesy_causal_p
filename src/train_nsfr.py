@@ -57,7 +57,7 @@ def load_data(args, image_path):
 def load_lang(args, mode, level):
     lang_file = str(args.output_file_prefix) + f'learned_lang_{mode}_{level}.pkl'
     if os.path.exists(lang_file):
-        lang_data = torch.load(lang_file)
+        lang_data = torch.load(lang_file, weights_only=False)
         if lang_data is not None:
             lang = alpha.init_ilp(args, lang_data["g_num"])
             lang.reset_lang(lang_data["g_num"], level)

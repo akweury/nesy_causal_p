@@ -454,8 +454,8 @@ def ocm_encoder(args, segments, dtype):
         example_seg = segments[example_i]
         example_groups = []
         if os.path.exists(ocm_file) and os.path.exists(group_file):
-            example_ocm = torch.load(ocm_file, map_location=torch.device(args.device))
-            example_groups = torch.load(group_file, map_location=torch.device(args.device))
+            example_ocm = torch.load(ocm_file, map_location=torch.device(args.device), weights_only=False)
+            example_groups = torch.load(group_file, map_location=torch.device(args.device), weights_only=False)
         else:
             example_ocm = []
             for segment in example_seg:
@@ -465,7 +465,7 @@ def ocm_encoder(args, segments, dtype):
                 ocm = gestalt_group.group2tensor(group)
                 example_ocm.append(ocm)
                 example_groups.append(group)
-            example_ocm = torch.stack(example_ocm)
+            example_ocm = torch.stack(example_ocm).to(args.device)
             torch.save(example_ocm, ocm_file)
             torch.save(example_groups, group_file)
         ocms.append(example_ocm)

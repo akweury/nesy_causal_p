@@ -375,11 +375,11 @@ class VFColor(nn.Module):
             return 0.0
         if type(color_gt) == int:
             print("")
-        color_rgb_gt = torch.tensor(bk.color_matplotlib[color_gt.name]).reshape(1, 3)
         color_indices = [bk.prop_idx_dict["rgb_r"], bk.prop_idx_dict["rgb_g"], bk.prop_idx_dict["rgb_b"]]
         color_data = (group_data[:, color_indices] * 255).to(torch.uint8)
+        color_rgb_gt = torch.tensor(bk.color_matplotlib[color_gt.name]).reshape(1, 3).to(color_data.device)
         is_color = float((color_rgb_gt == color_data).all())
-        if is_color==1:
+        if is_color == 1:
             print("")
         return is_color
 
@@ -495,9 +495,9 @@ class VFGSymmetryColor(nn.Module):
     def forward(self, args_dict):
         group_data = args_dict[bk.var_dtype_group_objs]["ocms"]
 
-        sorted_ocms =[]
+        sorted_ocms = []
         for g_ocm in group_data:
-            indices = torch.sort(g_ocm[:,1])[1]
+            indices = torch.sort(g_ocm[:, 1])[1]
             sorted_ocms.append(g_ocm[indices])
         sorted_ocms = torch.stack(sorted_ocms, dim=0)
         if len(group_data) != 2:
@@ -521,9 +521,9 @@ class VFGSymmetryShape(nn.Module):
 
     def forward(self, args_dict):
         group_data = args_dict[bk.var_dtype_group_objs]["ocms"]
-        sorted_ocms =[]
+        sorted_ocms = []
         for g_ocm in group_data:
-            indices = torch.sort(g_ocm[:,1])[1]
+            indices = torch.sort(g_ocm[:, 1])[1]
             sorted_ocms.append(g_ocm[indices])
         sorted_ocms = torch.stack(sorted_ocms, dim=0)
 

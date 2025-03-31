@@ -332,7 +332,7 @@ def algo_closure_position(args, input_groups):
     labels = torch.zeros(len(input_groups))
     group_labels = []
 
-    points = np.stack([group.pos for group in input_groups])
+    points = np.stack([group.pos.to("cpu") for group in input_groups])
     assigned_mask = np.zeros(len(points), dtype=bool)
     all_lines, line_points = find_lines_from_points(points.tolist(), tolerance=0.001, min_points=args.line_min_size)
     all_arcs = algo_find_arcs(points)
