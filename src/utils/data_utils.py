@@ -459,7 +459,7 @@ def crop_img(img, crop_data=None):
 def merge_segments(segments):
     merged_img = segments[0].clone()
     for segment in segments:
-        mask = (segment != torch.tensor(bk.color_matplotlib["lightgray"])).any(dim=-1)
+        mask = (segment != torch.tensor(bk.color_matplotlib["lightgray"]).to(segment.device)).any(dim=-1)
         merged_img[mask] = segment[mask]
     return merged_img
 

@@ -1068,14 +1068,20 @@ def closure_big_square(so, dtype, pattern_size):
     x = 0.4 + random.random() * 0.2
     y = 0.4 + random.random() * 0.2
     positions = get_square_positions(pattern_size, x, y)
+    so = {"s": so * 1.2, "m": so, "l": so * 0.8}.get(pattern_size, so)
 
+    obj_num = len(positions)
+
+    if not dtype and random.random() < 0.5:
+        positions = get_random_positions(obj_num, so)
+        dtype = True
     for i in range(len(positions)):
         color = random.choice(["blue", "red"])
         if dtype:
             shape = "circle" if color == "blue" else "triangle"
         else:
             shape = "triangle" if color == "blue" else "circle"
-        objs.append(kandinskyShape(color=color, shape=shape, size=so*random.uniform(0.8, 1.2),
+        objs.append(kandinskyShape(color=color, shape=shape, size=so*random.uniform(0.8, 1),
                                    x=positions[i][0], y=positions[i][1], line_width=-1, solid=True))
     return objs
 

@@ -38,7 +38,8 @@ docker run -it --gpus all -v /home/ml-jsha/nesy_causal_p:/app --rm grm:latest
   
 python3 -m debugpy --wait-for-client --listen 0.0.0.0:5678 play.py
 
-python -m src.play --device 10
+python -m src.play --device 10 --task_id 6 --line_min_size 3
+python -m src.play --device 10 --task_id 3
  
 ```
 

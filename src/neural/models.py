@@ -342,66 +342,212 @@ def circular_var(values):
     return torch.var(values)
 
 
-def extract_line_curves(angles, seg_var_th=1e-7, seg_diff_th=2 * 1e-3, angle_var_th=1e+2):
-    circular_variances = calculate_circular_variance(angles, wrap_size=10)
-    circular_difference = calculate_circular_difference(angles, wrap_size=10)
-    # chart_utils.van(circular_variances, file_name=config.output/"circular_image.png")
+#####################################################
 
-    all_seg = []
-    check_list = []
-    current_seg = []
+def smooth_angles(angles, window_size=11):
+    """
+    Smooth a 1-D tensor of angles in degrees using a circular moving average.
+    Angles are converted to radians for averaging, then converted back.
+    """
+    if window_size % 2 == 0:
+        window_size += 1
+    pad = window_size // 2
+    angles_padded = torch.cat([angles[-pad:], angles, angles[:pad]])
+    smoothed = []
+    for i in range(pad, len(angles) + pad):
+        window = angles_padded[i - pad: i + pad + 1]
+        window_rad = window * math.pi / 180.0
+        sin_mean = torch.sin(window_rad).mean()
+        cos_mean = torch.cos(window_rad).mean()
+        mean_angle_rad = torch.atan2(sin_mean, cos_mean)
+        mean_angle_deg = (mean_angle_rad * 180.0 / math.pi) % 360
+        smoothed.append(mean_angle_deg)
+    return torch.tensor(smoothed, dtype=angles.dtype)
+
+
+def circular_diff(angles):
+    """
+    Compute differences between consecutive angles (in degrees) with wrap-around.
+    The result is in the interval [-180, 180].
+    """
+    diff = torch.diff(angles)
+    diff = (diff + 180) % 360 - 180
+    return diff
+
+
+def circular_mean(angles):
+    """
+    Compute the circular mean (in degrees) of a tensor of angles.
+    """
+    angles_rad = angles * math.pi / 180.0
+    sin_mean = torch.sin(angles_rad).mean()
+    cos_mean = torch.cos(angles_rad).mean()
+    mean_angle_rad = torch.atan2(sin_mean, cos_mean)
+    return (mean_angle_rad * 180.0 / math.pi) % 360
+
+
+def extract_line_curves(
+        angles,
+        angle_var_th=1.0,  # Maximum allowed variance of the smoothed angles (for a line)
+        smoothing_window=11,  # Window size for smoothing the angles
+        window_size_var=11,  # Window size for computing local derivative variance
+        var_threshold=0.15,  # Local derivative variance threshold (deg^2) to consider a region as stable
+        deriv_mean_thresh=1.0,  # Mean derivative threshold (deg) for labeling a segment as a line
+        min_seg_length=10,  # Minimum number of indices for a segment to be considered valid
+        border_trim=5,  # Number of indices to trim from each end of a segment to reduce edge effects
+        max_gap=3,  # only break the segment if the gap is larger than that value
+):
+    """
+    Segment the outline (given as a 1-D tensor of tangent angles in degrees) into regions
+    corresponding to "line" or "circle" segments.
+
+    The segmentation parameters are now arguments so you can fine-tune them.
+    The function expects to find exactly two segments labeled as "line" for your application.
+    """
+    # Step 1: Smooth the input angles.
+    smoothed_angles = smooth_angles(angles, window_size=smoothing_window)
+
+    # Step 2: Compute the circular derivative.
+    d_angles = circular_diff(smoothed_angles)
+
+    # Step 3: Compute local variance of the derivative using a sliding window.
+    pad = window_size_var // 2
+    padded_d = torch.cat([d_angles[-pad:], d_angles, d_angles[:pad]])
+    local_var = []
+    for i in range(pad, len(d_angles) + pad):
+        window = padded_d[i - pad: i + pad + 1]
+        local_var.append(window.var(unbiased=False))
+    local_var = torch.tensor(local_var, dtype=d_angles.dtype)
+
+    segments = []
     segment_labels = []
-    future_step = 5
-    # Find the first index where the smoothed trend stops decreasing
-    for i in range(len(angles) - future_step):
-        if circular_variances[i] < 0.05:
-            current_seg.append(i)
-            check_list.append(i)
+    current_seg = []
+
+    # Step 4: Segment the derivative signal based on local variance.
+    # We also split segments if there is a gap in consecutive indices.
+    for i, lv in enumerate(local_var):
+        if lv < var_threshold:
+            # If a gap is detected, process the current segment first.
+            if current_seg and (i - current_seg[-1] > max_gap):
+                if len(current_seg) >= min_seg_length:
+                    # Trim the candidate segment edges.
+                    seg_indices = current_seg[border_trim:-border_trim] if len(
+                        current_seg) > 2 * border_trim else current_seg
+                    deriv_vals = torch.tensor([d_angles[j] for j in seg_indices])
+                    mean_deriv = abs(circular_mean(deriv_vals))
+                    seg_angles = smoothed_angles[seg_indices]
+                    angle_variance = seg_angles.var(unbiased=False)
+                    if mean_deriv < deriv_mean_thresh and angle_variance < angle_var_th:
+                        segment_labels.append("line")
+                    else:
+                        segment_labels.append("circle")
+                    segments.append(current_seg)
+                current_seg = [i]
+            else:
+                current_seg.append(i)
         else:
-            if len(current_seg) > 20:
-                seg_var = torch.var(circular_variances[current_seg[10:-10]])
-                seg_diff = torch.var(circular_difference[current_seg[10:-10]])
-                seg_angle_var = circular_var(angles[current_seg[10:-10]])
-                if seg_angle_var < angle_var_th:
+            # End of a candidate segment.
+            if current_seg and len(current_seg) >= min_seg_length:
+                seg_indices = current_seg[border_trim:-border_trim] if len(
+                    current_seg) > 2 * border_trim else current_seg
+                deriv_vals = torch.tensor([d_angles[j] for j in seg_indices])
+                mean_deriv = abs(circular_mean(deriv_vals))
+                seg_angles = smoothed_angles[seg_indices]
+                angle_variance = seg_angles.var(unbiased=False)
+                if mean_deriv < deriv_mean_thresh and angle_variance < angle_var_th:
                     segment_labels.append("line")
                 else:
                     segment_labels.append("circle")
-                all_seg.append(current_seg)
+                segments.append(current_seg)
             current_seg = []
-            current_seg.append(i)
-            check_list.append(i)
-    if len(current_seg) > 20:
-        all_seg.append(current_seg)
-        seg_var = torch.var(circular_variances[current_seg[10:-10]])
-        seg_diff = torch.var(circular_difference[current_seg[10:-10]])
-        seg_angle_var = circular_var(angles[current_seg[10:-10]])
-        if seg_angle_var < angle_var_th:
+
+    # Process any remaining segment.
+    if current_seg and len(current_seg) >= min_seg_length:
+        seg_indices = current_seg[border_trim:-border_trim] if len(current_seg) > 2 * border_trim else current_seg
+        deriv_vals = torch.tensor([d_angles[j] for j in seg_indices])
+        mean_deriv = abs(circular_mean(deriv_vals))
+        seg_angles = smoothed_angles[seg_indices]
+        angle_variance = seg_angles.var(unbiased=False)
+        if mean_deriv < deriv_mean_thresh and angle_variance < angle_var_th:
             segment_labels.append("line")
         else:
             segment_labels.append("circle")
-    # Visual Segments
-    # chart_utils.visual_multiple_segments(all_seg, angles)
+        segments.append(current_seg)
 
-    all_seg = [seg for seg in all_seg if len(seg) > 10]
-    is_head_tail_connect = (all_seg[0][0] < 10) and (all_seg[-1][-1] > len(angles) - 10)
-    is_head_line = circular_var(angles[middle_values(all_seg[0])]) < 10
-    is_tail_line = circular_var(angles[middle_values(all_seg[-1])]) < 10
-    is_head_circle = circular_var(angles[middle_values(all_seg[0])]) > 10
-    is_tail_circle = circular_var(angles[middle_values(all_seg[-1])]) > 10
-    if is_head_tail_connect:
-        if is_head_line and is_tail_line or is_head_circle and is_tail_circle:
-            merged_seg = all_seg[-1] + all_seg[0]
-            if len(all_seg[-1]) > len(all_seg[0]):
-                label = segment_labels[-1]
-            else:
-                label = segment_labels[0]
-            all_seg = all_seg[1:-1] + [merged_seg]
-            segment_labels = segment_labels[1:-1] + [label]
-    if segment_labels.count("line") != 2:
-        chart_utils.show_line_chart(circular_variances, file_name=config.output / "circular_image.png")
-        chart_utils.show_line_chart(angles, file_name=config.output / "circular_difference_image.png")
-        raise ValueError
-    return all_seg, segment_labels
+    # Step 5: (Optional) Merge head and tail segments if the contour is closed.
+    if segments and (segments[0][0] < border_trim and segments[-1][-1] > len(angles) - border_trim):
+        if segment_labels[0] == segment_labels[-1]:
+            merged_seg = segments[-1] + segments[0]
+            segments = segments[1:-1] + [merged_seg]
+            segment_labels = segment_labels[1:-1] + [segment_labels[0]]
+
+    # Final check: Expect exactly two segments labeled as "line".
+    if segment_labels.count("line") != 2 or segment_labels.count("circle") != 1:
+        #     For debugging purposes, optionally display diagnostic plots.
+        chart_utils.show_line_chart(local_var, file_name=config.output / "local_variance.png")
+        chart_utils.show_line_chart(angles, file_name=config.output / "angles.png")
+
+        print(
+            f"Found {segment_labels.count('line')} line(s), {segment_labels.count('circle')} circle(s).")
+        detect_correct = False
+    else:
+        detect_correct = True
+    return segments, segment_labels, detect_correct
+
+
+#####################################################
+
+# def extract_line_curves(angles, angle_var_th=1e+2):
+#     circular_variances = calculate_circular_variance(angles, wrap_size=10)
+#
+#     all_seg = []
+#     check_list = []
+#     current_seg = []
+#     segment_labels = []
+#     future_step = 5
+#     # Find the first index where the smoothed trend stops decreasing
+#     for i in range(len(angles) - future_step):
+#         if circular_variances[i] < 0.05:
+#             current_seg.append(i)
+#             check_list.append(i)
+#         else:
+#             if len(current_seg) > 20:
+#                 seg_angle_var = circular_var(angles[current_seg[10:-10]])
+#                 if seg_angle_var < angle_var_th:
+#                     segment_labels.append("line")
+#                 else:
+#                     segment_labels.append("circle")
+#                 all_seg.append(current_seg)
+#             current_seg = []
+#             current_seg.append(i)
+#             check_list.append(i)
+#     if len(current_seg) > 20:
+#         all_seg.append(current_seg)
+#         seg_angle_var = circular_var(angles[current_seg[10:-10]])
+#         if seg_angle_var < angle_var_th:
+#             segment_labels.append("line")
+#         else:
+#             segment_labels.append("circle")
+#     all_seg = [seg for seg in all_seg if len(seg) > 10]
+#     is_head_tail_connect = (all_seg[0][0] < 10) and (all_seg[-1][-1] > len(angles) - 10)
+#     is_head_line = circular_var(angles[middle_values(all_seg[0])]) < 10
+#     is_tail_line = circular_var(angles[middle_values(all_seg[-1])]) < 10
+#     is_head_circle = circular_var(angles[middle_values(all_seg[0])]) > 10
+#     is_tail_circle = circular_var(angles[middle_values(all_seg[-1])]) > 10
+#     if is_head_tail_connect:
+#         if is_head_line and is_tail_line or is_head_circle and is_tail_circle:
+#             merged_seg = all_seg[-1] + all_seg[0]
+#             if len(all_seg[-1]) > len(all_seg[0]):
+#                 label = segment_labels[-1]
+#             else:
+#                 label = segment_labels[0]
+#             all_seg = all_seg[1:-1] + [merged_seg]
+#             segment_labels = segment_labels[1:-1] + [label]
+#     if segment_labels.count("line") != 2:
+#         chart_utils.show_line_chart(circular_variances, file_name=config.output / "circular_image.png")
+#         chart_utils.show_line_chart(angles, file_name=config.output / "circular_difference_image.png")
+#         raise ValueError
+#     return all_seg, segment_labels
 
 
 def find_contours(input_array):
@@ -446,7 +592,7 @@ def calculate_dvs(contour_points):
 
 
 def get_contour_segs(img):
-    bw_img = np.array(Image.fromarray(img.numpy().astype('uint8')).convert("L"))
+    bw_img = np.array(Image.fromarray(img.to("cpu").numpy().astype('uint8')).convert("L"))
     bw_img[bw_img == 211] = 0
     bw_img[bw_img > 0] = 1
 
@@ -459,7 +605,21 @@ def get_contour_segs(img):
     all_labels = []
     # find out the segments, and their labels (curve or line)
     for dv in dvs:
-        segments, seg_labels = extract_line_curves(dv, seg_var_th=1e-7)
+        angle_var_th = 5.0  # Maximum allowed variance of the smoothed angles (for a line)
+        smoothing_window = 11  # Window size for smoothing the angles
+        window_size_var = 11  # Window size for computing local derivative variance
+        var_threshold = 0.5  # Local derivative variance threshold (deg^2) to consider a region as stable
+        deriv_mean_thresh = 10000  # Mean derivative threshold (deg) for labeling a segment as a line
+        min_seg_length = 5  # Minimum number of indices for a segment to be considered valid
+        border_trim = 5  # Number of indices to trim from each end of a segment to reduce edge effects
+        max_gap = 10
+        segments, seg_labels, detect_res = extract_line_curves(dv, angle_var_th,
+                                                   smoothing_window,
+                                                   window_size_var, var_threshold,
+                                                   deriv_mean_thresh, min_seg_length,
+                                                   border_trim, max_gap)
+        if not detect_res:
+            print("")
         all_segments.append(segments)
         all_labels.append(seg_labels)
 
@@ -698,7 +858,7 @@ def draw_arc_on_image(image, center, radius, start_angle, end_angle, color=(255,
 
 
 def euclidean_distance(p1, p2):
-    return np.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2)
+    return torch.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2)
 
 
 def cluster_lines_by_proximity(lines, eps=10):
@@ -1277,7 +1437,7 @@ def find_position_closure_squares(lines, line_group_data, labels, group_labels, 
 
     # Check every combination of four lines
     for combo in itertools.combinations(range(n), 4):
-        clusters = []          # Will store representative points for vertices
+        clusters = []  # Will store representative points for vertices
         line_assignments = []  # List of tuples: (cluster_index of endpoint1, cluster_index of endpoint2)
         valid = True
 
@@ -1324,7 +1484,6 @@ def find_position_closure_squares(lines, line_group_data, labels, group_labels, 
                 labels[point_index] = group_id
 
     return labels, group_labels
-
 
 
 def find_circles(curves, circle_data, labels):
