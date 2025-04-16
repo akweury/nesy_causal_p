@@ -259,6 +259,7 @@ def show_line_chart(data, title="", file_name=None):
         plt.savefig(file_name, format="pdf")
     plt.show()
 
+
 def visual_multiple_segments(labels, data):
     # Visualize the segments
     plt.figure(figsize=(10, 6))
@@ -344,3 +345,27 @@ def add_lines_to_img(img, lines):
         cv2.line(img, (current_start[0], current_start[1]), (current_end[0], current_end[1]), (255, 0, 0), 2)
     van(img)
     return img
+
+
+def draw_lines(line_segments, title="lines"):
+    # Example list of numpy arrays (each array is a set of points forming a line segment)
+    # Replace these with your actual data.
+
+    # Create a blank 1024x1024 image with 3 channels (color image)
+    img = np.zeros((1024, 1024, 3), dtype=np.uint8)
+
+    # Optionally set a seed for reproducible random colors
+    np.random.seed(42)
+
+    for segment in line_segments:
+        # Ensure the points are integers
+        pts = segment.astype(np.int32)
+        # Reshape the array to the shape OpenCV expects: (-1, 1, 2)
+        pts = pts.reshape((-1, 1, 2))
+        # Generate a random color in BGR format
+        color = tuple(np.random.randint(0, 256, size=3).tolist())
+        # Draw the polyline (set isClosed=False for open segments)
+        cv2.polylines(img, [pts], isClosed=False, color=color, thickness=2)
+
+    # Save the image as a PNG file
+    cv2.imwrite(str(config.output / f"{title}.png"), img)

@@ -81,7 +81,7 @@ def get_args():
     args = parser.parse_args()
     args.logger = init_logger()
     if args.device != "cpu":
-        args.device = int(args.device)
+        args.device = f"cuda:{int(args.device)}"
     args.log_file = log_utils.create_log_file(args.logger, config.output / "logs")
     args.lark_path = str(config.lark_file)
 

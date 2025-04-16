@@ -10,6 +10,7 @@ from src.utils import chart_utils
 from src.memory import recall
 from src.neural import models, merge_lines, percept_lines
 from src.reasoning import reason
+from src.neural import line_arc_detector
 
 
 def proximity_distance(u, v):
@@ -57,7 +58,7 @@ def algo_proximity(ocm, th):
     obj_n = ocm.shape[0]
     labels = torch.full((obj_n,), 0, dtype=torch.int32)
     visited = torch.zeros(obj_n, dtype=torch.bool)
-    current_label = 0
+    current_label = 1
     for i in range(obj_n):
         if not visited[i]:
             # BFS or DFS
@@ -134,20 +135,22 @@ def algo_symmetry(points, tol=0.05):
     return True, labels
 
 
-def cluster_by_proximity(ocms):
+def cluster_by_proximity(ocms, th=0.2):
     """ Function to compute distance or difference
     Return:
         labels 1 x O np array
         groups 1 x O x P np array
     """
-
-    th = 0.2
     preds = []
     shapes = []
     for ocm in ocms:
         pred = algo_proximity(ocm[:, :2], th)
-        preds.append(pred)
-        shapes.append(len(np.unique(pred)) * [0])
+        if len(pred.unique()) < len(pred):
+            preds.append(pred)
+            shapes.append(len(np.unique(pred)) * [0])
+        else:
+            preds.append([])
+            shapes.append([])
     return preds, th, shapes
 
 
@@ -362,30 +365,41 @@ def find_center_of_segment(segment):
     return (int(center_x), int(center_y))
 
 
-def algo_closure(args, segments, obj_groups):
+def algo_closure(args, la_detector, input_imgs, obj_groups):
     """ group input groups to output groups, which are high level groups """
     # each object assigned a group id as its label
     bk_shapes = bk.load_bk_fms(args, bk.bk_shapes)
     args.obj_fm_size = 32
-    img = data_utils.merge_segments(segments)
-
-    labels = torch.zeros(len(segments))
-    label_counter = 1
-    group_label = 0
-    contour_points, contour_segs, contour_seg_labels = models.get_contour_segs(img)
+    all_segments = []
+    all_labels = []
+    all_segment_indices = []
+    for input_img in input_imgs:
+        bw_img = line_arc_detector.rgb2bw(input_img)
+        contour, tangent_angles, curvature = line_arc_detector.test_bw_img(bw_img)
+        segments, segment_labels = la_detector(torch.from_numpy(tangent_angles), args.device)
+        merged_segments, merged_labels = line_arc_detector.post_process_segments(segments, segment_labels, curvature)
+        segmented_contours = [contour[np.array(segment)] for segment in merged_segments]
+        all_segment_indices += merged_segments
+        all_segments += segmented_contours
+        all_labels += merged_labels
 
     obj_centers = [group.pos for group in obj_groups]
     # base on the segments, what shape can you recall by considering closure principle
+    cir_segments = [all_segments[l_i] for l_i, label in enumerate(all_labels) if label == "circle"]
+    chart_utils.draw_lines(cir_segments, "circles")
     # find line groups
-    rectangle_lines = models.get_line_groups(contour_points, contour_segs, contour_seg_labels, img.shape[0])
-    triangle_lines = models.get_triangle_groups(contour_points, contour_segs, contour_seg_labels, img.shape[0])
-    curves = models.get_curves(contour_points, contour_segs, contour_seg_labels, img.shape[0])
+    line_segments = [all_segments[l_i] for l_i, label in enumerate(all_labels) if label == "line"]
+    chart_utils.draw_lines(line_segments, "lines")
+
+    rectangle_lines = models.get_line_groups(line_segments, input_imgs.shape[1])
+    triangle_lines = models.get_triangle_groups(all_segments, input_imgs.shape[1])
+    curves = models.get_curves(all_segments, all_segment_indices, all_labels, input_imgs.shape[1])
 
     # normed_similar_lines = []
     # for line in lines:
     #     normed_similar_lines.append([line[0], line[1].astype(np.float32) / 1024, line[2].astype(np.float32) / 1024])
 
-    obj_labels = torch.zeros(len(segments))
+    obj_labels = torch.zeros(len(obj_centers))
 
     group_labels = []
     # find polygons or circles
@@ -396,7 +410,7 @@ def algo_closure(args, segments, obj_groups):
     return labels, group_labels
 
 
-def cluster_by_feature_closure(args, segments, obj_groups):
+def cluster_by_feature_closure(args, la_detector, segments, obj_groups):
     all_labels = []
     group_lengths = []
 
@@ -404,12 +418,14 @@ def cluster_by_feature_closure(args, segments, obj_groups):
     for example_i in range(len(segments)):
         segment = segments[example_i]
         obj_group = obj_groups[example_i]
-        labels, shapes = algo_closure(args, segment, obj_group)
+        labels, shapes = algo_closure(args, la_detector, segment, obj_group)
         group_lengths.append(len(labels.unique()))
         all_labels.append(labels)
         all_shapes.append(shapes)
 
     return all_labels, all_shapes
+
+
 def cluster_by_position_closure(args, obj_groups):
     all_labels = []
     group_lengths = []
@@ -423,7 +439,6 @@ def cluster_by_position_closure(args, obj_groups):
         all_shapes.append(shapes)
 
     return all_labels, all_shapes
-
 
 
 def cluster_by_symmetry(ocms):

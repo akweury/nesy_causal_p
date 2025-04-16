@@ -654,18 +654,7 @@ def contour_to_direction_vector(contour):
         direction_vector.append((dx, dy))
     angles = direction_vectors_to_angles(np.array(direction_vector))
     smoothed_angles = smooth_directions_degrees(angles, window_size=10, sharpness_threshold=80)
-    # chart_utils.show_line_chart(smoothed_angles, file_name=config.output/ f"dv_angles_{10}_{80}.pdf")
 
-    # # Compute the direction vector
-    # dv_2 = []
-    # num_points = len(points)
-    # for i in range(num_points):
-    #     # Compute the difference between consecutive points
-    #     dx = points[(i + 20) % num_points][0] - points[i][0]  # Next point wraps around
-    #     dy = points[(i + 20) % num_points][1] - points[i][1]
-    #     dv_2.append((dx, dy))
-    # angles_2 = direction_vectors_to_angles(np.array(dv_2))
-    # chart_utils.show_line_chart(angles_2)
     return smoothed_angles
 
 

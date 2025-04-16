@@ -18,6 +18,7 @@ from src.percept import gestalt_group
 from src.neural import models
 from src.percept import gestalt_algs
 import config
+from src.neural import line_arc_detector
 
 
 # -----------------------------------------------------------------------------------
@@ -48,7 +49,8 @@ def find_segment_color(image: torch.Tensor) -> list:
     # Return the segment color as an RGB list.
     return unique_colors[0].tolist()
 
-def get_most_frequent_color(args,img):
+
+def get_most_frequent_color(args, img):
     assert img.ndim == 3
 
     # Find the most frequent color in the list
@@ -167,7 +169,6 @@ def find_best_matches(padded_image, dataset_flat, vertex_labels, shape_labels, t
     return matches
 
 
-
 def find_similar_patches(test_image, dataset_patches, vertex_labels, shape_labels, patch_size=32, threshold=1000):
     """
     Find patches in the test image that are similar to those in the dataset.
@@ -188,7 +189,7 @@ def find_similar_patches(test_image, dataset_patches, vertex_labels, shape_label
     # Crop the image to the valid area
     cropped_image, (x_offset, y_offset, _, _) = crop_to_valid_area(test_image, 0)
     # Pad the test image to handle boundary cases
-    padded_image= F.pad(cropped_image, (half_size, half_size, half_size, half_size), mode='constant', value=0)
+    padded_image = F.pad(cropped_image, (half_size, half_size, half_size, half_size), mode='constant', value=0)
     # padded_image = np.pad(cropped_image, ((half_size, half_size), (half_size, half_size)), mode='constant',
     #                       constant_values=0)
     # Pre-compute flattened dataset patches for faster distance computation
@@ -252,23 +253,18 @@ def extract_most_frequent_label_matches(matches):
 
 def percept_feature_groups(args, bk_shapes, segment):
     """ recall the memory features from the given segments """
-    feature_groups = []
     seg_color_rgb = find_segment_color(segment)
     seg_color = bk.color_dict_rgb2name[tuple(seg_color_rgb)]
-    # seg_color = get_most_frequent_color(args, segment.permute(2, 0, 1))
     # rgb segment to resized bw image
 
     # recall the memory
-    scores = []
-    recalled_fms_all = []
-    all_in_fms = []
-    # Example test image
     # Define the grayscale conversion weights
     weights = torch.tensor([0.2989, 0.5870, 0.1140], device=segment.device)
     # Convert to grayscale using the dot product
-    test_image = torch.tensordot(segment.float(), weights, dims=([-1], [0])).round().clamp(0,255).to(torch.uint8) # Shape: (1, H, W)
+    test_image = torch.tensordot(segment.float(), weights, dims=([-1], [0])).round().clamp(0, 255).to(
+        torch.uint8)  # Shape: (1, H, W)
 
-    # test_image = torch.tensor(Image.fromarray(segment.numpy().astype('uint8')).convert("L"))
+    # remove the gray background, set image to black-white image
     test_image[test_image == 211] = 0
     test_image[test_image > 0] = 1
     # Find similar patches
@@ -591,18 +587,12 @@ def fm_sum_channels(fm_all):
     return fm_sum
 
 
-def identify_fms(args, shape):
-    # calculate fms
-    k_size = args.k_size
-    fm_all = []
-    all_imgs = []
-
+def identify_fms(shape):
     # Load metadata
     metadata_path = config.kp_base_dataset / shape / "metadata.json"
     if not os.path.exists(str(metadata_path)):
         raise FileNotFoundError(f"Metadata file not found in {str(metadata_path)}")
     metadata = data_utils.load_json(metadata_path)
-
     patches = []
     labels = []
     patch_set = set()
@@ -628,23 +618,18 @@ def identify_fms(args, shape):
     contour_img = np.zeros((512, 512, 3), dtype=np.uint8)
     from src import bk
     for i in range(len(contour_points)):
-
         pos = contour_points[i]
         if i < 5:
             contour_img[pos[1], pos[0]] = [255, 0, 0]
         else:
             contour_img[pos[1], pos[0]] = [255, 255, 255]
     van(contour_img)
-
     direction_vector = torch.tensor(data_utils.contour_to_direction_vector(contour_points))
     return fm_all, direction_vector, labels
 
 
 def collect_fms(args):
     bk_shapes = bk.bk_shapes[1:]
-    args.step_counter += 1
-    args.logger.info(f"Step {args.step_counter}/{args.total_step}: "
-                     f"Collecting FMs for patterns {bk_shapes}.")
 
     for bk_shape in bk_shapes:
         args.save_path = config.output / bk_shape
@@ -655,13 +640,9 @@ def collect_fms(args):
         # fm identification
         fm_file = args.save_path / f'fms_patches_{args.k_size}.pt'
         if not os.path.exists(fm_file):
-            fms, contours, labels = identify_fms(args, bk_shape)
+            fms, contours, labels = identify_fms(bk_shape)
             fms_labels = {"fms": fms, "labels": labels, "contours": contours}
             torch.save(fms_labels, fm_file)
-        else:
-            fms_labels = torch.load(fm_file)
-            fms = fms_labels["fms"]
-            labels = fms_labels["labels"]
 
 
 def test_fms(args, data_loader):
@@ -743,7 +724,7 @@ def test_fms(args, data_loader):
         print(accuracy)
 
 
-def percept_gestalt_groups(args, ocms, segments, obj_groups, dtype, principle):
+def percept_gestalt_groups(args, la_detector, ocms, segments, obj_groups, dtype, principle):
     """
     return:
     gestalt principle: the gestalt principle that can perfect grouping inputs
@@ -752,7 +733,7 @@ def percept_gestalt_groups(args, ocms, segments, obj_groups, dtype, principle):
     other: either thresholds (proximity) or the grouping shape (closure)
     """
     if principle == "proximity":
-        labels_prox, ths, shape_proximity = gestalt_algs.cluster_by_proximity(ocms)
+        labels_prox, ths, shape_proximity = gestalt_algs.cluster_by_proximity(ocms, th=0.15)
         if labels_prox is not None:
             gcm = gestalt_group.gcm_encoder(labels_prox, ocms, all_shapes=shape_proximity)
             return gcm, labels_prox, ths
@@ -772,7 +753,7 @@ def percept_gestalt_groups(args, ocms, segments, obj_groups, dtype, principle):
             gcm = gestalt_group.gcm_encoder(labels_closure, ocms, shape_closure)
             return gcm, labels_closure, shape_closure
     elif principle == "feature_closure":
-        labels_closure, shape_closure = gestalt_algs.cluster_by_feature_closure(args, segments, obj_groups)
+        labels_closure, shape_closure = gestalt_algs.cluster_by_feature_closure(args, la_detector, segments, obj_groups)
         if labels_closure is not None:
             gcm = gestalt_group.gcm_encoder(labels_closure, ocms, shape_closure)
             return gcm, labels_closure, shape_closure
@@ -783,12 +764,17 @@ def percept_gestalt_groups(args, ocms, segments, obj_groups, dtype, principle):
         if labels_symmetry is not None:
             gcm = gestalt_group.gcm_encoder(labels_symmetry, ocms, shape_symmetry)
             return gcm, labels_symmetry, shape_symmetry
+    elif principle == "none":
+        labels = [torch.tensor(list(range(len(ocm)))) for ocm in ocms]
+        shapes = [torch.tensor([0]*len(ocm)) for ocm in ocms]
+        gcm = gestalt_group.gcm_encoder(labels, ocms, shapes)
+        return gcm, labels, shapes
+
+
     return None, None, None
 
 
 def test_od_accuracy(args, train_data):
-
-
     imgs = train_data["img"]
     labels = torch.cat((train_data["pos"], train_data["neg"]), dim=1)
     obj_indices = [bk.prop_idx_dict["shape_tri"], bk.prop_idx_dict["shape_sq"], bk.prop_idx_dict["shape_cir"]]
@@ -804,21 +790,22 @@ def test_od_accuracy(args, train_data):
     preds_pos = []
     for i in range(10):
         obj_num = len(ocm_pos[i])
-        indices = torch.sort(labels[0,i,:obj_num,0])[1]
-        gt = labels[0,i,:obj_num][indices][:,obj_indices]
-        pred_indices = torch.sort(ocm_pos[i][:,0])[1]
-        pred_obj =  ocm_pos[i][pred_indices][:, obj_indices]
+        indices = torch.sort(labels[0, i, :obj_num, 0])[1]
+        gt = labels[0, i, :obj_num][indices][:, obj_indices]
+        pred_indices = torch.sort(ocm_pos[i][:, 0])[1]
+        pred_obj = ocm_pos[i][pred_indices][:, obj_indices]
         preds_pos += torch.all(pred_obj == gt, dim=-1)
     preds_neg = []
     for i in range(10):
         obj_num = len(ocm_neg[i])
-        indices = torch.sort(labels[0,i+10,:obj_num,0])[1]
-        gt = labels[0,i+10,:obj_num][indices][:,obj_indices]
-        pred_indices = torch.sort(ocm_neg[i][:,0])[1]
-        pred_obj =  ocm_neg[i][pred_indices][:, obj_indices]
+        indices = torch.sort(labels[0, i + 10, :obj_num, 0])[1]
+        gt = labels[0, i + 10, :obj_num][indices][:, obj_indices]
+        pred_indices = torch.sort(ocm_neg[i][:, 0])[1]
+        pred_obj = ocm_neg[i][pred_indices][:, obj_indices]
         preds_neg += torch.all(pred_obj == gt, dim=-1)
-    acc = (sum(preds_neg) + sum(preds_pos))/(len(preds_neg) + len(preds_pos))
+    acc = (sum(preds_neg) + sum(preds_pos)) / (len(preds_neg) + len(preds_pos))
     print(acc)
+
 
 def cluster_by_principle(args, imgs, mode, prin):
     """ evaluate gestalt scores, decide grouping based on which strategy
@@ -841,9 +828,14 @@ def cluster_by_principle(args, imgs, mode, prin):
     ocm_pos, obj_g_pos = ocm_encoder(args, seg_pos, f"{mode}_pos")
     ocm_neg, obj_g_neg = ocm_encoder(args, seg_neg, f"{mode}_neg")
     # percept groups based on gestalt principles
-
-    group_pos, labels_pos, others_pos = percept_gestalt_groups(args, ocm_pos, seg_pos, obj_g_pos, "pos", prin)
-    group_neg, labels_neg, others_neg = percept_gestalt_groups(args, ocm_neg, seg_neg, obj_g_neg, "neg", prin)
+    if prin == "feature_closure":
+        la_detector = line_arc_detector.get_detector(args)
+    else:
+        la_detector = None
+    group_pos, labels_pos, others_pos = percept_gestalt_groups(args, la_detector, ocm_pos, seg_pos, obj_g_pos, "pos",
+                                                               prin)
+    group_neg, labels_neg, others_neg = percept_gestalt_groups(args, la_detector, ocm_neg, seg_neg, obj_g_neg, "neg",
+                                                               prin)
 
     groups = {
         "group_pos": group_pos, "label_pos": labels_pos,

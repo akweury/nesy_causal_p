@@ -86,6 +86,10 @@ alpha_mode = {
     'og': 4
 }
 
+#### output dirs
+mb_outlines = storage / "dataset" / "mb_outlines"
+os.makedirs(mb_outlines, exist_ok=True)
+
 ##############
 model_gestalt = models / "gestalt_rl"
 

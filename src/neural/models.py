@@ -591,6 +591,32 @@ def calculate_dvs(contour_points):
     return dvs, shifted_contour_points
 
 
+
+def get_contour_segs_neuro(img, la_detector):
+    bw_img = np.array(Image.fromarray(img.to("cpu").numpy().astype('uint8')).convert("L"))
+    bw_img[bw_img == 211] = 0
+    bw_img[bw_img > 0] = 1
+
+
+    # bw_img = resize_img(bw_img, 64)
+    contour_points = find_contours(bw_img)
+
+    dvs, contour_points = calculate_dvs(contour_points)
+
+    all_segments = []
+    all_labels = []
+    # find out the segments, and their labels (curve or line)
+    for dv in dvs:
+        # chart_utils.show_line_chart(dv, file_name=config.output / "angles.png")
+        segments, segment_labels = la_detector(dv.to(torch.float32))
+        all_segments.append(segments)
+        all_labels.append(segment_labels)
+
+    # visualize the segments on the original contour image
+    # chart_utils.visual_labeled_contours(bw_img.shape[0], all_segments, contour_points, all_labels)
+    return contour_points, all_segments, all_labels
+
+
 def get_contour_segs(img):
     bw_img = np.array(Image.fromarray(img.to("cpu").numpy().astype('uint8')).convert("L"))
     bw_img[bw_img == 211] = 0
@@ -606,13 +632,13 @@ def get_contour_segs(img):
     # find out the segments, and their labels (curve or line)
     for dv in dvs:
         angle_var_th = 5.0  # Maximum allowed variance of the smoothed angles (for a line)
-        smoothing_window = 11  # Window size for smoothing the angles
-        window_size_var = 11  # Window size for computing local derivative variance
-        var_threshold = 0.5  # Local derivative variance threshold (deg^2) to consider a region as stable
+        smoothing_window = 10  # Window size for smoothing the angles
+        window_size_var = 5  # Window size for computing local derivative variance
+        var_threshold = 1  # Local derivative variance threshold (deg^2) to consider a region as stable
         deriv_mean_thresh = 10000  # Mean derivative threshold (deg) for labeling a segment as a line
         min_seg_length = 5  # Minimum number of indices for a segment to be considered valid
         border_trim = 5  # Number of indices to trim from each end of a segment to reduce edge effects
-        max_gap = 10
+        max_gap = 15
         segments, seg_labels, detect_res = extract_line_curves(dv, angle_var_th,
                                                    smoothing_window,
                                                    window_size_var, var_threshold,
@@ -867,7 +893,7 @@ def cluster_lines_by_proximity(lines, eps=10):
     """
     endpoints = [(line[1] + line[2]) / 2 / 1024 for line in lines]
 
-    clustering = DBSCAN(eps=0.1, min_samples=1).fit(endpoints)
+    clustering = DBSCAN(eps=0.05, min_samples=1).fit(endpoints)
 
     clusters = defaultdict(list)
     for idx, label in enumerate(clustering.labels_):
@@ -1063,14 +1089,16 @@ def group_corners_to_triangles(labeled_clusters):
                     if dist < min_dist:
                         min_dist = dist
                         best_lb_label = lb_label
+        try:
+            grouped_rectangles.append({
+                'top': t_points,
+                'right_bottom': labeled_clusters[best_rb_label][1],
+                'left_bottom': labeled_clusters[best_lb_label][1],
 
-        grouped_rectangles.append({
-            'top': t_points,
-            'right_bottom': labeled_clusters[best_rb_label][1],
-            'left_bottom': labeled_clusters[best_lb_label][1],
-
-        })
-
+            })
+        except KeyError:
+            pass
+            # raise KeyError(f'Triangle {t_label} not found in {labeled_clusters}')
         used.update([t_label, best_rb_label, best_lb_label])
 
     return grouped_rectangles
@@ -1128,14 +1156,14 @@ def merge_triangles(lines):
 
 
 def get_curves(contour_points, contour_segs, contour_seg_labels, width):
-    cir_segs = []
-    for contour_i, contour_seg in enumerate(contour_segs):
-        for seg_i, seg in enumerate(contour_seg):
-            if contour_seg_labels[contour_i][seg_i] == "circle":
-                cir_segs.append(contour_points[contour_i][seg])
+    # cir_segs = []
+    # for contour_i, contour_seg in enumerate(contour_segs):
+    #     for seg_i, seg in enumerate(contour_seg):
+    #         if contour_seg_labels[contour_i][seg_i] == "circle":
+    #             cir_segs.append(contour_points[contour_i][seg])
 
     circles = []
-    for cir_seg in cir_segs:
+    for cir_seg in contour_points:
         cir_dict = calculate_arc_properties(cir_seg)
         circles.append(cir_dict)
 
@@ -1150,17 +1178,9 @@ def get_curves(contour_points, contour_segs, contour_seg_labels, width):
     return circles
 
 
-def get_line_groups(contour_points, contour_segs, contour_seg_labels, width):
-    line_segs = []
-    line_obj_indices = []
-    for contour_i, contour_seg in enumerate(contour_segs):
-        for seg_i, seg in enumerate(contour_seg):
-            if contour_seg_labels[contour_i][seg_i] == "line":
-                line_segs.append(contour_points[contour_i][seg])
-                line_obj_indices.append(contour_i)
-
+def get_line_groups(contour_points, width):
     lines = []
-    for line_seg in line_segs:
+    for line_seg in contour_points:
         slope, start, end = calculate_line_properties(line_seg)
         if np.abs(start[0] - end[0]) < 5:
             end[0] = start[0]
@@ -1192,17 +1212,10 @@ def get_line_groups(contour_points, contour_segs, contour_seg_labels, width):
     return rectangles
 
 
-def get_triangle_groups(contour_points, contour_segs, contour_seg_labels, width):
-    line_segs = []
-    line_obj_indices = []
-    for contour_i, contour_seg in enumerate(contour_segs):
-        for seg_i, seg in enumerate(contour_seg):
-            if contour_seg_labels[contour_i][seg_i] == "line":
-                line_segs.append(contour_points[contour_i][seg])
-                line_obj_indices.append(contour_i)
+def get_triangle_groups(contour_points, width):
 
     lines = []
-    for line_seg in line_segs:
+    for line_seg in contour_points:
         slope, start, end = calculate_line_properties(line_seg)
         if np.abs(start[0] - end[0]) < 5:
             end[0] = start[0]
@@ -2041,3 +2054,9 @@ def merge_cocircular_arcs(arcs, center_threshold=1e-2, radius_threshold=1e-2):
         arcs = unique_new
 
     return arcs
+
+
+
+
+def train_line_arc_detector():
+    pass

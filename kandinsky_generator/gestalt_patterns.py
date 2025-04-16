@@ -174,6 +174,111 @@ def proximity_red_triangle(so, dtype):
 
     return objs
 
+def none_close_by(so, dtype):
+
+    objs = []
+    cluster_dist = 0.2
+    neighbour_dist = 0.1
+    group_sizes = [2, 3]
+    group_nums = random.choice([2, 3])
+    group_anchors = [[0.2, 0.3], [0.9, 0.8], [0.8, 0.3]]
+
+    group_radius = 0.1
+    obj_num = random.choice([2, 5])
+    # positive
+    if dtype:
+        # two objects are close with each other
+        position_x1 = random.uniform(0.5,0.55)
+        position_y1 = random.uniform(0.5, 0.55)
+
+        color_1 = random.choice(bk.color_large_exclude_gray)
+        shape_1 = random.choice(bk.bk_shapes[1:])
+        objs.append(kandinskyShape(color=color_1, shape=shape_1, size=so, x=position_x1, y=position_y1, line_width=-1, solid=True))
+
+        position_x2 = position_x1 + random.uniform(0.05, 0.1)
+        position_y2 = position_y1+random.uniform(0.05,0.1)
+        color_2 = random.choice(bk.color_large_exclude_gray)
+        shape_2 = random.choice(bk.bk_shapes[1:])
+        objs.append(kandinskyShape(color=color_2, shape=shape_2, size=so, x=position_x2, y=position_y2, line_width=-1, solid=True))
+
+        for i in range(obj_num-2):
+            color= random.choice(bk.color_large_exclude_gray)
+            shape = random.choice(bk.bk_shapes[1:])
+            x = group_anchors[i][0]
+            y = group_anchors[i][1]
+            objs.append(kandinskyShape(color=color, shape=shape, size=so, x=x, y=y, line_width=-1, solid=True))
+
+    # negative
+    else:
+        # two objects are close with each other
+        position_x1 = random.uniform(0.5,0.55)
+        position_y1 = random.uniform(0.5, 0.55)
+
+        color_1 = random.choice(bk.color_large_exclude_gray)
+        shape_1 = random.choice(bk.bk_shapes[1:])
+        objs.append(kandinskyShape(color=color_1, shape=shape_1, size=so, x=position_x1, y=position_y1, line_width=-1,
+                                   solid=True))
+
+        position_x2 = position_x1 + random.uniform(0.1, 0.2)
+        position_y2 = position_y1 + random.uniform(0.1, 0.23)
+        color_2 = random.choice(bk.color_large_exclude_gray)
+        shape_2 = random.choice(bk.bk_shapes[1:])
+        objs.append(kandinskyShape(color=color_2, shape=shape_2, size=so, x=position_x2, y=position_y2, line_width=-1,
+                                   solid=True))
+
+        for i in range(obj_num - 2):
+            color = random.choice(bk.color_large_exclude_gray)
+            shape = random.choice(bk.bk_shapes[1:])
+            x = group_anchors[i][0]
+            y = group_anchors[i][1]
+            objs.append(kandinskyShape(color=color, shape=shape, size=so, x=x, y=y, line_width=-1, solid=True))
+    return objs
+
+def none_two_pairs(so, dtype):
+    objs = []
+    if dtype:
+        positions = [
+            [0.3, 0.3], [0.5, 0.4],
+            [0.6, 0.7], [0.8, 0.4]
+        ]
+        colors = random.sample(["red", "blue", "yellow"], 3)
+        shapes = random.sample(bk.bk_shapes[1:], 2)
+
+
+        for o_i in range(2):
+            objs.append(kandinskyShape(color=colors[0], shape=shapes[0], size=so,
+                                       x=positions[0 * 2 + o_i][0],
+                                       y=positions[0 * 2 + o_i][1], line_width=-1, solid=True))
+
+
+        objs.append(kandinskyShape(color=colors[1], shape=shapes[1], size=so,
+                                   x=positions[1 * 2 + 0][0],
+                                   y=positions[1 * 2 + 0][1], line_width=-1, solid=True))
+        objs.append(kandinskyShape(color=colors[2], shape=shapes[1], size=so,
+                                   x=positions[1 * 2 + 1][0],
+                                   y=positions[1 * 2 + 1][1], line_width=-1, solid=True))
+
+    else:
+        positions = [
+            [0.3, 0.3], [0.5, 0.4],
+            [0.6, 0.7], [0.8, 0.4]
+        ]
+        colors = random.sample(["red", "blue", "yellow"], 2)
+        shapes = random.sample(bk.bk_shapes[1:], 2)
+
+        for o_i in range(2):
+            objs.append(kandinskyShape(color=colors[0], shape=shapes[0], size=so,
+                                       x=positions[0 * 2 + o_i][0],
+                                       y=positions[0 * 2 + o_i][1], line_width=-1, solid=True))
+
+        objs.append(kandinskyShape(color=colors[1], shape=shapes[1], size=so,
+                                   x=positions[1 * 2 + 0][0],
+                                   y=positions[1 * 2 + 0][1], line_width=-1, solid=True))
+        objs.append(kandinskyShape(color=colors[1], shape=shapes[1], size=so,
+                                   x=positions[1 * 2 + 1][0],
+                                   y=positions[1 * 2 + 1][1], line_width=-1, solid=True))
+
+    return objs
 
 def proximity_one_shape(so, dtype):
     """

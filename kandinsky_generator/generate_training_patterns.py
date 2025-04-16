@@ -273,15 +273,17 @@ def get_task_names(principle):
     #                   "good_figure_always_three"]
     if principle == "proximity":
         task_names = [
-            "proximity_red_triangle"
+            # "proximity_red_triangle",
+            "close_by",
+
         ]
     elif principle == "similarity_shape":
         task_names = [
             "similarity_triangle_circle",
             "fixed_number"
         ]
-    # elif principle == "similarity_color":
-    #     task_names = ["similarity_two_pairs"]
+    elif principle == "similarity_color":
+        task_names = ["similarity_two_pairs"]
     elif principle == "position_closure":
         task_names = [
             "tri_group_s",
@@ -301,6 +303,12 @@ def get_task_names(principle):
             "closure_four_squares",
             "gestalt_triangle",
         ]
+    elif principle == "none":
+        task_names = [
+
+            # "two_pairs",
+            # "two_pairs_large"
+        ]
     # elif principle == "continuity":
     #     task_names = ["continuity_one_splits_two",
     #                   "continuity_one_splits_three"]
@@ -319,6 +327,10 @@ def gen_patterns(pattern_name, dtype):
     overlap_patterns = []
     if pattern_name == "proximity_red_triangle":
         g = lambda so, truth: proximity_red_triangle(so, dtype)
+    elif pattern_name == "two_pairs":
+        g = lambda so, truth: none_two_pairs(so, dtype)
+    elif pattern_name=="close_by":
+        g = lambda so, truth: none_close_by(so, dtype)
     elif pattern_name == "proximity_one_shape":
         g = lambda so, truth: proximity_one_shape(so, dtype)
     elif pattern_name == "similarity_triangle_circle":

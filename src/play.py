@@ -10,6 +10,11 @@ from src.percept import perception
 from src import llama_call
 from kandinsky_generator import generate_training_patterns
 
+import psutil
+import pynvml
+import time
+import threading
+
 
 def init_io_folders(args, data_folder):
     args.train_folder = data_folder / "train" / "task_true_pattern"
@@ -34,8 +39,6 @@ def init_io_folders(args, data_folder):
 
 def main():
     # load exp arguments
-
-
     args = args_utils.get_args()
     args.step_counter = 0
     args.total_step = 8
@@ -48,7 +51,6 @@ def main():
 
     # Identify feature maps
     perception.collect_fms(args)
-    # perception.test_fms(args, data_loader)
 
     for task_id, (train_data, test_data, principle) in enumerate(data_loader):
         if task_id != args.task_id:
@@ -56,19 +58,73 @@ def main():
         args.output_file_prefix = config.models / f"t{task_id}_"
         imgs_train = train_data["img"]
         imgs_test = test_data["img"]
-        # perception.test_od_accuracy(args, train_data)
         # grouping objects
         groups = perception.cluster_by_principle(args, imgs_train, "train", principle[0])
         # Learn Clauses from Training Data
+
+        # Start CPU memory monitoring
+        stop_monitor = monitor_cpu_memory()
+
         lang_obj, lang_group, rules = train_nsfr.train_clauses(args, groups)
+
+        # Stop monitoring and print peak memory
+        peak_cpu = stop_monitor()
+        print(f"Peak CPU memory during train_clauses: {peak_cpu:.2f} MB")
+
         for rule in rules:
-            print("Rule:", rule)
+            print("Rule:", rule["rule"])
         # Test Patterns, statistic the accuracy
         check_results = check_clause(args, lang_obj, lang_group, rules, imgs_test, principle[0])
         # convert to natural language
-        # natural_rules = llama_call.convert_to_final_clauses(args, rules, check_results, principle[0], task_id)
+        natural_rules = llama_call.convert_to_final_clauses(args, rules, check_results, principle[0], task_id)
 
     return
+
+
+def monitor_cpu_memory(interval=0.1):
+    process = psutil.Process()
+    peak_cpu = 0
+    running = True
+
+    def monitor():
+        nonlocal peak_cpu
+        while running:
+            mem = process.memory_info().rss / 1024 ** 2  # Convert to MB
+            peak_cpu = max(peak_cpu, mem)
+            time.sleep(interval)
+
+    thread = threading.Thread(target=monitor)
+    thread.start()
+
+    def stop():
+        nonlocal running
+        running = False
+        thread.join()
+        return peak_cpu
+
+    return stop
+def monitor_memory(interval=0.1):
+    process = psutil.Process()
+    pynvml.nvmlInit()
+    handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+
+    peak_cpu, peak_gpu = 0, 0
+    running = True
+
+    def monitor():
+        nonlocal peak_cpu, peak_gpu
+        while running:
+            cpu_mem = process.memory_info().rss / 1024 ** 2  # MB
+            gpu_mem = pynvml.nvmlDeviceGetMemoryInfo(handle).used / 1024 ** 2  # MB
+            peak_cpu = max(peak_cpu, cpu_mem)
+            peak_gpu = max(peak_gpu, gpu_mem)
+            time.sleep(interval)
+
+    thread = threading.Thread(target=monitor)
+    thread.start()
+    return thread, lambda: setattr(thread, 'running', False), lambda: (peak_cpu, peak_gpu), lambda: setattr(globals(),
+                                                                                                            'running',
+                                                                                                            False)
 
 
 if __name__ == '__main__':
