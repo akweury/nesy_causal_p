@@ -70,7 +70,7 @@ def generate_evenly_distributed_points(p, n, r):
 
 def generate_clusters(th, min_cluster_center_distance=0.2):
     """
-    Generate clusters of points in the unit square [0,1] x [0,1] with:
+    Generate clusters of points in the unit rectangle [0,1] x [0,1] with:
       - Each point at least 'th' away from the border.
       - Each cluster (1 to 3 points) generated around a cluster center.
       - Cluster centers are forced to be at least 'min_cluster_center_distance' apart,
@@ -177,7 +177,7 @@ def generate_random_anchor(existing_anchors, cluster_dist=0.1, x_min=0.4, x_max=
             return anchor
 
 
-def get_feature_square_positions(anchor, clu_size):
+def get_feature_rectangle_positions(anchor, clu_size):
     positions = []
 
     x = anchor[0]
@@ -187,7 +187,7 @@ def get_feature_square_positions(anchor, clu_size):
     xs = x
     ys = y - r
 
-    # correct the size to  the same area as an square
+    # correct the size to  the same area as an rectangle
     s = 0.7 * math.sqrt(3) * clu_size / 3
     dx = s * math.cos(math.radians(30))
     dy = s * math.cos(math.radians(30))
@@ -250,7 +250,7 @@ def get_triangle_positions(obj_quantity, x, y):
     return positions
 
 
-def get_square_positions(obj_quantity, x, y):
+def get_rectangle_positions(obj_quantity, x, y):
     r = 0.4 - min(abs(0.5 - x), abs(0.5 - y))
 
     m = {"s": 8, "m": 16, "l": 24}.get(obj_quantity, 2)

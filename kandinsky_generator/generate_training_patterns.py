@@ -180,6 +180,11 @@ u = KandinskyUniverse.SimpleUniverse()
 def kf2data(kf, width):
     data = []
     for obj in kf:
+        shape = obj.shape
+        if shape == "pac_man":
+            shape = "circle"
+        shape = bk.bk_shapes.index(shape)
+
         data.append({"x": obj.x,
                      "y": obj.y,
                      "size": obj.size,
@@ -187,7 +192,7 @@ def kf2data(kf, width):
                      "color_r": bk.color_matplotlib[obj.color][0],
                      "color_g": bk.color_matplotlib[obj.color][1],
                      "color_b": bk.color_matplotlib[obj.color][2],
-                     "shape": 0,
+                     "shape": shape,
                      "width": width
                      })
     return data
@@ -198,7 +203,7 @@ def kf2tensor(kf, max_length):
     for obj in kf:
         color = np.array((bk.color_matplotlib[obj.color])) / 255
         tri = 1 if obj.shape == "triangle" else 0
-        sq = 1 if obj.shape == "square" else 0
+        sq = 1 if obj.shape == "rectangle" else 0
         cir = 1 if obj.shape == "circle" else 0
         tensor = gestalt_group.gen_group_tensor(obj.x, obj.y, obj.size, 1,
                                                 color[0], color[1], color[2], tri, sq, cir)
@@ -211,59 +216,59 @@ def kf2tensor(kf, max_length):
     return tensors
 
 
-def genShapeOnShape(args):
-    shapes = bk.bk_shapes[1:]
-    width = 512
-    size_list = np.arange(0.05, 0.90, 0.05)
-    line_width_list = np.arange(0.05, 2, 0.05)
-    size_lw = [(x, y) for x in size_list for y in line_width_list]
-
-    for shape in shapes:
-        base_path = config.kp_base_dataset / f"{shape}"
-        os.makedirs(base_path, exist_ok=True)
-        png_num = len([f for f in Path(base_path).iterdir() if
-                       f.is_file() and f.suffix == '.png'])
-        n = len(size_lw) - png_num  # only generate insufficient ones
-        if n <= 0:
-            continue
-        shapeOnshapeObjects = ShapeOnShape(u, 20, 40)
-        for mode in ['train']:
-            if shape == "circle":
-                gen_fun = shapeOnshapeObjects.cir_only
-            elif shape == "triangle":
-                gen_fun = shapeOnshapeObjects.tri_only
-            elif shape == "square":
-                gen_fun = shapeOnshapeObjects.square_only
-            elif shape == "gestalt_triangle":
-                gen_fun = shapeOnshapeObjects.gestalt_triangle
-            elif shape == "diamond":
-                gen_fun = shapeOnshapeObjects.dia_only
-            elif shape == "trianglecircle":
-                gen_fun = shapeOnshapeObjects.triangle_circle
-            elif shape == "squarecircle":
-                gen_fun = shapeOnshapeObjects.square_circle
-            elif shape == "trianglesquare":
-                gen_fun = shapeOnshapeObjects.triangle_square
-            elif shape == "diamondcircle":
-                gen_fun = shapeOnshapeObjects.diamond_circle
-            elif shape == "trianglesquarecircle":
-                gen_fun = shapeOnshapeObjects.triangle_square_circle
-            elif shape == "trianglepartsquare":
-                gen_fun = shapeOnshapeObjects.triangle_partsquare
-            elif shape == "parttrianglepartsquare":
-                gen_fun = shapeOnshapeObjects.parttriangle_partsquare
-            elif shape == "random":
-                gen_fun = shapeOnshapeObjects.false_kf
-            else:
-                raise ValueError
-            for (i, kf) in enumerate(gen_fun(n, rule_style=False, size_lw=size_lw)):
-                image = KandinskyUniverse.kandinskyFigureAsImage(kf, width)
-                if image is None:
-                    continue
-                data = kf2data(kf, width)
-                with open(base_path / f"{shape}_{(png_num + i):06d}.json", 'w') as f:
-                    json.dump(data, f)
-                image.save(base_path / f"{shape}_{(png_num + i):06d}.png")
+# def genShapeOnShape(args):
+#     shapes = bk.bk_shapes[1:]
+#     width = 512
+#     size_list = np.arange(0.05, 0.90, 0.05)
+#     line_width_list = np.arange(0.05, 2, 0.05)
+#     size_lw = [(x, y) for x in size_list for y in line_width_list]
+#
+#     for shape in shapes:
+#         base_path = config.kp_base_dataset / f"{shape}"
+#         os.makedirs(base_path, exist_ok=True)
+#         png_num = len([f for f in Path(base_path).iterdir() if
+#                        f.is_file() and f.suffix == '.png'])
+#         n = len(size_lw) - png_num  # only generate insufficient ones
+#         if n <= 0:
+#             continue
+#         shapeOnshapeObjects = ShapeOnShape(u, 20, 40)
+#         for mode in ['train']:
+#             if shape == "circle":
+#                 gen_fun = shapeOnshapeObjects.cir_only
+#             elif shape == "triangle":
+#                 gen_fun = shapeOnshapeObjects.tri_only
+#             elif shape == "rectangle":
+#                 gen_fun = shapeOnshapeObjects.rectangle_only
+#             elif shape == "gestalt_triangle":
+#                 gen_fun = shapeOnshapeObjects.gestalt_triangle
+#             elif shape == "diamond":
+#                 gen_fun = shapeOnshapeObjects.dia_only
+#             elif shape == "trianglecircle":
+#                 gen_fun = shapeOnshapeObjects.triangle_circle
+#             elif shape == "rectanglecircle":
+#                 gen_fun = shapeOnshapeObjects.rectangle_circle
+#             elif shape == "trianglerectangle":
+#                 gen_fun = shapeOnshapeObjects.triangle_rectangle
+#             elif shape == "diamondcircle":
+#                 gen_fun = shapeOnshapeObjects.diamond_circle
+#             elif shape == "trianglerectanglecircle":
+#                 gen_fun = shapeOnshapeObjects.triangle_rectangle_circle
+#             elif shape == "trianglepartrectangle":
+#                 gen_fun = shapeOnshapeObjects.triangle_partrectangle
+#             elif shape == "parttrianglepartrectangle":
+#                 gen_fun = shapeOnshapeObjects.parttriangle_partrectangle
+#             elif shape == "random":
+#                 gen_fun = shapeOnshapeObjects.false_kf
+#             else:
+#                 raise ValueError
+#             for (i, kf) in enumerate(gen_fun(n, rule_style=False, size_lw=size_lw)):
+#                 image = KandinskyUniverse.kandinskyFigureAsImage(kf, width)
+#                 if image is None:
+#                     continue
+#                 data = kf2data(kf, width)
+#                 with open(base_path / f"{shape}_{(png_num + i):06d}.json", 'w') as f:
+#                     json.dump(data, f)
+#                 image.save(base_path / f"{shape}_{(png_num + i):06d}.png")
 
 
 def get_task_names(principle):
@@ -273,7 +278,7 @@ def get_task_names(principle):
     #                   "good_figure_always_three"]
     if principle == "proximity":
         task_names = [
-            # "proximity_red_triangle",
+            "proximity_red_triangle",
             "close_by",
 
         ]
@@ -289,24 +294,24 @@ def get_task_names(principle):
             "tri_group_s",
             "tri_group_m",
             "tri_group_l",
-            "square_group_s",
-            "square_group_m",
-            "square_group_l",
-            "triangle_square_s",
-            "triangle_square_m",
-            "triangle_square_l"
+            "rectangle_group_s",
+            "rectangle_group_m",
+            "rectangle_group_l",
+            "triangle_rectangle_s",
+            "triangle_rectangle_m",
+            "triangle_rectangle_l"
         ]
     elif principle == "feature_closure":
         task_names = [
             "gestalt_triangle_and_noise",
-            "closure_square_red_yellow",
-            "closure_four_squares",
+            "closure_rectangle_red_yellow",
+            "closure_four_rectangles",
             "gestalt_triangle",
         ]
     elif principle == "none":
         task_names = [
 
-            # "two_pairs",
+            "two_pairs",
             # "two_pairs_large"
         ]
     # elif principle == "continuity":
@@ -329,7 +334,7 @@ def gen_patterns(pattern_name, dtype):
         g = lambda so, truth: proximity_red_triangle(so, dtype)
     elif pattern_name == "two_pairs":
         g = lambda so, truth: none_two_pairs(so, dtype)
-    elif pattern_name=="close_by":
+    elif pattern_name == "close_by":
         g = lambda so, truth: none_close_by(so, dtype)
     elif pattern_name == "proximity_one_shape":
         g = lambda so, truth: proximity_one_shape(so, dtype)
@@ -341,28 +346,28 @@ def gen_patterns(pattern_name, dtype):
         g = lambda so, truth: similarity_two_pairs(so, dtype)
     elif pattern_name == "gestalt_triangle":
         g = lambda so, truth: closure_classic_triangle(so, dtype)
-    elif pattern_name == "closure_square_red_yellow":
-        g = lambda so, truth: closure_square_red_yellow(so, dtype)
-    elif pattern_name == "closure_four_squares":
-        g = lambda so, truth: closure_four_squares(so, dtype)
+    elif pattern_name == "closure_rectangle_red_yellow":
+        g = lambda so, truth: closure_rectangle_red_yellow(so, dtype)
+    elif pattern_name == "closure_four_rectangles":
+        g = lambda so, truth: closure_four_rectangles(so, dtype)
     elif pattern_name == "gestalt_triangle_and_noise":
         g = lambda so, truth: closure_classic_triangle_and_noise(so, dtype)
-    elif pattern_name == "gestalt_square":
-        g = lambda so, truth: closure_classic_square(so, dtype)
+    elif pattern_name == "gestalt_rectangle":
+        g = lambda so, truth: closure_classic_rectangle(so, dtype)
     elif pattern_name == "gestalt_circle":
         g = lambda so, truth: closure_classic_circle(so, dtype)
     elif "tri_group" in pattern_name:
         pattern_size = pattern_name.split("_")[-1]
         so = 0.1
         g = lambda so, truth: closure_big_triangle(so, dtype, pattern_size)
-    elif "square_group" in pattern_name:
+    elif "rectangle_group" in pattern_name:
         pattern_size = pattern_name.split("_")[-1]
         so = 0.1
-        g = lambda so, truth: closure_big_square(so, dtype, pattern_size)
-    elif "triangle_square" in pattern_name:
+        g = lambda so, truth: closure_big_rectangle(so, dtype, pattern_size)
+    elif "triangle_rectangle" in pattern_name:
         pattern_size = pattern_name.split("_")[-1]
         so = 0.1
-        g = lambda so, truth: closure_big_square(so, dtype, pattern_size
+        g = lambda so, truth: closure_big_rectangle(so, dtype, pattern_size
                                                  ) + closure_big_triangle(so, dtype,
                                                                           pattern_size)
     elif pattern_name == "continuity_one_splits_two":
@@ -400,32 +405,33 @@ def gen_and_save(path, width, mode):
 
         for t_i, task_name in enumerate(task_names):
             print("Generating training patterns for task {}".format(task_name))
-            img_data = []
+            img_data = {}
             kfs = []
             for dtype in [True, False]:
                 for example_i in range(example_num):
                     kfs.append(gen_patterns(task_name, dtype))  # pattern generation
             tensors = []
             images = []
-            for kf in kfs:
+            for kf_i, kf in enumerate(kfs):
                 img = np.asarray(KandinskyUniverse.kandinskyFigureAsImage(kf, width)).copy()
                 images.append(img)
-                img_data.append(kf2data(kf, width))
+                img_data[f"sep_{task_counter:06d}_{kf_i}"] = kf2data(kf, width)
                 tensors.append(kf2tensor(kf, max_length))
             tensors = torch.stack(tensors)
 
             # save image
-            os.makedirs(path / ".." / f"{mode}_all", exist_ok=True)
-            os.makedirs(path / ".." / f"{mode}_all" / f"{task_counter}_{task_name}", exist_ok=True)
+            # os.makedirs(path / ".." / f"{mode}", exist_ok=True)
+            os.makedirs(path / f"{task_counter}_{task_name}", exist_ok=True)
             for img_i in range(len(images)):
                 Image.fromarray(images[img_i]).save(
-                    path / ".." / f"{mode}_all" / f"{task_counter}_{task_name}" / f"sep_{task_counter:06d}_{img_i}.png")
-            images = chart_utils.hconcat_imgs(images)
-            Image.fromarray(images).save(path / f"{task_counter:06d}.png")
+                    path / f"{task_counter}_{task_name}" / f"sep_{task_counter:06d}_{img_i}.png")
+
+            # images = chart_utils.hconcat_imgs(images)
+            # Image.fromarray(images).save(path / f"{task_counter:06d}.png")
             # save data
             data = {"principle": principle,
                     "img_data": img_data}
-            with open(path / f"{task_counter:06d}.json", 'w') as f:
+            with open(path / f"{task_counter}_{task_name}" / f"gt.json", 'w') as f:
                 json.dump(data, f)
 
             # save tensor
@@ -456,7 +462,7 @@ def generate_triangle_image(image_size=512, min_size=20, max_size=200):
     Generate a single image with a random triangle.
 
     Args:
-        image_size (int): Size of the square image (image_size x image_size).
+        image_size (int): Size of the rectangle image (image_size x image_size).
         min_size (int): Minimum size of the triangle.
         max_size (int): Maximum size of the triangle.
 
@@ -498,7 +504,7 @@ def generate_circle_image(image_size=512, min_size=20, max_size=200, hollow=Fals
     Generate a single image with a random circle.
 
     Args:
-        image_size (int): Size of the square image (image_size x image_size).
+        image_size (int): Size of the rectangle image (image_size x image_size).
         min_size (int): Minimum size of the circle diameter.
         max_size (int): Maximum size of the circle diameter.
         hollow (bool): Whether the circle should be hollow (transparent inside).
@@ -541,16 +547,16 @@ def generate_circle_image(image_size=512, min_size=20, max_size=200, hollow=Fals
     return np.array(image), edge_points
 
 
-def generate_square_image(image_size=512, min_size=20, max_size=200, hollow=False, max_border_width=10):
+def generate_rectangle_image(image_size=512, min_size=20, max_size=200, hollow=False, max_border_width=10):
     """
-    Generate a single image with a random square.
+    Generate a single image with a random rectangle.
 
     Args:
-        image_size (int): Size of the square image (image_size x image_size).
-        min_size (int): Minimum size of the square.
-        max_size (int): Maximum size of the square.
-        hollow (bool): Whether the square should be hollow (transparent inside).
-        max_border_width (int): Maximum width of the border for hollow squares.
+        image_size (int): Size of the rectangle image (image_size x image_size).
+        min_size (int): Minimum size of the rectangle.
+        max_size (int): Maximum size of the rectangle.
+        hollow (bool): Whether the rectangle should be hollow (transparent inside).
+        max_border_width (int): Maximum width of the border for hollow rectangles.
 
     Returns:
         np.ndarray: Generated image as a NumPy array.
@@ -560,23 +566,23 @@ def generate_square_image(image_size=512, min_size=20, max_size=200, hollow=Fals
     image = Image.new("L", (image_size, image_size), color="black")
     draw = ImageDraw.Draw(image)
 
-    # Randomly determine the square size
-    square_size = np.random.randint(min_size, max_size)
+    # Randomly determine the rectangle size
+    rectangle_size = np.random.randint(min_size, max_size)
 
-    # Ensure the square is fully within bounds
-    margin = 50 + square_size // 2
+    # Ensure the rectangle is fully within bounds
+    margin = 50 + rectangle_size // 2
     x_center = np.random.randint(margin, image_size - margin)
     y_center = np.random.randint(margin, image_size - margin)
 
-    # Calculate the vertices of the square
+    # Calculate the vertices of the rectangle
     vertices = [
-        (x_center - square_size // 2, y_center - square_size // 2),  # Top-left vertex
-        (x_center + square_size // 2, y_center - square_size // 2),  # Top-right vertex
-        (x_center + square_size // 2, y_center + square_size // 2),  # Bottom-right vertex
-        (x_center - square_size // 2, y_center + square_size // 2)  # Bottom-left vertex
+        (x_center - rectangle_size // 2, y_center - rectangle_size // 2),  # Top-left vertex
+        (x_center + rectangle_size // 2, y_center - rectangle_size // 2),  # Top-right vertex
+        (x_center + rectangle_size // 2, y_center + rectangle_size // 2),  # Bottom-right vertex
+        (x_center - rectangle_size // 2, y_center + rectangle_size // 2)  # Bottom-left vertex
     ]
 
-    # Random color for the square
+    # Random color for the rectangle
     color = 255
 
     draw.rectangle((vertices[0], vertices[2]), fill=color)
@@ -615,7 +621,7 @@ def generate_dataset(shape, output_dir="triangle_dataset", num_images=1000, imag
     Args:
         output_dir (str): Directory to save the dataset.
         num_images (int): Number of images to generate.
-        image_size (int): Size of the square image (image_size x image_size).
+        image_size (int): Size of the rectangle image (image_size x image_size).
     """
     os.makedirs(output_dir, exist_ok=True)
     metadata = []
@@ -624,8 +630,8 @@ def generate_dataset(shape, output_dir="triangle_dataset", num_images=1000, imag
         # Generate a triangle image
         if shape == "triangle":
             image, vertices = generate_triangle_image(image_size=image_size)
-        elif shape == "square":
-            image, vertices = generate_square_image(image_size=image_size)
+        elif shape == "rectangle":
+            image, vertices = generate_rectangle_image(image_size=image_size)
         elif shape == "circle":
             image, vertices = generate_circle_image(image_size=image_size)
         else:
@@ -667,7 +673,7 @@ if __name__ == "__main__":
     num_images_to_generate = 1000
     image_size = 512
     # Parameters
-    for shape in ["circle", "square", "triangle"]:
+    for shape in ["circle", "rectangle", "triangle"]:
         output_directory = config.kp_base_dataset / shape
         # Generate dataset
         generate_dataset(shape, output_dir=output_directory, num_images=num_images_to_generate, image_size=image_size)

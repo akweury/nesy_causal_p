@@ -1,114 +1,104 @@
-# Created by MacBook Pro at 15.04.25
-
-
-import numpy as np
 import os
+import json
+import numpy as np
+import cv2
+from tqdm import tqdm
+import matplotlib.pyplot as plt
 import config
-from math import cos, sin, radians
-from itertools import combinations
+
+# 路径配置
+root_dir = config.kp_gestalt_dataset / "train"
+output_dir = config.mb_outlines
+os.makedirs(output_dir, exist_ok=True)
 
 
-def rotate(points, angle_deg):
-    angle_rad = np.deg2rad(angle_deg)
-    rot_matrix = np.array([
-        [np.cos(angle_rad), -np.sin(angle_rad)],
-        [np.sin(angle_rad), np.cos(angle_rad)]
-    ])
-    return points @ rot_matrix.T
+def extract_contour_points(image, num_points=100):
+    contours, _ = cv2.findContours(image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    if not contours:
+        return None
+    contour = max(contours, key=len).squeeze()
+    if contour.ndim != 2 or len(contour) < num_points:
+        return None
+    indices = np.linspace(0, len(contour) - 1, num=num_points, dtype=np.int32)
+    contour = contour[indices].astype(np.float32)
+    centroid = contour.mean(axis=0)
+    contour -= centroid
+    max_extent = np.linalg.norm(contour, axis=1).max()
+    contour = contour / (2 * max_extent + 1e-6)
+    return contour
 
 
-def normalize_shape(points):
-    """ Normalize shape to fit inside [-0.5, 0.5] x [-0.5, 0.5] box. """
-    centroid = np.mean(points, axis=0)
-    points -= centroid
-    max_extent = np.max(np.linalg.norm(points, axis=1))
-    return points / (2 * max_extent)  # normalize into radius-0.5
-
-def generate_triangle_points_in_unit_circle(step_deg=10):
-    angles = np.arange(0, 360, step_deg)
-    points = [(cos(radians(a)), sin(radians(a))) for a in angles]
-    return np.array(points)
-
-def is_valid_triangle(A, B, C, epsilon=0.8):
-    AB = B - A
-    AC = C - A
-    cross_product = np.abs(np.cross(AB, AC))
-    return cross_product > epsilon  # avoid collinear points
+def match_label(centroid_xy, gt_objects, img_width):
+    min_dist = float("inf")
+    matched_label = None
+    matched_idx = -1
+    for idx, obj in enumerate(gt_objects):
+        gt_x = obj["x"] * obj["width"]
+        gt_y = obj["y"] * obj["width"]
+        dist = np.sqrt((centroid_xy[0] - gt_x) ** 2 + (centroid_xy[1] - gt_y) ** 2)
+        if dist < min_dist:
+            min_dist = dist
+            matched_label = obj["shape"]
+            matched_idx = idx
+    return matched_label, matched_idx
 
 
-# Updated triangle generator
-def generate_all_triangles(min_angle=15, max_angle=150, step=1):
-    # Generate all valid triangles from points on unit circle
-    unit_circle_points = generate_triangle_points_in_unit_circle(step_deg=10)
-    indices = range(len(unit_circle_points))
-    triangle_set = []
+# 初始化每类 shape 的轮廓列表
+shape_data = {1: [], 2: [], 3: []}
 
-    for i, j, k in combinations(indices, 3):
-        A, B, C = unit_circle_points[i], unit_circle_points[j], unit_circle_points[k]
-        if is_valid_triangle(A, B, C):
-            triangle = np.array([A, B, C])
-            triangle_normalized = normalize_shape(triangle)
-            triangle_set.append(triangle_normalized)
-    return triangle_set
+# 处理每个 task
+task_dirs = [d for d in os.listdir(root_dir) if
+             os.path.isdir(os.path.join(root_dir, d)) and "closure" not in d and "gestalt" not in d]
 
-def generate_rectangle(aspect_ratio, angle_deg):
-    """Generate rectangle centered at origin with aspect ratio and rotation."""
-    w = np.sqrt(1 / aspect_ratio)
-    h = w * aspect_ratio
-    rect = np.array([
-        [-w / 2, -h / 2],
-        [w / 2, -h / 2],
-        [w / 2, h / 2],
-        [-w / 2, h / 2]
-    ])
-    rect_rotated = rotate(rect, angle_deg)
-    return normalize_shape(rect_rotated)
+for task in tqdm(task_dirs, desc="Processing tasks"):
+    task_path = os.path.join(root_dir, task)
+    gt_path = os.path.join(task_path, "gt.json")
+    if not os.path.exists(gt_path):
+        continue
+    with open(gt_path, "r") as f:
+        gt_data = json.load(f)
 
+    for img_name, obj_list in gt_data["img_data"].items():
+        img_path = os.path.join(task_path, img_name + ".png")
+        if not os.path.exists(img_path):
+            continue
 
-def generate_ellipse(aspect_ratio, angle_deg, num_points=100):
-    """Generate ellipse perimeter points."""
-    t = np.linspace(0, 2 * np.pi, num_points)
-    x = 0.5 * np.cos(t)
-    y = 0.5 * aspect_ratio * np.sin(t)
-    ellipse = np.stack([x, y], axis=1)
-    ellipse_rotated = rotate(ellipse, angle_deg)
-    return normalize_shape(ellipse_rotated)
+        img = cv2.imread(img_path)
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        binary = np.where(gray < 210, 255, 0).astype(np.uint8)
+        # plt.imshow(binary)
+        # plt.show()
+        num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(binary, connectivity=8)
+        matched = set()
+        for i in range(1, num_labels):  # skip background
+            x, y, w, h, area = stats[i]
+            if w == 0 or h == 0:
+                continue
+            patch = binary[y-2:y + h+2, x-2:x + w+2]
+            # plt.imshow(patch)
+            # plt.show()
+            contour = extract_contour_points(patch)
+            if contour is None:
+                continue
 
+            cx, cy = centroids[i]
+            label, gt_idx = match_label((cx, cy), obj_list, obj_list[0]["width"])
+            if label is not None and gt_idx not in matched:
+                matched.add(gt_idx)
+                shape_data[label].append(contour)
 
-# ---------- Unified Generator Function ----------
+# 保存
+for shape_id, contours in shape_data.items():
+    np.save(os.path.join(output_dir, f"shape_{shape_id}_contours.npy"), np.stack(contours))
 
-def generate_and_save_shapes(output_dir):
-    shape_data = {"triangle": generate_all_triangles(), "rectangle": [], "ellipse": []}
-    # Generate and save updated triangle shapes
-
-    # # Triangles
-    # for a in range(20, 160, 5):  # coarse first
-    #     for b in range(20, 160 - a, 5):
-    #         tri = generate_triangle(a, b)
-    #         if tri is not None:
-    #             shape_data["triangle"].append(tri)
-
-    # Rectangles
-    aspect_ratios = np.arange(0.2, 5.01, 0.05)
-    for r in aspect_ratios:
-        for angle in range(0, 180, 1):
-            rect = generate_rectangle(r, angle)
-            shape_data["rectangle"].append(rect)
-
-    # Ellipses
-    for r in aspect_ratios:
-        for angle in range(0, 180, 1):
-            ell = generate_ellipse(r, angle)
-            shape_data["ellipse"].append(ell)
-
-    # Save as .npy files
-    for shape, data in shape_data.items():
-        arr = np.array(data, dtype=object)
-        np.save(os.path.join(output_dir, f"{shape}_shapes.npy"), arr)
-
-    return shape_data
-
-
-# Generate and save shapes
-shape_data = generate_and_save_shapes(config.mb_outlines)
-shape_data.keys()  # Return keys to confirm shape types
+# 可视化前 10 个
+fig, axs = plt.subplots(1, 3, figsize=(16, 16))
+titles = ['Triangle', 'Rectangle', 'Ellipse']
+for i, ax in enumerate(axs):
+    ax.set_title(titles[i])
+    ax.axis('equal')
+    ax.axis('off')
+    for c in shape_data[i+1][:10]:
+        ax.plot(c[:, 0], c[:, 1])
+plt.tight_layout()
+plt.show()

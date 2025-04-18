@@ -14,8 +14,8 @@ import psutil
 import pynvml
 import time
 import threading
-
-
+from mbg import evaluate_object_detection
+from mbg.predictor import predictor
 def init_io_folders(args, data_folder):
     args.train_folder = data_folder / "train" / "task_true_pattern"
     os.makedirs(args.train_folder, exist_ok=True)
@@ -47,10 +47,13 @@ def main():
     # generate dataset
     generate_training_patterns.genGestaltTraining()
     # Import Generated Data
-    data_loader = dataset.load_dataset(args)
+    data_loader = dataset.load_dataset(args, mode="train")
+    # check the individual object detection
+    evaluate_object_detection.evaluate_symbolic_detection(data_loader, predictor)
+
 
     # Identify feature maps
-    perception.collect_fms(args)
+    # perception.collect_fms(args)
 
     for task_id, (train_data, test_data, principle) in enumerate(data_loader):
         if task_id != args.task_id:
@@ -103,6 +106,8 @@ def monitor_cpu_memory(interval=0.1):
         return peak_cpu
 
     return stop
+
+
 def monitor_memory(interval=0.1):
     process = psutil.Process()
     pynvml.nvmlInit()

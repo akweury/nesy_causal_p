@@ -19,3 +19,4 @@ stable_baselines3
 gym
 numpy
 debugpy
+faiss-cpu

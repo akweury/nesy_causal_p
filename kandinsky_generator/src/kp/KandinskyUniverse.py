@@ -28,29 +28,29 @@ class kandinskyShape:
 
 class SimpleUniverse:
     kandinsky_colors = ['red', 'yellow', 'blue']
-    kandinsky_shapes = ['square', 'circle', 'triangle']
+    kandinsky_shapes = ['rectangle', 'circle', 'triangle']
 
 
 # class ExtendedUniverse:
 #     # still have to add drawing functions below
 #     kandinsky_colors = ['red', 'yellow', 'blue', "green", "orange"]
-#     kandinsky_shapes = ['square', 'circle', 'triangle', "star"]
+#     kandinsky_shapes = ['rectangle', 'circle', 'triangle', "star"]
 
 
-def square(d, cx, cy, s, f):
+def rectangle(d, cx, cy, s, f):
     s = 0.6 * s
     d.rectangle(((cx - s / 2, cy - s / 2), (cx + s / 2, cy + s / 2)), fill=f)
 
 
 def circle(d, cx, cy, s, f):
-    # correct the size to  the same area as an square
+    # correct the size to  the same area as an rectangle
     s = 0.6 * math.sqrt(4 * s * s / math.pi)
     d.ellipse(((cx - s / 2, cy - s / 2), (cx + s / 2, cy + s / 2)), fill=f)
 
 
 def triangle(d, cx, cy, s, f):
     r = math.radians(30)
-    # correct the size to  the same area as an square
+    # correct the size to  the same area as an rectangle
     s = 0.6 * math.sqrt(4 * s * s / math.sqrt(3))
     s = math.sqrt(3) * s / 3
     dx = s * math.cos(r)
@@ -59,7 +59,7 @@ def triangle(d, cx, cy, s, f):
 
 
 def pac_man(d, cx, cy, s, f):
-    # correct the size to  the same area as an square
+    # correct the size to  the same area as an rectangle
     s = 0.6 * math.sqrt(4 * s * s / math.pi)
     d.ellipse(((cx - s / 2, cy - s / 2), (cx + s / 2, cy + s / 2)), fill=f)
 
@@ -273,11 +273,11 @@ def kandinskyFigureAsImage(shapes, width=600, subsampling=1):
 
                 cv2.fillConvexPoly(img, points, bk.color_matplotlib["lightgray"], 1)
 
-        elif s.shape == "square":
+        elif s.shape == "rectangle":
             size = 0.5 * 0.6 * w * s.size
             line_width = int(size * s.line_width)
 
-            # draw base square
+            # draw base rectangle
             xs = round(w * s.x - size)
             ys = round(w * s.y - size)
             xe = round(w * s.x + size)
@@ -285,7 +285,7 @@ def kandinskyFigureAsImage(shapes, width=600, subsampling=1):
             cv2.rectangle(img, (xs, ys), (xe, ye), rgbcolorvalue,
                           thickness=-1)
 
-            # draw top square
+            # draw top rectangle
             if not s.solid:
                 xs = round(w * s.x - size + line_width)
                 ys = round(w * s.y - size + line_width)
@@ -376,7 +376,7 @@ def kandinskyFigureAsAnnotation(shapes, image_id, category_ids, width=128,
                     1, 2 * size / b - eps_l, 2 * size / b - eps_h)
             area = 2 * (dx / 4) * (dy / 4)
 
-        if s.shape == "square":
+        if s.shape == "rectangle":
             size = 0.5 * 0.6 * w * s.size
             xs = round(w * s.x - size)
             ys = round(w * s.y - size)
@@ -451,7 +451,7 @@ def kandinskyFigureAsYOLOText(shapes, image_id, category_ids, width=128,
                     2 * size / b - eps_l, 2 * size / b - eps_h)
             area = 2 * (dx / 4) * (dy / 4)
 
-        if s.shape == "square":
+        if s.shape == "rectangle":
             size = 0.5 * 0.6 * w * s.size
             xs = round(w * s.x - size)
             ys = round(w * s.y - size)
@@ -521,7 +521,7 @@ def __kandinskyFigureAsYOLOText(shapes, image_id, category_ids, width=128,
                          str(s.y - dy) + " " + str(2 * size) + " " + str(2 * size)
             label_texts.append(label_text)
 
-        if s.shape == "square":
+        if s.shape == "rectangle":
             size = 0.5 * 0.6 * s.size
             xs = s.x - size
             ys = s.y - size
@@ -546,8 +546,8 @@ def overlaps(shapes, width=1024):
         d = ImageDraw.Draw(image)
         try:
             globals()[s.shape](d, w * s.x, w * s.y, w * s.size, 10)
-        except TypeError:
-            raise TypeError
+        except KeyError:
+            raise KeyError
         sumarray = sumarray + np.array(image)
 
     sumimage = Image.fromarray(sumarray)
@@ -566,4 +566,4 @@ def overflow(shapes):
 # matplotlib_colors.pop("black")
 # matplotlib_colors_list = [k for k, v in matplotlib_colors.items()]
 #
-kandinsky_shapes = ['square', 'circle', 'triangle']
+kandinsky_shapes = ['rectangle', 'circle', 'triangle']

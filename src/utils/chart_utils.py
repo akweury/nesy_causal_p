@@ -143,7 +143,7 @@ def visual_np_array(array, filename=None):
     plt.axis('off')
 
 
-def van(array, file_name=None):
+def van(array, file_name=config.output/"test.png"):
     plt.clf()  # Clear current figure
     if isinstance(array, list):
         hconcat = hconcat_imgs(array)

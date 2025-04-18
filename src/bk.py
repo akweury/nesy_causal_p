@@ -190,17 +190,17 @@ color_matplotlib.pop("darkgray")
 color_dict_rgb2name = {value: key for key, value in color_matplotlib.items()}
 color_large = [k for k, v in list(color_matplotlib.items())]
 color_large_exclude_gray = [item for item in color_large if item != "lightgray" and item != "lightgrey"]
-bk_shapes = ["none", "triangle", "square", "circle"]
+bk_shapes = ["none", "triangle", "rectangle", "circle"]
 
 gestalt_principles = [
-    # 'position_closure',
-    # "feature_closure",
+    'position_closure',
+    "feature_closure",
     "proximity",
-    # "symmetry",
-    # "similarity_shape",
-    # "similarity_color",
+    "symmetry",
+    "similarity_shape",
+    "similarity_color",
     # "continuity",
-    # "none",
+    "none",
 ]
 
 rule_logic_types = [
