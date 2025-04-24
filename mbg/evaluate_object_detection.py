@@ -2,14 +2,13 @@
 
 import numpy as np
 from tqdm import tqdm
+import torch
 
 import config
 from src import bk
 
-import torch
-
-from mbg.patch_set_model import PatchSetClassifier
-
+# from mbg.patch_set_model import PatchClassifier
+import mbg.mbg_config as param
 
 def match_objects(preds, gts, pos_thresh=0.05):
     matches = []
@@ -29,6 +28,7 @@ def match_objects(preds, gts, pos_thresh=0.05):
             used_gt.add(best_idx)
     return matches
 
+
 def compute_color_similarity(c1, c2):
     """
     Compute normalized color similarity between two RGB values.
@@ -46,13 +46,14 @@ def compute_color_similarity(c1, c2):
     similarity = 1 - (dist / max_dist)
     return similarity
 
+
 def compute_size_similarity(pred_obj, gt_obj, shape, img_width):
     pred_area = pred_obj["size"] * (img_width ** 2)  # image area * normalized predicted size
 
     gt_size = gt_obj["size"]
-    if bk.bk_shapes[shape] == "circle" or bk.bk_shapes[shape]  == "rectangle":
+    if bk.bk_shapes[shape] == "circle" or bk.bk_shapes[shape] == "rectangle":
         gt_area = 0.36 * (img_width ** 2) * (gt_size ** 2)
-    elif bk.bk_shapes[shape]  == "triangle":
+    elif bk.bk_shapes[shape] == "triangle":
         # Roughly estimated as proportional to size^2 like others
         gt_area = 0.35 * (img_width ** 2) * (gt_size ** 2)
     else:
@@ -82,12 +83,17 @@ def compute_accuracy(matches, key, image_width=None):
         correct = sum(1 for p, g in matches if p[key] == g[key])
     return correct / len(matches) if matches else 0.0
 
+
 def evaluate_symbolic_detection(dataloader, predictor):
     total_shape, total_color, total_size = 0, 0, 0
     total_detected = 0
-
-    model = PatchSetClassifier(input_dim=3 * 5 * 2, hidden_dim=128, num_classes=3)
-    model.load_state_dict(torch.load(config.mb_outlines/"patch_set_classifier.pt"))
+    # Load trained classifier
+    model = PatchClassifier(
+        num_patches=param.PATCHES_PER_SET,
+        patch_len=param.POINTS_PER_PATCH,
+        num_classes=len(param.LABEL_NAMES)
+    )
+    model.load_state_dict(torch.load(param.OBJ_MODEL_SAVE_PATH, map_location=param.DEVICE))
     model.eval()
 
     for batch in tqdm(dataloader, desc="Evaluating"):
@@ -112,5 +118,3 @@ def evaluate_symbolic_detection(dataloader, predictor):
     print(f"  Shape Accuracy: {total_shape / total_detected:.3f}")
     print(f"  Color Accuracy: {total_color / total_detected:.3f}")
     print(f"  Size Accuracy : {total_size / total_detected:.3f}")
-
-

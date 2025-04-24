@@ -1,17 +1,28 @@
-# Created by MacBook Pro at 17.04.25
-import torch
-import torch.nn as nn
-
-class PatchSetClassifier(nn.Module):
-    def __init__(self, input_dim, hidden_dim=128, num_classes=3):
-        super().__init__()
-        self.net = nn.Sequential(
-            nn.Linear(input_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, num_classes)
-        )
-
-    def forward(self, x):
-        return self.net(x.view(x.size(0), -1))
+# # Created by MacBook Pro at 17.04.25
+# import torch.nn as nn
+# import torch
+#
+#
+# class PatchClassifier(nn.Module):
+#     def __init__(self, input_dim=2, patch_len=16, num_patches=6, num_classes=4):
+#         super().__init__()
+#         self.flatten_dim = input_dim * patch_len
+#         self.encoder = nn.Sequential(
+#             nn.Linear(self.flatten_dim, 64),
+#             nn.ReLU(),
+#             nn.Linear(64, 32),
+#             nn.ReLU()
+#         )
+#         self.head = nn.Sequential(
+#             nn.Linear(32 * num_patches, 64),
+#             nn.ReLU(),
+#             nn.Linear(64, num_classes)
+#         )
+#
+#     def forward(self, x):
+#         # x: (B, P, 2, L)
+#         B, P, C, L = x.shape
+#         x = x.reshape(B, P, -1)  # (B, P, C*L)
+#         x = self.encoder(x)  # (B, P, F)
+#         x = x.view(B, -1)  # (B, P*F)
+#         return self.head(x)

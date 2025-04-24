@@ -9,55 +9,18 @@ from torchvision import transforms
 import config
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
-
-
+import random
+from PIL import Image
 from src import bk
-# 加载 memory bank
-# memory_data = np.load(config.mb_outlines / "contour_memory_bank.npz")
-# memory_embeddings = memory_data["embeddings"].astype(np.float32)
-# memory_labels = memory_data["labels"]
-# embedding_dim = memory_embeddings.shape[1]
-
-# 构建 FAISS 索引
-# faiss_index = faiss.IndexFlatL2(embedding_dim)
-# faiss_index.add(memory_embeddings)
+import mbg.mbg_config as param
+from mbg.object import dataset_patch
+from mbg.contour_utils import extract_object_contours, generate_patch_set_from_contour
 
 # 图像预处理（如需灰度 -> RGB 转换可加 transform）
 transform = transforms.Compose([
     transforms.ToTensor()  # 保持为 Tensor 格式，可选
 ])
 
-
-def generate_random_patch_sets(contour_tensor, patch_size=5, set_size=3, num_sets=10, num_patches=20):
-    """
-    从归一化的 contour_tensor 中生成非连续的 patch set。
-
-    参数：
-        contour_tensor: Tensor [N, 2]，轮廓点序列
-        patch_size: 每个 patch 包含的点数
-        set_size: 每个 patch set 包含多少个 patch
-        num_sets: 从每个 contour 生成的 patch set 数量
-        num_patches: 从轮廓上生成的 patch 总数（滑窗）
-
-    返回：
-        patch_sets: List[Tensor]，每个 Tensor 形状为 [set_size, patch_size, 2]
-    """
-    N = contour_tensor.size(0)
-    if N < patch_size:
-        return []
-
-    patch_start_indices = torch.linspace(0, N - patch_size, steps=num_patches, dtype=torch.long)
-    patches = [contour_tensor[i:i + patch_size] for i in patch_start_indices]
-
-    patch_sets = []
-    for _ in range(num_sets):
-        if len(patches) < set_size:
-            continue
-        idxs = torch.randperm(len(patches))[:set_size]
-        patch_set = torch.stack([patches[i] for i in idxs])
-        patch_sets.append(patch_set)
-
-    return patch_sets
 
 # 轮廓编码函数
 def sample_contour_patches(contour, num_patches=20, patch_size=5):
@@ -139,7 +102,10 @@ def visual_patch_sets(patch_set):
 def visual_img(img_tensor):
     plt.imshow(img_tensor)
     plt.show()
-def predictor(image_tensor, patch_classifier, device='cpu', shape_names=["triangle", "rectangle", "ellipse"]):
+
+# Predictor
+@torch.no_grad()
+def predictor(image_tensor, model, device='cpu', shape_names=["triangle", "rectangle", "ellipse"]):
     """
     image_tensor: torch.Tensor of shape [3, H, W], RGB image, values in [0,1]
     patch_classifier: trained PatchSetClassifier
@@ -156,31 +122,24 @@ def predictor(image_tensor, patch_classifier, device='cpu', shape_names=["triang
     results = []
 
     for i in range(1, num_labels):  # skip background
+
         x, y, w, h, area = stats[i]
         cx, cy = centroids[i]
         mask = (labels == i).astype(np.uint8)
-        # visual_img(mask)
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-        if len(contours) == 0:
-            continue
-        contour = max(contours, key=len).squeeze()
-        if contour.ndim != 2 or contour.shape[0] < 5:
-            continue
-        contour = contour - contour.mean(axis=0)
-        max_dist = np.linalg.norm(contour, axis=1).max()
-        contour = contour / (2 * max_dist + 1e-6)
-        contour_tensor = torch.tensor(contour, dtype=torch.float32)
 
-        patch_sets = generate_random_patch_sets(contour_tensor)
-        # visual_patch_sets(patch_sets[:6])
+        contours = extract_object_contours(Image.fromarray(mask.astype(np.uint8), mode="L"))
+        # if len(contours) < 3:
+        #     continue
+        selected = random.sample(contours, k=min(3, len(contours)))
+        merged = np.concatenate(selected, axis=0)
+        patch_set = generate_patch_set_from_contour(merged,  num_patches=param.PATCHES_PER_SET,
+                                                    points_per_patch=param.POINTS_PER_PATCH)
 
-        if len(patch_sets) == 0:
-            continue
-        batch = torch.stack(patch_sets).to(device)
-        with torch.no_grad():
-            logits = patch_classifier(batch)
-            probs = F.softmax(logits, dim=1).mean(dim=0)
-        shape_pred = shape_names[probs.argmax().item()]
+        logits = model(torch.from_numpy(patch_set).unsqueeze(0))
+
+        pred_label = logits.argmax(1).item()
+        confidence = torch.softmax(logits, dim=1)[0, pred_label].item()
+        shape_pred = param.LABEL_NAMES[pred_label]
         if shape_pred == "ellipse":
             shape_pred = "circle"
         shape_pred = bk.bk_shapes.index(shape_pred)
@@ -194,6 +153,8 @@ def predictor(image_tensor, patch_classifier, device='cpu', shape_names=["triang
             "color_b": int(color[2]),
             "shape": shape_pred
         }
+        plt.imshow(mask)
+        plt.show()
         results.append(s_obj)
 
     return results

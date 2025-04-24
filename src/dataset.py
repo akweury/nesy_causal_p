@@ -62,7 +62,7 @@ class GestaltDataset(Dataset):
     def __init__(self, root_dir, transform=None):
         self.root_dir = root_dir
         self.transform = transform or transforms.Compose([
-            transforms.Resize((224, 224)),
+            transforms.Resize((1024, 1024)),
             transforms.ToTensor()
         ])
         self.samples = []
@@ -84,27 +84,14 @@ class GestaltDataset(Dataset):
                 if img_id not in img_data:
                     continue
                 self.samples.append({
-                    "image_path": img_name,
-                    "symbolic_data": img_data[img_id],
-                    "principle": principle,
-                    "task": os.path.basename(task_folder)
-                })
+                    "image_path": img_name, "symbolic_data": img_data[img_id], "principle": principle,
+                    "task": os.path.basename(task_folder)})
 
     def __len__(self):
         return len(self.samples)
 
     def __getitem__(self, idx):
-        sample = self.samples[idx]
-        image = Image.open(sample["image_path"])
-        image = self.transform(image)
-
-        return {
-            "image": image,
-            "symbolic_data": sample["symbolic_data"],
-            "principle": sample["principle"],
-            "task": sample["task"],
-            "filename": os.path.basename(sample["image_path"])
-        }
+        return self.samples[idx]
 
 
 # class GestaltDataset(Dataset):

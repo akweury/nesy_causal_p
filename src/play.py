@@ -16,6 +16,9 @@ import time
 import threading
 from mbg import evaluate_object_detection
 from mbg.predictor import predictor
+from mbg.object import eval_patch_classifier
+from mbg.group import eval_pam_classifier
+
 def init_io_folders(args, data_folder):
     args.train_folder = data_folder / "train" / "task_true_pattern"
     os.makedirs(args.train_folder, exist_ok=True)
@@ -49,22 +52,23 @@ def main():
     # Import Generated Data
     data_loader = dataset.load_dataset(args, mode="train")
     # check the individual object detection
-    evaluate_object_detection.evaluate_symbolic_detection(data_loader, predictor)
+    # evaluate_object_detection.evaluate_symbolic_detection(data_loader, predictor)
 
 
     # Identify feature maps
     # perception.collect_fms(args)
-
-    for task_id, (train_data, test_data, principle) in enumerate(data_loader):
-        if task_id != args.task_id:
-            continue
+    obj_model = eval_patch_classifier.load_model(args.device)
+    group_model = eval_pam_classifier.load_model(args.device)
+    for task_id, data in enumerate(data_loader):
         args.output_file_prefix = config.models / f"t{task_id}_"
-        imgs_train = train_data["img"]
-        imgs_test = test_data["img"]
-        # grouping objects
-        groups = perception.cluster_by_principle(args, imgs_train, "train", principle[0])
-        # Learn Clauses from Training Data
 
+        # detect objects
+        objs = eval_patch_classifier.evaluate_image(obj_model, data)
+
+        # detect groups; multiple groups in one image
+        groups = eval_pam_classifier.evaluate_pam_classifier(group_model, data)
+
+        # Learn Clauses from Training Data
         # Start CPU memory monitoring
         stop_monitor = monitor_cpu_memory()
 
