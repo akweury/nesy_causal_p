@@ -193,14 +193,14 @@ color_large_exclude_gray = [item for item in color_large if item != "lightgray" 
 bk_shapes = ["none", "triangle", "rectangle", "circle"]
 
 gestalt_principles = [
-    'position_closure',
-    "feature_closure",
+    # 'position_closure',
+    # "feature_closure",
     "proximity",
-    "symmetry",
-    "similarity_shape",
-    "similarity_color",
+    # "symmetry",
+    # "similarity_shape",
+    # "similarity_color",
     # "continuity",
-    "none",
+    # "none",
 ]
 
 rule_logic_types = [

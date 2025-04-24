@@ -6,7 +6,7 @@ import cv2
 from PIL import Image, ImageDraw, ImageColor
 
 from src import bk
-
+from mbg import patch_preprocess
 
 class kandinskyShape:
     def __init__(self, shape="", color="", x=0.5, y=0.5, size=0.5, line_width=1.0,
@@ -224,97 +224,187 @@ def kandinskyFigureAsImagePIL(shapes, width=600, subsampling=4):
 #         return [42, 75, 215]
 
 
+
+def draw_circle(img, s, w):
+    radius = 0.3 * w * s.size
+    cx = round(w * s.x)
+    cy = round(w * s.y)
+    color = bk.color_matplotlib[s.color]
+    thickness = -1 if s.solid else int(radius * s.line_width)
+    cv2.circle(img, (cx, cy), round(radius), color, thickness)
+
+def draw_triangle(img, s, w):
+    angle = math.radians(30)
+    size = 0.7 * math.sqrt(3) * w * s.size / 3
+    dx = size * math.cos(angle)
+    dy = size * math.sin(angle)
+
+    cx, cy = round(w * s.x), round(w * s.y)
+    p1 = (cx, round(cy - size))
+    p2 = (round(cx + dx), round(cy + dy))
+    p3 = (round(cx - dx), round(cy + dy))
+    points = np.array([p1, p2, p3])
+
+    color = bk.color_matplotlib[s.color]
+    cv2.fillConvexPoly(img, points, color)
+
+    if not s.solid:
+        lwx = int(dx * s.line_width)
+        lwy = int(dy * s.line_width)
+        p1 = (cx, round(cy - size + size * s.line_width))
+        p2 = (round(cx + dx - lwx), round(cy + dy - lwy))
+        p3 = (round(cx - dx + lwx), round(cy + dy - lwy))
+        top = np.array([p1, p2, p3])
+        cv2.fillConvexPoly(img, top, bk.color_matplotlib["lightgray"])
+
+def draw_rectangle(img, s, w):
+    size = 0.3 * w * s.size
+    color = bk.color_matplotlib[s.color]
+    line_width = int(size * s.line_width)
+    cx, cy = round(w * s.x), round(w * s.y)
+
+    x1, y1 = round(cx - size), round(cy - size)
+    x2, y2 = round(cx + size), round(cy + size)
+    cv2.rectangle(img, (x1, y1), (x2, y2), color, -1)
+
+    if not s.solid:
+        inner = [x1 + line_width, y1 + line_width, x2 - line_width, y2 - line_width]
+        cv2.rectangle(img, (inner[0], inner[1]), (inner[2], inner[3]), bk.color_matplotlib["lightgray"], -1)
+
 def kandinskyFigureAsImage(shapes, width=600, subsampling=1):
     w = subsampling * width
-    img = np.zeros((w, w, 3), np.uint8)
-    img[:, :] = bk.color_matplotlib["lightgray"]
-
+    img = np.full((w, w, 3), fill_value=bk.color_matplotlib["lightgray"], dtype=np.uint8)
+    patch_inputs = []
     for s in shapes:
-        # not sure if this is the right color for openCV
-        # rgbcolorvalue = ImageColor.getrgb(s.color)
-        # use pastel colors
-        rgbcolorvalue = bk.color_matplotlib[s.color]
-
-        if s.shape == "circle":
-            size = 0.5 * 0.6 * math.sqrt(4 * w * s.size * w * s.size / math.pi)
-            if s.solid:
-                line_width = -1
-            else:
-                line_width = int(size * s.line_width)
-            cx = round(w * s.x)
-            cy = round(w * s.y)
-            cv2.circle(img, (cx, cy), round(size), rgbcolorvalue,
-                       thickness=line_width)
-
-        elif s.shape == "triangle":
-            r = math.radians(30)
+        obj_img = np.full((w, w, 3), fill_value=bk.color_matplotlib["lightgray"], dtype=np.uint8)
+        shape = s.shape
+        if shape == "circle":
+            draw_circle(obj_img, s, w)
+            draw_circle(img, s, w)
+        elif shape == "triangle":
+            draw_triangle(obj_img, s, w)
+            draw_triangle(img, s, w)
+        elif shape == "rectangle":
+            draw_rectangle(obj_img, s, w)
+            draw_rectangle(img, s, w)
+        elif shape == "pac_man":
+            center = (round(w * s.x), round(w * s.y))
+            radius = round(0.3 * w * s.size)
+            draw_pac_man(obj_img, center, radius, bk.color_matplotlib[s.color], s.start_angle, s.end_angle)
+            draw_pac_man(img, center, radius, bk.color_matplotlib[s.color], s.start_angle, s.end_angle)
+        elif shape == "star":
             size = 0.7 * math.sqrt(3) * w * s.size / 3
-
-            # base shape
-            dx = size * math.cos(r)
-            dy = size * math.sin(r)
-            p1 = (round(w * s.x), round(w * s.y - size))
-            p2 = (round(w * s.x + dx), round(w * s.y + dy))
-            p3 = (round(w * s.x - dx), round(w * s.y + dy))
-            points = np.array([p1, p2, p3])
-            cv2.fillConvexPoly(img, points, rgbcolorvalue, 1)
-
-            # top shape
-            if not s.solid:
-                line_x_width = int(dx * s.line_width)
-                line_y_width = int(dy * s.line_width)
-                p1 = (round(w * s.x),
-                      round(w * s.y - size + int(size * s.line_width)))  # top point
-                p2 = (round(w * s.x + dx - line_x_width),
-                      round(w * s.y + dy - line_y_width))  # right point
-                p3 = (round(w * s.x - dx + line_x_width),
-                      round(w * s.y + dy - line_y_width))  # left point
-                points = np.array([p1, p2, p3])
-
-                cv2.fillConvexPoly(img, points, bk.color_matplotlib["lightgray"], 1)
-
-        elif s.shape == "rectangle":
-            size = 0.5 * 0.6 * w * s.size
-            line_width = int(size * s.line_width)
-
-            # draw base rectangle
-            xs = round(w * s.x - size)
-            ys = round(w * s.y - size)
-            xe = round(w * s.x + size)
-            ye = round(w * s.y + size)
-            cv2.rectangle(img, (xs, ys), (xe, ye), rgbcolorvalue,
-                          thickness=-1)
-
-            # draw top rectangle
-            if not s.solid:
-                xs = round(w * s.x - size + line_width)
-                ys = round(w * s.y - size + line_width)
-                xe = round(w * s.x + size - line_width)
-                ye = round(w * s.y + size - line_width)
-                cv2.rectangle(img, (xs, ys), (xe, ye),
-                              bk.color_matplotlib["lightgray"],
-                              thickness=-1)
-        elif s.shape == "pac_man":
-            cx = round(w * s.x)
-            cy = round(w * s.y)
-            size = round(0.5 * 0.6 * math.sqrt(4 * w * s.size * w * s.size / math.pi))
-
-            draw_pac_man(img, (cx, cy), size, rgbcolorvalue, s.start_angle, s.end_angle)
-        elif s.shape == "star":
+            draw_star(obj_img, (s.x, s.y), size, bk.color_matplotlib[s.color])
+            draw_star(img, (s.x, s.y), size, bk.color_matplotlib[s.color])
+        elif shape == "diamond":
             size = 0.7 * math.sqrt(3) * w * s.size / 3
-            draw_star(img, (s.x, s.y), size, rgbcolorvalue)
-        elif s.shape == "diamond":
-            size = 0.7 * math.sqrt(3) * w * s.size / 3
-            draw_diamond(img, (w * s.x, w * s.y), size, rgbcolorvalue)
+            draw_diamond(obj_img, (w * s.x, w * s.y), size, bk.color_matplotlib[s.color])
+            draw_diamond(img, (w * s.x, w * s.y), size, bk.color_matplotlib[s.color])
         else:
-            raise ValueError("Unknown shape " + s.shape)
+            raise ValueError(f"Unknown shape: {shape}")
 
-    img_resampled = cv2.resize(
-        img, (width, width), interpolation=cv2.INTER_AREA)
+        binary_np = patch_preprocess.rgb_to_binary(obj_img)
+        patch_set = patch_preprocess.preprocess_image_to_patch_set(binary_np, contour_uniform=False)
+        patch_set[0] = list(patch_set[0])
+        patch_set[0][0] = patch_set[0][0].tolist()
+        patch_set[0][1] = list(patch_set[0][1])
+        patch_inputs.append(patch_set)
 
-    image = Image.fromarray(img_resampled)
+    img_resized = cv2.resize(img, (width, width), interpolation=cv2.INTER_AREA)
+    return img_resized, patch_inputs
 
-    return image
+
+# def kandinskyFigureAsImage(shapes, width=600, subsampling=1):
+#     w = subsampling * width
+#     img = np.zeros((w, w, 3), np.uint8)
+#     img[:, :] = bk.color_matplotlib["lightgray"]
+#
+#     for s in shapes:
+#         # not sure if this is the right color for openCV
+#         # rgbcolorvalue = ImageColor.getrgb(s.color)
+#         # use pastel colors
+#         rgbcolorvalue = bk.color_matplotlib[s.color]
+#
+#         if s.shape == "circle":
+#             size = 0.5 * 0.6 * math.sqrt(4 * w * s.size * w * s.size / math.pi)
+#             if s.solid:
+#                 line_width = -1
+#             else:
+#                 line_width = int(size * s.line_width)
+#             cx = round(w * s.x)
+#             cy = round(w * s.y)
+#             cv2.circle(img, (cx, cy), round(size), rgbcolorvalue,
+#                        thickness=line_width)
+#
+#         elif s.shape == "triangle":
+#             r = math.radians(30)
+#             size = 0.7 * math.sqrt(3) * w * s.size / 3
+#
+#             # base shape
+#             dx = size * math.cos(r)
+#             dy = size * math.sin(r)
+#             p1 = (round(w * s.x), round(w * s.y - size))
+#             p2 = (round(w * s.x + dx), round(w * s.y + dy))
+#             p3 = (round(w * s.x - dx), round(w * s.y + dy))
+#             points = np.array([p1, p2, p3])
+#             cv2.fillConvexPoly(img, points, rgbcolorvalue, 1)
+#
+#             # top shape
+#             if not s.solid:
+#                 line_x_width = int(dx * s.line_width)
+#                 line_y_width = int(dy * s.line_width)
+#                 p1 = (round(w * s.x),
+#                       round(w * s.y - size + int(size * s.line_width)))  # top point
+#                 p2 = (round(w * s.x + dx - line_x_width),
+#                       round(w * s.y + dy - line_y_width))  # right point
+#                 p3 = (round(w * s.x - dx + line_x_width),
+#                       round(w * s.y + dy - line_y_width))  # left point
+#                 points = np.array([p1, p2, p3])
+#
+#                 cv2.fillConvexPoly(img, points, bk.color_matplotlib["lightgray"], 1)
+#
+#         elif s.shape == "rectangle":
+#             size = 0.5 * 0.6 * w * s.size
+#             line_width = int(size * s.line_width)
+#
+#             # draw base rectangle
+#             xs = round(w * s.x - size)
+#             ys = round(w * s.y - size)
+#             xe = round(w * s.x + size)
+#             ye = round(w * s.y + size)
+#             cv2.rectangle(img, (xs, ys), (xe, ye), rgbcolorvalue,
+#                           thickness=-1)
+#
+#             # draw top rectangle
+#             if not s.solid:
+#                 xs = round(w * s.x - size + line_width)
+#                 ys = round(w * s.y - size + line_width)
+#                 xe = round(w * s.x + size - line_width)
+#                 ye = round(w * s.y + size - line_width)
+#                 cv2.rectangle(img, (xs, ys), (xe, ye),
+#                               bk.color_matplotlib["lightgray"],
+#                               thickness=-1)
+#         elif s.shape == "pac_man":
+#             cx = round(w * s.x)
+#             cy = round(w * s.y)
+#             size = round(0.5 * 0.6 * math.sqrt(4 * w * s.size * w * s.size / math.pi))
+#
+#             draw_pac_man(img, (cx, cy), size, rgbcolorvalue, s.start_angle, s.end_angle)
+#         elif s.shape == "star":
+#             size = 0.7 * math.sqrt(3) * w * s.size / 3
+#             draw_star(img, (s.x, s.y), size, rgbcolorvalue)
+#         elif s.shape == "diamond":
+#             size = 0.7 * math.sqrt(3) * w * s.size / 3
+#             draw_diamond(img, (w * s.x, w * s.y), size, rgbcolorvalue)
+#         else:
+#             raise ValueError("Unknown shape " + s.shape)
+#
+#     img_resampled = cv2.resize(
+#         img, (width, width), interpolation=cv2.INTER_AREA)
+#
+#     image = Image.fromarray(img_resampled)
+#
+#     return image
 
 
 def kandinskyFigureAsAnnotation(shapes, image_id, category_ids, width=128,

@@ -14,8 +14,6 @@ import psutil
 import pynvml
 import time
 import threading
-from mbg import evaluate_object_detection
-from mbg.predictor import predictor
 from mbg.object import eval_patch_classifier
 from mbg.group import eval_pam_classifier
 

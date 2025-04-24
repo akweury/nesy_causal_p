@@ -16,7 +16,7 @@ def rgb_to_binary(image_rgb: np.ndarray, threshold: int = 210) -> np.ndarray:
     return binary_np
 
 
-def preprocess_image_to_patch_set(binary_image: np.ndarray, num_patches: int = 6, points_per_patch: int = 16):
+def preprocess_image_to_patch_set(binary_image: np.ndarray, num_patches: int = 6, points_per_patch: int = 16, contour_uniform=True):
     """
     Extract patch sets from binary image by contour-based object detection.
     Each patch set contains `num_patches` patches of length `points_per_patch` each.
@@ -30,6 +30,7 @@ def preprocess_image_to_patch_set(binary_image: np.ndarray, num_patches: int = 6
         x, y, w, h, area = stats[i]
         if area < 10:
             continue
+
         obj_mask = (labels[y:y + h, x:x + w] == i).astype(np.uint8) * 255
         contours, _ = cv2.findContours(obj_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
         if not contours or len(contours[0]) < points_per_patch:
@@ -43,9 +44,15 @@ def preprocess_image_to_patch_set(binary_image: np.ndarray, num_patches: int = 6
         contour = torch.tensor(contour, dtype=torch.float32)
         contour = contour[torch.linspace(0, len(contour) - 1, steps=num_patches * points_per_patch).long()]
         patch_set = contour.view(num_patches, points_per_patch, 2)
+        x = int(x)
+        y = int(y)
+        w = int(w)
+        h = int(h)
         outputs.append((patch_set, (x, y, w, h)))
 
     return outputs
+
+
 def preprocess_image_to_one_patch_set(binary_image: np.ndarray, num_patches: int = 6, points_per_patch: int = 16):
     contours, _ = cv2.findContours(binary_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
     contour = contours[0].squeeze(1)
@@ -74,6 +81,7 @@ def preprocess_image_to_one_patch_set(binary_image: np.ndarray, num_patches: int
     #     patch_set = contour.view(num_patches, points_per_patch, 2)
     #     outputs.append((patch_set, (x, y, w, h)))
     # return outputs
+
 
 def split_image_into_objects(rgb_image: np.ndarray) -> List[np.ndarray]:
     """
@@ -164,10 +172,45 @@ def match_objects_to_labels(object_images: List[np.ndarray], gt_objects: List[di
     return labels
 
 
+def match_objects_to_glabels(object_images: List[np.ndarray], gt_objects: List[dict], group_labels,
+                             threshold: float = 0.02) -> List[int]:
+    obj_orders = []
+    for obj_img in object_images:
+        # Compute centroid of the object in this image
+        mask = (obj_img != 211).any(axis=-1).astype(np.uint8)  # Non-background pixels
+        if mask.sum() == 0:
+            obj_orders.append(-1)
+            continue
+
+        coords = np.argwhere(mask)
+        cy, cx = coords.mean(axis=0)  # Note: (row, col) => (y, x)
+        norm_x = cx / obj_img.shape[1]
+        norm_y = cy / obj_img.shape[0]
+
+        # Match to nearest GT object
+        o_id = -1
+        min_dist = float('inf')
+        for o_i, gt in enumerate(gt_objects):
+            dist = (float(gt['x']) - norm_x) ** 2 + (float(gt['y']) - norm_y) ** 2
+            if dist < min_dist and dist < threshold ** 2:
+                min_dist = dist
+                o_id = o_i
+        obj_orders.append(o_id)
+
+    new_group_pairs = []
+    try:
+        for group_pair in group_labels:
+            new_group_pairs.append([obj_orders.index(id) for id in group_pair])
+    except ValueError:
+        raise ValueError
+    return new_group_pairs
+
+
 def img_path2obj_images(img_path: Path) -> List[np.ndarray]:
     image = load_rgb_image(img_path)
     obj_images = split_image_into_objects(image)
     return obj_images
+
 
 def img_path2patches_and_labels(image_path, gt_dict):
     obj_images = img_path2obj_images(image_path)
@@ -186,6 +229,22 @@ def img_path2patches_and_labels(image_path, gt_dict):
         patch_sets.append(patch_set)
         sorted_labels.append(label)
     return patch_sets, sorted_labels
+
+
+def img_path2patches_and_glabels(image_path, gt_dict, g_labels):
+    obj_images = img_path2obj_images(image_path)
+
+    g_labels_sorted = match_objects_to_glabels(obj_images, gt_dict, g_labels)
+    # single object image to patch set
+    patch_sets = []
+    for o_i, obj_img in enumerate(obj_images):
+        binary_np = rgb_to_binary(obj_img)
+        patch_set = preprocess_image_to_patch_set(binary_np)
+        patch_sets.append(patch_set)
+
+
+    return patch_sets, g_labels_sorted
+
 
 def img_path2one_patches(image_path):
     image = load_rgb_image(image_path)

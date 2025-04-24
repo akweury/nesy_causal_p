@@ -330,6 +330,7 @@ from kandinsky_generator.gestalt_patterns import *
 def gen_patterns(pattern_name, dtype):
     so = 0.1
     overlap_patterns = []
+    g_labels = []
     if pattern_name == "proximity_red_triangle":
         g = lambda so, truth: proximity_red_triangle(so, dtype)
     elif pattern_name == "two_pairs":
@@ -379,19 +380,19 @@ def gen_patterns(pattern_name, dtype):
 
     else:
         raise ValueError
-    kf = g(so, dtype)
+    kf, g_labels = g(so, dtype)
     t = 0
     tt = 0
     max_try = 1000
     if pattern_name not in overlap_patterns:
         while (KandinskyUniverse.overlaps(kf) or KandinskyUniverse.overflow(kf)) and (t < max_try):
-            kf = g(so, dtype)
+            kf, g_labels = g(so, dtype)
             if tt > 10:
                 tt = 0
                 so = so * 0.90
             tt = tt + 1
             t = t + 1
-    return kf
+    return kf, g_labels
 
 
 def gen_and_save(path, width, mode):
@@ -407,15 +408,22 @@ def gen_and_save(path, width, mode):
             print("Generating training patterns for task {}".format(task_name))
             img_data = {}
             kfs = []
+            g_labels=  []
             for dtype in [True, False]:
                 for example_i in range(example_num):
-                    kfs.append(gen_patterns(task_name, dtype))  # pattern generation
+                    kf, g_label = gen_patterns(task_name, dtype)
+                    kfs.append(kf)  # pattern generation
+                    g_labels.append(g_label)
             tensors = []
             images = []
             for kf_i, kf in enumerate(kfs):
-                img = np.asarray(KandinskyUniverse.kandinskyFigureAsImage(kf, width)).copy()
+                img, patches = KandinskyUniverse.kandinskyFigureAsImage(kf, width)
+
                 images.append(img)
-                img_data[f"sep_{task_counter:06d}_{kf_i}"] = kf2data(kf, width)
+                img_data[f"sep_{task_counter:06d}_{kf_i}"] = {}
+                img_data[f"sep_{task_counter:06d}_{kf_i}"]["objects"] = kf2data(kf, width)
+                img_data[f"sep_{task_counter:06d}_{kf_i}"]["patches"] = patches
+                img_data[f"sep_{task_counter:06d}_{kf_i}"][principle] = g_labels[kf_i]
                 tensors.append(kf2tensor(kf, max_length))
             tensors = torch.stack(tensors)
 
