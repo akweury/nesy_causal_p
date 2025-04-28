@@ -25,7 +25,8 @@ def load_model(device):
 
 def evaluate_shapes(model, data):
     device = torch.device(param.DEVICE)
-    patch_sets, labels = patch_preprocess.img_path2patches_and_labels(data["image_path"][0], data["symbolic_data"])
+    patch_sets, labels = patch_preprocess.img_path2patches_and_labels(data["image_path"][0],
+                                                                      data["symbolic_data"]["objects"])
     predictions = []
     positions = []
     sizes = []
@@ -40,11 +41,7 @@ def evaluate_shapes(model, data):
             pred_label = logits.argmax(dim=1).item()
             predictions.append(pred_label)
 
-    correct = (torch.tensor(predictions) == torch.tensor(labels)).sum()
-
-    acc = correct / len(labels)
-    results = [param.LABEL_NAMES[p] for p in predictions]
-    return positions, labels, sizes
+    return positions, labels, sizes, patch_sets
 
 
 def evaluate_colors(data):
@@ -60,8 +57,9 @@ def evaluate_colors(data):
     return colors
 
 
+
 def evaluate_image(model, data):
-    positions, labels, sizes = evaluate_shapes(model, data)
+    positions, labels, sizes, patches = evaluate_shapes(model, data)
     colors = evaluate_colors(data)
     objs = []
     for i in range(len(positions)):
@@ -73,7 +71,9 @@ def evaluate_image(model, data):
             "color_r": int(colors[i][0]),
             "color_g": int(colors[i][1]),
             "color_b": int(colors[i][2]),
-            "shape": labels[i]
+            "shape": labels[i],
+            "patch": patches[i]
         }
         objs.append(obj)
+
     return objs

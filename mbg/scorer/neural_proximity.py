@@ -2,7 +2,6 @@
 # neural_proximity_scorer.py
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 class NeuralProximityScorer(nn.Module):
     def __init__(self, input_dim=2, hidden_dim=64, patch_len=16, patch_embed_dim=64):

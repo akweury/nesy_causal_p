@@ -1,5 +1,4 @@
 # train_pam_synthetic_classifier.py
-# train_pam_synthetic_classifier.py
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -13,7 +12,6 @@ from PIL import Image
 
 from mbg.group.pam_patchset_dataset import PAMPatchSetDataset
 import mbg.mbg_config as param
-from mbg.object.patch_classifier_model import PatchClassifier
 from mbg.object import patch_classifier_model
 device = torch.device(param.DEVICE)
 
