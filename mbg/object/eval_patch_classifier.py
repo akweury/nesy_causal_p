@@ -64,15 +64,15 @@ def evaluate_image(model, data):
     objs = []
     for i in range(len(positions)):
         obj = {
-            "x": float(positions[i][0]),
-            "y": float(positions[i][1]),
-            "w": sizes[i][0],
-            "h": sizes[i][1],
-            "color_r": int(colors[i][0]),
-            "color_g": int(colors[i][1]),
-            "color_b": int(colors[i][2]),
-            "shape": labels[i],
-            "patch": patches[i]
+            "id": i,
+            "s": {"shape":  labels[i],
+                  "color": [int(colors[i][0]),int(colors[i][1]),int(colors[i][2])],
+                  "x":float(positions[i][0]),
+                  "y":float(positions[i][1]),
+                  "w":sizes[i][0],
+                  "h":sizes[i][1],
+                  },
+            "h": patches[i]
         }
         objs.append(obj)
 

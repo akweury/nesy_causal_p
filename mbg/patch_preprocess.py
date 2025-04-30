@@ -251,3 +251,13 @@ def img_path2one_patches(image_path):
     binary_np = rgb_to_binary(image)
     patch_set = preprocess_image_to_one_patch_set(binary_np)
     return patch_set
+
+
+def shift_obj_patches_to_global_positions(obj_patch, shift):
+    (x_min, y_min, w, h) = shift
+    x_shift = obj_patch[:,:,0] + w
+    y_shift = obj_patch[:,:,1] + h
+
+    shifted_tensor = torch.stack([x_shift, y_shift], dim=2)
+    return shifted_tensor
+

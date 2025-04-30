@@ -418,7 +418,6 @@ def gen_and_save(path, width, mode):
             images = []
             for kf_i, kf in enumerate(kfs):
                 img, patches = KandinskyUniverse.kandinskyFigureAsImage(kf, width)
-
                 images.append(img)
                 img_data[f"sep_{task_counter:06d}_{kf_i}"] = {}
                 img_data[f"sep_{task_counter:06d}_{kf_i}"]["objects"] = kf2data(kf, width)

@@ -16,8 +16,8 @@ import time
 import threading
 from mbg.object import eval_patch_classifier
 from mbg.group import eval_groups
-from mbg.group import proximity_grouping
-from mbg.scorer import scorer_config
+from mbg.grounding import grounding
+from mbg.language import clause_generation
 def init_io_folders(args, data_folder):
     args.train_folder = data_folder / "train" / "task_true_pattern"
     os.makedirs(args.train_folder, exist_ok=True)
@@ -64,6 +64,10 @@ def main():
         objs = eval_patch_classifier.evaluate_image(obj_model, data)
         # detect groups; multiple groups in one image
         groups = eval_groups.eval_groups(objs, data["symbolic_data"]["proximity"])
+
+        hard, soft = grounding.ground_facts(objs, groups)
+        clause_candidates = clause_generation.generate_clauses(hard, soft)
+
 
         # Learn Clauses from Training Data
         # Start CPU memory monitoring
