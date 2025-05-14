@@ -10,7 +10,7 @@ import numpy as np
 import os
 import glob
 from PIL import Image
-
+import re
 
 class BasicShapeDataset(Dataset):
     def __init__(self, args, transform=None):
@@ -79,13 +79,23 @@ class GestaltDataset(Dataset):
             img_data = gt_data["img_data"]
 
             # Collect all images and their metadata
-            for img_name in sorted(glob.glob(os.path.join(task_folder, "*.png"))):
+            all_names = sorted(glob.glob(os.path.join(task_folder, "*.png")), key=self.extract_idx)
+            for img_i, img_name in enumerate(all_names):
                 img_id = os.path.basename(img_name).split(".")[0]
                 if img_id not in img_data:
                     continue
+                img_label = img_i < len(all_names) // 2
                 self.samples.append({
-                    "image_path": img_name, "symbolic_data": img_data[img_id], "principle": principle,
+                    "image_path": img_name,
+                    "img_label": img_label,
+                    "symbolic_data": img_data[img_id],
+                    "principle": principle,
                     "task": os.path.basename(task_folder)})
+
+    def extract_idx(self, path: str) -> int:
+        # 匹配最后一个下划线到 .png 之间的数字
+        m = re.search(r'_(\d+)\.png$', path)
+        return int(m.group(1)) if m else -1
 
     def __len__(self):
         return len(self.samples)
