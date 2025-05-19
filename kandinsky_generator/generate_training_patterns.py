@@ -453,7 +453,7 @@ def genGestaltTraining():
     width = 1024
     base_path = config.kp_gestalt_dataset
     os.makedirs(base_path, exist_ok=True)
-    for mode in ['train', "test"]:
+    for mode in ['train', "val", "test"]:
         data_path = base_path / mode
         os.makedirs(data_path, exist_ok=True)
         tensor_file = data_path / f"{mode}.pt"

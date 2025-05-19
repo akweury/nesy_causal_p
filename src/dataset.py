@@ -3,7 +3,7 @@
 import torch
 import cv2
 import json
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, ConcatDataset
 import config
 from src.utils import data_utils, file_utils, chart_utils
 import numpy as np
@@ -11,6 +11,7 @@ import os
 import glob
 from PIL import Image
 import re
+
 
 class BasicShapeDataset(Dataset):
     def __init__(self, args, transform=None):
@@ -227,3 +228,14 @@ def load_elvis_dataset(args):
     principle_path = config.storage / "res_1024" / args.run_principle
     pattern_folders = sorted([p for p in (principle_path / "train").iterdir() if p.is_dir()], key=lambda x: x.stem)
     return pattern_folders
+
+
+def load_train_val_dataset(args, train_loader, val_loader):
+    train_val_ds = ConcatDataset([train_loader.dataset, val_loader.dataset])
+    train_val_loader = DataLoader(
+        train_val_ds,
+        batch_size=args.batch_size,
+        shuffle=True,
+        collate_fn=train_loader.collate_fn
+    )
+    return train_val_loader

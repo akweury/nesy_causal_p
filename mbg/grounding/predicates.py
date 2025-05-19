@@ -9,143 +9,181 @@ from mbg.patch_preprocess import shift_obj_patches_to_global_positions
 
 # these are the only two “head” predicates we ever learn clauses for:
 HEAD_PREDICATES = {
-    "image": "image_target",   # heads of form image_target(X)
-    "group": "group_target"    # heads of form group_target(G, X)
+    "image": "image_target",  # heads of form image_target(X)
+    "group": "group_target"  # heads of form group_target(G, X)
 }
 
 # Registries
 OBJ_HARD: Dict[str, Callable[..., torch.Tensor]] = {}
 GRP_HARD: Dict[str, Callable[..., torch.Tensor]] = {}
-SOFT:    Dict[str, Callable[..., torch.Tensor]] = {}
+SOFT: Dict[str, Callable[..., torch.Tensor]] = {}
+
 
 # Decorators for registration
 def object_predicate(name: str):
     def dec(fn: Callable[..., torch.Tensor]):
         OBJ_HARD[name] = fn
         return fn
+
     return dec
+
 
 def group_predicate(name: str):
     def dec(fn: Callable[..., torch.Tensor]):
         GRP_HARD[name] = fn
         return fn
+
     return dec
+
 
 def soft_predicate(name: str):
     def dec(fn: Callable[..., torch.Tensor]):
         SOFT[name] = fn
         return fn
+
     return dec
 
 
-#
-# === Object‐level hard predicates ===
-#
-
-@object_predicate("has_shape")
-def has_shape(objects: List[Dict[str, Any]], groups=None, device="cpu"):
-    return torch.tensor(
-        [o["s"]["shape"] for o in objects],
-        dtype=torch.long, device=device
-    )
-
-@object_predicate("has_color")
-def has_color(objects: List[Dict[str, Any]], groups=None, device="cpu"):
-    return torch.tensor(
-        [o["s"]["color"] for o in objects],
-        dtype=torch.long, device=device
-    )
-
-@object_predicate("x")
-def pos_x(objects: List[Dict[str, Any]], groups=None, device="cpu"):
-    return torch.tensor(
-        [o["s"]["x"] for o in objects],
-        dtype=torch.float, device=device
-    )
-
-@object_predicate("y")
-def pos_y(objects: List[Dict[str, Any]], groups=None, device="cpu"):
-    return torch.tensor(
-        [o["s"]["y"] for o in objects],
-        dtype=torch.float, device=device
-    )
-
-@object_predicate("w")
-def width(objects: List[Dict[str, Any]], groups=None, device="cpu"):
-    return torch.tensor(
-        [o["s"].get("w", 0) for o in objects],
-        dtype=torch.float, device=device
-    )
-
-@object_predicate("h")
-def height(objects: List[Dict[str, Any]], groups=None, device="cpu"):
-    return torch.tensor(
-        [o["s"].get("h", 0) for o in objects],
-        dtype=torch.float, device=device
-    )
-
-@object_predicate("in_group")
-def in_group(objects: List[Dict[str, Any]], groups: List[Dict[str, Any]], device="cpu"):
-    O, G = len(objects), len(groups)
-    mat = torch.zeros((O, G), dtype=torch.bool, device=device)
-    obj2idx = {o["id"]: i for i, o in enumerate(objects)}
-    grp2idx = {g["id"]: i for i, g in enumerate(groups)}
-    for g in groups:
-        gi = grp2idx[g["id"]]
-        for member in g["members"]:
-            mat[obj2idx[member["id"]], gi] = True
-    return mat
+# mbg/language/predicates_eval.py
+import torch
+from typing import Dict, Any, Tuple
 
 
 #
-# === Group‐level hard predicates ===
+# ————————————————
+# Object­-level predicates
+# ————————————————
 #
+def has_shape_eval(
+        hard: Dict[str, torch.Tensor],
+        soft: Dict[str, torch.Tensor],
+        _: Any,
+        a2: int
+) -> torch.Tensor:
+    """
+    hard['has_shape']: Tensor[O] of ints
+    a2: the target shape‐code
+    => returns Tensor[O] with 1.0 where shape==a2
+    """
+    return (hard["has_shape"] == a2).float()
 
-@group_predicate("group_size")
-def group_size(objects=None, groups: List[Dict[str, Any]]=None, device="cpu"):
-    return torch.tensor(
-        [len(g["members"]) for g in groups],
-        dtype=torch.float, device=device
-    )
 
-@group_predicate("principle")
-def principle(objects=None, groups: List[Dict[str, Any]]=None, device="cpu"):
-    # caller must set princ_map on their side
-    return torch.tensor(
-        [PRINC_MAP[g["principle"]] for g in groups],
-        dtype=torch.long, device=device
-    )
+def has_color_eval(
+        hard: Dict[str, torch.Tensor],
+        soft: Dict[str, torch.Tensor],
+        _: Any,
+        a2: Tuple[int, int, int]
+) -> torch.Tensor:
+    """
+    hard['has_color']: Tensor[O,3]
+    a2: (r,g,b)
+    => returns Tensor[O] with 1.0 where all three channels match
+    """
+    colors = hard["has_color"]  # (O,3)
+    target = torch.tensor(a2, device=colors.device)
+    try:
+        res = (colors == target).all(dim=1).float()
+    except RuntimeError:
+        raise RuntimeError
+
+    return res
+
+
+def x_eval(
+        hard: Dict[str, torch.Tensor],
+        soft: Dict[str, torch.Tensor],
+        _: Any,
+        a2: float,
+        tol: float = 1e-3
+) -> torch.Tensor:
+    return torch.isclose(hard["x"], torch.tensor(a2, device=hard["x"].device), atol=tol).float()
+
+
+def y_eval(hard, soft, _, a2: float, tol: float = 1e-3) -> torch.Tensor:
+    return torch.isclose(hard["y"], torch.tensor(a2, device=hard["y"].device), atol=tol).float()
+
+
+def w_eval(hard, soft, _, a2: float, tol: float = 1e-3) -> torch.Tensor:
+    return torch.isclose(hard["w"], torch.tensor(a2, device=hard["w"].device), atol=tol).float()
+
+
+def h_eval(hard, soft, _, a2: float, tol: float = 1e-3) -> torch.Tensor:
+    return torch.isclose(hard["h"], torch.tensor(a2, device=hard["h"].device), atol=tol).float()
+
+
+# def in_group_eval(
+#     hard: Dict[str, torch.Tensor],
+#     soft: Dict[str, torch.Tensor],
+#     _: Any,
+#     a2: str
+# ) -> torch.Tensor:
+#     """
+#     hard['in_group']: Tensor[O,G]
+#     a2: e.g. 'g2' or integer index
+#     => returns Tensor[O] = column g2 of in_group
+#     """
+#     if isinstance(a2, str) and a2.startswith("g"):
+#         gi = int(a2[1:])
+#     else:
+#         gi = int(a2)
+#     return hard["in_group"][:, gi].float()
+def in_group_eval(
+        hard: Dict[str, torch.Tensor],
+        soft: Dict[str, torch.Tensor],
+        _,
+        __
+) -> torch.Tensor:
+    """
+    Return the full O×G membership matrix.
+    downstream evaluators (_eval_image, _body_to_group_mats, etc.)
+    will handle existential / universal reduction appropriately.
+    """
+    return hard["in_group"].float()
 
 
 #
-# === Soft (neural) predicates ===
+# ————————————————
+# Group­-level predicates
+# ————————————————
 #
-
-@soft_predicate("prox")
-def object_proximity(objects: List[Dict[str, Any]], groups=None, device="cpu"):
-    O = len(objects)
-    if O == 0:
-        return torch.empty((0, 0), device=device)
-    embs = []
-    for o in objects:
-        contour, origin = o["h"][0]
-        pts = torch.tensor(contour, device=device)
-        org = torch.tensor(origin, device=device)
-        emb = shift_obj_patches_to_global_positions(pts, org).flatten()
-        embs.append(emb)
-    H = torch.stack(embs, dim=0)
-    H = H / (H.norm(dim=1, keepdim=True) + 1e-8)
-    return H @ H.t()
-
-@soft_predicate("grp_sim")
-def group_similarity(objects=None, groups: List[Dict[str, Any]]=None, device="cpu"):
-    G = len(groups)
-    if G == 0:
-        return torch.empty((0, 0), device=device)
-    H = torch.stack([g["h"] for g in groups], dim=0)
-    H = H / (H.norm(dim=1, keepdim=True) + 1e-8)
-    return H @ H.t()
+def group_size_eval(
+        hard: Dict[str, torch.Tensor],
+        soft: Dict[str, torch.Tensor],
+        _: Any,
+        a2: int
+) -> torch.Tensor:
+    return (hard["group_size"] == a2).float()
 
 
-# constant for principle‐map
-PRINC_MAP = {"proximity": 0, "similarity": 1, "closure": 2, "symmetry": 3}
+def principle_eval(
+        hard: Dict[str, torch.Tensor],
+        soft: Dict[str, torch.Tensor],
+        _: Any,
+        a2: int
+) -> torch.Tensor:
+    return (hard["principle"] == a2).float()
+
+
+#
+# ————————————————
+# Soft (neural) predicates
+# ————————————————
+#
+def prox_eval(
+        hard: Dict[str, torch.Tensor],
+        soft: Dict[str, torch.Tensor],
+        _,
+        __
+) -> torch.Tensor:
+    # returns the full O×O proximity matrix
+    return soft["prox"]
+
+
+def grp_sim_eval(
+        hard: Dict[str, torch.Tensor],
+        soft: Dict[str, torch.Tensor],
+        _,
+        __
+) -> torch.Tensor:
+    # returns the full G×G group‐similarity matrix
+    return soft["grp_sim"]

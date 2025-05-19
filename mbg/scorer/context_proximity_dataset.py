@@ -12,18 +12,18 @@ from pathlib import Path
 from torch.utils.data import Dataset
 
 def obj2context_pair_data(i, j, patches, pairs):
-    c_i = torch.tensor(patches[i][0][0])
+    c_i = patches[i][0][0].clone()
     c_i[:, :, 0] += patches[i][0][1][0]
     c_i[:, :, 1] += patches[i][0][1][1]
 
-    c_j = torch.tensor(patches[j][0][0])
+    c_j = patches[j][0][0].clone()
     c_j[:, :, 0] += patches[j][0][1][0]
     c_j[:, :, 1] += patches[j][0][1][1]
 
     others = []
     for k in range(len(patches)):
         if k != i and k != j:
-            c_k = torch.tensor(patches[k][0][0])
+            c_k = patches[k][0][0].clone()
             c_k[:, :, 0] += patches[k][0][1][0]
             c_k[:, :, 1] += patches[k][0][1][1]
             c_k = c_k.tolist()

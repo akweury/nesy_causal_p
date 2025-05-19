@@ -3,7 +3,7 @@
 import torch
 from typing import List, Dict, Any, Callable, Tuple, Union
 from mbg.patch_preprocess import shift_obj_patches_to_global_positions
-from mbg.grounding.predicates import OBJ_HARD, GRP_HARD, SOFT
+from mbg.grounding.predicates_raw import OBJ_HARD, GRP_HARD, SOFT
 
 # class GroundingModule:
 #     """
