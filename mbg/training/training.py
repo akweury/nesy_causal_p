@@ -44,7 +44,11 @@ def train_rules(train_loader, obj_model, hyp_params):
 
     for data in train_loader:
         # --- 1. 基础信息读取 ---
+
         task_id = data["task"][0].split("_")[0]
+        if task_id=="1":
+            print("")
+
         img_label = int(data["img_label"])  # 1 or 0
 
         # --- 2. 物体 & 分组检测 ---

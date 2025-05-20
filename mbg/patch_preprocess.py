@@ -90,7 +90,7 @@ def split_image_into_objects(rgb_image: np.ndarray) -> List[np.ndarray]:
     """
     # Convert to grayscale and then to binary mask
     gray = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2GRAY)
-    _, binary = cv2.threshold(gray, 210, 255, cv2.THRESH_BINARY_INV)
+    binary = np.where(gray == 211, 0, 255).astype(np.uint8)
 
     # Find connected components
     num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(binary, connectivity=8)

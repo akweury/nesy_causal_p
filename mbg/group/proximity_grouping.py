@@ -66,6 +66,7 @@ def proximity_grouping(obj_patches,
             visited.add(i)
             group = [i]
             dfs(i, group)
-            groups.append(group)
+            if len(group)>1:
+                groups.append(group)
 
     return groups
