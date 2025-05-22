@@ -49,16 +49,12 @@ def main():
         task_name = train_data["task"]
 
         # 1) hyperparam search
-        best_prox, best_sim, best_topk = training.grid_search(args, train_data, val_data, obj_model)
+        # (best_prox, best_sim, best_topk), train_metrics = training.grid_search(args, train_data, val_data, obj_model)
 
         # log best hyperparams
-        wandb.log({
-            "task": task_name,
-            "task_idx": task_idx,
-            "best_prox": best_prox,
-            "best_sim": best_sim,
-            "best_topk": best_topk
-        })
+        # wandb.log({
+        #     "train_acc": train_metrics.get("acc",0),
+        # })
 
         # 2) merge train+val into a single loader
         train_val_data = {
@@ -66,12 +62,11 @@ def main():
             "positive": train_data["positive"] + val_data["positive"],
             "negative": train_data["negative"] + val_data["negative"]
         }
-
         # 3) re-learn your final rules on the combined set
         hyp_params = {
-            "prox": best_prox,
-            "sim": best_sim,
-            "top_k": best_topk,
+            "prox": 0.9,
+            "sim": 0.5,
+            "top_k": 5,
             "conf_th": 0.5
         }
         final_rules = training.train_rules(train_val_data, obj_model, hyp_params)
@@ -81,16 +76,11 @@ def main():
 
         # log test results
         wandb.log({
-            "task": task_name,
-            "test_accuracy": test_metrics.get("accuracy", 0),
-            "test_f1": test_metrics.get("f1_score", 0),
-            "test_precision": test_metrics.get("precision", 0),
-            "test_recall": test_metrics.get("recall", 0),
-            "task_idx": task_idx
+            "test_accuracy": test_metrics.get("acc", 0),
+            "test_auc": test_metrics.get("auc", 0),
+            "test_f1": test_metrics.get("f1", 0),
         })
-
         print(f"[{task_name}] Test results:", test_metrics)
-
     wandb.finish()
     return
 

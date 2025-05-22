@@ -112,7 +112,7 @@ def object_proximity(objects: List[Dict], groups=None, device="cpu"):
     embs = []
     for o in objects:
         cont, org = o["h"][0]
-        e = shift_obj_patches_to_global_positions(cont.to(device), org.to(device)).flatten()
+        e = shift_obj_patches_to_global_positions(cont.to(device), torch.tensor(org).to(device)).flatten()
         embs.append(e)
     H = torch.stack(embs, 0)
     H = H / (H.norm(1, keepdim=True) + 1e-8)

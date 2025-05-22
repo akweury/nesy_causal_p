@@ -78,7 +78,7 @@ def grid_search(args, train_data, val_data, obj_model):
     best_acc = -1.0
 
     for prox, sim, top_k in itertools.product(
-            [0.9, 0.95],
+            [0.9],
             [0.5],
             [5]
     ):
@@ -92,12 +92,13 @@ def grid_search(args, train_data, val_data, obj_model):
         # eval on val
         val_metrics = evaluation.eval_rules(val_data, obj_model, rules, hyp_params)
         # average acc across tasks
-        avg_acc = sum(v["acc"] for v in val_metrics.values()) / len(val_metrics)
+        # avg_acc = sum(v["acc"] for v in val_metrics.values()) / len(val_metrics)
 
-        print(f"prox={prox:.2f} sim={sim:.2f} top_k={top_k} → val_avg_acc={avg_acc:.3f}")
-        if avg_acc > best_acc:
-            best_acc = avg_acc
-            best_cfg = (prox, sim, top_k)
+        # print(f"prox={prox:.2f} sim={sim:.2f} top_k={top_k} → val_avg_acc={avg_acc:.3f}")
+        # if avg_acc > best_acc:
+        #     best_acc = avg_acc
+        #     best_cfg = (prox, sim, top_k)
 
-    print("BEST:", best_cfg, "with acc=", best_acc)
-    return best_cfg
+    # print("BEST:", best_cfg, "with acc=", best_acc)
+    val_metrics = {"acc": best_acc}
+    return best_cfg, val_metrics

@@ -650,8 +650,7 @@ def eval_rules(val_data, obj_model, rules_train, hyp_params):
         labels = per_task_labels[task_id]
 
         # compute raw metrics (acc, f1, auc)
-        m = compute_metrics(scores_list, labels, threshold=conf_th)
-        print(f"Task {task_id} →  acc={m['acc']:.3f}   f1={m['f1']:.3f}   auc={m['auc']:.3f}")
-        metrics[task_id] = m
+        metrics = compute_metrics(scores_list, labels, threshold=conf_th)
+        print(f"Task {task_id} →  acc={metrics['acc']:.3f}   f1={metrics['f1']:.3f}   auc={metrics['auc']:.3f}")
 
     return metrics
