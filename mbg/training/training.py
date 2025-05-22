@@ -46,14 +46,11 @@ def train_rules(train_loader, obj_model, hyp_params):
         # --- 1. 基础信息读取 ---
 
         task_id = data["task"][0].split("_")[0]
-        if task_id=="1":
-            print("")
-
         img_label = int(data["img_label"])  # 1 or 0
 
         # --- 2. 物体 & 分组检测 ---
         objs = eval_patch_classifier.evaluate_image(obj_model, data)
-        groups = eval_groups.eval_groups(objs, data["symbolic_data"]["proximity"], hyp_params["prox"])
+        groups = eval_groups.eval_groups(objs, hyp_params["prox"])
         num_groups = len(groups)
 
         # --- 3. Grounding & Clause Generation ---

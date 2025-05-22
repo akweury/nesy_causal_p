@@ -30,7 +30,7 @@ for epoch in range(EPOCHS):
         cj = cj
         label = label
 
-        logits = model(ci, cj, ctx[0])
+        logits = model(ci, cj, ctx[0].unsqueeze(0))
         loss = criterion(logits, label)
         optimizer.zero_grad()
         loss.backward()

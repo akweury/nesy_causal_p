@@ -191,7 +191,7 @@ color_dict_rgb2name = {value: key for key, value in color_matplotlib.items()}
 color_large = [k for k, v in list(color_matplotlib.items())]
 color_large_exclude_gray = [item for item in color_large if item != "lightgray" and item != "lightgrey"]
 bk_shapes = ["none", "triangle", "rectangle", "circle"]
-
+bk_shapes_2 = ["none", "triangle", "square", "circle"]
 gestalt_principles = [
     # 'position_closure',
     # "feature_closure",

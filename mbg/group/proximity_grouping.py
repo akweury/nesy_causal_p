@@ -5,13 +5,12 @@
 import torch
 from typing import List
 from mbg.scorer.context_proximity_scorer import ContextProximityScorer
-from matplotlib import pyplot as plt
+
 from mbg.scorer.context_proximity_dataset import obj2context_pair_data
 
 
 def compute_pairwise_scores(scorer: ContextProximityScorer,
-                            patch_sets,
-                            gt_pairs) -> torch.Tensor:
+                            patch_sets) -> torch.Tensor:
     """
     Args:
         scorer: Trained NeuralProximityScorer
@@ -24,7 +23,7 @@ def compute_pairwise_scores(scorer: ContextProximityScorer,
     scores = torch.zeros(N, N)
     for i in range(N):
         for j in range(i + 1, N):
-            c_i, c_j, others, label = obj2context_pair_data(i, j, patch_sets, gt_pairs)
+            c_i, c_j, others = obj2context_pair_data(i, j, patch_sets)
             s = scorer(c_i.unsqueeze(0), c_j.unsqueeze(0), others)
             pred = (torch.sigmoid(s) > 0.5).float()
             scores[i, j] = scores[j, i] = pred
@@ -34,7 +33,6 @@ def compute_pairwise_scores(scorer: ContextProximityScorer,
 
 def proximity_grouping(obj_patches,
                        scorer: ContextProximityScorer,
-                       gt_pairs,
                        threshold: float = 0.5) -> List[List[int]]:
     """
     Perform grouping based on pairwise proximity scores.
@@ -48,7 +46,7 @@ def proximity_grouping(obj_patches,
         groups: List of groups (each group is a list of indices)
     """
     N = len(obj_patches)
-    scores = compute_pairwise_scores(scorer, obj_patches, gt_pairs)  # (N, N)
+    scores = compute_pairwise_scores(scorer, obj_patches)  # (N, N)
     adj_matrix = (scores > threshold).int()
 
     visited = set()

@@ -73,13 +73,13 @@ def construct_group_representations(objs, group_obj_ids, principle):
     return rep_gs
 
 
-def eval_groups(objs, gt_pairs, prox_th):
+def eval_groups(objs, prox_th):
     obj_patches = extract_patches_from_objs(objs)
     principle = "proximity"
     # load grouping model
     group_prox_model = scorer_config.load_scorer_model("proximity")
     # grouping objects
-    group_ids = proximity_grouping.proximity_grouping(obj_patches, group_prox_model, gt_pairs)
+    group_ids = proximity_grouping.proximity_grouping(obj_patches, group_prox_model, prox_th)
     # encoding the groups
     groups = construct_group_representations(objs, group_ids, principle)
     return groups

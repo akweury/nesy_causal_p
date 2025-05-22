@@ -11,7 +11,7 @@ class ContextProximityScorer(nn.Module):
             self,
             input_dim: int = 2,
             hidden_dim: int = 64,
-            patch_len: int = 16,
+            patch_len: int = 4,
             patch_embed_dim: int = 64,
     ):
         super().__init__()
@@ -43,27 +43,27 @@ class ContextProximityScorer(nn.Module):
         return x  # (B, patch_embed_dim)
 
     def forward(
-            self,
-            contour_i: torch.Tensor,
-            contour_j: torch.Tensor,
-            context_list: torch.Tensor
+        self,
+        contour_i: torch.Tensor,     # (B, 4, 2)
+        contour_j: torch.Tensor,     # (B, 4, 2)
+        context_list: list           # list of (N_ctx, 4, 2), variable-sized
     ) -> torch.Tensor:
-        context_list = context_list.unsqueeze(0)
-        try:
+        B = contour_i.size(0)
 
-            B, num_ctx, P, L, D = context_list.shape
-        except ValueError:
-            context_list = torch.zeros(1, 1, 6, 16, 2)
-            B, num_ctx, P, L, D = context_list.shape
+        # Convert to (B, 1, 4, 2) for encode_patch_set
+        contour_i = contour_i.unsqueeze(1)
+        contour_j = contour_j.unsqueeze(1)
         emb_i = self.encode_patch_set(contour_i)
         emb_j = self.encode_patch_set(contour_j)
 
-        # context 平均
-        ctx_flat = context_list.view(B * num_ctx, P, L, D)
-        ctx_emb_flat = self.encode_patch_set(ctx_flat)  # (B*num_ctx, C)
-        ctx_emb = ctx_emb_flat.view(B, num_ctx, -1)  # (B, num_ctx, C)
-        emb_ctx = ctx_emb.mean(dim=1)  # (B, C)
+        # Handle context (variable-length across batch)
+        emb_ctx_list = []
+        for ctx in context_list:
+            ctx = ctx.unsqueeze(0)  # (1, N_ctx, 4, 2)
+            emb_ctx = self.encode_patch_set(ctx)  # (1, patch_embed_dim)
+            emb_ctx_list.append(emb_ctx)
+        emb_ctx = torch.cat(emb_ctx_list, dim=0)  # (B, patch_embed_dim)
 
         pair_emb = torch.cat([emb_i, emb_j, emb_ctx], dim=1)
-        logit = self.classifier(pair_emb).squeeze(-1)
+        logit = self.classifier(pair_emb).squeeze(-1)  # (B,)
         return logit

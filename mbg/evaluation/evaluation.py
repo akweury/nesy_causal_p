@@ -613,7 +613,7 @@ def eval_rules(val_loader, obj_model, rules_train, hyp_params):
 
         # 1) detect objects & groups
         objs = eval_patch_classifier.evaluate_image(obj_model, data)
-        groups = eval_groups.eval_groups(objs, data["symbolic_data"]["proximity"], prox_th)
+        groups = eval_groups.eval_groups(objs, prox_th)
         num_groups = len(groups)
 
         # 2) ground  & generate validation image’s clauses

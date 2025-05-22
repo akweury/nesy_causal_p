@@ -6,7 +6,7 @@ from mbg.scorer.context_proximity_scorer import ContextProximityScorer
 
 # config
 
-PAIR_PATH = config.kp_gestalt_dataset / "train"
+PAIR_PATH = config.grb_base / "proximity"/"train"
 POS_WEIGHT = 3
 PROXIMITY_MODEL = config.models / "neural_proximity_model.pt"
 EPOCHS = 50

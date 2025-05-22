@@ -11,6 +11,7 @@ import os
 import glob
 from PIL import Image
 import re
+from src import bk
 
 
 class BasicShapeDataset(Dataset):
@@ -105,6 +106,61 @@ class GestaltDataset(Dataset):
         return self.samples[idx]
 
 
+class GrbDataset(Dataset):
+    def __init__(self, folder_path: str, mode: str, val_split: float = 0.2):
+        assert mode in ["train", "val", "test"]
+        self.samples = []
+
+        for task_folder in sorted(os.listdir(folder_path)):
+            full_task_path = os.path.join(folder_path, task_folder)
+            if not os.path.isdir(full_task_path):
+                continue
+
+            for class_label, class_name in enumerate(["negative", "positive"]):
+                class_folder = os.path.join(full_task_path, class_name)
+                if not os.path.isdir(class_folder):
+                    continue
+
+                image_files = sorted([f for f in os.listdir(class_folder) if f.endswith(".png")])
+                split_idx = int(len(image_files) * (1 - val_split))
+
+                if mode == "train":
+                    selected_files = image_files[:split_idx]
+                else:
+                    selected_files = image_files[split_idx:]
+
+                for fname in selected_files:
+                    img_name = os.path.join(class_folder, fname)
+                    json_name = img_name.replace(".png", ".json")
+
+                    if not os.path.exists(json_name):
+                        continue
+
+                    with open(json_name, 'r') as f:
+                        json_data = json.load(f)
+                    sym_data = [{'x':od['x'], 'y':od['y'], 'size':od['size'],
+                                 'color_r':od['color_r'],
+                                 'color_g':od['color_g'],
+                                 'color_b':od['color_b'],
+                                 'shape':bk.bk_shapes_2.index(od['shape']),
+                                 } for od in json_data["img_data"]]
+                    item = {
+                        "image_path": img_name,
+                        "img_label": class_label,
+                        "symbolic_data": sym_data,
+                        "principle": json_data["principle"],
+                        "task": os.path.basename(full_task_path)
+                    }
+                    self.samples.append(item)
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        item = self.samples[idx]
+        return item
+
+
 # class GestaltDataset(Dataset):
 #     def __init__(self, args, imgs):
 #         self.args = args
@@ -188,12 +244,9 @@ class GestaltDataset(Dataset):
 #         return train_data, test_data, principle
 
 
-def load_dataset(args, mode):
-    data_path = config.kp_gestalt_dataset / mode
-    _dataset = GestaltDataset(data_path)
-    data_loader = DataLoader(_dataset,
-                             batch_size=args.batch_size,
-                             shuffle=False)
+def load_dataset(args, data, mode=None):
+    _dataset = GrbDataset(data, mode)
+    data_loader = DataLoader(_dataset, batch_size=args.batch_size, shuffle=False)
     return data_loader
 
 

@@ -36,12 +36,13 @@ def init_io_folders(args, data_folder):
 def main():
     # load exp arguments
     args = args_utils.get_args()
-    # generate dataset
-    generate_training_patterns.genGestaltTraining()
+
+
+
     # Import Generated Data
-    train_loader = dataset.load_dataset(args, mode="train")
-    val_loader = dataset.load_dataset(args, mode="val")
-    test_loader = dataset.load_dataset(args, mode="test")
+    train_loader = dataset.load_dataset(args, data=config.grb_prox/"train", mode='train')
+    val_loader = dataset.load_dataset(args, data=config.grb_prox/"train", mode="val")
+    test_loader = dataset.load_dataset(args, data=config.grb_prox/"test", mode='test')
 
     obj_model = eval_patch_classifier.load_model(args.device)
 

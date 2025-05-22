@@ -26,7 +26,7 @@ def load_model(device):
 def evaluate_shapes(model, data):
     device = torch.device(param.DEVICE)
     patch_sets, labels = patch_preprocess.img_path2patches_and_labels(data["image_path"][0],
-                                                                      data["symbolic_data"]["objects"])
+                                                                      data["symbolic_data"])
     predictions = []
     positions = []
     sizes = []
