@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 import cv2
-from typing import List
+from typing import List, Tuple
 from pathlib import Path
 from PIL import Image
 
@@ -16,7 +16,8 @@ def rgb_to_binary(image_rgb: np.ndarray, threshold: int = 210) -> np.ndarray:
     return binary_np
 
 
-def preprocess_image_to_patch_set(binary_image: np.ndarray, num_patches: int = 6, points_per_patch: int = 16, contour_uniform=True):
+def preprocess_image_to_patch_set(binary_image: np.ndarray, num_patches: int = 6, points_per_patch: int = 16,
+                                  contour_uniform=True):
     """
     Extract patch sets from binary image by contour-based object detection.
     Each patch set contains `num_patches` patches of length `points_per_patch` each.
@@ -242,7 +243,6 @@ def img_path2patches_and_glabels(image_path, gt_dict, g_labels):
         patch_set = preprocess_image_to_patch_set(binary_np)
         patch_sets.append(patch_set)
 
-
     return patch_sets, g_labels_sorted
 
 
@@ -255,9 +255,59 @@ def img_path2one_patches(image_path):
 
 def shift_obj_patches_to_global_positions(obj_patch, shift):
     (x_min, y_min, w, h) = shift
-    x_shift = obj_patch[:,:,0] + w
-    y_shift = obj_patch[:,:,1] + h
+    x_shift = obj_patch[:, :, 0] + w
+    y_shift = obj_patch[:, :, 1] + h
 
     shifted_tensor = torch.stack([x_shift, y_shift], dim=2)
     return shifted_tensor
 
+
+def align_data_and_imgs(objects: List[dict], obj_imgs: List[np.ndarray]) -> Tuple[List[dict], List[np.ndarray]]:
+    """
+    Align object metadata with object images based on centroid location matching.
+    Each image contains a single colored object on a [211, 211, 211] gray background.
+
+    :param objects: List of symbolic object dictionaries with 'x' and 'y' in [0, 1] range
+    :param obj_imgs: List of 1024x1024x3 numpy arrays, one per object
+    :return: Tuple of (aligned_objects, aligned_obj_imgs)
+    """
+    resolution = 1024
+    bg_color = np.array([211, 211, 211], dtype=np.uint8)
+
+    def get_centroid(img: np.ndarray) -> Tuple[float, float]:
+        mask = np.any(img != bg_color, axis=-1)
+        ys, xs = np.where(mask)
+        if len(xs) == 0 or len(ys) == 0:
+            return -1, -1  # invalid
+        cx = xs.mean() / resolution
+        cy = ys.mean() / resolution
+        return cx, cy
+
+    # Compute centroids for images
+    img_centroids = [get_centroid(img) for img in obj_imgs]
+    obj_centroids = [(obj['x'], obj['y']) for obj in objects]
+
+    # Match each image centroid to the closest object centroid
+    aligned_objects = [None] * len(objects)
+    aligned_imgs = [None] * len(objects)
+
+    used_obj_idxs = set()
+    for i, img_c in enumerate(img_centroids):
+        dists = [np.linalg.norm(np.array(img_c) - np.array(obj_c)) if j not in used_obj_idxs else float('inf')
+                 for j, obj_c in enumerate(obj_centroids)]
+        match_idx = int(np.argmin(dists))
+        aligned_objects[i] = objects[match_idx]
+        aligned_imgs[i] = obj_imgs[i]
+        used_obj_idxs.add(match_idx)
+
+    return aligned_objects, aligned_imgs
+
+
+def rgb2patch(rgb_img):
+    width = rgb_img.shape[0]
+    binary_np = rgb_to_binary(rgb_img)
+    patch_set = preprocess_image_to_patch_set(binary_np)
+    patch_set_shifted = torch.stack(
+        (patch_set[0][0][:, :, 0] + patch_set[0][1][0], patch_set[0][0][:, :, 1] + patch_set[0][1][1]), dim=2)
+    patch_set_norm = patch_set_shifted/width
+    return patch_set_norm

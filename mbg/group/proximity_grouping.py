@@ -24,7 +24,7 @@ def compute_pairwise_scores(scorer: ContextProximityScorer,
     for i in range(N):
         for j in range(i + 1, N):
             c_i, c_j, others = obj2context_pair_data(i, j, patch_sets)
-            s = scorer(c_i.unsqueeze(0), c_j.unsqueeze(0), others)
+            s = scorer(c_i.unsqueeze(0), c_j.unsqueeze(0), others.unsqueeze(0))
             pred = (torch.sigmoid(s) > 0.5).float()
             scores[i, j] = scores[j, i] = pred
 

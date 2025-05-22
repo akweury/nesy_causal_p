@@ -1,16 +1,13 @@
 # =============================
 # Dataset: context_proximity_dataset.py
 # =============================
-import torch
-from torch.utils.data import Dataset
-import json
-from pathlib import Path
-
 import json
 import torch
 from pathlib import Path
 from torch.utils.data import Dataset
 import random
+
+from mbg import patch_preprocess
 
 
 def obj2context_pair_data(i, j, patches):
@@ -53,7 +50,7 @@ class ContextProximityDataset(Dataset):
 
     def _load(self):
         task_dirs = [d for d in self.root_dir.iterdir() if d.is_dir()]
-        task_dirs = random.sample(task_dirs, 50)
+        task_dirs = random.sample(task_dirs, 3)
         for task_dir in task_dirs:
             for label_dir in ["positive", "negative"]:
                 labeled_dir = task_dir / label_dir
@@ -61,14 +58,18 @@ class ContextProximityDataset(Dataset):
                     continue
 
                 json_files = sorted(labeled_dir.glob("*.json"))
-                json_files = random.sample(json_files, 3)
-                for json_file in json_files:
+                png_files = sorted(labeled_dir.glob("*.png"))
+
+                for f_i, json_file in enumerate(json_files):
                     with open(json_file) as f:
                         metadata = json.load(f)
                     objects = metadata.get("img_data", [])
+                    obj_imgs = patch_preprocess.img_path2obj_images(png_files[f_i])
+                    if len(objects) != len(obj_imgs):
+                        continue
                     if len(objects) < 2:
                         continue
-
+                    objects, obj_imgs = patch_preprocess.align_data_and_imgs(objects, obj_imgs)
                     for i in range(len(objects)):
                         for j in range(len(objects)):
                             if i == j:
@@ -76,22 +77,18 @@ class ContextProximityDataset(Dataset):
 
                             obj_i = objects[i]
                             obj_j = objects[j]
-
-                            # Convert to tensors of shape (4, 2)
-                            c_i = torch.tensor(self._get_bbox_corners(obj_i["x"], obj_i["y"], obj_i["size"]))
-                            c_j = torch.tensor(self._get_bbox_corners(obj_j["x"], obj_j["y"], obj_j["size"]))
-
+                            c_i = patch_preprocess.rgb2patch(obj_imgs[i])
+                            c_j = patch_preprocess.rgb2patch(obj_imgs[j])
                             # Context objects (excluding i and j)
                             others = []
                             for k in range(len(objects)):
                                 if k != i and k != j:
-                                    obj_k = objects[k]
-                                    c_k = self._get_bbox_corners(obj_k["x"], obj_k["y"], obj_k["size"])
+                                    c_k = patch_preprocess.rgb2patch(obj_imgs[k])
                                     others.append(c_k)
                             if others:
-                                others_tensor = torch.tensor(others)  # (N_ctx, 4, 2)
+                                others_tensor = torch.stack(others, dim=0)  # (N_ctx, 4, 2)
                             else:
-                                others_tensor = torch.zeros((1, 4, 2))  # placeholder if no context
+                                others_tensor = torch.zeros((1, 6, 16, 2))  # placeholder if no context
 
                             label = 1 if obj_i["group_id"] == obj_j["group_id"] and obj_i["group_id"] != -1 else 0
                             self.data.append((c_i, c_j, others_tensor, label))

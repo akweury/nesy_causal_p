@@ -600,17 +600,16 @@ def compute_image_score(learned_rules, rule_scores, eps=1e-8):
     return weighted_sum / (total_weight + eps)
 
 
-def eval_rules(val_loader, obj_model, rules_train, hyp_params):
+def eval_rules(val_data, obj_model, rules_train, hyp_params):
     # we’ll collect per‐task true / pred
     per_task_scores = defaultdict(list)
     per_task_labels = defaultdict(list)
     conf_th = hyp_params["conf_th"]
     prox_th = hyp_params["prox"]
+    task_id = val_data["task"][0].split("_")[0]
     # for each rule, we need to know the valuation result, so either 1 or 0
-    for data in val_loader:
-        task_id = data["task"][0].split("_")[0]
+    for data in val_data["positive"] + val_data["negative"]:
         true_label = int(data["img_label"][0])
-
         # 1) detect objects & groups
         objs = eval_patch_classifier.evaluate_image(obj_model, data)
         groups = eval_groups.eval_groups(objs, prox_th)

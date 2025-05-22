@@ -116,6 +116,8 @@ class GrbDataset(Dataset):
             if not os.path.isdir(full_task_path):
                 continue
 
+            task_data = {"task": task_folder, "positive": [], "negative": []}
+
             for class_label, class_name in enumerate(["negative", "positive"]):
                 class_folder = os.path.join(full_task_path, class_name)
                 if not os.path.isdir(class_folder):
@@ -126,39 +128,47 @@ class GrbDataset(Dataset):
 
                 if mode == "train":
                     selected_files = image_files[:split_idx]
-                else:
+                elif mode == "val":
                     selected_files = image_files[split_idx:]
+                elif mode == "test":
+                    selected_files = image_files  # full set
 
                 for fname in selected_files:
-                    img_name = os.path.join(class_folder, fname)
-                    json_name = img_name.replace(".png", ".json")
+                    img_path = os.path.join(class_folder, fname)
+                    json_path = img_path.replace(".png", ".json")
 
-                    if not os.path.exists(json_name):
+                    if not os.path.exists(json_path):
                         continue
 
-                    with open(json_name, 'r') as f:
+                    with open(json_path, 'r') as f:
                         json_data = json.load(f)
-                    sym_data = [{'x':od['x'], 'y':od['y'], 'size':od['size'],
-                                 'color_r':od['color_r'],
-                                 'color_g':od['color_g'],
-                                 'color_b':od['color_b'],
-                                 'shape':bk.bk_shapes_2.index(od['shape']),
-                                 } for od in json_data["img_data"]]
-                    item = {
-                        "image_path": img_name,
+
+                    sym_data = [{
+                        'x': od['x'],
+                        'y': od['y'],
+                        'size': od['size'],
+                        'color_r': od['color_r'],
+                        'color_g': od['color_g'],
+                        'color_b': od['color_b'],
+                        'shape': bk.bk_shapes_2.index(od['shape']),
+                    } for od in json_data["img_data"]]
+
+                    entry = {
+                        "image_path": img_path,
                         "img_label": class_label,
                         "symbolic_data": sym_data,
-                        "principle": json_data["principle"],
-                        "task": os.path.basename(full_task_path)
+                        "principle": json_data["principle"]
                     }
-                    self.samples.append(item)
+                    task_data[class_name].append(entry)
+
+            if task_data["positive"] or task_data["negative"]:
+                self.samples.append(task_data)
 
     def __len__(self):
         return len(self.samples)
 
     def __getitem__(self, idx):
-        item = self.samples[idx]
-        return item
+        return self.samples[idx]
 
 
 # class GestaltDataset(Dataset):
@@ -292,3 +302,30 @@ def load_train_val_dataset(args, train_loader, val_loader):
         collate_fn=train_loader.collate_fn
     )
     return train_val_loader
+
+
+class MultiSplitTaskLoader(Dataset):
+    def __init__(self, train_set, val_set, test_set):
+        min_len = min(len(train_set), len(val_set), len(test_set))
+        self.train_set = train_set
+        self.val_set = val_set
+        self.test_set = test_set
+        self.length = min_len  # to allow zipping
+
+    def __len__(self):
+        return self.length
+
+    def __getitem__(self, idx):
+        return (
+            self.train_set[idx],
+            self.val_set[idx],
+            self.test_set[idx]
+        )
+
+
+def load_combined_dataset():
+    combined_dataset = MultiSplitTaskLoader(GrbDataset(config.grb_prox / "train", "train"),
+                                            GrbDataset(config.grb_prox / "train", "val"),
+                                            GrbDataset(config.grb_prox / "test", "test"))
+    combined_loader = DataLoader(combined_dataset, batch_size=1, shuffle=False)
+    return combined_loader

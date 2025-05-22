@@ -35,17 +35,15 @@ def train_grouping_model(train_loader, device, epochs=10, LR = 1e-3):
             optimizer.step()
             optimizer.zero_grad()
     return model
-def train_rules(train_loader, obj_model, hyp_params):
+def train_rules(train_data, obj_model, hyp_params):
     # 1) 收集每张图的频次 & group 数
     pos_per_task_train = defaultdict(list)  # task_id -> List[Counter[Clause,int]] (正例)
     neg_per_task_train = defaultdict(list)  # task_id -> List[Counter[Clause,int]] (负例)
     pos_group_counts_train = defaultdict(list)  # task_id -> List[int] 每张正例图的 group 数
     neg_group_counts_train = defaultdict(list)  # task_id -> List[int] 每张负例图的 group 数
-
-    for data in train_loader:
+    task_id = train_data["task"][0].split("_")[0]
+    for data in train_data["positive"]+train_data["negative"]:
         # --- 1. 基础信息读取 ---
-
-        task_id = data["task"][0].split("_")[0]
         img_label = int(data["img_label"])  # 1 or 0
 
         # --- 2. 物体 & 分组检测 ---
@@ -75,7 +73,7 @@ def train_rules(train_loader, obj_model, hyp_params):
     return rules_train
 
 
-def grid_search(args, train_loader, val_loader, obj_model):
+def grid_search(args, train_data, val_data, obj_model):
     best_cfg = None
     best_acc = -1.0
 
@@ -89,10 +87,10 @@ def grid_search(args, train_loader, val_loader, obj_model):
         # Step 0: Train the proximity grouping model
         # group_prox_model = train_grouping_model(train_loader, device=args.device)
         # learn on train
-        rules = train_rules(train_loader, obj_model, hyp_params)
+        rules = train_rules(train_data, obj_model, hyp_params)
 
         # eval on val
-        val_metrics = evaluation.eval_rules(val_loader,obj_model, rules,hyp_params)
+        val_metrics = evaluation.eval_rules(val_data, obj_model, rules, hyp_params)
         # average acc across tasks
         avg_acc = sum(v["acc"] for v in val_metrics.values()) / len(val_metrics)
 
