@@ -1,4 +1,4 @@
-# Base image with PyTorch + CUDA from NVIDIA NGC
+# Base image from NVIDIA with PyTorch + CUDA
 FROM nvcr.io/nvidia/pytorch:23.10-py3
 
 # Set working directory
@@ -7,12 +7,15 @@ WORKDIR /app
 # Set timezone to UTC
 RUN ln -snf /usr/share/zoneinfo/Etc/UTC /etc/localtime && echo "UTC" > /etc/timezone
 
+# Disable APT hook that causes errors in NGC images
+RUN rm -f /etc/apt/apt.conf.d/docker-clean || true
+
 # Avoid interactive prompts from apt and pip
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PIP_NO_CACHE_DIR=1
 ENV PIP_NO_PROGRESS_BAR=off
 
-# Install system dependencies
+# Install system dependencies (safe and minimal)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         libgl1 \
@@ -24,18 +27,18 @@ RUN apt-get update && \
 # Upgrade pip and core Python packaging tools
 RUN python -m pip install --upgrade pip setuptools wheel
 
-# Install Python dependencies
+# Install Python requirements
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install additional tools (OpenCV and debugger)
+# Add optional dev tools (OpenCV, debugger)
 RUN pip install --no-cache-dir \
     opencv-python==4.8.0.74 \
     debugpy \
     pydevd-pycharm~=241.14494.241
 
-# Optional: copy project code (can be mounted instead)
+# Optional: copy source code
 # COPY . .
 
-# Default command (can be overridden by PyCharm run config)
-# CMD ["python", "scripts/main.py"]
+# Optional: run script with debugpy
+# CMD ["python3", "-m", "debugpy", "--listen", "0.0.0.0:5678", "--wait-for-client", "main.py"]
