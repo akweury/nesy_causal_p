@@ -12,7 +12,7 @@ ENV PIP_NO_CACHE_DIR=1
 ENV PIP_NO_PROGRESS_BAR=off
 
 # Upgrade pip + core tools only
-RUN python -m pip install --upgrade pip setuptools wheel
+RUN python -m pip install --upgrade pip setuptools
 
 # Copy and install Python requirements
 COPY requirements.txt .
