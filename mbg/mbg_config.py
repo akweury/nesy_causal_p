@@ -25,7 +25,7 @@ RANDOM_SEED = 42
 BATCH_SIZE = 32
 LEARNING_RATE = 1e-3
 EPOCHS = 200
-DEVICE = "cpu"  # or "cuda:0"
+
 
 # ==== 可视化 ====
 LABEL_NAMES = {0: "triangle", 1: "rectangle", 2: "ellipse"}
