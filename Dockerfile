@@ -1,38 +1,41 @@
-# Use the official NVIDIA PyTorch image with CUDA support
+# Base image with PyTorch + CUDA from NVIDIA NGC
 FROM nvcr.io/nvidia/pytorch:23.10-py3
 
-# Set the working directory inside the container
+# Set working directory
 WORKDIR /app
-RUN ln -snf /usr/share/zoneinfo/Etc/UTC /etc/localtime
+
+# Set timezone to UTC
+RUN ln -snf /usr/share/zoneinfo/Etc/UTC /etc/localtime && echo "UTC" > /etc/timezone
+
+# Avoid interactive prompts from apt and pip
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PIP_NO_CACHE_DIR=1
+ENV PIP_NO_PROGRESS_BAR=off
+
 # Install system dependencies
-RUN apt-get update && apt-get install -y \
-    libgl1 \
-    mesa-utils \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        libgl1 \
+        mesa-utils \
+        git && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
-RUN pip install --upgrade pip
-# Ensure SSH key has correct permissions (if using SSH cloning)
-#ADD .ssh/ /root/.ssh/
+# Upgrade pip and core Python packaging tools
+RUN python -m pip install --upgrade pip setuptools wheel
 
-#RUN chmod 600 /root/.ssh/id_ed25519 && ssh-keyscan github.com >> /root/.ssh/known_hosts
-
-
-#ARG GITHUB_TOKEN
-RUN apt update && apt install -y git
-RUN #git clone https://$GITHUB_TOKEN@github.com/akweury/nesy_causal_p.git /app
-
-# Upgrade pip, setuptools, and wheel
-RUN pip install --upgrade pip setuptools wheel
-# Install Python dependencies with --no-cache-dir
-WORKDIR /app
-
-RUN pip install opencv-python==4.8.0.74
+# Install Python dependencies
 COPY requirements.txt .
-RUN pip install -r requirements.txt
-RUN pip install debugpy
-RUN pip install pydevd-pycharm~=241.14494.241
-#CMD ["python3", "-m", "debugpy", "--wait-for-client", "--listen", "0.0.0.0:5678", "play.py"]
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Set the default command for training (adjust as needed)
-#CMD ["python", "scripts/main.py"]
+# Install additional tools (OpenCV and debugger)
+RUN pip install --no-cache-dir \
+    opencv-python==4.8.0.74 \
+    debugpy \
+    pydevd-pycharm~=241.14494.241
 
+# Optional: copy project code (can be mounted instead)
+# COPY . .
+
+# Default command (can be overridden by PyCharm run config)
+# CMD ["python", "scripts/main.py"]
