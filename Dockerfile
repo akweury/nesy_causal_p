@@ -10,7 +10,7 @@ ENV PIP_NO_CACHE_DIR=1
 ENV PIP_NO_PROGRESS_BAR=off
 
 # (1) Use a specific stable pip version to avoid threading errors
-RUN python -m pip install --no-cache-dir --upgrade "pip==23.2.1" "setuptools" "wheel"
+# RUN python -m pip install --no-cache-dir --upgrade "pip==23.2.1" "setuptools" "wheel"
 
 # (2) Copy requirements and install them
 COPY requirements.txt .
