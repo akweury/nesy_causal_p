@@ -6,13 +6,14 @@ import pynvml
 import time
 import threading
 import wandb
+from collections import defaultdict
+import json
 
 from src.utils import args_utils
 from src import dataset
-from kandinsky_generator import generate_training_patterns
+
 from mbg.object import eval_patch_classifier
 from mbg.training import training
-from src.dataset import GrbDataset
 from mbg.evaluation import evaluation
 
 def init_io_folders(args, data_folder):
@@ -36,6 +37,7 @@ def init_io_folders(args, data_folder):
     os.makedirs(args.out_cf_folder, exist_ok=True)
 
 
+
 def main():
     # load exp arguments
     args = args_utils.get_args()
@@ -45,44 +47,80 @@ def main():
     # initialize wandb
     wandb.init(project="grb-pipeline", config=args.__dict__, name=args.exp_name)
 
+    # store metrics per property value
+    property_stats = defaultdict(lambda: defaultdict(list))  # {prop_name: {True: [], False: []}}
+
     for task_idx, (train_data, val_data, test_data) in enumerate(combined_loader):
         task_name = train_data["task"]
+        properties = {
+            "non_overlap": train_data["non_overlap"],
+            "qualifier_all": train_data["qualifier_all"],
+            "qualifier_exist": train_data["qualifier_exist"],
+            "prop_shape": train_data["prop_shape"],
+            "prop_color": train_data["prop_color"],
+            "prop_size": train_data["prop_size"],
+            "prop_count": train_data["prop_count"],
+        }
 
-        # 1) hyperparam search
-        # (best_prox, best_sim, best_topk), train_metrics = training.grid_search(args, train_data, val_data, obj_model)
-
-        # log best hyperparams
-        # wandb.log({
-        #     "train_acc": train_metrics.get("acc",0),
-        # })
-
-        # 2) merge train+val into a single loader
+        # merge train + val
         train_val_data = {
             "task": task_name,
             "positive": train_data["positive"] + val_data["positive"],
             "negative": train_data["negative"] + val_data["negative"]
         }
-        # 3) re-learn your final rules on the combined set
-        hyp_params = {
-            "prox": 0.9,
-            "sim": 0.5,
-            "top_k": 5,
-            "conf_th": 0.5
-        }
-        final_rules = training.train_rules(train_val_data, obj_model, hyp_params)
 
-        # 4) evaluate on the held-out test set
+        hyp_params = {"prox": 0.9, "sim": 0.5, "top_k": 5, "conf_th": 0.5}
+        final_rules = training.train_rules(train_val_data, obj_model, hyp_params)
         test_metrics = evaluation.eval_rules(test_data, obj_model, final_rules, hyp_params)
 
-        # log test results
+        # log raw results
         wandb.log({
             "test_accuracy": test_metrics.get("acc", 0),
             "test_auc": test_metrics.get("auc", 0),
             "test_f1": test_metrics.get("f1", 0),
         })
         print(f"[{task_name}] Test results:", test_metrics)
+
+        # accumulate statistics
+        for prop_name, prop_value in properties.items():
+            property_stats[prop_name][prop_value].append(test_metrics)
+            wandb.log({
+                f"{prop_name}_{prop_value}/task_name": task_name,
+                f"{prop_name}_{prop_value}/acc": test_metrics.get("acc", 0),
+                f"{prop_name}_{prop_value}/f1": test_metrics.get("f1", 0),
+                f"{prop_name}_{prop_value}/auc": test_metrics.get("auc", 0),
+            })
+    # analyze and log aggregated statistics
+    analysis_summary = {}
+    for prop_name, value_dict in property_stats.items():
+        for value in [True, False]:
+            metrics_list = value_dict.get(value, [])
+            if metrics_list:
+                avg_acc = sum(m.get("acc", 0) for m in metrics_list) / len(metrics_list)
+                avg_f1 = sum(m.get("f1", 0) for m in metrics_list) / len(metrics_list)
+                avg_auc = sum(m.get("auc", 0) for m in metrics_list) / len(metrics_list)
+
+                key_prefix = f"{prop_name}_{value}"
+                wandb.log({
+                    f"{key_prefix}_avg_acc": avg_acc,
+                    f"{key_prefix}_avg_f1": avg_f1,
+                    f"{key_prefix}_avg_auc": avg_auc,
+                })
+
+                analysis_summary[key_prefix] = {
+                    "avg_acc": avg_acc,
+                    "avg_f1": avg_f1,
+                    "avg_auc": avg_auc,
+                    "count": len(metrics_list)
+                }
+
+    # save analysis to file
+    with open(f"analysis_summary_{args.exp_name}.json", "w") as f:
+        json.dump(analysis_summary, f, indent=2)
+
     wandb.finish()
     return
+
 
 
 def monitor_cpu_memory(interval=0.1):

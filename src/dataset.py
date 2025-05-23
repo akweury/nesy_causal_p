@@ -117,7 +117,7 @@ class GrbDataset(Dataset):
                 continue
 
             task_data = {"task": task_folder, "positive": [], "negative": []}
-
+            meta_data_loaded = False
             for class_label, class_name in enumerate(["negative", "positive"]):
                 class_folder = os.path.join(full_task_path, class_name)
                 if not os.path.isdir(class_folder):
@@ -143,6 +143,16 @@ class GrbDataset(Dataset):
                     with open(json_path, 'r') as f:
                         json_data = json.load(f)
 
+                    if not meta_data_loaded:
+                        task_data["principle"] = json_data["principle"]
+                        task_data["non_overlap"] = json_data["non_overlap"]
+                        task_data["qualifier_all"] = json_data["qualifier_all"]
+                        task_data["qualifier_exist"] = json_data["qualifier_exist"]
+                        task_data["prop_shape"] = json_data["prop_shape"]
+                        task_data["prop_color"] = json_data["prop_color"]
+                        task_data["prop_size"] = json_data["prop_size"]
+                        task_data["prop_count"] = json_data["prop_count"]
+                        meta_data_loaded = True
                     sym_data = [{
                         'x': od['x'],
                         'y': od['y'],
