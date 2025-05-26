@@ -7,6 +7,7 @@ from mbg.scorer import scorer_config
 from mbg.scorer.context_proximity_dataset import obj2context_pair_data
 
 from mbg.group import proximity_grouping
+from mbg.group import grouping_similarity
 from mbg.group import symbolic_group_features
 from mbg.group.neural_group_features import NeuralGroupEncoder
 from src import bk
@@ -73,13 +74,21 @@ def construct_group_representations(objs, group_obj_ids, principle):
     return rep_gs
 
 
-def eval_groups(objs, prox_th):
+def eval_groups(objs, prox_th, principle):
     obj_patches = extract_patches_from_objs(objs)
-    principle = "proximity"
-    # load grouping model
-    group_prox_model = scorer_config.load_scorer_model("proximity")
+
+
+    if principle=="proximity":
+        # load grouping model
+        group_model = scorer_config.load_scorer_model("proximity")
+        group_ids = proximity_grouping.proximity_grouping(obj_patches, group_model, prox_th)
+    elif principle == "similarity":
+        group_model = scorer_config.load_scorer_model("similarity")
+        group_ids = grouping_similarity.similarity_grouping(objs, group_model)
+    else:
+        raise ValueError
     # grouping objects
-    group_ids = proximity_grouping.proximity_grouping(obj_patches, group_prox_model, prox_th)
+
     # encoding the groups
     groups = construct_group_representations(objs, group_ids, principle)
     return groups

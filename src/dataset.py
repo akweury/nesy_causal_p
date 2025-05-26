@@ -106,6 +106,13 @@ class GestaltDataset(Dataset):
         return self.samples[idx]
 
 
+def shape_to_id(name):
+    if name == "pac_man":
+        n = bk.bk_shapes_2.index("circle")
+    else:
+        n = bk.bk_shapes_2.index(name)
+    return n
+
 class GrbDataset(Dataset):
     def __init__(self, folder_path: str, mode: str, val_split: float = 0.2):
         assert mode in ["train", "val", "test"]
@@ -153,6 +160,7 @@ class GrbDataset(Dataset):
                         task_data["prop_size"] = json_data["prop_size"]
                         task_data["prop_count"] = json_data["prop_count"]
                         meta_data_loaded = True
+
                     sym_data = [{
                         'x': od['x'],
                         'y': od['y'],
@@ -160,7 +168,7 @@ class GrbDataset(Dataset):
                         'color_r': od['color_r'],
                         'color_g': od['color_g'],
                         'color_b': od['color_b'],
-                        'shape': bk.bk_shapes_2.index(od['shape']),
+                        'shape': shape_to_id(od["shape"]),
                     } for od in json_data["img_data"]]
 
                     entry = {
@@ -333,9 +341,9 @@ class MultiSplitTaskLoader(Dataset):
         )
 
 
-def load_combined_dataset():
-    combined_dataset = MultiSplitTaskLoader(GrbDataset(config.grb_prox / "train", "train"),
-                                            GrbDataset(config.grb_prox / "train", "val"),
-                                            GrbDataset(config.grb_prox / "test", "test"))
+def load_combined_dataset(principle_path):
+    combined_dataset = MultiSplitTaskLoader(GrbDataset(principle_path / "train", "train"),
+                                            GrbDataset(principle_path / "train", "val"),
+                                            GrbDataset(principle_path / "test", "test"))
     combined_loader = DataLoader(combined_dataset, batch_size=1, shuffle=False)
     return combined_loader

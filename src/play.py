@@ -16,6 +16,7 @@ from mbg.object import eval_patch_classifier
 from mbg.training import training
 from mbg.evaluation import evaluation
 
+
 def init_io_folders(args, data_folder):
     args.train_folder = data_folder / "train" / "task_true_pattern"
     os.makedirs(args.train_folder, exist_ok=True)
@@ -37,15 +38,24 @@ def init_io_folders(args, data_folder):
     os.makedirs(args.out_cf_folder, exist_ok=True)
 
 
-
 def main():
     # load exp arguments
     args = args_utils.get_args()
-    combined_loader = dataset.load_combined_dataset()
+
+    train_principle = args.principle
+
+    if train_principle == "similarity":
+        principle_path = config.grb_simi
+    elif train_principle =="proximity":
+        principle_path = config.grb_prox
+    else:
+        raise ValueError
+
+    combined_loader = dataset.load_combined_dataset(principle_path)
     obj_model = eval_patch_classifier.load_model(args.device)
 
     # initialize wandb
-    wandb.init(project="grb-pipeline", config=args.__dict__, name=args.exp_name)
+    # wandb.init(project="grb-pipeline", config=args.__dict__, name=args.exp_name)
 
     # store metrics per property value
     property_stats = defaultdict(lambda: defaultdict(list))  # {prop_name: {True: [], False: []}}
@@ -70,8 +80,8 @@ def main():
         }
 
         hyp_params = {"prox": 0.9, "sim": 0.5, "top_k": 5, "conf_th": 0.5}
-        final_rules = training.train_rules(train_val_data, obj_model, hyp_params)
-        test_metrics = evaluation.eval_rules(test_data, obj_model, final_rules, hyp_params)
+        final_rules = training.train_rules(train_val_data, obj_model, hyp_params, train_principle)
+        test_metrics = evaluation.eval_rules(test_data, obj_model, final_rules, hyp_params, train_principle)
 
         # log raw results
         wandb.log({
@@ -79,17 +89,17 @@ def main():
             "test_auc": test_metrics.get("auc", 0),
             "test_f1": test_metrics.get("f1", 0),
         })
-        print(f"[{task_name}] Test results:", test_metrics)
+        print(f"{task_idx + 1}/{combined_loader.__len__()}[{task_name}] Test results:", test_metrics)
 
         # accumulate statistics
         for prop_name, prop_value in properties.items():
             property_stats[prop_name][prop_value].append(test_metrics)
-            wandb.log({
-                f"{prop_name}_{prop_value}/task_name": task_name,
-                f"{prop_name}_{prop_value}/acc": test_metrics.get("acc", 0),
-                f"{prop_name}_{prop_value}/f1": test_metrics.get("f1", 0),
-                f"{prop_name}_{prop_value}/auc": test_metrics.get("auc", 0),
-            })
+            # wandb.log({
+            #     f"{prop_name}_{prop_value}/task_name": task_name,
+            #     f"{prop_name}_{prop_value}/acc": test_metrics.get("acc", 0),
+            #     f"{prop_name}_{prop_value}/f1": test_metrics.get("f1", 0),
+            #     f"{prop_name}_{prop_value}/auc": test_metrics.get("auc", 0),
+            # })
     # analyze and log aggregated statistics
     analysis_summary = {}
     for prop_name, value_dict in property_stats.items():
@@ -101,11 +111,11 @@ def main():
                 avg_auc = sum(m.get("auc", 0) for m in metrics_list) / len(metrics_list)
 
                 key_prefix = f"{prop_name}_{value}"
-                wandb.log({
-                    f"{key_prefix}_avg_acc": avg_acc,
-                    f"{key_prefix}_avg_f1": avg_f1,
-                    f"{key_prefix}_avg_auc": avg_auc,
-                })
+                # wandb.log({
+                #     f"{key_prefix}_avg_acc": avg_acc,
+                #     f"{key_prefix}_avg_f1": avg_f1,
+                #     f"{key_prefix}_avg_auc": avg_auc,
+                # })
 
                 analysis_summary[key_prefix] = {
                     "avg_acc": avg_acc,
@@ -120,7 +130,6 @@ def main():
 
     wandb.finish()
     return
-
 
 
 def monitor_cpu_memory(interval=0.1):

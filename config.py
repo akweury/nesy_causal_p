@@ -72,6 +72,7 @@ kp_challenge_dataset = storage / "dataset" / "challenge"
 kp_gestalt_dataset = storage / "dataset" / "gestalt"
 grb_base = storage / "dataset" / "grb"
 grb_prox = grb_base / "proximity"
+grb_simi = grb_base / "similarity"
 
 
 # clear_folder(kp_gestalt_dataset)

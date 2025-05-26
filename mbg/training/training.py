@@ -35,7 +35,7 @@ def train_grouping_model(train_loader, device, epochs=10, LR = 1e-3):
             optimizer.step()
             optimizer.zero_grad()
     return model
-def train_rules(train_data, obj_model, hyp_params):
+def train_rules(train_data, obj_model, hyp_params, train_principle):
     # 1) 收集每张图的频次 & group 数
     pos_per_task_train = defaultdict(list)  # task_id -> List[Counter[Clause,int]] (正例)
     neg_per_task_train = defaultdict(list)  # task_id -> List[Counter[Clause,int]] (负例)
@@ -48,7 +48,7 @@ def train_rules(train_data, obj_model, hyp_params):
 
         # --- 2. 物体 & 分组检测 ---
         objs = eval_patch_classifier.evaluate_image(obj_model, data)
-        groups = eval_groups.eval_groups(objs, hyp_params["prox"])
+        groups = eval_groups.eval_groups(objs, hyp_params["prox"], train_principle)
         num_groups = len(groups)
 
         # --- 3. Grounding & Clause Generation ---
