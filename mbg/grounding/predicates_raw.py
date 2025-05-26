@@ -41,7 +41,7 @@ def soft_predicate(name: str):
 
 @object_predicate("has_shape")
 def has_shape(objects: List[Dict[str, Any]], groups=None, device="cpu"):
-    return torch.tensor([o["s"]["shape"] for o in objects],
+    return torch.tensor([o["s"]["shape"].argmax() - 1 for o in objects],
                         dtype=torch.long, device=device)
 
 

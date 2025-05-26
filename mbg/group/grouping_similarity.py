@@ -1,10 +1,10 @@
 # Created by MacBook Pro at 23.05.25
 import torch
-from mbg.scorer.context_similarity_scorer import shape_to_onehot
+
 from src import bk
 
 
-def similarity_grouping(objs, model):
+def similarity_grouping(objs, model, threshold):
     N = len(objs)
     scores = torch.zeros(N, N)
 
@@ -45,31 +45,31 @@ def shape_onehot(shape_id):
 
 
 def obj2pair_data(objects, i, j):
-    obj_i = objects[i]["s"]
-    obj_j = objects[j]["s"]
+    obj_i = objects[i]
+    obj_j = objects[j]
 
     # Extract features
     c_i = {
         "color": torch.tensor(obj_i["color"], dtype=torch.float32) / 255,
         "size": torch.tensor([obj_i["w"]/1024], dtype=torch.float32),
-        "shape": shape_onehot(obj_i["shape"] + 1)
+        "shape": obj_j["shape"],
     }
 
     c_j = {
         "color": torch.tensor(obj_j["color"], dtype=torch.float32) / 255,
         "size": torch.tensor([obj_j["w"]/1024], dtype=torch.float32),
-        "shape": shape_onehot(obj_j["shape"] + 1)
+        "shape": obj_j["shape"],
     }
 
     # Context (exclude i and j)
     others = []
     for k in range(len(objects)):
         if k != i and k != j:
-            obj_k = objects[k]["s"]
+            obj_k = objects[k]
             others.append({
                 "color": torch.tensor(obj_k["color"], dtype=torch.float32) / 255,
                 "size": torch.tensor([obj_k["w"]/1024], dtype=torch.float32),
-                "shape": shape_onehot(obj_k["shape"] + 1)
+                "shape": obj_k["shape"]
             })
 
     if not others:

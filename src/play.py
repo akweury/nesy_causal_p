@@ -84,11 +84,11 @@ def main():
         test_metrics = evaluation.eval_rules(test_data, obj_model, final_rules, hyp_params, train_principle)
 
         # log raw results
-        wandb.log({
-            "test_accuracy": test_metrics.get("acc", 0),
-            "test_auc": test_metrics.get("auc", 0),
-            "test_f1": test_metrics.get("f1", 0),
-        })
+        # wandb.log({
+        #     "test_accuracy": test_metrics.get("acc", 0),
+        #     "test_auc": test_metrics.get("auc", 0),
+        #     "test_f1": test_metrics.get("f1", 0),
+        # })
         print(f"{task_idx + 1}/{combined_loader.__len__()}[{task_name}] Test results:", test_metrics)
 
         # accumulate statistics

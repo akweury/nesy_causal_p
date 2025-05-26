@@ -14,6 +14,7 @@ from tqdm import tqdm
 from src import bk
 from mbg.scorer import similarity_scorer
 from mbg.scorer import scorer_config
+from mbg.group import grouping_similarity
 
 
 def context_collate_fn(batch):
@@ -46,11 +47,12 @@ class ContextSimilarityDataset(Dataset):
     def __init__(self, root_dir=scorer_config.SIMILARITY_PATH):
         self.root_dir = Path(root_dir)
         self.data = []
-        self._load()
+        self._load_balanced()
 
-    def _load(self):
-        task_dirs = [d for d in self.root_dir.iterdir() if d.is_dir()]
-        task_dirs = random.sample(task_dirs, 20)
+    def _load_balanced(self):
+        task_dirs = sorted([d for d in self.root_dir.iterdir() if d.is_dir()])[:20]
+        pos_data, neg_data = [], []
+
         for task_dir in task_dirs:
             for label_dir in ["positive", "negative"]:
                 labeled_dir = task_dir / label_dir
@@ -63,53 +65,34 @@ class ContextSimilarityDataset(Dataset):
                     with open(json_file) as f:
                         metadata = json.load(f)
                     objects = metadata.get("img_data", [])
-                    if len(objects) < 2 or len(objects)>20:
+                    if len(objects) < 2 or len(objects) > 10:
                         continue
 
+                    # enrich objects
+                    for o in objects:
+                        o["color"] = [o["color_r"], o["color_g"], o["color_b"]]
+                        o["w"] = o["size"] * 1024 + random.uniform(-5, 5)
+                        o["shape"] = shape_to_onehot(o["shape"])
 
                     for i in range(len(objects)):
                         for j in range(len(objects)):
                             if i == j:
                                 continue
-
                             obj_i = objects[i]
                             obj_j = objects[j]
-
-                            # Extract features
-                            c_i = {
-                                "color": torch.tensor([obj_i["color_r"], obj_i["color_g"], obj_i["color_b"]],
-                                                      dtype=torch.float32) / 255,
-                                "size": torch.tensor([obj_i["size"]], dtype=torch.float32),
-                                "shape": shape_to_onehot(obj_i["shape"])
-                            }
-
-                            c_j = {
-                                "color": torch.tensor([obj_j["color_r"], obj_j["color_g"], obj_j["color_b"]],
-                                                      dtype=torch.float32) / 255,
-                                "size": torch.tensor([obj_j["size"]], dtype=torch.float32),
-                                "shape": shape_to_onehot(obj_j["shape"])
-                            }
-
-                            # Context (exclude i and j)
-                            others = []
-                            for k, obj_k in enumerate(objects):
-                                if k != i and k != j:
-                                    others.append({
-                                        "color": torch.tensor([obj_k["color_r"], obj_k["color_g"], obj_k["color_b"]],
-                                                              dtype=torch.float32) / 255,
-                                        "size": torch.tensor([obj_k["size"]], dtype=torch.float32),
-                                        "shape": shape_to_onehot(obj_k["shape"])
-                                    })
-
-                            if not others:
-                                others = [{
-                                    "color": torch.zeros(3),
-                                    "size": torch.zeros(1),
-                                    "shape": torch.zeros(len(bk.bk_shapes))
-                                }]
-
+                            c_i, c_j, others = grouping_similarity.obj2pair_data(objects, i, j)
                             label = 1 if obj_i["group_id"] == obj_j["group_id"] and obj_i["group_id"] != -1 else 0
-                            self.data.append((c_i, c_j, others, label))
+                            item = (c_i, c_j, others, label)
+                            (pos_data if label == 1 else neg_data).append(item)
+
+        # Balance dataset
+        min_len = min(len(pos_data), len(neg_data))
+        random.shuffle(pos_data)
+        random.shuffle(neg_data)
+        self.data = pos_data[:min_len] + neg_data[:min_len]
+        random.shuffle(self.data)
+
+        print(f"Loaded {len(self.data)} samples (balanced: {min_len} pos, {min_len} neg)")
 
     def __len__(self):
         return len(self.data)
@@ -118,10 +101,10 @@ class ContextSimilarityDataset(Dataset):
         c_i, c_j, others, label = self.data[idx]
         return c_i, c_j, others, torch.tensor(label, dtype=torch.float32)
 
-def train_model():
 
+def train_model():
     # Hyperparameters
-    EPOCHS = 10
+    EPOCHS = 20
     BATCH_SIZE = 1
     LR = 1e-3
 
@@ -129,6 +112,10 @@ def train_model():
     dataset = ContextSimilarityDataset()
     model = similarity_scorer.ContextualSimilarityScorer()
     data_loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True, collate_fn=context_collate_fn)
+
+    pos = sum(label for _, _, _, label in dataset)
+    neg = len(dataset) - pos
+    print(f"Positive: {pos}, Negative: {neg}, Ratio: {pos / len(dataset):.2f}")
 
     # Loss and Optimizer
     criterion = nn.BCEWithLogitsLoss()
@@ -139,7 +126,7 @@ def train_model():
         total_loss, correct, total = 0, 0, 0
         for ci, cj, ctx, label in tqdm(data_loader, desc=f"Epoch {epoch + 1}"):
             # Forward pass
-            logits = model(ctx[0], ci, cj)  # ctx[0]: context for B=1
+            logits = model(ctx[0], ci[0], cj[0])  # ctx[0]: context for B=1
             loss = criterion(logits, label)
 
             # Backprop

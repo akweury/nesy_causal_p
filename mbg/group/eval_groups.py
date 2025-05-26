@@ -16,7 +16,7 @@ from src import bk
 def extract_patches_from_objs(objs):
     patches = []
     for obj in objs:
-        patches.append(obj["h"])
+        patches.append(obj)
     return patches
 
 
@@ -74,17 +74,18 @@ def construct_group_representations(objs, group_obj_ids, principle):
     return rep_gs
 
 
-def eval_groups(objs, prox_th, principle):
-    obj_patches = extract_patches_from_objs(objs)
+def eval_groups(objs, threshold, principle):
+    symbolic_objs = [o["s"] for o in objs]
+    obj_patches = extract_patches_from_objs(symbolic_objs)
 
 
     if principle=="proximity":
         # load grouping model
         group_model = scorer_config.load_scorer_model("proximity")
-        group_ids = proximity_grouping.proximity_grouping(obj_patches, group_model, prox_th)
+        group_ids = proximity_grouping.proximity_grouping(obj_patches, group_model, threshold)
     elif principle == "similarity":
         group_model = scorer_config.load_scorer_model("similarity")
-        group_ids = grouping_similarity.similarity_grouping(objs, group_model)
+        group_ids = grouping_similarity.similarity_grouping(symbolic_objs, group_model, threshold)
     else:
         raise ValueError
     # grouping objects

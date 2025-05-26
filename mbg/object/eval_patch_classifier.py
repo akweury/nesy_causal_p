@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from PIL import Image
 import numpy as np
 import cv2
-
+from src import bk
 from mbg.object.patch_classifier_model import PatchClassifier
 import mbg.mbg_config as param
 from mbg import patch_preprocess
@@ -57,20 +57,21 @@ def evaluate_colors(data):
     return colors
 
 
-
 def evaluate_image(model, data):
     positions, labels, sizes, patches = evaluate_shapes(model, data)
     colors = evaluate_colors(data)
     objs = []
     for i in range(len(positions)):
+        shape_one_hot = torch.zeros(len(bk.bk_shapes), dtype=torch.float32)
+        shape_one_hot[labels[i] + 1] = 1.0
         obj = {
             "id": i,
-            "s": {"shape":  labels[i],
-                  "color": [int(colors[i][0]),int(colors[i][1]),int(colors[i][2])],
-                  "x":float(positions[i][0]),
-                  "y":float(positions[i][1]),
-                  "w":sizes[i][0],
-                  "h":sizes[i][1],
+            "s": {"shape": shape_one_hot,
+                  "color": [int(colors[i][0]), int(colors[i][1]), int(colors[i][2])],
+                  "x": float(positions[i][0]),
+                  "y": float(positions[i][1]),
+                  "w": sizes[i][0],
+                  "h": sizes[i][1],
                   },
             "h": patches[i]
         }

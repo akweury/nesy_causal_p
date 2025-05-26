@@ -55,7 +55,7 @@ def compute_symbolic_group_features(
     C = len(param.LABEL_NAMES)
     shape_counts = np.zeros(C, dtype=float)
     for o in objects:
-        shape_counts[int(o["s"]['shape'])] += 1
+        shape_counts += o["s"]['shape'][1:].numpy()
     shape_dist = shape_counts / n
 
     # ---- average color ----
