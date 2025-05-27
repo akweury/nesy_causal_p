@@ -15,6 +15,19 @@ from mbg import patch_preprocess  # your custom patch extraction module
 from mbg.scorer import scorer_config
 import torch.nn.functional as F
 
+principle = "proximity"
+
+if principle == "proximity":
+    data_path = scorer_config.proximity_path
+    model_path = scorer_config.PROXIMITY_MODEL
+elif principle=="similarity":
+    data_path = scorer_config.SIMILARITY_PATH
+    model_path = scorer_config.SIMILARITY_MODEL
+elif principle=="closure":
+    data_path = scorer_config.closure_path
+    model_path = scorer_config.CLOSURE_MODEL
+else:
+    raise ValueError
 
 class SlotGroupingDataset(Dataset):
     def __init__(self, root_dir, max_objects=100):
@@ -32,7 +45,7 @@ class SlotGroupingDataset(Dataset):
         task_dirs = [d for d in self.root_dir.iterdir() if d.is_dir()]
         for task_dir in task_dirs:
             for label_dir in ["positive", "negative"]:
-                if len(self.data) > 100:
+                if len(self.data) > 1000:
                     continue
                 labeled_dir = task_dir / label_dir
                 if not labeled_dir.exists():
@@ -138,10 +151,11 @@ def collate_fn(batch):
 
 # Training
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 model = SlotAttention(num_slots=10, dim=192).to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
 num_epochs = 20
-data_path = scorer_config.closure_path
+
 dataset = SlotGroupingDataset(data_path)
 loader = DataLoader(dataset, batch_size=1, shuffle=True, collate_fn=collate_fn)
 
@@ -169,6 +183,6 @@ for epoch in range(num_epochs):
 
 torch.save({
     "model_state": model.state_dict(),
-}, scorer_config.CLOSURE_MODEL)
+}, model_path)
 
-print("✅ Model saved to slot_attention_grouping.pt")
+print(f"✅ Model saved to {model_path}")

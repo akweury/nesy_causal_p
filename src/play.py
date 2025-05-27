@@ -9,6 +9,7 @@ import wandb
 from collections import defaultdict
 import json
 
+import torch
 from src.utils import args_utils
 from src import dataset
 
@@ -46,9 +47,9 @@ def main():
 
     if train_principle == "similarity":
         principle_path = config.grb_simi
-    elif train_principle =="proximity":
+    elif train_principle == "proximity":
         principle_path = config.grb_prox
-    elif train_principle =="closure":
+    elif train_principle == "closure":
         principle_path = config.grb_closure
     else:
         raise ValueError
@@ -61,7 +62,9 @@ def main():
 
     # store metrics per property value
     property_stats = defaultdict(lambda: defaultdict(list))  # {prop_name: {True: [], False: []}}
-
+    all_f1 = []
+    all_auc = []
+    all_acc = []
     for task_idx, (train_data, val_data, test_data) in enumerate(combined_loader):
         task_name = train_data["task"]
         properties = {
@@ -83,13 +86,25 @@ def main():
 
         hyp_params = {"prox": 0.9, "sim": 0.5, "top_k": 5, "conf_th": 0.5}
         final_rules = training.train_rules(train_val_data, obj_model, hyp_params, train_principle, args.device)
-        test_metrics = evaluation.eval_rules(test_data, obj_model, final_rules, hyp_params, train_principle, args.device)
+        test_metrics = evaluation.eval_rules(test_data, obj_model, final_rules, hyp_params, train_principle,
+                                             args.device)
+
+        test_acc = test_metrics.get("acc", 0)
+        test_auc = test_metrics.get("auc", 0)
+        test_f1 = test_metrics.get("f1", 0)
+
+        all_f1.append(test_f1)
+        all_auc.append(test_auc)
+        all_acc.append(test_acc)
 
         # log raw results
         wandb.log({
-            "test_accuracy": test_metrics.get("acc", 0),
-            "test_auc": test_metrics.get("auc", 0),
-            "test_f1": test_metrics.get("f1", 0),
+            "test_accuracy": test_acc,
+            "test_auc": test_auc,
+            "test_f1": test_f1,
+            "avg_acc": torch.tensor(all_acc).mean(),
+            "avg_auc": torch.tensor(all_auc).mean(),
+            "avg_f1": torch.tensor(all_f1).mean(),
         })
         print(f"{task_idx + 1}/{combined_loader.__len__()}[{task_name}] Test results:", test_metrics)
 
