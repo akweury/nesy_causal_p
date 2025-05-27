@@ -16,7 +16,7 @@ from src import bk
 def extract_patches_from_objs(objs):
     patches = []
     for obj in objs:
-        patches.append(obj)
+        patches.append(obj["h"])
     return patches
 
 
@@ -76,7 +76,7 @@ def construct_group_representations(objs, group_obj_ids, principle):
 
 def eval_groups(objs, threshold, principle):
     symbolic_objs = [o["s"] for o in objs]
-    obj_patches = extract_patches_from_objs(symbolic_objs)
+    obj_patches = extract_patches_from_objs(objs)
 
 
     if principle=="proximity":
