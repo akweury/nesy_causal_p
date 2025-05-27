@@ -59,10 +59,10 @@ class LogicLanguage:
 
     def _add_neural(self):
         # e.g. proximity: continuous scorer over two group embeddings
-        from mbg.scorer.context_proximity_scorer import ContextProximityScorer
+        from mbg.scorer.context_contour_scorer import ContextContourScorer
         from mbg.scorer import scorer_config
         # instantiate your pretrained scorer
-        prox_model = ContextProximityScorer()
+        prox_model = ContextContourScorer()
         prox_model.load_state_dict(torch.load(scorer_config.PROXIMITY_MODEL))
         prox_model.eval()
 

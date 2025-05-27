@@ -12,11 +12,11 @@ from mbg.group import eval_groups
 from mbg.grounding import grounding
 from mbg.language import clause_generation
 from mbg.evaluation import evaluation
-from mbg.scorer.context_proximity_scorer import ContextProximityScorer
+from mbg.scorer.context_contour_scorer import ContextContourScorer
 
 def train_grouping_model(train_loader, device, epochs=10, LR = 1e-3):
     # pair_dataset = build_pairwise_grouping_dataset(train_loader)  # returns (patch_i, patch_j, label) pairs
-    model = ContextProximityScorer()  # a small convnet or MLP
+    model = ContextContourScorer()  # a small convnet or MLP
     model.to(device)
     criterion = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(model.parameters(), lr=LR)

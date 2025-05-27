@@ -4,12 +4,12 @@
 
 import torch
 from typing import List
-from mbg.scorer.context_proximity_scorer import ContextProximityScorer
+from mbg.scorer.context_contour_scorer import ContextContourScorer
 
 from mbg.scorer.context_proximity_dataset import obj2context_pair_data
 
 
-def compute_pairwise_scores(scorer: ContextProximityScorer,
+def compute_pairwise_scores(scorer: ContextContourScorer,
                             patch_sets) -> torch.Tensor:
     """
     Args:
@@ -32,7 +32,7 @@ def compute_pairwise_scores(scorer: ContextProximityScorer,
 
 
 def proximity_grouping(obj_patches,
-                       scorer: ContextProximityScorer,
+                       scorer: ContextContourScorer,
                        threshold: float = 0.5) -> List[List[int]]:
     """
     Perform grouping based on pairwise proximity scores.

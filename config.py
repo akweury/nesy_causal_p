@@ -73,6 +73,7 @@ kp_gestalt_dataset = storage / "dataset" / "gestalt"
 grb_base = storage / "dataset" / "grb"
 grb_prox = grb_base / "proximity"
 grb_simi = grb_base / "similarity"
+grb_closure = grb_base / "closure"
 
 
 # clear_folder(kp_gestalt_dataset)

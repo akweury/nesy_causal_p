@@ -34,7 +34,7 @@ def draw_pair_image(patch_i, patch_j, label, idx):
     pil_img.save(SAVE_DIR / f"pair_{idx:04d}_label{label}.png")
 
 def main():
-    dataset = ProximityPairDataset(scorer_config.PAIR_PATH)
+    dataset = ProximityPairDataset(scorer_config.proximity_path)
 
     for idx in tqdm(range(min(len(dataset), 200))):  # 可调整数量
         c_i, c_j, label = dataset[idx]

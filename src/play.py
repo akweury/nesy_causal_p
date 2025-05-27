@@ -48,6 +48,8 @@ def main():
         principle_path = config.grb_simi
     elif train_principle =="proximity":
         principle_path = config.grb_prox
+    elif train_principle =="closure":
+        principle_path = config.grb_closure
     else:
         raise ValueError
 

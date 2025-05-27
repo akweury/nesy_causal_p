@@ -1,12 +1,12 @@
 # =============================
-# Model: context_proximity_scorer.py
+# Model: context_contour_scorer.py
 # =============================
-# context_proximity_scorer.py
+# context_contour_scorer.py
 import torch
 import torch.nn as nn
 
 
-class ContextProximityScorer(nn.Module):
+class ContextContourScorer(nn.Module):
     def __init__(
         self,
         input_dim: int = 2,

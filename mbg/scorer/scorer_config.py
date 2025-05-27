@@ -2,15 +2,20 @@
 
 import torch
 import config
-from mbg.scorer.context_proximity_scorer import ContextProximityScorer
+from mbg.scorer.context_contour_scorer import ContextContourScorer
 from mbg.scorer.similarity_scorer import ContextualSimilarityScorer
+from mbg.scorer.slot_attention import SlotAttention  # import your saved module
+
 # config
 
-PAIR_PATH = config.grb_base / "proximity" / "train"
+proximity_path = config.grb_base / "proximity" / "train"
+closure_path = config.grb_base / "closure" / "train"
 SIMILARITY_PATH = config.grb_base / "similarity" / "train"
 POS_WEIGHT = 3
 PROXIMITY_MODEL = config.models / "neural_proximity_model.pt"
 SIMILARITY_MODEL = config.models / "neural_similarity_model.pt"
+CLOSURE_MODEL = config.models / "neural_closure_model.pt"
+
 EPOCHS = 50
 BATCH_SIZE = 32
 LR = 1e-3
@@ -19,11 +24,14 @@ DEVICE = "cpu"
 
 def load_scorer_model(principle_name):
     if principle_name == "proximity":
-        model = ContextProximityScorer()
+        model = ContextContourScorer()
         model.load_state_dict(torch.load(PROXIMITY_MODEL))
     elif principle_name == "similarity":
         model = ContextualSimilarityScorer()
         model.load_state_dict(torch.load(SIMILARITY_MODEL))
+    elif principle_name == "closure":
+        model = SlotAttention(num_slots=10, dim=192)
+        model.load_state_dict(torch.load(CLOSURE_MODEL)["model_state"])
     else:
         raise ValueError
     return model

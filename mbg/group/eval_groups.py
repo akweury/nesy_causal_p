@@ -11,7 +11,7 @@ from mbg.group import grouping_similarity
 from mbg.group import symbolic_group_features
 from mbg.group.neural_group_features import NeuralGroupEncoder
 from src import bk
-
+from mbg.group import closure_grouping
 
 def extract_patches_from_objs(objs):
     patches = []
@@ -86,6 +86,9 @@ def eval_groups(objs, threshold, principle):
     elif principle == "similarity":
         group_model = scorer_config.load_scorer_model("similarity")
         group_ids = grouping_similarity.similarity_grouping(symbolic_objs, group_model, threshold)
+    elif principle == "closure":
+        group_model = scorer_config.load_scorer_model("closure")
+        group_ids = closure_grouping.closure_grouping(obj_patches, group_model, threshold)
     else:
         raise ValueError
     # grouping objects

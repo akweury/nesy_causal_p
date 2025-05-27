@@ -9,15 +9,20 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from context_proximity_dataset import ContextProximityDataset, context_collate_fn
-from context_proximity_scorer import ContextProximityScorer
+from context_proximity_dataset import ContextContourDataset, context_collate_fn
+from context_contour_scorer import ContextContourScorer
 from mbg.scorer import scorer_config
 EPOCHS = 10
 BATCH_SIZE = 1
 LR = 1e-3
 
-model = ContextProximityScorer()
-dataset = ContextProximityDataset(scorer_config.PAIR_PATH)
+
+
+data_path = scorer_config.closure_path
+model_path = scorer_config.CLOSURE_MODEL
+
+model = ContextContourScorer()
+dataset = ContextContourDataset(data_path)
 data_loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True, collate_fn=context_collate_fn)
 
 criterion = nn.BCEWithLogitsLoss()
@@ -29,19 +34,15 @@ for epoch in range(EPOCHS):
         ci = ci
         cj = cj
         label = label
-
         logits = model(ci, cj, ctx[0].unsqueeze(0))
         loss = criterion(logits, label)
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-
         total_loss += loss.item() * len(label)
         pred = (torch.sigmoid(logits) > 0.5).float()
         correct += (pred == label).sum().item()
         total += len(label)
-
     print(f"[Epoch {epoch+1}] Loss: {total_loss / total:.4f} | Acc: {correct / total:.4f}")
-
-torch.save(model.state_dict(), scorer_config.PROXIMITY_MODEL)
-print(f"Model saved to {scorer_config.PROXIMITY_MODEL}")
+torch.save(model.state_dict(), model_path)
+print(f"Model saved to {model_path}")
