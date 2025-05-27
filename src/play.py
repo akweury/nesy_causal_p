@@ -55,7 +55,7 @@ def main():
     obj_model = eval_patch_classifier.load_model(args.device)
 
     # initialize wandb
-    wandb.init(project="grb-pipeline", config=args.__dict__, name=args.exp_name)
+    wandb.init(project=f"grb_{train_principle}", config=args.__dict__, name=args.exp_name)
 
     # store metrics per property value
     property_stats = defaultdict(lambda: defaultdict(list))  # {prop_name: {True: [], False: []}}
