@@ -74,21 +74,21 @@ def construct_group_representations(objs, group_obj_ids, principle):
     return rep_gs
 
 
-def eval_groups(objs, threshold, principle):
+def eval_groups(objs, threshold, principle, device):
     symbolic_objs = [o["s"] for o in objs]
     obj_patches = extract_patches_from_objs(objs)
 
 
     if principle=="proximity":
         # load grouping model
-        group_model = scorer_config.load_scorer_model("proximity")
+        group_model = scorer_config.load_scorer_model("proximity").to(device)
         group_ids = proximity_grouping.proximity_grouping(obj_patches, group_model, threshold)
     elif principle == "similarity":
-        group_model = scorer_config.load_scorer_model("similarity")
+        group_model = scorer_config.load_scorer_model("similarity").to(device)
         group_ids = grouping_similarity.similarity_grouping(symbolic_objs, group_model, threshold)
     elif principle == "closure":
-        group_model = scorer_config.load_scorer_model("closure")
-        group_ids = closure_grouping.closure_grouping(obj_patches, group_model, threshold)
+        group_model = scorer_config.load_scorer_model("closure").to(device)
+        group_ids = closure_grouping.closure_grouping(obj_patches, group_model, threshold, device)
     else:
         raise ValueError
     # grouping objects

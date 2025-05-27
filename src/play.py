@@ -82,7 +82,7 @@ def main():
         }
 
         hyp_params = {"prox": 0.9, "sim": 0.5, "top_k": 5, "conf_th": 0.5}
-        final_rules = training.train_rules(train_val_data, obj_model, hyp_params, train_principle)
+        final_rules = training.train_rules(train_val_data, obj_model, hyp_params, train_principle, args.device)
         test_metrics = evaluation.eval_rules(test_data, obj_model, final_rules, hyp_params, train_principle)
 
         # log raw results
