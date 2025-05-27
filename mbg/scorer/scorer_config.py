@@ -10,11 +10,15 @@ from mbg.scorer.slot_attention import SlotAttention  # import your saved module
 
 proximity_path = config.grb_base / "proximity" / "train"
 closure_path = config.grb_base / "closure" / "train"
+continuity_path = config.grb_base / "continuity" / "train"
 SIMILARITY_PATH = config.grb_base / "similarity" / "train"
+
 POS_WEIGHT = 3
+
 PROXIMITY_MODEL = config.models / "neural_proximity_model.pt"
 SIMILARITY_MODEL = config.models / "neural_similarity_model.pt"
 CLOSURE_MODEL = config.models / "neural_closure_model.pt"
+CONTINUITY_MODEL = config.models / "neural_continuity_model.pt"
 
 EPOCHS = 50
 BATCH_SIZE = 32

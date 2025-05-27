@@ -3,6 +3,27 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
+class ContourWithCenterEncoder(nn.Module):
+    def __init__(self, input_dim=192, out_dim=192):
+        super().__init__()
+        self.project = nn.Sequential(
+            nn.Linear(input_dim + 2, 256),
+            nn.ReLU(),
+            nn.Linear(256, out_dim)
+        )
+
+    def forward(self, emb):
+        """
+        emb: [B, N, 192] — flattened contour (assumed normalized xy pairs)
+        """
+        center_x = emb[:, :, ::2].mean(dim=2, keepdim=True)  # x̄: mean of even indices
+        center_y = emb[:, :, 1::2].mean(dim=2, keepdim=True)  # ȳ: mean of odd indices
+        centers = torch.cat([center_x, center_y], dim=2)      # [B, N, 2]
+        enriched = torch.cat([emb, centers], dim=2)           # [B, N, 194]
+        return self.project(enriched)                         # [B, N, out_dim]
+
+
 class SlotAttention(nn.Module):
     def __init__(self, num_slots, dim, iters=3):
         super().__init__()

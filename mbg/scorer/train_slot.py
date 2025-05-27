@@ -2,7 +2,7 @@
 
 import torch
 
-from slot_attention import SlotAttention  # import your saved module
+from slot_attention import SlotAttention, ContourWithCenterEncoder  # import your saved module
 from torch.utils.data import DataLoader
 from scipy.optimize import linear_sum_assignment
 
@@ -15,19 +15,23 @@ from mbg import patch_preprocess  # your custom patch extraction module
 from mbg.scorer import scorer_config
 import torch.nn.functional as F
 
-principle = "proximity"
+principle = "closure"
 
 if principle == "proximity":
     data_path = scorer_config.proximity_path
     model_path = scorer_config.PROXIMITY_MODEL
-elif principle=="similarity":
+elif principle == "similarity":
     data_path = scorer_config.SIMILARITY_PATH
     model_path = scorer_config.SIMILARITY_MODEL
-elif principle=="closure":
+elif principle == "closure":
     data_path = scorer_config.closure_path
+    model_path = scorer_config.CLOSURE_MODEL
+elif principle == "continuity":
+    data_path = scorer_config.continuity_path
     model_path = scorer_config.CLOSURE_MODEL
 else:
     raise ValueError
+
 
 class SlotGroupingDataset(Dataset):
     def __init__(self, root_dir, max_objects=100):
@@ -45,7 +49,7 @@ class SlotGroupingDataset(Dataset):
         task_dirs = [d for d in self.root_dir.iterdir() if d.is_dir()]
         for task_dir in task_dirs:
             for label_dir in ["positive", "negative"]:
-                if len(self.data) > 1000:
+                if len(self.data) > 100:
                     continue
                 labeled_dir = task_dir / label_dir
                 if not labeled_dir.exists():
@@ -114,8 +118,8 @@ def hungarian_loss_and_accuracy(pred_attn, gt_group_ids, mask):
         if n_valid < 2:
             continue
 
-        pred = pred_attn[b, mask[b]]        # [n_valid, K]
-        gt = gt_group_ids[b, mask[b]]       # [n_valid]
+        pred = pred_attn[b, mask[b]]  # [n_valid, K]
+        gt = gt_group_ids[b, mask[b]]  # [n_valid]
         true_ids = list(set(gt.tolist()))
         M = len(true_ids)
 
@@ -138,6 +142,64 @@ def hungarian_loss_and_accuracy(pred_attn, gt_group_ids, mask):
     avg_acc = total_acc / count
     return avg_loss, avg_acc
 
+
+def hungarian_loss_with_null(pred_attn, gt_group_ids, mask, null_slot_index):
+    B, N, K = pred_attn.shape
+    total_loss, total_acc = 0, 0
+    count = 0
+
+    for b in range(B):
+        n_valid = mask[b].sum().item()
+        if n_valid < 2:
+            continue
+
+        pred = pred_attn[b, mask[b]]  # [n_valid, K]
+        gt = gt_group_ids[b, mask[b]]  # [n_valid]
+
+        # Separate valid and null
+        valid_idx = (gt != -1)
+        null_idx = (gt == -1)
+
+        true_ids = sorted(set(gt[valid_idx].tolist()))
+        M = len(true_ids)
+
+        cost = torch.zeros(K, M + 1, device=pred.device)  # +1 for null slot
+
+        # Valid object-group match
+        for k in range(K):
+            for j, gid in enumerate(true_ids):
+                match = (gt == gid).float()
+                cost[k, j] = - (pred[:, k] * match).sum()
+
+        # Null slot match
+        for k in range(K):
+            null_match = null_idx.float()
+            cost[k, M] = - (pred[:, k] * null_match).sum()
+
+        # Force null objects to match only null slot
+        row, col = linear_sum_assignment(cost.detach().cpu().numpy())
+        group_map = {r: c for r, c in zip(row, col)}
+
+        pred_labels = torch.full((pred.shape[0],), -1, dtype=torch.long, device=pred.device)
+        for slot_k, col_j in group_map.items():
+            if col_j < M:
+                gid = true_ids[col_j]
+                pred_mask = pred.argmax(dim=1) == slot_k
+                pred_labels[pred_mask.squeeze()] = gid
+            else:
+                # Null group: keep -1
+                pass
+
+        acc = ((pred_labels == gt) | ((gt == -1) & (pred_labels == -1))).float().mean().item()
+        loss = cost[row, col].sum()
+
+        total_loss += loss
+        total_acc += acc
+        count += 1
+
+    return -total_loss / count, total_acc / count
+
+
 def collate_fn(batch):
     max_len = max(x[0].size(0) for x in batch)
     feats, gids, mask = [], [], []
@@ -152,12 +214,13 @@ def collate_fn(batch):
 # Training
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-model = SlotAttention(num_slots=10, dim=192).to(device)
+model = SlotAttention(num_slots=6, dim=192).to(device)
+# encoder = ContourWithCenterEncoder(input_dim=192, out_dim=192).to(device)
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
-num_epochs = 20
+num_epochs = 100
 
 dataset = SlotGroupingDataset(data_path)
-loader = DataLoader(dataset, batch_size=1, shuffle=True, collate_fn=collate_fn)
+loader = DataLoader(dataset, batch_size=1, shuffle=False, collate_fn=collate_fn)
 
 for epoch in range(num_epochs):
     model.train()
