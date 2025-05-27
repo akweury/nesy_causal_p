@@ -600,7 +600,7 @@ def compute_image_score(learned_rules, rule_scores, eps=1e-8):
     return weighted_sum / (total_weight + eps)
 
 
-def eval_rules(val_data, obj_model, rules_train, hyp_params, eval_principle):
+def eval_rules(val_data, obj_model, rules_train, hyp_params, eval_principle, device):
     # we’ll collect per‐task true / pred
     per_task_scores = defaultdict(list)
     per_task_labels = defaultdict(list)
@@ -612,7 +612,7 @@ def eval_rules(val_data, obj_model, rules_train, hyp_params, eval_principle):
         true_label = int(data["img_label"][0])
         # 1) detect objects & groups
         objs = eval_patch_classifier.evaluate_image(obj_model, data)
-        groups = eval_groups.eval_groups(objs, prox_th, eval_principle)
+        groups = eval_groups.eval_groups(objs, prox_th, eval_principle, device)
         num_groups = len(groups)
 
         # 2) ground  & generate validation image’s clauses
