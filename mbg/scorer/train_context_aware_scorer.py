@@ -10,6 +10,7 @@ from mbg.scorer.context_proximity_dataset import ContextContourDataset, context_
 from mbg.scorer.context_contour_scorer import ContextContourScorer
 from mbg.scorer import scorer_config
 
+
 def train_model(principle, input_type, device, log_wandb=True):
     # Resolve paths
     path_map = {
@@ -83,17 +84,25 @@ def train_model(principle, input_type, device, log_wandb=True):
         wandb.finish()
 
 
+def parse_device(device_str):
+    if device_str.isdigit():
+        return f"cuda:{device_str}"
+    elif device_str.startswith("cuda") or device_str == "cpu":
+        return device_str
+    else:
+        raise ValueError(f"Invalid device string: {device_str}")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--device", default="cuda:0" if torch.cuda.is_available() else "cpu", help="Device to train on")
     parser.add_argument("--all", action="store_true", help="Train all principles and input types")
     args = parser.parse_args()
-
+    args.device = parse_device(args.device)
     principles = ["closure", "proximity", "continuity", "symmetry", "similarity"]
     input_types = ["pos", "pos_color", "pos_color_size"]
 
     report = []
-
     if args.all:
         for p in principles:
             for t in input_types:
