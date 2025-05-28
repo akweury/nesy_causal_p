@@ -42,20 +42,12 @@ def train_model(principle, input_type, device, log_wandb=True):
     criterion = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
-    if log_wandb:
-        wandb.init(project="grb-context-train", name=f"{principle}_{input_type}", config={
-            "principle": principle,
-            "input_type": input_type,
-            "epochs": 50,
-            "batch_size": 1,
-            "learning_rate": 1e-3,
-            "device": device,
-        })
-
+    avg_acc = 0
+    avg_loss = 0
     for epoch in range(50):
         model.train()
         total_loss, correct, total = 0, 0, 0
-        for ci, cj, ctx, label in tqdm(data_loader, desc=f"{principle}-{input_type}"):
+        for ci, cj, ctx, label in data_loader:
             ci, cj = ci.to(device), cj.to(device)
             label = label.to(device)
             ctx_tensor = ctx[0].unsqueeze(0).to(device)
@@ -73,6 +65,7 @@ def train_model(principle, input_type, device, log_wandb=True):
 
         acc = correct / total
         avg_loss = total_loss / total
+        avg_acc = acc
         print(f"[Epoch {epoch + 1}] Loss: {avg_loss:.4f} | Acc: {acc:.4f}")
 
         if log_wandb:
@@ -80,8 +73,8 @@ def train_model(principle, input_type, device, log_wandb=True):
 
     torch.save(model.state_dict(), model_path)
     print(f"Model saved to {model_path}")
-    if log_wandb:
-        wandb.finish()
+
+    return avg_acc, avg_loss
 
 
 def parse_device(device_str):
@@ -102,6 +95,11 @@ if __name__ == "__main__":
     principles = ["closure", "proximity", "continuity", "symmetry", "similarity"]
     input_types = ["pos", "pos_color", "pos_color_size"]
 
+    wandb.init(project="grb-context-train", config={
+        "epochs": 50,
+        "batch_size": 1,
+        "learning_rate": 1e-3,
+    })
     report = []
     if args.all:
         for p in principles:
@@ -113,6 +111,7 @@ if __name__ == "__main__":
         acc, loss = train_model("similarity", "pos_color", args.device, log_wandb=True)
         report.append(("similarity", "pos_color", acc, loss))
 
+    wandb.finish()
     # Final report
     print("\n==== Final Report ====")
     print(f"{'Principle':<12} {'Input Type':<16} {'Accuracy':>10} {'Loss':>10}")
