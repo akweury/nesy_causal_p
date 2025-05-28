@@ -6,8 +6,8 @@ from tqdm import tqdm
 import wandb
 import argparse
 
-from context_proximity_dataset import ContextContourDataset, context_collate_fn
-from context_contour_scorer import ContextContourScorer
+from mbg.scorer.context_proximity_dataset import ContextContourDataset, context_collate_fn
+from mbg.scorer.context_contour_scorer import ContextContourScorer
 from mbg.scorer import scorer_config
 
 def train_model(principle, input_type, device, log_wandb=True):
