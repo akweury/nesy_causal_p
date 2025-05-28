@@ -49,7 +49,83 @@ def preprocess_image_to_patch_set(binary_image: np.ndarray, num_patches: int = 6
         y = int(y)
         w = int(w)
         h = int(h)
-        outputs.append((patch_set, (x, y, w, h)))
+        patch_set[:, :, 0] += x
+        patch_set[:, :, 1] += y
+        patch_set[:, :, :2] /= binary_image.shape[0]
+        # patch_set_shifted = torch.stack(
+        #     (patch_set[0][0][:, :, 0] + patch_set[0][1][0], patch_set[0][0][:, :, 1] + patch_set[0][1][1]), dim=2)
+        # patch_set_norm = patch_set_shifted/width
+        outputs.append(patch_set)
+
+    return outputs
+
+
+def preprocess_rgb_image_to_patch_set(rgb_image: np.ndarray, num_patches: int = 6, points_per_patch: int = 16,
+                                      contour_uniform=True) -> list:
+    """
+    Extract patch sets from RGB image by contour-based object detection.
+    Each patch set contains `num_patches` patches of length `points_per_patch` each.
+    Each contour point has (x, y, R, G, B).
+
+    Returns: List of (patch_set: Tensor [P, L, 5], bounding_box: (x, y, w, h))
+    """
+
+    # Convert RGB to grayscale and threshold to get binary mask for contour detection
+    gray = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2GRAY)
+    binary_mask = np.where(gray == 211, 0, 255).astype(np.uint8)
+
+    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(binary_mask, connectivity=8)
+    outputs = []
+
+    for i in range(1, num_labels):  # skip background
+        x, y, w, h, area = stats[i]
+        if area < 10:
+            continue
+
+        obj_mask = (labels[y:y + h, x:x + w] == i).astype(np.uint8) * 255
+        contours, _ = cv2.findContours(obj_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        if not contours or len(contours[0]) < points_per_patch:
+            continue
+
+        contour = contours[0].squeeze(1)  # shape [N, 2]
+        if contour.ndim != 2 or contour.shape[1] != 2:
+            continue
+
+        # Sample points uniformly
+        contour = torch.tensor(contour, dtype=torch.long)  # use long for indexing
+        idxs = torch.linspace(0, len(contour) - 1, steps=num_patches * points_per_patch).long()
+        sampled_xy = contour[idxs]
+
+        # Get RGB values at contour points
+        sampled_rgb = []
+        for pt in sampled_xy:
+            cx, cy = pt[0].item() + x, pt[1].item() + y  # offset to full image
+            if 0 <= cy < rgb_image.shape[0] and 0 <= cx < rgb_image.shape[1]:
+                color = rgb_image[cy, cx]
+            else:
+                color = np.array([0, 0, 0])
+            sampled_rgb.append(color)
+
+        sampled_rgb = torch.tensor(sampled_rgb, dtype=torch.float32) / 255  # shape [P*L, 3]
+        sampled_xy = sampled_xy.float()
+        sampled_xy += torch.tensor([x, y], dtype=torch.float32)  # convert to absolute coords
+
+        patch_set = torch.cat([sampled_xy, sampled_rgb], dim=1).view(num_patches, points_per_patch, 5)
+        patch_set[:, :, :2] /= rgb_image.shape[0]
+
+        W, H = rgb_image.shape[:2]
+        # x_rel = patch_set[..., 0] / W
+        # y_rel = patch_set[..., 1] / H
+
+        size_tensor = torch.tensor([w / W, h / H], dtype=torch.float32).view(1, 1, 2).expand_as(patch_set[..., :2])
+        # rel_tensor = torch.stack([x_rel, y_rel], dim=-1)
+        perceptual_set = torch.cat([patch_set, size_tensor], dim=-1)  # shape: [P, L, 7]
+
+        outputs.append(perceptual_set)
+        # patch_set_shifted = torch.stack(
+        #     (patch_set[0][0][:, :, 0] + patch_set[0][1][0], patch_set[0][0][:, :, 1] + patch_set[0][1][1]), dim=2)
+        # patch_set_norm = patch_set_shifted / rgb_image.shape[0]
+        # outputs.append((patch_set, (x, y, w, h)))
 
     return outputs
 
@@ -232,18 +308,18 @@ def img_path2patches_and_labels(image_path, gt_dict):
     return patch_sets, sorted_labels
 
 
-def img_path2patches_and_glabels(image_path, gt_dict, g_labels):
-    obj_images = img_path2obj_images(image_path)
-
-    g_labels_sorted = match_objects_to_glabels(obj_images, gt_dict, g_labels)
-    # single object image to patch set
-    patch_sets = []
-    for o_i, obj_img in enumerate(obj_images):
-        binary_np = rgb_to_binary(obj_img)
-        patch_set = preprocess_image_to_patch_set(binary_np)
-        patch_sets.append(patch_set)
-
-    return patch_sets, g_labels_sorted
+# def img_path2patches_and_glabels(image_path, gt_dict, g_labels):
+#     obj_images = img_path2obj_images(image_path)
+#
+#     g_labels_sorted = match_objects_to_glabels(obj_images, gt_dict, g_labels)
+#     # single object image to patch set
+#     patch_sets = []
+#     for o_i, obj_img in enumerate(obj_images):
+#         binary_np = rgb_to_binary(obj_img)
+#         patch_set = preprocess_image_to_patch_set(binary_np)
+#         patch_sets.append(patch_set)
+#
+#     return patch_sets, g_labels_sorted
 
 
 def img_path2one_patches(image_path):
@@ -303,11 +379,14 @@ def align_data_and_imgs(objects: List[dict], obj_imgs: List[np.ndarray]) -> Tupl
     return aligned_objects, aligned_imgs
 
 
-def rgb2patch(rgb_img):
-    width = rgb_img.shape[0]
-    binary_np = rgb_to_binary(rgb_img)
-    patch_set = preprocess_image_to_patch_set(binary_np)
-    patch_set_shifted = torch.stack(
-        (patch_set[0][0][:, :, 0] + patch_set[0][1][0], patch_set[0][0][:, :, 1] + patch_set[0][1][1]), dim=2)
-    patch_set_norm = patch_set_shifted/width
-    return patch_set_norm
+def rgb2patch(rgb_img, input_type):
+    if input_type == "pos":
+        patch_set = preprocess_rgb_image_to_patch_set(rgb_img)[0][:,:, :2]
+    elif input_type == "pos_color":
+        patch_set = preprocess_rgb_image_to_patch_set(rgb_img)[0][:,:, :5]
+    elif input_type == "pos_color_size":
+        patch_set = preprocess_rgb_image_to_patch_set(rgb_img)[0]
+    else:
+        raise ValueError
+
+    return patch_set

@@ -33,9 +33,12 @@ def obj2context_pair_data(i, j, patches):
 
 
 class ContextContourDataset(Dataset):
-    def __init__(self, root_dir):
+    def __init__(self, root_dir, input_type, task_num=20, data_num=1000):
         self.root_dir = Path(root_dir)
         self.data = []
+        self.input_type = input_type
+        self.data_num = data_num
+        self.task_num = task_num
         self._load()
 
     def _get_bbox_corners(self, x, y, size):
@@ -50,9 +53,11 @@ class ContextContourDataset(Dataset):
 
     def _load(self):
         task_dirs = [d for d in self.root_dir.iterdir() if d.is_dir()]
-        task_dirs = random.sample(task_dirs, 20)
+        task_dirs = random.sample(task_dirs, self.task_num)
         for task_dir in task_dirs:
             for label_dir in ["positive", "negative"]:
+                if len(self.data) > self.data_num:
+                    continue
                 labeled_dir = task_dir / label_dir
                 if not labeled_dir.exists():
                     continue
@@ -68,6 +73,8 @@ class ContextContourDataset(Dataset):
                     obj_imgs = patch_preprocess.img_path2obj_images(png_files[f_i])
                     if len(objects) != len(obj_imgs):
                         continue
+                    if len(objects) > 10:
+                        continue
                     if len(objects) < 2:
                         continue
                     objects, obj_imgs = patch_preprocess.align_data_and_imgs(objects, obj_imgs)
@@ -78,18 +85,18 @@ class ContextContourDataset(Dataset):
 
                             obj_i = objects[i]
                             obj_j = objects[j]
-                            c_i = patch_preprocess.rgb2patch(obj_imgs[i])
-                            c_j = patch_preprocess.rgb2patch(obj_imgs[j])
+                            c_i = patch_preprocess.rgb2patch(obj_imgs[i], self.input_type)
+                            c_j = patch_preprocess.rgb2patch(obj_imgs[j], self.input_type)
                             # Context objects (excluding i and j)
                             others = []
                             for k in range(len(objects)):
                                 if k != i and k != j:
-                                    c_k = patch_preprocess.rgb2patch(obj_imgs[k])
+                                    c_k = patch_preprocess.rgb2patch(obj_imgs[k], self.input_type)
                                     others.append(c_k)
                             if others:
                                 others_tensor = torch.stack(others, dim=0)  # (N_ctx, 4, 2)
                             else:
-                                others_tensor = torch.zeros((1, 6, 16, 2))  # placeholder if no context
+                                others_tensor = torch.zeros((1, 6, 16, c_i.shape[-1]))  # placeholder if no context
 
                             label = 1 if obj_i["group_id"] == obj_j["group_id"] and obj_i["group_id"] != -1 else 0
                             self.data.append((c_i, c_j, others_tensor, label))
