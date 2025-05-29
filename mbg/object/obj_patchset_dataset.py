@@ -37,7 +37,7 @@ class ObjPatchSetDataset(Dataset):
             for img_name in gt_dict:
                 image_path = task_dir / (img_name + ".png")
 
-                patch_sets, labels = patch_preprocess.img_path2patches_and_labels(image_path, gt_dict[img_name])
+                patch_sets, labels, _, _ = patch_preprocess.img_path2patches_and_labels(image_path, gt_dict[img_name]["objects"])
                 image_paths = [image_path] * len(patch_sets)
                 self.data += zip(patch_sets, labels, image_paths)
 
@@ -46,4 +46,4 @@ class ObjPatchSetDataset(Dataset):
 
     def __getitem__(self, idx):
         patch_set, label, _ = self.data[idx]
-        return patch_set[0][0], torch.tensor(label)
+        return patch_set[:,:,:2], torch.tensor(label)

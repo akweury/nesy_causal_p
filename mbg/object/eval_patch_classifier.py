@@ -25,7 +25,7 @@ def load_model(device):
 
 def evaluate_shapes(model, data):
     device = next(model.parameters()).device
-    patch_sets, labels, positions, sizes = patch_preprocess.img_path2patches_and_labels(data["image_path"][0],
+    patch_sets, _, positions, sizes = patch_preprocess.img_path2patches_and_labels(data["image_path"][0],
                                                                       data["symbolic_data"])
     predictions = []
     for o_i in range(len(patch_sets)):

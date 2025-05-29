@@ -233,7 +233,10 @@ def match_objects_to_labels(object_images: List[np.ndarray], gt_objects: List[di
         best_label = -1
         min_dist = float('inf')
         for gt in gt_objects:
-            dist = (float(gt['x']) - norm_x) ** 2 + (float(gt['y']) - norm_y) ** 2
+            try:
+                dist = (float(gt['x']) - norm_x) ** 2 + (float(gt['y']) - norm_y) ** 2
+            except TypeError:
+                raise TypeError
             if dist < min_dist and dist < threshold ** 2:
                 min_dist = dist
                 best_label = int(gt['shape'])  # Assumes shape is an int
@@ -284,8 +287,9 @@ def img_path2obj_images(img_path: Path) -> List[np.ndarray]:
 
 def img_path2patches_and_labels(image_path, gt_dict, input_type="pos_color_size"):
     obj_images = img_path2obj_images(image_path)
+    objects, obj_images = align_data_and_imgs(gt_dict, obj_images)
 
-    labels = match_objects_to_labels(obj_images, gt_dict)
+    labels = match_objects_to_labels(obj_images, objects)
     # single object image to patch set
     patch_sets = []
     sorted_labels = []
@@ -357,19 +361,19 @@ def align_data_and_imgs(objects: List[dict], obj_imgs: List[np.ndarray]) -> Tupl
 
     # Compute centroids for images
     img_centroids = [get_centroid(img) for img in obj_imgs]
-    obj_centroids = [(obj['x'], obj['y']) for obj in objects]
+    obj_centroids = [torch.tensor([obj['x'], obj['y']]) for obj in objects]
 
     # Match each image centroid to the closest object centroid
-    aligned_objects = [None] * len(objects)
-    aligned_imgs = [None] * len(objects)
+    aligned_objects = []
+    aligned_imgs = []
 
     used_obj_idxs = set()
     for i, img_c in enumerate(img_centroids):
         dists = [np.linalg.norm(np.array(img_c) - np.array(obj_c)) if j not in used_obj_idxs else float('inf')
                  for j, obj_c in enumerate(obj_centroids)]
         match_idx = int(np.argmin(dists))
-        aligned_objects[i] = objects[match_idx]
-        aligned_imgs[i] = obj_imgs[i]
+        aligned_objects.append(objects[match_idx])
+        aligned_imgs.append(obj_imgs[i])
         used_obj_idxs.add(match_idx)
 
     return aligned_objects, aligned_imgs

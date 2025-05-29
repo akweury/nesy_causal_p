@@ -18,7 +18,7 @@ def is_jsonable(x):
         return False
 
 
-device = torch.device(param.DEVICE)
+device = "cpu"
 
 wandb.init(
     project="pam_synthetic_patch_classifier",
