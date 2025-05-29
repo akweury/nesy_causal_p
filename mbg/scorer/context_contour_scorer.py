@@ -63,7 +63,10 @@ class ContextContourScorer(nn.Module):
             ctx_emb = torch.zeros(B, self.patch_embed_dim, device=contour_i.device)
         else:
             # Flatten and encode context
-            B, N, P, L, D = context_list.shape
+            try:
+                B, N, P, L, D = context_list.shape
+            except ValueError:
+                raise ValueError
             ctx_flat = context_list.view(B * N, P, L, D)
             ctx_emb = self.encode_patch_set(ctx_flat)  # (B*N, C)
             ctx_emb = ctx_emb.view(B, N, -1).mean(dim=1)  # (B, C)

@@ -12,9 +12,6 @@ from mbg.group.neural_group_features import NeuralGroupEncoder
 from src import bk
 
 
-
-
-
 def embedding_principles(group_principle):
     principles = bk.gestalt_principles
     p_id = principles.index(group_principle)
@@ -84,7 +81,7 @@ def group_objects_with_model(model, objects, input_type="pos_color_size", device
         ci, cj = objects[i].unsqueeze(0), objects[j].unsqueeze(0)
         context = [x for k, x in enumerate(objects) if k != i and k != j]
         if len(context) == 0:
-            ctx_tensor = torch.zeros((1, 1, objects[0].shape[0]), device=device)
+            ctx_tensor = torch.zeros((1, 1, 6, 16, 7), device=device)
         else:
             ctx_tensor = torch.stack(context).unsqueeze(0)
 

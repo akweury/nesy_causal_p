@@ -651,6 +651,6 @@ def eval_rules(val_data, obj_model, rules_train, hyp_params, eval_principle, dev
 
         # compute raw metrics (acc, f1, auc)
         metrics = compute_metrics(scores_list, labels, threshold=conf_th)
-        print(f"Task {task_id} →  acc={metrics['acc']:.3f}   f1={metrics['f1']:.3f}   auc={metrics['auc']:.3f}")
+        # print(f"Task {task_id} →  acc={metrics['acc']:.3f}   f1={metrics['f1']:.3f}   auc={metrics['auc']:.3f}")
 
     return metrics
