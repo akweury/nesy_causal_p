@@ -102,27 +102,3 @@ def principle(objects=None, groups=None, device="cpu"):
     return torch.tensor([PRINC_MAP[g["principle"]] for g in groups],
                         dtype=torch.long, device=device)
 
-
-# --- Neural (soft) predicates ---
-
-@soft_predicate("prox")
-def object_proximity(objects: List[Dict], groups=None, device="cpu"):
-    if not objects:
-        return torch.empty(0, 0, device=device)
-    embs = []
-    for o in objects:
-        cont, org = o["h"][0]
-        e = shift_obj_patches_to_global_positions(cont.to(device), torch.tensor(org).to(device)).flatten()
-        embs.append(e)
-    H = torch.stack(embs, 0)
-    H = H / (H.norm(1, keepdim=True) + 1e-8)
-    return H @ H.t()
-
-
-@soft_predicate("grp_sim")
-def group_similarity(objects=None, groups=None, device="cpu"):
-    if not groups:
-        return torch.empty(0, 0, device=device)
-    H = torch.stack([g["h"] for g in groups], 0)
-    H = H / (H.norm(1, keepdim=True) + 1e-8)
-    return H @ H.t()

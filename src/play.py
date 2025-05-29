@@ -84,10 +84,10 @@ def main():
             "negative": train_data["negative"] + val_data["negative"]
         }
 
-        hyp_params = {"prox": 0.9, "sim": 0.5, "top_k": 5, "conf_th": 0.5}
+        hyp_params = {"prox": 0.9, "sim": 0.5, "top_k": 5, "conf_th": 0.5, "patch_dim":7}
         final_rules = training.train_rules(train_val_data, obj_model, hyp_params, train_principle, args.device)
         test_metrics = evaluation.eval_rules(test_data, obj_model, final_rules, hyp_params, train_principle,
-                                             args.device)
+                                             args.device, hyp_params["patch_dim"])
 
         test_acc = test_metrics.get("acc", 0)
         test_auc = test_metrics.get("auc", 0)

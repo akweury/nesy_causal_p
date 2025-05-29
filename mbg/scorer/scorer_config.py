@@ -28,16 +28,18 @@ LR = 1e-3
 DEVICE = "cpu"
 
 
-def load_scorer_model(principle_name):
+def load_scorer_model(principle_name, device, input_dim=7):
+    model = ContextContourScorer(input_dim=input_dim).to(device)
     if principle_name == "proximity":
-        model = ContextContourScorer()
-        model.load_state_dict(torch.load(PROXIMITY_MODEL))
+        model.load_state_dict(torch.load(PROXIMITY_MODEL, map_location=device))
     elif principle_name == "similarity":
-        model = ContextualSimilarityScorer()
-        model.load_state_dict(torch.load(SIMILARITY_MODEL))
+        model.load_state_dict(torch.load(SIMILARITY_MODEL, map_location=device))
     elif principle_name == "closure":
-        model = SlotAttention(num_slots=10, dim=192)
-        model.load_state_dict(torch.load(CLOSURE_MODEL)["model_state"])
+        model.load_state_dict(torch.load(CLOSURE_MODEL, map_location=device))
+    elif principle_name == "continuity":
+        model.load_state_dict(torch.load(CONTINUITY_MODEL, map_location=device))
+    elif principle_name == "symmetry":
+        model.load_state_dict(torch.load(SYMMETRY_MODEL, map_location=device))
     else:
         raise ValueError
     return model

@@ -48,7 +48,7 @@ def train_rules(train_data, obj_model, hyp_params, train_principle, device):
 
         # --- 2. 物体 & 分组检测 ---
         objs = eval_patch_classifier.evaluate_image(obj_model, data)
-        groups = eval_groups.eval_groups(objs, hyp_params["prox"], train_principle, device)
+        groups = eval_groups.eval_groups(objs, hyp_params["prox"], train_principle, device, dim=hyp_params["patch_dim"])
         num_groups = len(groups)
 
         # --- 3. Grounding & Clause Generation ---

@@ -49,7 +49,6 @@ python -m src.play --device 2 --principle closure
 python -m src.play --device 1 --principle similarity
 python -m src.play --device 0 --principle proximity
 python -m mbg.scorer.train_context_aware_scorer --device 1 --all
-python -m train_context_aware_scorer --device 1 --all
  
 ```
 

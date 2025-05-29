@@ -1,34 +1,18 @@
 # Created by MacBook Pro at 23.04.25
 
+import networkx as nx
+from itertools import combinations
 import torch
 import torch.nn.functional as F
-import mbg.mbg_config as param
-from mbg.scorer import scorer_config
-from mbg.scorer.context_proximity_dataset import obj2context_pair_data
 
+from mbg.scorer import scorer_config
 from mbg.group import proximity_grouping
-from mbg.group import grouping_similarity
 from mbg.group import symbolic_group_features
 from mbg.group.neural_group_features import NeuralGroupEncoder
 from src import bk
-from mbg.group import closure_grouping
-
-def extract_patches_from_objs(objs):
-    patches = []
-    for obj in objs:
-        patches.append(obj["h"])
-    return patches
 
 
-def extract_patch_tensors_from_objs(objs):
-    patches = []
-    for obj in objs:
-        x_new = obj["h"][0][0][:, :, 0] + obj["h"][0][1][0]
-        y_new = obj["h"][0][0][:, :, 1] + obj["h"][0][1][0]
-        new_patches = torch.stack([x_new / 1024, y_new / 1024], dim=2)
-        patches.append(new_patches)
-    patches = torch.stack(patches, dim=0)
-    return patches
+
 
 
 def embedding_principles(group_principle):
@@ -38,10 +22,11 @@ def embedding_principles(group_principle):
     return p_g
 
 
-def embedding_group_neural_features(group_objs):
-    group_patches = extract_patch_tensors_from_objs(group_objs)
+def embedding_group_neural_features(group_objs, input_dim=7):
+    group_patches = torch.stack([o["h"] for o in group_objs])
     # build the encoder (dims must match your patch-encoder settings):
     group_encoder = NeuralGroupEncoder(
+        input_dim=input_dim,
         obj_embed_dim=64,
         hidden_dim=128,
         group_embed_dim=128
@@ -51,20 +36,22 @@ def embedding_group_neural_features(group_objs):
     h_g = group_encoder(group_patches)  # → torch.Size([128])
     return h_g
 
+
 def dict_group_features(group_objs):
     group_feature = symbolic_group_features.compute_symbolic_group_features(group_objs, 1024, 1024)
     s_g = group_feature.to_dict()
     return s_g
 
-def construct_group_representations(objs, group_obj_ids, principle):
+
+def construct_group_representations(objs, group_obj_ids, principle, input_dim):
     rep_gs = []
     for g_i, group_obj_id in enumerate(group_obj_ids):
         group_objs = [objs[i] for i in group_obj_id]
-        s_g = dict_group_features(group_objs)
-        h_g = embedding_group_neural_features(group_objs)
+        # s_g = dict_group_features(group_objs)
+        h_g = embedding_group_neural_features(group_objs, input_dim)
         p_g = principle
         grp = {
-            "id":g_i,
+            "id": g_i,
             "child_obj_ids": group_obj_id,
             "members": group_objs,
             "h": h_g,
@@ -74,25 +61,49 @@ def construct_group_representations(objs, group_obj_ids, principle):
     return rep_gs
 
 
-def eval_groups(objs, threshold, principle, device):
-    symbolic_objs = [o["s"] for o in objs]
-    obj_patches = extract_patches_from_objs(objs)
+@torch.no_grad()
+def group_objects_with_model(model, objects, input_type="pos_color_size", device="cpu", threshold=0.5):
+    """
+    Args:
+        model: trained ContextContourScorer model
+        objects: list of dicts, each with keys like 'position', 'color', 'size' depending on input_type
+        input_type: one of 'pos', 'pos_color', 'pos_color_size'
+        device: cuda or cpu
+        threshold: probability threshold to consider two objects grouped
+    Returns:
+        List of groups, each group is a list of object indices
+    """
+
+    model = model.to(device).eval()
+    n = len(objects)
+
+    G = nx.Graph()
+    G.add_nodes_from(range(n))
+
+    for i, j in combinations(range(n), 2):
+        ci, cj = objects[i].unsqueeze(0), objects[j].unsqueeze(0)
+        context = [x for k, x in enumerate(objects) if k != i and k != j]
+        if len(context) == 0:
+            ctx_tensor = torch.zeros((1, 1, objects[0].shape[0]), device=device)
+        else:
+            ctx_tensor = torch.stack(context).unsqueeze(0)
+
+        logit = model(ci, cj, ctx_tensor)
+        prob = torch.sigmoid(logit).item()
+
+        if prob > threshold:
+            G.add_edge(i, j)
+
+    # Extract connected components as groups
+    groups = [list(comp) for comp in nx.connected_components(G)]
+    return groups
 
 
-    if principle=="proximity":
-        # load grouping model
-        group_model = scorer_config.load_scorer_model("proximity").to(device)
-        group_ids = proximity_grouping.proximity_grouping(obj_patches, group_model, threshold)
-    elif principle == "similarity":
-        group_model = scorer_config.load_scorer_model("similarity").to(device)
-        group_ids = grouping_similarity.similarity_grouping(symbolic_objs, group_model, threshold)
-    elif principle == "closure":
-        group_model = scorer_config.load_scorer_model("closure").to(device)
-        group_ids = closure_grouping.closure_grouping(obj_patches, group_model, threshold, device)
-    else:
-        raise ValueError
-    # grouping objects
-
+def eval_groups(objs, threshold, principle, device, dim):
+    # symbolic_objs = [o["s"] for o in objs]
+    neural_objs = [o["h"] for o in objs]
+    group_model = scorer_config.load_scorer_model(principle, device)
+    group_ids = group_objects_with_model(group_model, neural_objs)
     # encoding the groups
-    groups = construct_group_representations(objs, group_ids, principle)
+    groups = construct_group_representations(objs, group_ids, principle, dim)
     return groups

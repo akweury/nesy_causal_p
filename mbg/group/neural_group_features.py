@@ -39,10 +39,10 @@ class NeuralGroupEncoder(nn.Module):
     """
     Given a set of object embeddings, returns a single group embedding.
     """
-    def __init__(self, obj_embed_dim=64, hidden_dim=128, group_embed_dim=128):
+    def __init__(self,input_dim, obj_embed_dim=64, hidden_dim=128, group_embed_dim=128):
         super().__init__()
         self.obj_encoder = PatchSetEncoder(
-            input_dim=2,
+            input_dim=input_dim,
             hidden_dim=hidden_dim//2,
             patch_len=param.POINTS_PER_PATCH,
             embed_dim=obj_embed_dim

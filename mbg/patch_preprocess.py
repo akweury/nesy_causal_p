@@ -61,7 +61,7 @@ def preprocess_image_to_patch_set(binary_image: np.ndarray, num_patches: int = 6
 
 
 def preprocess_rgb_image_to_patch_set(rgb_image: np.ndarray, num_patches: int = 6, points_per_patch: int = 16,
-                                      contour_uniform=True) -> list:
+                                      contour_uniform=True):
     """
     Extract patch sets from RGB image by contour-based object detection.
     Each patch set contains `num_patches` patches of length `points_per_patch` each.
@@ -76,7 +76,8 @@ def preprocess_rgb_image_to_patch_set(rgb_image: np.ndarray, num_patches: int = 
 
     num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(binary_mask, connectivity=8)
     outputs = []
-
+    positions = []
+    sizes = []
     for i in range(1, num_labels):  # skip background
         x, y, w, h, area = stats[i]
         if area < 10:
@@ -105,29 +106,21 @@ def preprocess_rgb_image_to_patch_set(rgb_image: np.ndarray, num_patches: int = 
             else:
                 color = np.array([0, 0, 0])
             sampled_rgb.append(color)
-
         sampled_rgb = torch.tensor(sampled_rgb, dtype=torch.float32) / 255  # shape [P*L, 3]
         sampled_xy = sampled_xy.float()
         sampled_xy += torch.tensor([x, y], dtype=torch.float32)  # convert to absolute coords
 
+        H, W = rgb_image.shape[:2]
+
         patch_set = torch.cat([sampled_xy, sampled_rgb], dim=1).view(num_patches, points_per_patch, 5)
         patch_set[:, :, :2] /= rgb_image.shape[0]
-
         W, H = rgb_image.shape[:2]
-        # x_rel = patch_set[..., 0] / W
-        # y_rel = patch_set[..., 1] / H
-
         size_tensor = torch.tensor([w / W, h / H], dtype=torch.float32).view(1, 1, 2).expand_as(patch_set[..., :2])
-        # rel_tensor = torch.stack([x_rel, y_rel], dim=-1)
         perceptual_set = torch.cat([patch_set, size_tensor], dim=-1)  # shape: [P, L, 7]
-
         outputs.append(perceptual_set)
-        # patch_set_shifted = torch.stack(
-        #     (patch_set[0][0][:, :, 0] + patch_set[0][1][0], patch_set[0][0][:, :, 1] + patch_set[0][1][1]), dim=2)
-        # patch_set_norm = patch_set_shifted / rgb_image.shape[0]
-        # outputs.append((patch_set, (x, y, w, h)))
-
-    return outputs
+        positions.append([x / W, y / H])
+        sizes.append([w / W, h / H])
+    return outputs, positions, sizes
 
 
 def preprocess_image_to_one_patch_set(binary_image: np.ndarray, num_patches: int = 6, points_per_patch: int = 16):
@@ -289,23 +282,26 @@ def img_path2obj_images(img_path: Path) -> List[np.ndarray]:
     return obj_images
 
 
-def img_path2patches_and_labels(image_path, gt_dict):
+def img_path2patches_and_labels(image_path, gt_dict, input_type="pos_color_size"):
     obj_images = img_path2obj_images(image_path)
 
     labels = match_objects_to_labels(obj_images, gt_dict)
     # single object image to patch set
     patch_sets = []
     sorted_labels = []
+    positions = []
+    sizes = []
     for o_i, obj_img in enumerate(obj_images):
-        binary_np = rgb_to_binary(obj_img)
-        patch_set = preprocess_image_to_patch_set(binary_np)
+        patch_set, obj_position, obj_size = rgb2patch(obj_img, input_type)
         if labels[o_i] == -1:
             continue
         label = labels[o_i] - 1
 
         patch_sets.append(patch_set)
         sorted_labels.append(label)
-    return patch_sets, sorted_labels
+        positions.append(obj_position)
+        sizes.append(obj_size)
+    return patch_sets, sorted_labels, positions, sizes
 
 
 # def img_path2patches_and_glabels(image_path, gt_dict, g_labels):
@@ -381,12 +377,21 @@ def align_data_and_imgs(objects: List[dict], obj_imgs: List[np.ndarray]) -> Tupl
 
 def rgb2patch(rgb_img, input_type):
     if input_type == "pos":
-        patch_set = preprocess_rgb_image_to_patch_set(rgb_img)[0][:,:, :2]
+        patch_set, positions, sizes = preprocess_rgb_image_to_patch_set(rgb_img)
+        patch_set = patch_set[0][:,:,:2]
+        positions = positions[0]
+        sizes=sizes[0]
     elif input_type == "pos_color":
-        patch_set = preprocess_rgb_image_to_patch_set(rgb_img)[0][:,:, :5]
+        patch_set, positions, sizes = preprocess_rgb_image_to_patch_set(rgb_img)
+        patch_set = patch_set[0][:,:,:5]
+        positions = positions[0]
+        sizes=sizes[0]
     elif input_type == "pos_color_size":
-        patch_set = preprocess_rgb_image_to_patch_set(rgb_img)[0]
+        patch_set, positions, sizes = preprocess_rgb_image_to_patch_set(rgb_img)
+        patch_set = patch_set[0]
+        positions = positions[0]
+        sizes=sizes[0]
     else:
         raise ValueError
 
-    return patch_set
+    return patch_set, positions, sizes
