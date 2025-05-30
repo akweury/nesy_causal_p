@@ -5,6 +5,7 @@
 
 from typing import List, Dict, Any, Callable, Tuple
 import torch
+from src import bk
 from mbg.patch_preprocess import shift_obj_patches_to_global_positions
 
 # these are the only two “head” predicates we ever learn clauses for:
@@ -66,6 +67,9 @@ def has_shape_eval(
     => returns Tensor[O] with 1.0 where shape==a2
     """
     return (hard["has_shape"] == a2).float()
+
+
+
 
 
 def has_color_eval(
@@ -187,3 +191,49 @@ def grp_sim_eval(
 ) -> torch.Tensor:
     # returns the full G×G group‐similarity matrix
     return soft["grp_sim"]
+
+
+#
+# ————————————————————————————
+# Object-level: not_has_shape_* predicates
+# ————————————————————————————
+#
+def not_has_shape_eval_factory(target_shape_id: int):
+    def _eval(hard: Dict[str, torch.Tensor],
+              soft: Dict[str, torch.Tensor],
+              _: Any,
+              __: Any) -> torch.Tensor:
+        pred_name = "not_has_shape_" + bk.bk_shapes[target_shape_id+1]
+        return (hard[pred_name].all()).float()
+    return _eval
+
+
+# 注册以下形状的 not_has_shape 评估器
+not_has_shape_rectangle_eval = not_has_shape_eval_factory(target_shape_id=bk.rect_index)
+not_has_shape_circle_eval = not_has_shape_eval_factory(target_shape_id=bk.cir_index)
+not_has_shape_triangle_eval = not_has_shape_eval_factory(target_shape_id=bk.tri_index)
+
+
+
+def make_no_member_shape_eval(shape_idx: int):
+    def _eval(hard: Dict[str, torch.Tensor],
+              soft: Dict[str, torch.Tensor],
+              _: Any,
+              __: Any) -> torch.Tensor:
+        in_group = hard["in_group"]      # (O, G)
+        has_shape = hard["has_shape"]    # (O,)
+        O, G = in_group.shape
+        result = []
+
+        for g in range(G):
+            member_mask = in_group[:, g].bool()
+            group_shapes = has_shape[member_mask]
+            all_not_match = (group_shapes != shape_idx).all()
+            result.append(float(all_not_match))
+
+        return torch.tensor(result, dtype=torch.float, device=has_shape.device)
+    return _eval
+
+no_member_shape_triangle_eval = make_no_member_shape_eval(shape_idx=bk.tri_index)
+no_member_shape_square_eval = make_no_member_shape_eval(shape_idx=bk.rect_index)
+no_member_shape_circle_eval = make_no_member_shape_eval(shape_idx=bk.cir_index)

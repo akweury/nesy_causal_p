@@ -118,186 +118,11 @@ def compute_metrics(
     }
 
 
-# def apply_rules(
-#         rules: List[ScoredRule],
-#         hard: Dict[str, torch.Tensor],
-#         soft: Dict[str, torch.Tensor]
-# ) -> Dict[ScoredRule, float]:
-#     """
-#     For each learned ScoredRule, returns a match score in [0,1] on this one image.
-#     - image‐level rules (scope=='image'): existential over objects/groups
-#     - group‐existential (scope=='group_exist'): existential over groups
-#     - group‐universal (scope=='group_univ'): universal over groups
-#     """
-#     O = hard["has_shape"].shape[0]
-#     G = hard["group_size"].shape[0]
-#
-#     def eval_body_image(body):
-#         # for image_target: at least one grounding must satisfy *all* atoms
-#         if not body:
-#             return 1.0
-#         # we will build a score tensor for each possible grounding and then max
-#         # distinguish object‐only atoms vs group‐only vs mixed
-#         # for simplicity here we only handle the common patterns:
-#         #   ("has_shape","O",v), ("has_color","O",rgb), ("in_group","O","G"), ("prox","O1","O2"), ("grp_sim","G1","G2")
-#         scores = []
-#
-#         # unary object‐level
-#         for atom in body:
-#             pred, a1, a2 = atom
-#             if pred == "has_shape":
-#                 v = a2
-#                 mat = (hard["has_shape"] == v).float()  # (O,)
-#                 scores.append(mat)
-#             elif pred == "has_color":
-#                 r, g, b = a2
-#                 mat = ((hard["has_color"][:, 0] == r) &
-#                        (hard["has_color"][:, 1] == g) &
-#                        (hard["has_color"][:, 2] == b)).float()
-#                 scores.append(mat)
-#             elif pred == "in_group":
-#                 # in_group("O","G") existential means any True in the entire matrix
-#                 scores.append(hard["in_group"].any(dim=1).float())
-#             elif pred == "group_size":
-#                 scores.append((hard["group_size"] == a2).any().float())
-#             elif pred == "prox":
-#                 # take the max prox over all object pairs
-#                 scores.append(soft["prox"].max().unsqueeze(0))
-#             elif pred == "grp_sim":
-#                 scores.append(soft["grp_sim"].max().unsqueeze(0))
-#             else:
-#                 raise NotImplementedError(f"Unknown pred {pred}")
-#
-#         # now we need to AND all atoms: for unary we have per‐object vectors,
-#         # for prox/grp_sim we have single‐value tensors.
-#         # to mix them, broadcast the single‐value ones to O entries:
-#         mats = []
-#         for m in scores:
-#             if m.numel() == 1:
-#                 mats.append(m.expand(O))
-#             else:
-#                 mats.append(m)
-#         # conjunction per object:
-#         conj = torch.stack(mats, dim=0).min(dim=0)[0]  # (O,)
-#         if len(conj) == 0:
-#             return 0
-#         else:
-#             return float(conj.max().item())
-#
-#     def eval_body_group_exist(body):
-#         # for group_target existential: at least one group satisfies
-#         # similar to image but over groups
-#         if not body:
-#             return 1.0
-#         # we'll reuse hard["in_group"] and group_size/principle
-#         # build per‐group scores
-#         scores = []
-#         for atom in body:
-#             pred, a1, a2 = atom
-#             if pred == "group_size":
-#                 sz = a2
-#                 mat = (hard["group_size"] == sz).float()  # (G,)
-#                 scores.append(mat)
-#             elif pred == "principle":
-#                 pr = a2
-#                 mat = (hard["principle"] == pr).float()
-#                 scores.append(mat)
-#             elif pred == "in_group":
-#                 # in_group("O","G")—we want ANY object in that group
-#                 mat = hard["in_group"].any(dim=0).float()  # (G,)
-#                 scores.append(mat)
-#             elif pred == "has_shape" or pred == "has_color":
-#                 # these refer to object‐unary + in_group; we already have matching object rows
-#                 # project to group by max over members
-#                 if pred == "has_shape":
-#                     v = a2
-#                     obj_m = (hard["has_shape"] == v).float()  # (O,)
-#                 else:
-#                     r, g, b = a2
-#                     obj_m = ((hard["has_color"][:, 0] == r) &
-#                              (hard["has_color"][:, 1] == g) &
-#                              (hard["has_color"][:, 2] == b)).float()  # (O,)
-#                 # for each group take max over objects in that group
-#                 mat = []
-#                 for gi in range(G):
-#                     members = hard["in_group"][:, gi]  # (O,)
-#                     if members.any():
-#                         mat.append(obj_m[members].max())
-#                     else:
-#                         mat.append(torch.tensor(0.0))
-#                 if len(mat)>0:
-#                     scores.append(torch.stack(mat))  # (G,)
-#             else:
-#                 raise NotImplementedError(f"Unknown pred {pred}")
-#
-#         # AND them per‐group, then OR across groups
-#         mats = scores
-#         conj = torch.stack(mats, dim=0).min(dim=0)[0]  # (G,)
-#         if len(conj) == 0:
-#             return 0
-#         else:
-#             return float(conj.max().item())
-#
-#     def eval_body_group_univ(body):
-#         # universal: every group must satisfy ALL atoms
-#         if not body:
-#             return 1.0
-#         # reuse the same per‐group mats from above
-#         mats = []
-#         for atom in body:
-#             pred, a1, a2 = atom
-#             if pred == "group_size":
-#                 mats.append((hard["group_size"] == a2).float())
-#             elif pred == "principle":
-#                 mats.append((hard["principle"] == a2).float())
-#             elif pred == "in_group":
-#                 mats.append(hard["in_group"].any(dim=0).float())
-#             elif pred in ("has_shape", "has_color"):
-#                 # same as exist but we need the per‐group vector
-#                 if pred == "has_shape":
-#                     obj_m = (hard["has_shape"] == a2).float()
-#                 else:
-#                     r, g, b = a2
-#                     obj_m = ((hard["has_color"][:, 0] == r) &
-#                              (hard["has_color"][:, 1] == g) &
-#                              (hard["has_color"][:, 2] == b)).float()
-#                 # project to groups
-#                 mat = []
-#                 for gi in range(G):
-#                     members = hard["in_group"][:, gi]
-#                     if members.any():
-#                         mat.append(obj_m[members].max())
-#                     else:
-#                         mat.append(torch.tensor(0.0))
-#                 mats.append(torch.stack(mat))
-#             else:
-#                 raise NotImplementedError
-#
-#         conj = torch.stack(mats, dim=0).min(dim=0)[0]  # (G,)
-#         if len(conj) == 0:
-#             return 0
-#         else:
-#             return float(conj.min().item())  # all groups
-#
-#     scores = {}
-#     for sr in rules:
-#         b = sr.clause.body
-#         if sr.scope == "image":
-#             m = eval_body_image(b)
-#         elif sr.scope == "existential":
-#             m = eval_body_group_exist(b)
-#         elif sr.scope == "universal":
-#             m = eval_body_group_univ(b)
-#         else:
-#             raise ValueError(sr.scope)
-#         # combine with rule’s learned confidence
-#         scores[sr] = m * sr.confidence
-#     return scores
-
 from mbg.grounding.predicates import (
     has_shape_eval, has_color_eval, x_eval, y_eval, w_eval, h_eval,
     in_group_eval, group_size_eval, principle_eval,
-    prox_eval, grp_sim_eval
+    prox_eval, grp_sim_eval, not_has_shape_triangle_eval, not_has_shape_circle_eval,not_has_shape_rectangle_eval,
+    no_member_shape_triangle_eval, no_member_shape_circle_eval, no_member_shape_square_eval
 )
 
 EVAL_FN = {
@@ -312,6 +137,12 @@ EVAL_FN = {
     "principle": principle_eval,
     "prox": prox_eval,
     "grp_sim": grp_sim_eval,
+    'not_has_shape_triangle': not_has_shape_triangle_eval,
+    'not_has_shape_rectangle': not_has_shape_rectangle_eval,
+    'not_has_shape_circle': not_has_shape_circle_eval,
+    "no_member_triangle": no_member_shape_triangle_eval,
+    "no_member_rectangle": no_member_shape_square_eval,
+    "no_member_circle": no_member_shape_circle_eval,
 }
 
 
@@ -320,67 +151,6 @@ def _eval_atom(pred, hard, soft, objects, groups, a1, a2, device="cpu"):
         raise ValueError(f"Unknown predicate {pred}")
     # call with exactly (hard, soft, a1, a2); ignore objects/groups here
     return EVAL_FN[pred](hard, soft, a1, a2)
-
-
-#
-# # Helper: given a body = list of (pred_name, arg1, arg2) and a predicate registry,
-# # call the right function to get a tensor of shape (N,) or (N,N) or ().
-# def _eval_atom(
-#         pred: str,
-#         hard ,
-#         soft ,
-#         objects,
-#         groups,
-#         a1: any,
-#         a2: any,
-#         device: str = "cpu"
-# ) -> torch.Tensor:
-#     """
-#     Look up pred in your registries and call it.
-#     Returns a Tensor of shape
-#       - (O,) for object‐level predicates,
-#       - (G,) for group‐level predicates,
-#       - (O,O) or (G,G) for soft ones.
-#     """
-#     # helper to call fn with only the parameters it expects
-#     def call_flexible(fn, /, **all_kwargs):
-#         sig = inspect.signature(fn)
-#         kwargs = {k: v for k, v in all_kwargs.items() if k in sig.parameters}
-#         return fn(**kwargs)
-#     # 1) object‐level hard predicates
-#     if pred in OBJ_HARD:
-#         # raw = either shape (O,) or (O,G)
-#         raw = OBJ_HARD[pred](objects=objects, groups=groups, device=device)
-#         if raw.ndim == 1:
-#             # e.g. has_shape(o) == a2
-#             return (raw == a2).float()
-#         elif raw.ndim == 2:
-#             # only in_group returns an (O,G) mask
-#             # a2 should be something like "g2" or an int
-#             if isinstance(a2, str) and a2.startswith("g"):
-#                 gi = int(a2[1:])
-#             else:
-#                 gi = int(a2)
-#             return raw[:, gi].float()
-#         else:
-#             raise RuntimeError(f"Unexpected OBJ_HARD output shape {raw.shape} for {pred}")
-#
-#     # 2) group‐level hard predicates
-#     # 2) group‐level hard predicates
-#     if pred in GRP_HARD:
-#         raw = call_flexible(
-#             GRP_HARD[pred],
-#             objects=objects, groups=groups, device=device
-#         )
-#         # raw: (G,)
-#         return (raw == a2).float()
-#
-#     # 3) soft (neural) predicates
-#     if pred in SOFT:
-#         # e.g. prox or grp_sim → full matrix
-#         return SOFT[pred](objects=objects, groups=groups, device=device)
-#     raise KeyError(f"Unknown predicate {pred}")
-
 
 def _body_to_group_mats(
         body: List[tuple],
@@ -457,7 +227,7 @@ def _body_to_group_mats(
                 # project object‐mask [O] → group mask [G]
                 vec = []
                 for gi in range(G):
-                    members = in_grp[:, gi]
+                    members = in_grp[:, gi].to(torch.int)
                     if members.any():
                         vec.append(t[members].max())
                     else:
@@ -590,15 +360,35 @@ def apply_rules(
     return out
 
 
-def compute_image_score(learned_rules, rule_scores, eps=1e-8):
+def compute_image_score(learned_rules, rule_scores, high_conf_th=0.99, fallback_weight=0.1, eps=1e-8):
     """
-    Combine rule scores into a single validation image score,
-    weighted by the confidence of each learned rule.
+    Compute image score using high-confidence rule prioritization:
+    - If any rule has confidence >= high_conf_th and fires, only those are considered.
+    - Otherwise, fallback to confidence-weighted average (penalizing low-conf clauses).
     """
-    weighted_sum = sum(r.confidence * s for r, s in zip(learned_rules, rule_scores.values()))
-    total_weight = sum(r.confidence for r in learned_rules)
-    return weighted_sum / (total_weight + eps)
+    high_conf_scores = []
+    for rule in learned_rules:
+        score = rule_scores.get(rule, 0.0)
+        if rule.confidence >= high_conf_th:
+            high_conf_scores.append(score)
 
+    # Use only high-confidence rules if any fired
+    if high_conf_scores:
+        return sum(high_conf_scores) / (len(high_conf_scores) + eps)
+
+    # Otherwise, fall back to confidence^2 weighted average
+    weighted_sum = 0.0
+    total_weight = 0.0
+    for rule in learned_rules:
+        score = rule_scores.get(rule, 0.0)
+        weight = rule.confidence ** 2
+        weighted_sum += weight * score
+        total_weight += weight
+
+    if total_weight > 0:
+        return weighted_sum / (total_weight + eps)
+    else:
+        return fallback_weight
 
 def eval_rules(val_data, obj_model, rules_train, hyp_params, eval_principle, device, patch_dim):
     # we’ll collect per‐task true / pred

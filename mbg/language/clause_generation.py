@@ -9,7 +9,7 @@ from collections import Counter, defaultdict, namedtuple
 import json
 import config
 from mbg.grounding.predicates import HEAD_PREDICATES
-
+from src import bk
 
 # A very simple Clause representation:
 Atom = Tuple[Any, ...]  # e.g. ("has_shape", "o0", "triangle")
@@ -202,11 +202,27 @@ class ClauseGenerator:
         # 1) image_target(X) clauses
         img_head = (self.img_head, "X")
 
-        # (a) one clause per object for shape
+        # (a) object-level shape-based predicates
         for i in range(O):
             shape_val = int(hard["has_shape"][i].item())
+
+            # has_shape
             add(img_head, [("has_shape", "O", shape_val),
                            ("in_group", "O", "G")])
+
+        # (a.2) group-level shape exclusion predicates
+        for pred in hard:
+            if pred.startswith("not_has_shape_"):
+                shape_val = bk.bk_shapes.index(pred.split("not_has_shape_")[-1]) - 1
+                for g in range(G):
+                    if hard[pred].all():
+                        add(img_head, [(pred, "G", shape_val)])
+
+            # # not_has_shape_* variants
+            # for pred in hard:
+            #     if pred.startswith("not_has_shape_"):
+            #         if hard[pred][i].item() >= 0.5:
+            #             add(img_head, [(pred, "O"), ("in_group", "O", "G")])
 
         # (b) one clause per object for color
         for i in range(O):
@@ -245,11 +261,17 @@ class ClauseGenerator:
         # (a) per object‐in‐that‐group shape
         for i in range(O):
             shape_val = int(hard["has_shape"][i].item())
-            # membership matrix tells us which groups this object belongs to
             for g in range(G):
                 if hard["in_group"][i, g]:
                     add(grp_head, [("has_shape", "O", shape_val),
                                    ("in_group", "O", "G")])
+        # (a.2) group-level shape exclusion predicates
+        for pred in hard:
+            if pred.startswith("no_member_"):
+                shape_val = bk.bk_shapes.index(pred.split("no_member_")[-1]) - 1
+                for g in range(G):
+                    if hard[pred][g].all():
+                        add(grp_head, [(pred, "G", shape_val)])
 
         # (b) per object‐in‐that‐group color
         for i in range(O):
@@ -537,12 +559,11 @@ def filter_group_existential_rules(
     return final
 
 
-
 def filter_group_universal_rules(
-    pos_per_task: Dict[str, List[Counter]],
-    neg_per_task: Dict[str, List[Counter]],
-    pos_group_counts: Dict[str, List[int]],
-    neg_group_counts: Dict[str, List[int]],
+        pos_per_task: Dict[str, List[Counter]],
+        neg_per_task: Dict[str, List[Counter]],
+        pos_group_counts: Dict[str, List[int]],
+        neg_group_counts: Dict[str, List[int]],
 ) -> Dict[str, List[Tuple[Clause, float]]]:
     """
     Soft‐universal filtering for group_target clauses with clipped ratios.
@@ -555,7 +576,7 @@ def filter_group_universal_rules(
     final: Dict[str, List[Tuple[Clause, float]]] = {}
 
     for task_id, pos_freqs in pos_per_task.items():
-        neg_freqs  = neg_per_task.get(task_id, [])
+        neg_freqs = neg_per_task.get(task_id, [])
         pos_counts = pos_group_counts[task_id]
         neg_counts = neg_group_counts.get(task_id, [])
 

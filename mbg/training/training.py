@@ -4,8 +4,6 @@ from collections import Counter, defaultdict
 import torch.nn as nn
 import torch.optim as optim
 import torch
-from torch.utils.data import DataLoader
-from tqdm import tqdm
 
 from mbg.object import eval_patch_classifier
 from mbg.group import eval_groups
@@ -13,7 +11,7 @@ from mbg.grounding import grounding
 from mbg.language import clause_generation
 from mbg.evaluation import evaluation
 from mbg.scorer.context_contour_scorer import ContextContourScorer
-
+import config
 def train_grouping_model(train_loader, device, epochs=10, LR = 1e-3):
     # pair_dataset = build_pairwise_grouping_dataset(train_loader)  # returns (patch_i, patch_j, label) pairs
     model = ContextContourScorer()  # a small convnet or MLP
@@ -64,11 +62,11 @@ def train_rules(train_data, obj_model, hyp_params, train_principle, device):
         else:
             neg_per_task_train[task_id].append(freq)
             neg_group_counts_train[task_id].append(num_groups)
-    img_rules_train = clause_generation.filter_image_level_rules(pos_per_task_train, neg_per_task_train)
-    exist_rules_train = clause_generation.filter_group_existential_rules(pos_per_task_train, neg_per_task_train)
-    univ_rules_train = clause_generation.filter_group_universal_rules(pos_per_task_train, neg_per_task_train,
+    rules_img = clause_generation.filter_image_level_rules(pos_per_task_train, neg_per_task_train)
+    rules_g_exist = clause_generation.filter_group_existential_rules(pos_per_task_train, neg_per_task_train)
+    rules_g_universal = clause_generation.filter_group_universal_rules(pos_per_task_train, neg_per_task_train,
                                                                       pos_group_counts_train, neg_group_counts_train)
-    rules_train = clause_generation.assemble_final_rules(img_rules_train, exist_rules_train, univ_rules_train,
+    rules_train = clause_generation.assemble_final_rules(rules_img, rules_g_exist, rules_g_universal,
                                                          top_k=hyp_params["top_k"])
     return rules_train
 

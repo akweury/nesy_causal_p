@@ -6,6 +6,17 @@ from pathlib import Path
 import shutil
 
 
+########## helper function ################################
+
+def print_list_summary(lst, max_items=10):
+    print(f"Length: {len(lst)}")
+    print("First few items:")
+    for i, item in enumerate(lst[:max_items]):
+        print(f"[{i}] {item}")
+
+
+########################################################
+
 root = Path(__file__).parents[0]
 
 
@@ -32,7 +43,6 @@ if not os.path.exists(storage):
     os.mkdir(storage)
 if not os.path.exists(output):
     os.mkdir(output)
-
 
 code_group_relation = {
     "a_eq_b": 0,
@@ -74,7 +84,6 @@ grb_base = storage / "dataset" / "grb"
 grb_prox = grb_base / "proximity"
 grb_simi = grb_base / "similarity"
 grb_closure = grb_base / "closure"
-
 
 # clear_folder(kp_gestalt_dataset)
 kp_gestalt_dataset_all = storage / "dataset" / "gestalt_all"

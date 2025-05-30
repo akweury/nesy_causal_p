@@ -102,11 +102,11 @@ def preprocess_rgb_image_to_patch_set(rgb_image: np.ndarray, num_patches: int = 
         for pt in sampled_xy:
             cx, cy = pt[0].item() + x, pt[1].item() + y  # offset to full image
             if 0 <= cy < rgb_image.shape[0] and 0 <= cx < rgb_image.shape[1]:
-                color = rgb_image[cy, cx]
+                color = torch.from_numpy(rgb_image[cy, cx])
             else:
-                color = np.array([0, 0, 0])
+                color = torch.tensor([0, 0, 0])
             sampled_rgb.append(color)
-        sampled_rgb = torch.tensor(sampled_rgb, dtype=torch.float32) / 255  # shape [P*L, 3]
+        sampled_rgb = torch.stack(sampled_rgb) / 255  # shape [P*L, 3]
         sampled_xy = sampled_xy.float()
         sampled_xy += torch.tensor([x, y], dtype=torch.float32)  # convert to absolute coords
 

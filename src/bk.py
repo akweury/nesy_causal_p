@@ -190,7 +190,13 @@ color_matplotlib.pop("darkgray")
 color_dict_rgb2name = {value: key for key, value in color_matplotlib.items()}
 color_large = [k for k, v in list(color_matplotlib.items())]
 color_large_exclude_gray = [item for item in color_large if item != "lightgray" and item != "lightgrey"]
+
 bk_shapes = ["none", "triangle", "rectangle", "circle"]
+
+tri_index = bk_shapes.index("triangle") - 1
+rect_index = bk_shapes.index("rectangle") - 1
+cir_index = bk_shapes.index("circle") - 1
+
 bk_shapes_2 = ["none", "triangle", "square", "circle"]
 gestalt_principles = [
     # 'position_closure',
@@ -250,6 +256,7 @@ def load_bk_fms(args, bk_shapes):
             "labels": labels,
         })
     return bk
+
 
 def gen_group_tensor(x, y, size, obj_num, r, g, b, tri, sq, cir):
     return torch.tensor([x, y, size, obj_num, r, g, b, tri, sq, cir])
