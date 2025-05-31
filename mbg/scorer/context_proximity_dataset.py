@@ -77,7 +77,7 @@ class ContextContourDataset(Dataset):
                         continue
                     if len(objects) < 2:
                         continue
-                    objects, obj_imgs = patch_preprocess.align_data_and_imgs(objects, obj_imgs)
+                    objects, obj_imgs, permutes = patch_preprocess.align_data_and_imgs(objects, obj_imgs)
                     for i in range(len(objects)):
                         for j in range(len(objects)):
                             if i == j:

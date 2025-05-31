@@ -36,8 +36,9 @@ val_loader = DataLoader(val_set, batch_size=param.BATCH_SIZE)
 model = PatchClassifier(
     num_patches=param.PATCHES_PER_SET,
     patch_len=param.POINTS_PER_PATCH,
-    num_classes=param.NUM_CLASSES
+    num_classes=len(param.LABEL_NAMES)
 ).to(device)
+
 
 optimizer = optim.Adam(model.parameters(), lr=param.LEARNING_RATE)
 criterion = nn.CrossEntropyLoss()

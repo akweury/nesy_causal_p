@@ -12,7 +12,7 @@ from PIL import Image
 
 from mbg import mbg_config as param
 from mbg import patch_preprocess
-
+from src import bk
 
 class ObjPatchSetDataset(Dataset):
     def __init__(self, root_dir=param.ROOT_DATASET_DIR, num_patches=param.PATCHES_PER_SET,
@@ -24,20 +24,20 @@ class ObjPatchSetDataset(Dataset):
         self._build()
 
     def _build(self):
-        task_dirs = [d for d in self.root_dir.iterdir() if d.is_dir()]
+        task_dirs = [d/"positive" for d in self.root_dir.iterdir() if d.is_dir()]
+        task_dirs += [d/"negative" for d in self.root_dir.iterdir() if d.is_dir()]
+        task_dirs = random.sample(task_dirs, 100)
         for task_dir in task_dirs:
-            gt_path = task_dir / "gt.json"
-            if not gt_path.exists():
-                continue
-            with open(gt_path) as f:
-                gt_dict = json.load(f)["img_data"]
-
-            for img_path in task_dir.iterdir():
-                print(img_path)
-            for img_name in gt_dict:
-                image_path = task_dir / (img_name + ".png")
-
-                patch_sets, labels, _, _ = patch_preprocess.img_path2patches_and_labels(image_path, gt_dict[img_name]["objects"])
+            json_files = sorted(task_dir.glob("*.json"))
+            png_files = sorted(task_dir.glob("*.png"))
+            for f_i, json_file in enumerate(json_files):
+                with open(json_file) as f:
+                    metadata = json.load(f)
+                objects = metadata.get("img_data", [])
+                image_path = png_files[f_i]
+                for o in objects:
+                    o["shape"] = bk.bk_shapes_2.index(o['shape'])
+                patch_sets, labels, _, _, _ = patch_preprocess.img_path2patches_and_labels(image_path, objects)
                 image_paths = [image_path] * len(patch_sets)
                 self.data += zip(patch_sets, labels, image_paths)
 

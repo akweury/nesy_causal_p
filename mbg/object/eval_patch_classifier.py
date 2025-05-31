@@ -25,8 +25,8 @@ def load_model(device):
 
 def evaluate_shapes(model, data):
     device = next(model.parameters()).device
-    patch_sets, _, positions, sizes = patch_preprocess.img_path2patches_and_labels(data["image_path"][0],
-                                                                      data["symbolic_data"])
+    patch_sets, _, positions, sizes, permutes = patch_preprocess.img_path2patches_and_labels(data["image_path"][0],
+                                                                                             data["symbolic_data"])
     predictions = []
     for o_i in range(len(patch_sets)):
         with torch.no_grad():
@@ -34,7 +34,7 @@ def evaluate_shapes(model, data):
             pred_label = logits.argmax(dim=1).item()
             predictions.append(pred_label)
 
-    return predictions, patch_sets, positions, sizes
+    return predictions, patch_sets, positions, sizes, permutes
 
 
 def evaluate_colors(data):
@@ -51,8 +51,10 @@ def evaluate_colors(data):
 
 
 def evaluate_image(model, data):
-    labels, patches, positions, sizes = evaluate_shapes(model, data)
-    colors = evaluate_colors(data)
+    labels, patches, positions, sizes, permutes = evaluate_shapes(model, data)
+
+
+    colors = evaluate_colors(data[permutes])
     objs = []
     for i in range(len(labels)):
         shape_one_hot = torch.zeros(len(bk.bk_shapes), dtype=torch.float32)

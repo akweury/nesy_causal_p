@@ -3,7 +3,7 @@ import os
 import config
 
 # ==== 数据路径 ====
-ROOT_DATASET_DIR = config.kp_gestalt_dataset / "train"
+ROOT_DATASET_DIR = config.grb_prox / "train"
 CONTOUR_DATASET_DIR = config.mb_outlines
 GT_EXTENSION = "gt.json"
 

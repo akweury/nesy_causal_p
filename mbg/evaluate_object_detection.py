@@ -84,37 +84,37 @@ def compute_accuracy(matches, key, image_width=None):
     return correct / len(matches) if matches else 0.0
 
 
-def evaluate_symbolic_detection(dataloader, predictor):
-    total_shape, total_color, total_size = 0, 0, 0
-    total_detected = 0
-    # Load trained classifier
-    model = PatchClassifier(
-        num_patches=param.PATCHES_PER_SET,
-        patch_len=param.POINTS_PER_PATCH,
-        num_classes=len(param.LABEL_NAMES)
-    )
-    model.load_state_dict(torch.load(param.OBJ_MODEL_SAVE_PATH, map_location=param.DEVICE))
-    model.eval()
-
-    for batch in tqdm(dataloader, desc="Evaluating"):
-        for i in range(len(batch["image"])):
-            image = batch["image"][i]
-            gt_objects = batch["symbolic_data"]
-            # Your GRM-based predictor for symbolic object detection
-            pred_objects = predictor(image, model)  # List of dicts with same keys as gt_objects
-            matches = match_objects(pred_objects, gt_objects)
-            if not matches:
-                continue
-            shape_acc = compute_accuracy(matches, "shape")
-            color_acc = compute_accuracy(matches, "color_rgb")
-            size_acc = compute_accuracy(matches, "size", image.shape[-1])
-
-            total_shape += shape_acc * len(matches)
-            total_color += color_acc * len(matches)
-            total_size += size_acc * len(matches)
-            total_detected += len(matches)
-
-    print("Symbolic Object Detection Accuracy:")
-    print(f"  Shape Accuracy: {total_shape / total_detected:.3f}")
-    print(f"  Color Accuracy: {total_color / total_detected:.3f}")
-    print(f"  Size Accuracy : {total_size / total_detected:.3f}")
+# def evaluate_symbolic_detection(dataloader, predictor):
+#     total_shape, total_color, total_size = 0, 0, 0
+#     total_detected = 0
+#     # Load trained classifier
+#     model = PatchClassifier(
+#         num_patches=param.PATCHES_PER_SET,
+#         patch_len=param.POINTS_PER_PATCH,
+#         num_classes=len(param.LABEL_NAMES)
+#     )
+#     model.load_state_dict(torch.load(param.OBJ_MODEL_SAVE_PATH, map_location=param.DEVICE))
+#     model.eval()
+#
+#     for batch in tqdm(dataloader, desc="Evaluating"):
+#         for i in range(len(batch["image"])):
+#             image = batch["image"][i]
+#             gt_objects = batch["symbolic_data"]
+#             # Your GRM-based predictor for symbolic object detection
+#             pred_objects = predictor(image, model)  # List of dicts with same keys as gt_objects
+#             matches = match_objects(pred_objects, gt_objects)
+#             if not matches:
+#                 continue
+#             shape_acc = compute_accuracy(matches, "shape")
+#             color_acc = compute_accuracy(matches, "color_rgb")
+#             size_acc = compute_accuracy(matches, "size", image.shape[-1])
+#
+#             total_shape += shape_acc * len(matches)
+#             total_color += color_acc * len(matches)
+#             total_size += size_acc * len(matches)
+#             total_detected += len(matches)
+#
+#     print("Symbolic Object Detection Accuracy:")
+#     print(f"  Shape Accuracy: {total_shape / total_detected:.3f}")
+#     print(f"  Color Accuracy: {total_color / total_detected:.3f}")
+#     print(f"  Size Accuracy : {total_size / total_detected:.3f}")

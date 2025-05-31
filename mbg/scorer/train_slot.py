@@ -33,57 +33,57 @@ else:
     raise ValueError
 
 
-class SlotGroupingDataset(Dataset):
-    def __init__(self, root_dir, max_objects=100):
-        """
-        Args:
-            root_dir: path to your Gestalt dataset (task folders)
-            max_objects: skip images with too many objects
-        """
-        self.root_dir = Path(root_dir)
-        self.data = []
-        self.max_objects = max_objects
-        self._load()
-
-    def _load(self):
-        task_dirs = [d for d in self.root_dir.iterdir() if d.is_dir()]
-        for task_dir in task_dirs:
-            for label_dir in ["positive", "negative"]:
-                if len(self.data) > 100:
-                    continue
-                labeled_dir = task_dir / label_dir
-                if not labeled_dir.exists():
-                    continue
-
-                json_files = sorted(labeled_dir.glob("*.json"))
-                png_files = sorted(labeled_dir.glob("*.png"))
-
-                for f_i, json_file in enumerate(json_files):
-                    with open(json_file) as f:
-                        metadata = json.load(f)
-                    objects = metadata.get("img_data", [])
-                    if len(objects) < 2 or len(objects) > self.max_objects:
-                        continue
-
-                    # Extract patches for all objects
-                    obj_imgs = patch_preprocess.img_path2obj_images(png_files[f_i])
-                    if len(obj_imgs) != len(objects):
-                        continue
-
-                    objects, obj_imgs = patch_preprocess.align_data_and_imgs(objects, obj_imgs)
-
-                    patch_feats = [patch_preprocess.rgb2patch(img).flatten() for img in obj_imgs]
-                    group_ids = [obj["group_id"] for obj in objects]
-                    patch_feats = torch.stack(patch_feats)  # shape [N, D]
-                    group_ids = torch.tensor(group_ids)  # shape [N]
-                    self.data.append((patch_feats, group_ids))
-
-    def __len__(self):
-        return len(self.data)
-
-    def __getitem__(self, idx):
-        return self.data[idx]
-
+# class SlotGroupingDataset(Dataset):
+#     def __init__(self, root_dir, max_objects=100):
+#         """
+#         Args:
+#             root_dir: path to your Gestalt dataset (task folders)
+#             max_objects: skip images with too many objects
+#         """
+#         self.root_dir = Path(root_dir)
+#         self.data = []
+#         self.max_objects = max_objects
+#         self._load()
+#
+#     def _load(self):
+#         task_dirs = [d for d in self.root_dir.iterdir() if d.is_dir()]
+#         for task_dir in task_dirs:
+#             for label_dir in ["positive", "negative"]:
+#                 if len(self.data) > 100:
+#                     continue
+#                 labeled_dir = task_dir / label_dir
+#                 if not labeled_dir.exists():
+#                     continue
+#
+#                 json_files = sorted(labeled_dir.glob("*.json"))
+#                 png_files = sorted(labeled_dir.glob("*.png"))
+#
+#                 for f_i, json_file in enumerate(json_files):
+#                     with open(json_file) as f:
+#                         metadata = json.load(f)
+#                     objects = metadata.get("img_data", [])
+#                     if len(objects) < 2 or len(objects) > self.max_objects:
+#                         continue
+#
+#                     # Extract patches for all objects
+#                     obj_imgs = patch_preprocess.img_path2obj_images(png_files[f_i])
+#                     if len(obj_imgs) != len(objects):
+#                         continue
+#
+#                     objects, obj_imgs, permutes = patch_preprocess.align_data_and_imgs(objects, obj_imgs)
+#
+#                     patch_feats = [patch_preprocess.rgb2patch(img).flatten() for img in obj_imgs]
+#                     group_ids = [obj["group_id"] for obj in objects]
+#                     patch_feats = torch.stack(patch_feats)  # shape [N, D]
+#                     group_ids = torch.tensor(group_ids)  # shape [N]
+#                     self.data.append((patch_feats, group_ids))
+#
+#     def __len__(self):
+#         return len(self.data)
+#
+#     def __getitem__(self, idx):
+#         return self.data[idx]
+#
 
 def hungarian_loss(pred_attn, gt_group_ids, mask):
     B, N, K = pred_attn.shape

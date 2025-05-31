@@ -201,7 +201,7 @@ import numpy as np
 from typing import List
 
 
-def match_objects_to_labels(object_images: List[np.ndarray], gt_objects: List[dict], threshold: float = 0.02) -> List[
+def match_objects_to_labels(object_images: List[np.ndarray], gt_objects: List[dict], threshold: float = 0.1) -> List[
     int]:
     """
     Match object images to ground truth objects based on centroid proximity,
@@ -287,7 +287,7 @@ def img_path2obj_images(img_path: Path) -> List[np.ndarray]:
 
 def img_path2patches_and_labels(image_path, gt_dict, input_type="pos_color_size"):
     obj_images = img_path2obj_images(image_path)
-    objects, obj_images = align_data_and_imgs(gt_dict, obj_images)
+    objects, obj_images, permutes = align_data_and_imgs(gt_dict, obj_images)
 
     labels = match_objects_to_labels(obj_images, objects)
     # single object image to patch set
@@ -305,7 +305,7 @@ def img_path2patches_and_labels(image_path, gt_dict, input_type="pos_color_size"
         sorted_labels.append(label)
         positions.append(obj_position)
         sizes.append(obj_size)
-    return patch_sets, sorted_labels, positions, sizes
+    return patch_sets, sorted_labels, positions, sizes, permutes
 
 
 # def img_path2patches_and_glabels(image_path, gt_dict, g_labels):
@@ -338,14 +338,15 @@ def shift_obj_patches_to_global_positions(obj_patch, shift):
     return shifted_tensor
 
 
-def align_data_and_imgs(objects: List[dict], obj_imgs: List[np.ndarray]) -> Tuple[List[dict], List[np.ndarray]]:
+def align_data_and_imgs(objects: List[dict], obj_imgs: List[np.ndarray]) -> Tuple[List[dict], List[np.ndarray], List[int]]:
     """
     Align object metadata with object images based on centroid location matching.
     Each image contains a single colored object on a [211, 211, 211] gray background.
 
     :param objects: List of symbolic object dictionaries with 'x' and 'y' in [0, 1] range
     :param obj_imgs: List of 1024x1024x3 numpy arrays, one per object
-    :return: Tuple of (aligned_objects, aligned_obj_imgs)
+    :return: Tuple of (aligned_objects, aligned_obj_imgs, old_to_new_indices)
+             where old_to_new_indices[i] = index in original objects list for the i-th image
     """
     resolution = 1024
     bg_color = np.array([211, 211, 211], dtype=np.uint8)
@@ -359,24 +360,28 @@ def align_data_and_imgs(objects: List[dict], obj_imgs: List[np.ndarray]) -> Tupl
         cy = ys.mean() / resolution
         return cx, cy
 
-    # Compute centroids for images
+    # Compute centroids
     img_centroids = [get_centroid(img) for img in obj_imgs]
     obj_centroids = [torch.tensor([obj['x'], obj['y']]) for obj in objects]
 
-    # Match each image centroid to the closest object centroid
     aligned_objects = []
     aligned_imgs = []
+    old_to_new_indices = []
 
     used_obj_idxs = set()
+
     for i, img_c in enumerate(img_centroids):
-        dists = [np.linalg.norm(np.array(img_c) - np.array(obj_c)) if j not in used_obj_idxs else float('inf')
-                 for j, obj_c in enumerate(obj_centroids)]
+        dists = [
+            np.linalg.norm(np.array(img_c) - obj_c.numpy()) if j not in used_obj_idxs else float('inf')
+            for j, obj_c in enumerate(obj_centroids)
+        ]
         match_idx = int(np.argmin(dists))
         aligned_objects.append(objects[match_idx])
         aligned_imgs.append(obj_imgs[i])
+        old_to_new_indices.append(match_idx)
         used_obj_idxs.add(match_idx)
 
-    return aligned_objects, aligned_imgs
+    return aligned_objects, aligned_imgs, old_to_new_indices
 
 
 def rgb2patch(rgb_img, input_type):
