@@ -23,10 +23,10 @@ def load_model(device):
     return model
 
 
-def evaluate_shapes(model, data):
+def evaluate_shapes(model, obj_images):
     device = next(model.parameters()).device
-    patch_sets, _, positions, sizes, permutes = patch_preprocess.img_path2patches_and_labels(data["image_path"][0],
-                                                                                             data["symbolic_data"])
+
+    patch_sets, positions, sizes = patch_preprocess.obj_imgs2patches(obj_images)
     predictions = []
     for o_i in range(len(patch_sets)):
         with torch.no_grad():
@@ -34,12 +34,13 @@ def evaluate_shapes(model, data):
             pred_label = logits.argmax(dim=1).item()
             predictions.append(pred_label)
 
-    return predictions, patch_sets, positions, sizes, permutes
+    return predictions, patch_sets, positions, sizes
 
 
-def evaluate_colors(data):
+def evaluate_colors(obj_images):
+    # obj_images = patch_preprocess.img_path2obj_images(img_path)
+
     colors = []
-    obj_images = patch_preprocess.img_path2obj_images(data["image_path"][0])
     bk_color = np.array([211, 211, 211], dtype=np.uint8)
     for o_i in range(len(obj_images)):
         img = obj_images[o_i]
@@ -50,11 +51,10 @@ def evaluate_colors(data):
     return colors
 
 
-def evaluate_image(model, data):
-    labels, patches, positions, sizes, permutes = evaluate_shapes(model, data)
-
-
-    colors = evaluate_colors(data[permutes])
+def evaluate_image(model, img_path):
+    obj_images = patch_preprocess.img_path2obj_images(img_path)
+    labels, patches, positions, sizes = evaluate_shapes(model, obj_images)
+    colors = evaluate_colors(obj_images)
     objs = []
     for i in range(len(labels)):
         shape_one_hot = torch.zeros(len(bk.bk_shapes), dtype=torch.float32)

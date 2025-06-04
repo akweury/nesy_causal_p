@@ -229,7 +229,7 @@ def _body_to_group_mats(
                 for gi in range(G):
                     members = in_grp[:, gi].to(torch.int)
                     if members.any():
-                        vec.append(t[members].max())
+                        vec.append((t*members).max())
                     else:
                         vec.append(torch.tensor(0.0, device=t.device))
                 mats.append(torch.stack(vec))
@@ -390,7 +390,8 @@ def compute_image_score(learned_rules, rule_scores, high_conf_th=0.99, fallback_
     else:
         return fallback_weight
 
-def eval_rules(val_data, obj_model, rules_train, hyp_params, eval_principle, device, patch_dim):
+def eval_rules(val_data, obj_model, learned_rules, hyp_params, eval_principle, device, calibrator):
+    patch_dim = hyp_params["patch_dim"]
     # we’ll collect per‐task true / pred
     per_task_scores = defaultdict(list)
     per_task_labels = defaultdict(list)
@@ -401,34 +402,28 @@ def eval_rules(val_data, obj_model, rules_train, hyp_params, eval_principle, dev
     for data in val_data["positive"] + val_data["negative"]:
         true_label = int(data["img_label"][0])
         # 1) detect objects & groups
-        objs = eval_patch_classifier.evaluate_image(obj_model, data)
+        objs = eval_patch_classifier.evaluate_image(obj_model, data["image_path"][0])
         groups = eval_groups.eval_groups(objs, prox_th, eval_principle, device, patch_dim)
         num_groups = len(groups)
 
         # 2) ground  & generate validation image’s clauses
         hard, soft = grounding.ground_facts(objs, groups)
 
-        # 3) fetch learned rules for this task
-        learned_rules = rules_train[task_id]  # List[ScoredRule]
-
         # 4) filter out very‐low confidence rules
         kept_rules = [r for r in learned_rules if r.confidence >= conf_th]
 
         # 5) soft‐match each rule on this image
-        rule_scores = apply_rules(learned_rules, hard, soft, objs, groups)
-        #    rule_scores: Dict[ScoredRule, float] in [0..1]
+        rule_score_dict = apply_rules(kept_rules, hard, soft, objs, groups)
+        rule_score = list(rule_score_dict.values())
 
-        img_score = compute_image_score(learned_rules, rule_scores)
-        # # 6) confidence‐powered aggregation
-        # num = 0.0
-        # den = 0.0
-        # for r, m in rule_scores.items():
-        #     w = r.confidence ** conf_power
-        #     num += m * w
-        #     den += w
-        #
-        # img_score = (num / den) if den > 0 else 0.0
+        # Pad if fewer than k
+        while len(rule_score) < hyp_params["top_k"]:
+            rule_score.append(0.0)
 
+        if calibrator:
+            img_score = calibrator(torch.tensor(rule_score)).detach().cpu().numpy()
+        else:
+            img_score = compute_image_score(kept_rules, rule_score_dict)
         per_task_scores[task_id].append(img_score)
         per_task_labels[task_id].append(true_label)
 

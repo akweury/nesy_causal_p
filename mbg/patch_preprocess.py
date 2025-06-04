@@ -285,6 +285,19 @@ def img_path2obj_images(img_path: Path) -> List[np.ndarray]:
     return obj_images
 
 
+def obj_imgs2patches(obj_images, input_type="pos_color_size"):
+    # single object image to patch set
+    patch_sets = []
+    positions = []
+    sizes = []
+    for o_i, obj_img in enumerate(obj_images):
+        patch_set, obj_position, obj_size = rgb2patch(obj_img, input_type)
+        patch_sets.append(patch_set)
+        positions.append(obj_position)
+        sizes.append(obj_size)
+    return patch_sets, positions, sizes
+
+
 def img_path2patches_and_labels(image_path, gt_dict, input_type="pos_color_size"):
     obj_images = img_path2obj_images(image_path)
     objects, obj_images, permutes = align_data_and_imgs(gt_dict, obj_images)
@@ -338,7 +351,8 @@ def shift_obj_patches_to_global_positions(obj_patch, shift):
     return shifted_tensor
 
 
-def align_data_and_imgs(objects: List[dict], obj_imgs: List[np.ndarray]) -> Tuple[List[dict], List[np.ndarray], List[int]]:
+def align_data_and_imgs(objects: List[dict], obj_imgs: List[np.ndarray]) -> Tuple[
+    List[dict], List[np.ndarray], List[int]]:
     """
     Align object metadata with object images based on centroid location matching.
     Each image contains a single colored object on a [211, 211, 211] gray background.
@@ -387,19 +401,19 @@ def align_data_and_imgs(objects: List[dict], obj_imgs: List[np.ndarray]) -> Tupl
 def rgb2patch(rgb_img, input_type):
     if input_type == "pos":
         patch_set, positions, sizes = preprocess_rgb_image_to_patch_set(rgb_img)
-        patch_set = patch_set[0][:,:,:2]
+        patch_set = patch_set[0][:, :, :2]
         positions = positions[0]
-        sizes=sizes[0]
+        sizes = sizes[0]
     elif input_type == "pos_color":
         patch_set, positions, sizes = preprocess_rgb_image_to_patch_set(rgb_img)
-        patch_set = patch_set[0][:,:,:5]
+        patch_set = patch_set[0][:, :, :5]
         positions = positions[0]
-        sizes=sizes[0]
+        sizes = sizes[0]
     elif input_type == "pos_color_size":
         patch_set, positions, sizes = preprocess_rgb_image_to_patch_set(rgb_img)
         patch_set = patch_set[0]
         positions = positions[0]
-        sizes=sizes[0]
+        sizes = sizes[0]
     else:
         raise ValueError
 

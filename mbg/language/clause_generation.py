@@ -10,6 +10,7 @@ import json
 import config
 from mbg.grounding.predicates import HEAD_PREDICATES
 from src import bk
+import itertools
 
 # A very simple Clause representation:
 Atom = Tuple[Any, ...]  # e.g. ("has_shape", "o0", "triangle")
@@ -163,6 +164,73 @@ class Clause:
 #
 #         return clauses
 
+class ClauseExtender:
+    """
+    Bottom-up clause extender using staged body-length growth.
+    Takes an initial set of 1-body clauses (e.g. from image-level generator),
+    evaluates them, and incrementally extends them to multi-body clauses.
+    """
+
+    def __init__(self, max_body_len=3, min_conf=0.8):
+        self.max_body_len = max_body_len
+        self.min_conf = min_conf
+
+    def extend(self, pos_data, neg_data, fact_extractor) -> List[Clause]:
+        all_atoms = set()
+        pos_facts = []
+        neg_facts = []
+
+        for d in pos_data:
+            facts = fact_extractor(d)
+            pos_facts.append(facts)
+            all_atoms.update(facts.keys())
+
+        for d in neg_data:
+            facts = fact_extractor(d)
+            neg_facts.append(facts)
+            all_atoms.update(facts.keys())
+
+        body_clauses = [Clause(head=("image_target", "X"), body=[(a,)]) for a in sorted(all_atoms)]
+        final_rules = []
+
+        for L in range(1, self.max_body_len + 1):
+            next_candidates = set()
+            passed_clauses = []
+
+            for clause in body_clauses:
+                score = self._evaluate_clause(clause, pos_facts, neg_facts)
+                if score >= self.min_conf:
+                    clause.weight = score
+                    final_rules.append(clause)
+                    passed_clauses.append(clause)
+
+            if not passed_clauses or L == self.max_body_len:
+                break
+
+            for c1, c2 in itertools.combinations(passed_clauses, 2):
+                merged = sorted(set(c1.body) | set(c2.body))
+                if len(merged) == L + 1:
+                    next_candidates.add(Clause(head=("image_target", "X"), body=merged))
+
+            body_clauses = list(next_candidates)
+
+        return final_rules
+
+    def _evaluate_clause(self, clause: Clause, pos_facts, neg_facts) -> float:
+        pos_hits, neg_hits = 0, 0
+
+        for facts in pos_facts:
+            if all(facts.get(pred[0], False) for pred in clause.body):
+                pos_hits += 1
+
+        for facts in neg_facts:
+            if all(facts.get(pred[0], False) for pred in clause.body):
+                neg_hits += 1
+
+        if pos_hits + neg_hits == 0:
+            return 0.0
+        return pos_hits / (pos_hits + neg_hits + 1e-5)
+
 
 class ClauseGenerator:
     """
@@ -217,13 +285,6 @@ class ClauseGenerator:
                 for g in range(G):
                     if hard[pred].all():
                         add(img_head, [(pred, "G", shape_val)])
-
-            # # not_has_shape_* variants
-            # for pred in hard:
-            #     if pred.startswith("not_has_shape_"):
-            #         if hard[pred][i].item() >= 0.5:
-            #             add(img_head, [(pred, "O"), ("in_group", "O", "G")])
-
         # (b) one clause per object for color
         for i in range(O):
             rgb = tuple(int(c) for c in hard["has_color"][i].tolist())
@@ -469,9 +530,9 @@ def split_clauses_by_head(
 
 
 def filter_image_level_rules(
-        pos_per_task: Dict[str, List[Counter]],
-        neg_per_task: Dict[str, List[Counter]],
-) -> Dict[str, List[Tuple[Clause, float]]]:
+        pos_freqs: List[Counter],
+        neg_freqs: List[Counter],
+) -> List[Tuple[Clause, float]]:
     """
     For each task, score every image‐head clause r by:
       support = (# positives where r appears) / N_pos
@@ -481,41 +542,35 @@ def filter_image_level_rules(
     Returns:
       { task_id: [ (clause, score), … ] }
     """
-    final: Dict[str, List[Tuple[Clause, float]]] = {}
+    N_pos = len(pos_freqs)
+    N_neg = len(neg_freqs)
 
-    for task_id, pos_freqs in pos_per_task.items():
-        neg_freqs = neg_per_task.get(task_id, [])
-        N_pos = len(pos_freqs)
-        N_neg = len(neg_freqs)
+    # gather all candidates seen in at least one positive
+    all_rules = set().union(*pos_freqs)
 
-        # gather all candidates seen in at least one positive
-        all_rules = set().union(*pos_freqs)
+    scored: List[Tuple[Clause, float]] = []
+    for r in all_rules:
+        # count how many positives / negatives contain r
+        pos_count = sum(1 for freq in pos_freqs if r in freq)
+        neg_count = sum(1 for freq in neg_freqs if r in freq)
 
-        scored: List[Tuple[Clause, float]] = []
-        for r in all_rules:
-            # count how many positives / negatives contain r
-            pos_count = sum(1 for freq in pos_freqs if r in freq)
-            neg_count = sum(1 for freq in neg_freqs if r in freq)
+        support = pos_count / N_pos
+        fpr = (neg_count / N_neg) if N_neg > 0 else 0.0
 
-            support = pos_count / N_pos
-            fpr = (neg_count / N_neg) if N_neg > 0 else 0.0
+        score = support * (1.0 - fpr)
+        # keep only those with non-zero support
+        if support > 0:
+            scored.append((r, score))
 
-            score = support * (1.0 - fpr)
-            # keep only those with non-zero support
-            if support > 0:
-                scored.append((r, score))
-
-        # sort high→low confidence
-        scored.sort(key=lambda x: x[1], reverse=True)
-        final[task_id] = scored
-
-    return final
+    # sort high→low confidence
+    scored.sort(key=lambda x: x[1], reverse=True)
+    return scored
 
 
 def filter_group_existential_rules(
-        pos_per_task: Dict[str, List[Counter]],
-        neg_per_task: Dict[str, List[Counter]],
-) -> Dict[str, List[Tuple[Clause, float]]]:
+        pos_freqs: List[Counter],
+        neg_freqs: List[Counter]
+) -> List[Tuple[Clause, float]]:
     """
     For group_target clauses, score each r by:
       support = (# positives where r appears ≥1) / N_pos
@@ -524,47 +579,41 @@ def filter_group_existential_rules(
 
     Returns a dict mapping task_id → [(clause, score), …] sorted high→low.
     """
-    final: Dict[str, List[Tuple[Clause, float]]] = {}
+    N_pos = len(pos_freqs)
+    N_neg = len(neg_freqs)
 
-    for task_id, pos_freqs in pos_per_task.items():
-        neg_freqs = neg_per_task.get(task_id, [])
-        N_pos = len(pos_freqs)
-        N_neg = len(neg_freqs)
+    # collect all group_target clauses seen in any positive
+    all_grp_clauses = set(
+        clause for freq in pos_freqs
+        for clause in freq.keys()
+        if clause.head[0] == "group_target"
+    )
 
-        # collect all group_target clauses seen in any positive
-        all_grp_clauses = set(
-            clause for freq in pos_freqs
-            for clause in freq.keys()
-            if clause.head[0] == "group_target"
-        )
+    scored: List[Tuple[Clause, float]] = []
+    for r in all_grp_clauses:
+        # count presence in pos & neg
+        pos_count = sum(1 for freq in pos_freqs if r in freq)
+        neg_count = sum(1 for freq in neg_freqs if r in freq)
 
-        scored: List[Tuple[Clause, float]] = []
-        for r in all_grp_clauses:
-            # count presence in pos & neg
-            pos_count = sum(1 for freq in pos_freqs if r in freq)
-            neg_count = sum(1 for freq in neg_freqs if r in freq)
+        support = pos_count / N_pos
+        fpr = (neg_count / N_neg) if N_neg > 0 else 0.0
+        score = support * (1.0 - fpr)
 
-            support = pos_count / N_pos
-            fpr = (neg_count / N_neg) if N_neg > 0 else 0.0
-            score = support * (1.0 - fpr)
+        # only keep those seen at least once in positives
+        if support > 0:
+            scored.append((r, score))
 
-            # only keep those seen at least once in positives
-            if support > 0:
-                scored.append((r, score))
-
-        # sort by descending confidence
-        scored.sort(key=lambda x: x[1], reverse=True)
-        final[task_id] = scored
-
-    return final
+    # sort by descending confidence
+    scored.sort(key=lambda x: x[1], reverse=True)
+    return scored
 
 
 def filter_group_universal_rules(
-        pos_per_task: Dict[str, List[Counter]],
-        neg_per_task: Dict[str, List[Counter]],
-        pos_group_counts: Dict[str, List[int]],
-        neg_group_counts: Dict[str, List[int]],
-) -> Dict[str, List[Tuple[Clause, float]]]:
+        pos_freqs: List[Counter],
+        neg_freqs: List[Counter],
+        pos_counts: List[int],
+        neg_counts: List[int],
+) -> List[Tuple[Clause, float]]:
     """
     Soft‐universal filtering for group_target clauses with clipped ratios.
 
@@ -573,69 +622,60 @@ def filter_group_universal_rules(
     Assign confidence(c) = mean_i [ clipped_ratio_i ]
     where clipped_ratio_i = min( freq_i(c)/pos_counts[i] , 1.0 )
     """
-    final: Dict[str, List[Tuple[Clause, float]]] = {}
+    # gather all group_target candidates seen in any positive
+    candidates = set()
+    for freq in pos_freqs:
+        candidates |= {c for c in freq if c.head[0] == "group_target"}
 
-    for task_id, pos_freqs in pos_per_task.items():
-        neg_freqs = neg_per_task.get(task_id, [])
-        pos_counts = pos_group_counts[task_id]
-        neg_counts = neg_group_counts.get(task_id, [])
+    keep: List[Tuple[Clause, float]] = []
+    for clause in candidates:
+        # Compute soft group match ratio per image
+        pos_ratios = []
+        for i, pos_freq in enumerate(pos_freqs):
+            total_pos = pos_counts[i]
+            if total_pos > 0:
+                freq = pos_freq.get(clause, 0)
+                ratio = freq / total_pos
+                pos_ratios.append(ratio)
 
-        # gather all group_target candidates seen in any positive
-        candidates = set()
-        for freq in pos_freqs:
-            candidates |= {c for c in freq if c.head[0] == "group_target"}
+        neg_ratios = []
+        for j, neg_freq in enumerate(neg_freqs):
+            total_neg = neg_counts[j]
+            if total_neg > 0:
+                freq = neg_freq.get(clause, 0)
+                ratio = freq / total_neg
+                neg_ratios.append(ratio)
 
-        keep: List[Tuple[Clause, float]] = []
-        for clause in candidates:
-            # 1) reject if in ANY negative image it perfectly matches all groups
-            bad_neg = False
-            for j, neg_freq in enumerate(neg_freqs):
-                total_neg = neg_counts[j]
-                if total_neg and neg_freq.get(clause, 0) / total_neg >= 1.0:
-                    bad_neg = True
-                    break
-            if bad_neg:
-                continue
+        avg_pos = sum(pos_ratios) / len(pos_ratios) if pos_ratios else 0.0
+        avg_neg = sum(neg_ratios) / len(neg_ratios) if neg_ratios else 0.0
 
-            # 2) compute clipped ratios over positives
-            clipped = []
-            for i, pos_freq in enumerate(pos_freqs):
-                total_pos = pos_counts[i]
-                if total_pos:
-                    raw = pos_freq.get(clause, 0) / total_pos
-                    clipped.append(min(raw, 1.0))
-            confidence = float(sum(clipped) / len(clipped)) if clipped else 0.0
+        confidence = max(0.0, avg_pos - avg_neg)
 
-            keep.append((clause, confidence))
-
-        final[task_id] = keep
-
-    return final
+        keep.append((clause, confidence))
+    return keep
 
 
 def assemble_final_rules(
-        image_rules: Dict[str, List[Tuple[Clause, float]]],
-        exist_rules: Dict[str, List[Tuple[Clause, float]]],
-        universal_rules: Dict[str, List[Tuple[Clause, float]]], top_k=5
-) -> Dict[str, List[ScoredRule]]:
-    final_rules = {}
-    for task_id in set(image_rules) | set(exist_rules) | set(universal_rules):
-        all_scored = []
+        image_rules: List[Tuple[Clause, float]],
+        exist_rules: List[Tuple[Clause, float]],
+        universal_rules: List[Tuple[Clause, float]],
+        top_k=5
+) -> List[ScoredRule]:
+    # for task_id in set(image_rules) | set(exist_rules) | set(universal_rules):
+    all_scored = []
 
-        for c, conf in image_rules.get(task_id, []):
-            all_scored.append(ScoredRule(c, conf, "image"))
+    for c, conf in image_rules:
+        all_scored.append(ScoredRule(c, conf, "image"))
 
-        for c, conf in exist_rules.get(task_id, []):
-            all_scored.append(ScoredRule(c, conf, "existential"))
+    for c, conf in exist_rules:
+        all_scored.append(ScoredRule(c, conf, "existential"))
 
-        for c, conf in universal_rules.get(task_id, []):
-            all_scored.append(ScoredRule(c, conf, "universal"))
+    for c, conf in universal_rules:
+        all_scored.append(ScoredRule(c, conf, "universal"))
 
-        # sort by confidence descending
-        all_scored.sort(key=lambda sr: sr.confidence, reverse=True)
-        final_rules[task_id] = all_scored
-    top_k_rules = {tid: rs[:top_k] for tid, rs in final_rules.items()}
-    return top_k_rules
+    # sort by confidence descending
+    all_scored.sort(key=lambda sr: sr.confidence, reverse=True)
+    return all_scored[:top_k]
 
 
 def clause_to_text(clause: Clause) -> str:

@@ -237,3 +237,38 @@ def make_no_member_shape_eval(shape_idx: int):
 no_member_shape_triangle_eval = make_no_member_shape_eval(shape_idx=bk.tri_index)
 no_member_shape_square_eval = make_no_member_shape_eval(shape_idx=bk.rect_index)
 no_member_shape_circle_eval = make_no_member_shape_eval(shape_idx=bk.cir_index)
+
+
+
+def eval_atom(atom, facts_dict):
+    """
+    Evaluates whether a predicate atom is true in given facts.
+    Assumes atom is a tuple like ('has_shape', 'O', 2) or ('no_member_circle', 'G', 1)
+    """
+    pred = atom[0]
+    args = atom[1:]
+
+    if pred not in facts_dict:
+        raise KeyError(f"Predicate {pred} not found.")
+
+    tensor = facts_dict[pred]
+    if pred.startswith("no_member_") or pred.startswith("not_has_shape") or pred in ["group_size", "principle", "diverse_shapes"]:
+        g = int(args[-1])
+        return bool(tensor[g].item() >= 0.5)
+
+    elif pred in ["has_shape"]:
+        o = int(args[-1])
+        return bool(tensor[o].item() == args[-1])
+
+    elif pred in ["has_color"]:
+        o = int(args[-2])
+        target_rgb = args[-1]
+        rgb = tuple(int(c) for c in tensor[o].tolist())
+        return rgb == target_rgb
+
+    elif pred == "in_group":
+        o = int(args[-2])
+        g = int(args[-1])
+        return bool(facts_dict["in_group"][o, g] >= 0.5)
+
+    return False
