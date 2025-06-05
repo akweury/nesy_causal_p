@@ -2,12 +2,11 @@
 from typing import List, Tuple, Set, NamedTuple, Dict, Optional, Any
 
 import itertools
-from collections import Counter, defaultdict
+from collections import Counter
 import torch.nn as nn
 import torch.optim as optim
 import torch
 from itertools import combinations
-from collections import defaultdict
 from copy import deepcopy
 
 from mbg.object import eval_patch_classifier
@@ -18,8 +17,8 @@ from mbg.language.clause_generation import ScoredRule
 from mbg.evaluation import evaluation
 from mbg.scorer.context_contour_scorer import ContextContourScorer
 from mbg.scorer.calibrator import ConfidenceCalibrator
-from mbg.grounding.predicates import eval_atom
-from mbg.language.clause_generation import Clause
+
+
 
 
 def train_grouping_model(train_loader, device, epochs=10, LR=1e-3):

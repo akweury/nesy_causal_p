@@ -84,6 +84,8 @@ grb_base = storage / "dataset" / "grb"
 grb_prox = grb_base / "proximity"
 grb_simi = grb_base / "similarity"
 grb_closure = grb_base / "closure"
+grb_continuity = grb_base / "continuity"
+grb_symmetry = grb_base / "symmetry"
 
 # clear_folder(kp_gestalt_dataset)
 kp_gestalt_dataset_all = storage / "dataset" / "gestalt_all"
@@ -118,6 +120,6 @@ model_group_kp_triangle_only = storage / "output" / "kp_sy_triangle_only" / "tri
 # nn settings
 kernel_size = 3
 
-gestalt_action = ["proximity", "color_similarity", "shape_similarity", "closure"]
+# gestalt_action = ["proximity", "color_similarity", "shape_similarity", "closure"]
 
 group_index = 10

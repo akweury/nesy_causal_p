@@ -51,6 +51,10 @@ def main():
         principle_path = config.grb_prox
     elif train_principle == "closure":
         principle_path = config.grb_closure
+    elif train_principle == "continuity":
+        principle_path = config.grb_continuity
+    elif train_principle == "symmetry":
+        principle_path = config.grb_symmetry
     else:
         raise ValueError
 
@@ -66,8 +70,8 @@ def main():
     all_auc = []
     all_acc = []
     for task_idx, (train_data, val_data, test_data) in enumerate(combined_loader):
-        # if task_idx < 42:
-        #     continue
+        if task_idx < 7:
+            continue
         task_name = train_data["task"]
         properties = {
             "non_overlap": train_data["non_overlap"],

@@ -1,8 +1,7 @@
 # Created by MacBook Pro at 29.04.25
 # grounding.py
 import torch
-from typing import List, Dict, Any, Callable, Tuple, Union
-from mbg.patch_preprocess import shift_obj_patches_to_global_positions
+from typing import List, Dict, Any, Tuple
 from mbg.grounding.predicates_raw import OBJ_HARD, GRP_HARD, SOFT
 
 # class GroundingModule:

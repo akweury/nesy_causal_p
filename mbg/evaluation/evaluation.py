@@ -5,14 +5,12 @@
 
 import torch
 from collections import defaultdict
-from typing import List, Dict, Any
-import inspect
+from typing import List, Dict
 
 from mbg.object import eval_patch_classifier
 from mbg.group import eval_groups
 from mbg.grounding import grounding
 from mbg.language.clause_generation import Clause, ScoredRule
-from mbg.grounding.predicates import OBJ_HARD, GRP_HARD, SOFT
 
 
 def _evaluate_clause(
@@ -118,12 +116,7 @@ def compute_metrics(
     }
 
 
-from mbg.grounding.predicates import (
-    has_shape_eval, has_color_eval, x_eval, y_eval, w_eval, h_eval,
-    in_group_eval, group_size_eval, principle_eval,
-    prox_eval, grp_sim_eval, not_has_shape_triangle_eval, not_has_shape_circle_eval,not_has_shape_rectangle_eval,
-    no_member_shape_triangle_eval, no_member_shape_circle_eval, no_member_shape_square_eval
-)
+from mbg.grounding.predicates import *
 
 EVAL_FN = {
     "has_shape": has_shape_eval,
@@ -143,6 +136,10 @@ EVAL_FN = {
     "no_member_triangle": no_member_shape_triangle_eval,
     "no_member_rectangle": no_member_shape_square_eval,
     "no_member_circle": no_member_shape_circle_eval,
+    "mirror_x": mirror_x_eval,
+    "same_shape": same_shape_eval,
+    "same_color": same_color_eval,
+    "same_y": same_y_eval,
 }
 
 
@@ -151,6 +148,7 @@ def _eval_atom(pred, hard, soft, objects, groups, a1, a2, device="cpu"):
         raise ValueError(f"Unknown predicate {pred}")
     # call with exactly (hard, soft, a1, a2); ignore objects/groups here
     return EVAL_FN[pred](hard, soft, a1, a2)
+
 
 def _body_to_group_mats(
         body: List[tuple],
@@ -229,7 +227,7 @@ def _body_to_group_mats(
                 for gi in range(G):
                     members = in_grp[:, gi].to(torch.int)
                     if members.any():
-                        vec.append((t*members).max())
+                        vec.append((t * members).max())
                     else:
                         vec.append(torch.tensor(0.0, device=t.device))
                 mats.append(torch.stack(vec))
@@ -389,6 +387,7 @@ def compute_image_score(learned_rules, rule_scores, high_conf_th=0.99, fallback_
         return weighted_sum / (total_weight + eps)
     else:
         return fallback_weight
+
 
 def eval_rules(val_data, obj_model, learned_rules, hyp_params, eval_principle, device, calibrator):
     patch_dim = hyp_params["patch_dim"]

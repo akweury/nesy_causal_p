@@ -104,6 +104,33 @@ make_not_has_shape_pred("rectangle", bk.bk_shapes.index("rectangle") - 1)
 make_not_has_shape_pred("circle", bk.bk_shapes.index("circle") - 1)
 make_not_has_shape_pred("triangle", bk.bk_shapes.index("triangle") - 1)
 
+@object_predicate("same_shape")
+def same_shape(objects: List[Dict], groups=None, device="cpu"):
+    O = len(objects)
+    shape_ids = torch.tensor([o["s"]["shape"].argmax() - 1 for o in objects], device=device)
+    return (shape_ids.unsqueeze(0) == shape_ids.unsqueeze(1)).float()
+
+
+@object_predicate("same_color")
+def same_color(objects: List[Dict], groups=None, device="cpu"):
+    O = len(objects)
+    colors = torch.tensor([o["s"]["color"] for o in objects], dtype=torch.float32, device=device)
+    diff = colors.unsqueeze(1) - colors.unsqueeze(0)
+    return (diff.norm(dim=2) < 1e-3).float()
+
+
+@object_predicate("mirror_x")
+def mirror_x(objects: List[Dict], groups=None, device="cpu"):
+    x = torch.tensor([o["s"]["x"] for o in objects], dtype=torch.float32, device=device)
+    mirror = torch.abs(x.unsqueeze(0) + x.unsqueeze(1) - 1.0) < 0.05
+    return mirror.float()
+
+
+@object_predicate("same_y")
+def same_y(objects: List[Dict], groups=None, device="cpu"):
+    y = torch.tensor([o["s"]["y"] for o in objects], dtype=torch.float32, device=device)
+    return (torch.abs(y.unsqueeze(0) - y.unsqueeze(1)) < 0.03).float()
+
 
 # --- Group‐level hard predicates ---
 
@@ -115,11 +142,9 @@ def group_size(objects=None, groups=None, device="cpu"):
 
 @group_predicate("principle")
 def principle(objects=None, groups=None, device="cpu"):
-    PRINC_MAP = {"proximity": 0, "similarity": 1, "closure": 2, "symmetry": 3}
+    PRINC_MAP = {"proximity": 0, "similarity": 1, "closure": 2, "symmetry": 3, "continuity": 4}
     return torch.tensor([PRINC_MAP[g["principle"]] for g in groups],
                         dtype=torch.float, device=device)
-
-
 
 
 def make_no_member_shape_pred(shape_name: str, shape_idx: int):
@@ -133,27 +158,12 @@ def make_no_member_shape_pred(shape_name: str, shape_idx: int):
             member_shapes = shape_ids[member_ids]
             results.append(torch.all(member_shapes != shape_idx))
         return torch.stack(results).to(torch.float)
+
     return _pred
+
 
 for i, shape in enumerate(bk.bk_shapes[1:]):
     make_no_member_shape_pred(shape, i)  # adjust if your shape encoding starts at -1
-
-
-# @group_predicate("no_member_triangle")
-# def no_member_triangle(objects: List[Dict], groups: List[Dict], device="cpu"):
-#     """
-#     Returns True if no member of the group has shape == triangle (index 2).
-#     """
-#     obj2idx = {o["id"]: i for i, o in enumerate(objects)}
-#     shape_ids = torch.tensor([o["s"]["shape"].argmax() - 1 for o in objects], dtype=torch.long, device=device)
-#     results = []
-#
-#     for g in groups:
-#         member_ids = [obj2idx[m["id"]] for m in g["members"]]
-#         member_shapes = shape_ids[member_ids]
-#         results.append(torch.all(member_shapes != (bk.bk_shapes.index("triangle") - 1)))
-#
-#     return torch.stack(results).to(torch.float)
 
 
 @group_predicate("diverse_shapes")

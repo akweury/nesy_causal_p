@@ -115,22 +115,6 @@ def h_eval(hard, soft, _, a2: float, tol: float = 1e-3) -> torch.Tensor:
     return torch.isclose(hard["h"], torch.tensor(a2, device=hard["h"].device), atol=tol).float()
 
 
-# def in_group_eval(
-#     hard: Dict[str, torch.Tensor],
-#     soft: Dict[str, torch.Tensor],
-#     _: Any,
-#     a2: str
-# ) -> torch.Tensor:
-#     """
-#     hard['in_group']: Tensor[O,G]
-#     a2: e.g. 'g2' or integer index
-#     => returns Tensor[O] = column g2 of in_group
-#     """
-#     if isinstance(a2, str) and a2.startswith("g"):
-#         gi = int(a2[1:])
-#     else:
-#         gi = int(a2)
-#     return hard["in_group"][:, gi].float()
 def in_group_eval(
         hard: Dict[str, torch.Tensor],
         soft: Dict[str, torch.Tensor],
@@ -239,36 +223,15 @@ no_member_shape_square_eval = make_no_member_shape_eval(shape_idx=bk.rect_index)
 no_member_shape_circle_eval = make_no_member_shape_eval(shape_idx=bk.cir_index)
 
 
+# Symmetry-related predicates
+def same_shape_eval(hard, soft, _, __):
+    return hard["same_shape"]
 
-def eval_atom(atom, facts_dict):
-    """
-    Evaluates whether a predicate atom is true in given facts.
-    Assumes atom is a tuple like ('has_shape', 'O', 2) or ('no_member_circle', 'G', 1)
-    """
-    pred = atom[0]
-    args = atom[1:]
+def same_color_eval(hard, soft, _, __):
+    return hard["same_color"]
 
-    if pred not in facts_dict:
-        raise KeyError(f"Predicate {pred} not found.")
+def mirror_x_eval(hard, soft, _, __):
+    return hard["mirror_x"]
 
-    tensor = facts_dict[pred]
-    if pred.startswith("no_member_") or pred.startswith("not_has_shape") or pred in ["group_size", "principle", "diverse_shapes"]:
-        g = int(args[-1])
-        return bool(tensor[g].item() >= 0.5)
-
-    elif pred in ["has_shape"]:
-        o = int(args[-1])
-        return bool(tensor[o].item() == args[-1])
-
-    elif pred in ["has_color"]:
-        o = int(args[-2])
-        target_rgb = args[-1]
-        rgb = tuple(int(c) for c in tensor[o].tolist())
-        return rgb == target_rgb
-
-    elif pred == "in_group":
-        o = int(args[-2])
-        g = int(args[-1])
-        return bool(facts_dict["in_group"][o, g] >= 0.5)
-
-    return False
+def same_y_eval(hard, soft, _, __):
+    return hard["same_y"]

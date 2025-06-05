@@ -120,6 +120,12 @@ def preprocess_rgb_image_to_patch_set(rgb_image: np.ndarray, num_patches: int = 
         outputs.append(perceptual_set)
         positions.append([x / W, y / H])
         sizes.append([w / W, h / H])
+    if len(outputs) == 0:
+        outputs.append(torch.zeros(num_patches, points_per_patch, 7))
+    if len(positions) == 0:
+        positions.append([0.0, 0.0])
+    if len(sizes) == 0:
+        sizes.append([0.0, 0.0])
     return outputs, positions, sizes
 
 
@@ -411,7 +417,12 @@ def rgb2patch(rgb_img, input_type):
         sizes = sizes[0]
     elif input_type == "pos_color_size":
         patch_set, positions, sizes = preprocess_rgb_image_to_patch_set(rgb_img)
-        patch_set = patch_set[0]
+        try:
+            patch_set = patch_set[0]
+        except IndexError:
+            patch_set, positions, sizes = preprocess_rgb_image_to_patch_set(rgb_img)
+
+            raise IndexError
         positions = positions[0]
         sizes = sizes[0]
     else:

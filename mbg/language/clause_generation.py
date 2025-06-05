@@ -5,7 +5,7 @@
 from typing import List, Tuple, Set, NamedTuple, Dict, Optional, Any
 from pathlib import Path
 import torch
-from collections import Counter, defaultdict, namedtuple
+from collections import Counter
 import json
 import config
 from mbg.grounding.predicates import HEAD_PREDICATES
@@ -349,6 +349,20 @@ class ClauseGenerator:
             add(grp_head, [("group_size", "G", sz)])
             add(grp_head, [("principle", "G", pr)])
 
+        # (f) symmetry-related object-object predicates
+        if all(k in hard for k in ["same_shape", "same_color", "mirror_x"]):
+            same_shape = hard["same_shape"]
+            same_color = hard["same_color"]
+            mirror = hard["mirror_x"]
+            for i in range(O):
+                for j in range(i + 1, O):
+                    if mirror[i, j] > 0.5:
+                        if same_shape[i, j] > 0.5:
+                            add(img_head, [("mirror_x", "O1", "O2"),
+                                           ("same_shape", "O1", "O2")])
+                        if same_color[i, j] > 0.5:
+                            add(img_head, [("mirror_x", "O1", "O2"),
+                                           ("same_color", "O1", "O2")])
         return clauses
 
 
