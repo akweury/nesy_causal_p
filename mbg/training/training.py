@@ -57,13 +57,13 @@ def train_rules(hard_facts, soft_facts, num_groups, train_image_labels, hyp_para
         hard, soft = hard_facts[i], soft_facts[i]
         cg = clause_generation.ClauseGenerator(prox_thresh=hyp_params["prox"], sim_thresh=hyp_params["sim"])
         clauses = cg.generate(hard, soft)
-        freq = Counter(clauses)
+        # freq = Counter(clauses)
         # --- 4. 存入对应容器 ---
         if img_label == 1:
-            pos_per_task_train.append(freq)
+            pos_per_task_train.append(clauses)
 
         else:
-            neg_per_task_train.append(freq)
+            neg_per_task_train.append(clauses)
 
     rules_img = clause_generation.filter_image_level_rules(pos_per_task_train, neg_per_task_train)
     rules_g_exist = clause_generation.filter_group_existential_rules(pos_per_task_train, neg_per_task_train)
@@ -82,10 +82,10 @@ def extend_rules(base_rules, hard_facts_list, soft_facts_list, img_labels, objs_
     N_neg = len(objs_list) // 2
     # --- 1. Generate all pairs of base rules with same head and scope ---
     for r1, r2 in combinations(base_rules, 2):
-        if r1.clause.head == r2.clause.head and r1.scope == r2.scope:
-            merged_body = list(set(r1.clause.body) | set(r2.clause.body))
-            if len(merged_body) == len(r1.clause.body) + 1:  # avoid duplicates
-                new_clause = deepcopy(r1.clause)
+        if r1.c.head == r2.c.head and r1.scope == r2.scope:
+            merged_body = list(set(r1.c.body) | set(r2.c.body))
+            if len(merged_body) == len(r1.c.body) + 1:  # avoid duplicates
+                new_clause = deepcopy(r1.c)
                 new_clause.body = merged_body
                 combined_rules.append((new_clause, r1.scope))
 

@@ -140,6 +140,8 @@ EVAL_FN = {
     "same_shape": same_shape_eval,
     "same_color": same_color_eval,
     "same_y": same_y_eval,
+    "diverse_sizes": diverse_sizes_eval,
+    "diverse_shapes": diverse_shapes_eval,
 }
 
 
@@ -353,7 +355,7 @@ def apply_rules(
         if len(objects) == 0 or len(groups) == 0:
             match_score = 0
         else:
-            match_score = fn(sr.clause.body, hard, soft, objects, groups)
+            match_score = fn(sr.c.body, hard, soft, objects, groups)
         out[sr] = match_score * sr.confidence
     return out
 

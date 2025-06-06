@@ -62,7 +62,7 @@ def main():
     obj_model = eval_patch_classifier.load_model(args.device)
 
     # initialize wandb
-    wandb.init(project=f"grb_{train_principle}", config=args.__dict__, name=args.exp_name)
+    # wandb.init(project=f"grb_{train_principle}", config=args.__dict__, name=args.exp_name)
 
     # store metrics per property value
     property_stats = defaultdict(lambda: defaultdict(list))  # {prop_name: {True: [], False: []}}
@@ -70,7 +70,7 @@ def main():
     all_auc = []
     all_acc = []
     for task_idx, (train_data, val_data, test_data) in enumerate(combined_loader):
-        if task_idx < 7:
+        if task_idx < 180:
             continue
         task_name = train_data["task"]
         properties = {
@@ -94,8 +94,7 @@ def main():
 
         # train
         hard, soft, group_nums, obj_list, group_list = training.ground_facts(train_val_data, obj_model, hyp_params,
-                                                                             train_principle,
-                                                                             args.device)
+                                                                             train_principle, args.device)
         train_img_labels = [1] * (len(group_nums) // 2) + [0] * (len(group_nums) // 2)
         base_rules = training.train_rules(hard, soft, group_nums, train_img_labels, hyp_params)
         final_rules = training.extend_rules(base_rules, hard, soft, train_img_labels, obj_list, group_list, hyp_params)

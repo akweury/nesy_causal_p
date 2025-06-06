@@ -104,6 +104,7 @@ make_not_has_shape_pred("rectangle", bk.bk_shapes.index("rectangle") - 1)
 make_not_has_shape_pred("circle", bk.bk_shapes.index("circle") - 1)
 make_not_has_shape_pred("triangle", bk.bk_shapes.index("triangle") - 1)
 
+
 @object_predicate("same_shape")
 def same_shape(objects: List[Dict], groups=None, device="cpu"):
     O = len(objects)
@@ -117,6 +118,18 @@ def same_color(objects: List[Dict], groups=None, device="cpu"):
     colors = torch.tensor([o["s"]["color"] for o in objects], dtype=torch.float32, device=device)
     diff = colors.unsqueeze(1) - colors.unsqueeze(0)
     return (diff.norm(dim=2) < 1e-3).float()
+
+
+@object_predicate("same_size")
+def same_size(objects: List[Dict], groups=None, device="cpu"):
+    O = len(objects)
+    widths = torch.tensor([o["s"].get("w", 0.0) for o in objects], dtype=torch.float32, device=device)
+    heights = torch.tensor([o["s"].get("h", 0.0) for o in objects], dtype=torch.float32, device=device)
+    sizes = widths * heights  # Tensor[O]
+
+    # Compute pairwise difference matrix
+    diff = sizes.unsqueeze(1) - sizes.unsqueeze(0)
+    return (diff.abs() < 1e-2).float()
 
 
 @object_predicate("mirror_x")
@@ -180,4 +193,109 @@ def diverse_shapes(objects: List[Dict], groups: List[Dict], device="cpu"):
         unique_shapes = torch.unique(shape_ids[member_ids])
         results.append(len(unique_shapes) > 1)
 
+    return torch.tensor(results, dtype=torch.float, device=device)
+
+
+@group_predicate("unique_shapes")
+def diverse_shapes(objects: List[Dict], groups: List[Dict], device="cpu"):
+    """
+    Returns True if a group contains at least two different shapes.
+    """
+    obj2idx = {o["id"]: i for i, o in enumerate(objects)}
+    shape_ids = torch.tensor([o["s"]["shape"].argmax() - 1 for o in objects], dtype=torch.long, device=device)
+    results = []
+
+    for g in groups:
+        member_ids = [obj2idx[m["id"]] for m in g["members"]]
+        unique_shapes = torch.unique(shape_ids[member_ids])
+        results.append(len(unique_shapes) == 1)
+
+    return torch.tensor(results, dtype=torch.float, device=device)
+
+
+@group_predicate("diverse_colors")
+def diverse_colors(objects: List[Dict], groups: List[Dict], device="cpu"):
+    """
+    Returns True if a group contains at least two different colors.
+    """
+    obj2idx = {o["id"]: i for i, o in enumerate(objects)}
+    color_ids = torch.tensor([tuple(o["s"]["color"]) for o in objects], dtype=torch.int, device=device)
+    results = []
+
+    for g in groups:
+        member_ids = [obj2idx[m["id"]] for m in g["members"]]
+        group_colors = color_ids[member_ids]
+        unique_colors = torch.unique(group_colors, dim=0)
+        results.append(len(unique_colors) > 1)
+
+    return torch.tensor(results, dtype=torch.float, device=device)
+
+
+@group_predicate("unique_colors")
+def unique_colors(objects: List[Dict], groups: List[Dict], device="cpu"):
+    """
+    Returns True if a group contains at least two different colors.
+    """
+    obj2idx = {o["id"]: i for i, o in enumerate(objects)}
+    color_ids = torch.tensor([tuple(o["s"]["color"]) for o in objects], dtype=torch.int, device=device)
+    results = []
+
+    for g in groups:
+        member_ids = [obj2idx[m["id"]] for m in g["members"]]
+        group_colors = color_ids[member_ids]
+        unique_colors = torch.unique(group_colors, dim=0)
+        results.append(len(unique_colors) == 1)
+
+    return torch.tensor(results, dtype=torch.float, device=device)
+
+
+@group_predicate("diverse_sizes")
+def diverse_sizes(objects: List[Dict], groups: List[Dict], device="cpu"):
+    """
+    Returns True if a group contains at least two different sizes.
+    Size is defined here as the product of width and height.
+    """
+    obj2idx = {o["id"]: i for i, o in enumerate(objects)}
+    widths = torch.tensor([o["s"].get("w", 0) for o in objects], dtype=torch.float, device=device)
+    heights = torch.tensor([o["s"].get("h", 0) for o in objects], dtype=torch.float, device=device)
+    sizes = widths * heights
+    results = []
+
+    for g in groups:
+        member_ids = [obj2idx[m["id"]] for m in g["members"]]
+        group_sizes = sizes[member_ids]
+        unique_sizes = torch.unique(group_sizes, dim=0)
+        results.append(len(unique_sizes) > 1)
+
+    return torch.tensor(results, dtype=torch.float, device=device)
+
+
+@group_predicate("unique_sizes")
+def unique_sizes(objects: List[Dict], groups: List[Dict], device="cpu"):
+    """
+    Returns True if a group contains at least two different sizes.
+    Size is defined here as the product of width and height.
+    """
+    obj2idx = {o["id"]: i for i, o in enumerate(objects)}
+    widths = torch.tensor([o["s"].get("w", 0) for o in objects], dtype=torch.float, device=device)
+    heights = torch.tensor([o["s"].get("h", 0) for o in objects], dtype=torch.float, device=device)
+    sizes = widths * heights
+    results = []
+
+    for g in groups:
+        member_ids = [obj2idx[m["id"]] for m in g["members"]]
+        group_sizes = sizes[member_ids]
+        unique_sizes = torch.unique(group_sizes, dim=0)
+        results.append(len(unique_sizes) == 1)
+
+    return torch.tensor(results, dtype=torch.float, device=device)
+
+
+@group_predicate("same_group_counts")
+def same_group_counts(objects: List[Dict], groups: List[Dict], device="cpu"):
+    """
+    Returns True if the group has a different number of members than at least one other group in the same image.
+    """
+    group_sizes = torch.tensor([len(g["members"]) for g in groups], dtype=torch.long, device=device)
+    results = len(group_sizes.unique()) == 1
     return torch.tensor(results, dtype=torch.float, device=device)

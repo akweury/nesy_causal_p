@@ -69,9 +69,6 @@ def has_shape_eval(
     return (hard["has_shape"] == a2).float()
 
 
-
-
-
 def has_color_eval(
         hard: Dict[str, torch.Tensor],
         soft: Dict[str, torch.Tensor],
@@ -187,8 +184,9 @@ def not_has_shape_eval_factory(target_shape_id: int):
               soft: Dict[str, torch.Tensor],
               _: Any,
               __: Any) -> torch.Tensor:
-        pred_name = "not_has_shape_" + bk.bk_shapes[target_shape_id+1]
+        pred_name = "not_has_shape_" + bk.bk_shapes[target_shape_id + 1]
         return (hard[pred_name].all()).float()
+
     return _eval
 
 
@@ -198,14 +196,13 @@ not_has_shape_circle_eval = not_has_shape_eval_factory(target_shape_id=bk.cir_in
 not_has_shape_triangle_eval = not_has_shape_eval_factory(target_shape_id=bk.tri_index)
 
 
-
 def make_no_member_shape_eval(shape_idx: int):
     def _eval(hard: Dict[str, torch.Tensor],
               soft: Dict[str, torch.Tensor],
               _: Any,
               __: Any) -> torch.Tensor:
-        in_group = hard["in_group"]      # (O, G)
-        has_shape = hard["has_shape"]    # (O,)
+        in_group = hard["in_group"]  # (O, G)
+        has_shape = hard["has_shape"]  # (O,)
         O, G = in_group.shape
         result = []
 
@@ -216,7 +213,9 @@ def make_no_member_shape_eval(shape_idx: int):
             result.append(float(all_not_match))
 
         return torch.tensor(result, dtype=torch.float, device=has_shape.device)
+
     return _eval
+
 
 no_member_shape_triangle_eval = make_no_member_shape_eval(shape_idx=bk.tri_index)
 no_member_shape_square_eval = make_no_member_shape_eval(shape_idx=bk.rect_index)
@@ -227,11 +226,82 @@ no_member_shape_circle_eval = make_no_member_shape_eval(shape_idx=bk.cir_index)
 def same_shape_eval(hard, soft, _, __):
     return hard["same_shape"]
 
+
 def same_color_eval(hard, soft, _, __):
     return hard["same_color"]
+
 
 def mirror_x_eval(hard, soft, _, __):
     return hard["mirror_x"]
 
+
 def same_y_eval(hard, soft, _, __):
     return hard["same_y"]
+
+
+def _group_diversity_eval(hard: Dict[str, torch.Tensor], key: str, tol: float = 1e-4) -> torch.Tensor:
+    """
+    Generic group diversity evaluation.
+    key: one of 'has_shape', 'has_color', 'size'
+    Returns: Tensor[G], where 1.0 means ≥2 unique values in group
+    """
+    in_group = hard["in_group"]  # (O, G)
+    values = hard[key]  # (O,) or (O,3) or (O,1)
+
+    O, G = in_group.shape
+    results = []
+
+    for g in range(G):
+        results.append(values[g]==1)
+        # member_mask = in_group[:, g].bool()
+        # group_vals = values[member_mask]
+        # if group_vals.ndim == 1:
+        #     unique = torch.unique(group_vals)
+        # else:
+        #     unique = torch.unique(group_vals, dim=0)
+        # results.append(float(len(unique) >= 2))
+
+    return torch.tensor(results, device=values.device)
+
+
+def _group_uniqueness_eval(hard: Dict[str, torch.Tensor], key: str, tol: float = 1e-4) -> torch.Tensor:
+    """
+    Generic group uniqueness evaluation.
+    Returns: Tensor[G], where 1.0 means exactly 1 unique value in group
+    """
+    in_group = hard["in_group"]
+    values = hard[key]
+
+    O, G = in_group.shape
+    results = []
+
+    for g in range(G):
+        results.append(values[g]==1)
+        # member_mask = in_group[:, g].bool()
+        # group_vals = values[member_mask]
+        # if group_vals.ndim == 1:
+        #     unique = torch.unique(group_vals)
+        # else:
+        #     unique = torch.unique(group_vals, dim=0)
+        # results.append(float(len(unique) == 1))
+
+    return torch.tensor(results, device=values.device)
+
+
+# Actual evaluation function bindings
+def diverse_shapes_eval(hard, soft, _, __): return _group_diversity_eval(hard, "diverse_shapes")
+
+
+def diverse_colors_eval(hard, soft, _, __): return _group_diversity_eval(hard, "diverse_colors")
+
+
+def diverse_sizes_eval(hard, soft, _, __):  return _group_diversity_eval(hard, "diverse_sizes")
+
+
+def unique_shapes_eval(hard, soft, _, __):  return _group_uniqueness_eval(hard, "unique_shapes")
+
+
+def unique_colors_eval(hard, soft, _, __):  return _group_uniqueness_eval(hard, "unique_colors")
+
+
+def unique_sizes_eval(hard, soft, _, __):   return _group_uniqueness_eval(hard, "unique_sizes")
