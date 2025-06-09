@@ -163,6 +163,8 @@ def principle(objects=None, groups=None, device="cpu"):
 def make_no_member_shape_pred(shape_name: str, shape_idx: int):
     @group_predicate(f"no_member_{shape_name}")
     def _pred(objects: List[Dict], groups: List[Dict], device="cpu"):
+        if len(groups)==0:
+            return torch.tensor([])
         obj2idx = {o["id"]: i for i, o in enumerate(objects)}
         shape_ids = torch.tensor([o["s"]["shape"].argmax() - 1 for o in objects], dtype=torch.long, device=device)
         results = []

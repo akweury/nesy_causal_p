@@ -453,6 +453,8 @@ class ClauseGenerator:
 
         # (d) not_has_shape_*, no_member_*, diverse_*
         for pred in hard:
+            if hard[pred].size() == 0:
+                continue
             if pred.startswith("not_has_shape_"):
 
                 shape_val = bk.bk_shapes.index(pred.split("not_has_shape_")[-1]) - 1
@@ -465,6 +467,7 @@ class ClauseGenerator:
                 add(img_head, [(pred, "I", shape_val)], support_mask=mask)
 
             elif pred.startswith("diverse_") and pred != "diverse_counts":
+
                 mask = hard[pred].clone()
                 add(img_head, [(pred, "I", None)], support_mask=mask)
 
@@ -510,6 +513,7 @@ class ClauseGenerator:
 
         # === Group-level clauses ===
         for g in range(G):
+
             g_mask = torch.zeros(G, dtype=torch.bool)
             g_mask[g] = True
 
@@ -771,6 +775,8 @@ def filter_image_level_rules(
         support = clause_pos_support[clause] / N_pos if N_pos > 0 else 0.0
         fpr = clause_neg_support[clause] / N_neg if N_neg > 0 else 0.0
         score = support * (1.0 - fpr)
+        # if score>0.9:
+        #     print("")
         scored.append((clause, score))
 
     scored.sort(key=lambda x: x[1], reverse=True)
@@ -898,8 +904,8 @@ def filter_group_universal_rules(
         if pos_ratios and neg_ratios:
             pos_support = sum(pos_ratios) / len(pos_freqs)
             neg_support = sum(neg_ratios) / len(neg_freqs) if neg_ratios else 0.0
-            final_support = pos_support *(1.0- neg_support)
-            if final_support>0:
+            final_support = pos_support * (1.0 - neg_support)
+            if final_support > 0:
                 results.append((clause, final_support))
 
     results.sort(key=lambda x: x[1], reverse=True)

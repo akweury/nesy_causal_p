@@ -165,26 +165,99 @@ def split_image_into_objects(rgb_image: np.ndarray) -> List[np.ndarray]:
     Objects are identified as connected components of the same color.
     """
     # Convert to grayscale and then to binary mask
-    gray = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2GRAY)
-    binary = np.where(gray == 211, 0, 255).astype(np.uint8)
+    # gray = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2GRAY)
+    # binary = np.where(gray == 211, 0, 255).astype(np.uint8)
+    #
+    # # Find connected components
+    # num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(binary, connectivity=8)
+    #
+    # output_images = []
+    # for label in range(1, num_labels):  # skip background
+    #     # Create a mask for the current component
+    #     mask = (labels == label).astype(np.uint8) * 255
+    #     mask_3ch = cv2.merge([mask] * 3)
+    #
+    #     # Mask the original image
+    #     isolated = cv2.bitwise_and(rgb_image, mask_3ch)
+    #
+    #     # Set the background to light gray (211,211,211)
+    #     background = np.full_like(rgb_image, 211, dtype=np.uint8)
+    #     final_image = np.where(mask_3ch == 0, background, isolated)
+    #
+    #     output_images.append(final_image)
+    """
+    Extract individual object regions from an RGB image, each returned as a cropped RGB image.
 
-    # Find connected components
-    num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(binary, connectivity=8)
+    Args:
+        rgb_image (np.ndarray): Input image in RGB format (H, W, 3).
+        min_area (int): Minimum area of object to be extracted (to skip noise).
+
+    Returns:
+        List[np.ndarray]: List of cropped RGB images, each containing one object.
+    """
+    min_area = 10
+    bg_color = (211, 211, 211)
+
+    H, W = rgb_image.shape[:2]
+    bg_color = np.array(bg_color)
+
+    # Step 1: Create foreground mask
+    fg_mask = np.any(rgb_image != bg_color, axis=-1)
+
+    # Step 2: Extract foreground pixels and get unique object colors
+    fg_pixels = rgb_image[fg_mask]
+    # if len(fg_pixels) == 0:
+    #     return []
+
+    unique_colors = np.unique(fg_pixels.reshape(-1, 3), axis=0)
 
     output_images = []
-    for label in range(1, num_labels):  # skip background
-        # Create a mask for the current component
-        mask = (labels == label).astype(np.uint8) * 255
-        mask_3ch = cv2.merge([mask] * 3)
+    for color in unique_colors:
+        # Step 3: Mask for current color
+        color_mask = np.all(rgb_image == color, axis=-1).astype(np.uint8)
 
-        # Mask the original image
-        isolated = cv2.bitwise_and(rgb_image, mask_3ch)
+        # Step 4: Connected component analysis to split disconnected shapes
+        num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(color_mask, connectivity=8)
 
-        # Set the background to light gray (211,211,211)
-        background = np.full_like(rgb_image, 211, dtype=np.uint8)
-        final_image = np.where(mask_3ch == 0, background, isolated)
+        for label in range(1, num_labels):  # skip background
+            area = stats[label, cv2.CC_STAT_AREA]
+            if area < min_area:
+                continue
 
-        output_images.append(final_image)
+            obj_mask = (labels == label)
+            obj_rgb = np.full_like(rgb_image, fill_value=bg_color)  # start from background
+            obj_rgb[obj_mask] = color  # set object color
+
+            output_images.append(obj_rgb)
+
+    #
+    # import matplotlib.pyplot as plt
+    # target_height = 1024
+    # resized_images = []
+    # for img in output_images:
+    #     h, w = img.shape[:2]
+    #     scale = target_height / h
+    #     new_w = int(w * scale)
+    #     resized = cv2.resize(img, (new_w, target_height), interpolation=cv2.INTER_AREA)
+    #     resized_images.append(resized)
+    #
+    # # Determine max width to pad uniformly if needed
+    # max_w = max(img.shape[1] for img in resized_images)
+    # pad_color = (211, 211, 211)
+    # padded_images = []
+    # for img in resized_images:
+    #     h, w = img.shape[:2]
+    #     pad_left = (max_w - w) // 2
+    #     pad_right = max_w - w - pad_left
+    #     padded = cv2.copyMakeBorder(img, 0, 0, pad_left, pad_right, cv2.BORDER_CONSTANT, value=pad_color)
+    #     padded_images.append(padded)
+    #
+    # # Concatenate horizontally
+    # combined = np.hstack(padded_images)
+    # # Show with matplotlib
+    # plt.imshow(combined)
+    # plt.axis('off')
+    # plt.show()
 
     return output_images
 

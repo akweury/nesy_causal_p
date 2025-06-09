@@ -142,6 +142,10 @@ EVAL_FN = {
     "same_y": same_y_eval,
     "diverse_sizes": diverse_sizes_eval,
     "diverse_shapes": diverse_shapes_eval,
+    "unique_colors": unique_colors_eval,
+    "unique_shapes": unique_shapes_eval,
+    "unique_sizes": unique_sizes_eval,
+
 }
 
 
