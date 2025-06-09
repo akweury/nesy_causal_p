@@ -70,8 +70,8 @@ def main():
     all_auc = []
     all_acc = []
     for task_idx, (train_data, val_data, test_data) in enumerate(combined_loader):
-        if task_idx < 50:
-            continue
+        # if task_idx < 50:
+        #     continue
         task_name = train_data["task"]
         properties = {
             "non_overlap": train_data["non_overlap"],
