@@ -62,7 +62,7 @@ def main():
     obj_model = eval_patch_classifier.load_model(args.device)
 
     # initialize wandb
-    wandb.init(project=f"grb_{train_principle}", config=args.__dict__, name=args.exp_name)
+    # wandb.init(project=f"grb_{train_principle}", config=args.__dict__, name=args.exp_name)
 
     # store metrics per property value
     property_stats = defaultdict(lambda: defaultdict(list))  # {prop_name: {True: [], False: []}}
@@ -70,8 +70,8 @@ def main():
     all_auc = []
     all_acc = []
     for task_idx, (train_data, val_data, test_data) in enumerate(combined_loader):
-        # if task_idx < 50:
-        #     continue
+        if task_idx < 9:
+            continue
         task_name = train_data["task"]
         properties = {
             "non_overlap": train_data["non_overlap"],

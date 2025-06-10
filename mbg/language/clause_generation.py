@@ -432,6 +432,7 @@ class ClauseGenerator:
                 mask[i] = True
                 add(img_head, [("has_shape", "O", shape_val), ("in_group", "O", "G")], support_mask=mask)
 
+
         # (b) color
         for i in range(O):
             rgb = tuple(int(c) for c in hard["has_color"][i].tolist())
@@ -510,6 +511,10 @@ class ClauseGenerator:
                             add(img_head, [("mirror_x", "O1", "O2"), ("same_shape", "O1", "O2")], support_mask=mask)
                         if same_color[i, j] > 0.5:
                             add(img_head, [("mirror_x", "O1", "O2"), ("same_color", "O1", "O2")], support_mask=mask)
+
+        # clause to represent the group number
+        gn = int(len(hard["group_size"]))
+        add(img_head,[("group_num", "I", gn)], support_mask=torch.ones(G, dtype=torch.bool))
 
         # === Group-level clauses ===
         for g in range(G):

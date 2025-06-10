@@ -92,7 +92,7 @@ def group_objects_with_model(model, objects, input_type="pos_color_size", device
             G.add_edge(i, j)
 
     # Extract connected components as groups
-    groups = [list(comp) for comp in nx.connected_components(G) if len(list(comp))>1]
+    groups = [list(comp) for comp in nx.connected_components(G)]
     return groups
 
 

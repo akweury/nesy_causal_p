@@ -146,6 +146,7 @@ EVAL_FN = {
     "unique_colors": unique_colors_eval,
     "unique_shapes": unique_shapes_eval,
     "unique_sizes": unique_sizes_eval,
+    "group_num": group_num_eval,
 
 }
 

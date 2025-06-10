@@ -126,6 +126,15 @@ def in_group_eval(
     return hard["in_group"].float()
 
 
+def group_num_eval(
+        hard: Dict[str, torch.Tensor],
+        soft: Dict[str, torch.Tensor],
+        _: Any,
+        a2: int
+) -> torch.Tensor:
+    return torch.tensor(len(hard["group_size"]) == a2).float()
+
+
 #
 # ————————————————
 # Group­-level predicates
@@ -252,7 +261,7 @@ def _group_diversity_eval(hard: Dict[str, torch.Tensor], key: str, tol: float = 
     results = []
 
     for g in range(G):
-        results.append(values[g]==1)
+        results.append(values[g] == 1)
         # member_mask = in_group[:, g].bool()
         # group_vals = values[member_mask]
         # if group_vals.ndim == 1:
@@ -276,7 +285,7 @@ def _group_uniqueness_eval(hard: Dict[str, torch.Tensor], key: str, tol: float =
     results = []
 
     for g in range(G):
-        results.append(values[g]==1)
+        results.append(values[g] == 1)
         # member_mask = in_group[:, g].bool()
         # group_vals = values[member_mask]
         # if group_vals.ndim == 1:
