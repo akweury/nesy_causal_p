@@ -163,7 +163,7 @@ def principle(objects=None, groups=None, device="cpu"):
 def make_no_member_shape_pred(shape_name: str, shape_idx: int):
     @group_predicate(f"no_member_{shape_name}")
     def _pred(objects: List[Dict], groups: List[Dict], device="cpu"):
-        if len(groups)==0:
+        if len(groups) == 0:
             return torch.tensor([])
         obj2idx = {o["id"]: i for i, o in enumerate(objects)}
         shape_ids = torch.tensor([o["s"]["shape"].argmax() - 1 for o in objects], dtype=torch.long, device=device)
@@ -301,3 +301,49 @@ def same_group_counts(objects: List[Dict], groups: List[Dict], device="cpu"):
     group_sizes = torch.tensor([len(g["members"]) for g in groups], dtype=torch.long, device=device)
     results = len(group_sizes.unique()) == 1
     return torch.tensor(results, dtype=torch.float, device=device)
+
+
+@soft_predicate("sim_color_soft")
+def sim_color_soft(objects=None, groups=None, device="cpu", soft=None, sigma=20.0):
+    """
+    Compare average RGB color per object.
+    Returns [O, O] soft similarity matrix.
+    """
+    embeddings = torch.stack([o["h"] for o in objects])  # [O, 6, 16, 7]
+    color = embeddings[:, :, :, 2:5]  # [O, 6, 16, 3]
+    avg_color = color.mean(dim=(1, 2))  # [O, 3]
+
+    diff = avg_color.unsqueeze(1) - avg_color.unsqueeze(0)  # [O, O, 3]
+    dist = diff.norm(dim=2)  # [O, O]
+    sim = torch.exp(- (dist ** 2) / (2 * sigma ** 2))
+    return sim
+
+
+@soft_predicate("sim_shape_soft")
+def sim_shape_soft(objects=None, groups=None, device="cpu", soft=None, sigma=0.1):
+    """
+    Compare contour shape (normalized).
+    Returns [O, O] shape similarity.
+    """
+
+    embeddings = torch.stack([o["h"] for o in objects])  # [O, 6, 16, 7]
+    shape = embeddings[:, :, :, :2]  # [O, 6, 16, 2]
+    shape = shape.reshape(shape.size(0), -1)  # [O, 6*16*2]
+    shape = shape - shape.mean(dim=1, keepdim=True)  # mean-centering
+    shape = shape / (shape.norm(dim=1, keepdim=True) + 1e-5)
+
+    sim = shape @ shape.T  # cosine similarity
+    return sim
+
+
+@soft_predicate("sim_size_soft")
+def sim_size_soft(objects=None, groups=None, device="cpu", soft=None, sigma=0.02):
+    """
+    Compare object sizes (w*h).
+    """
+    embeddings = torch.stack([o["h"] for o in objects])  # [O, 6, 16, 7]
+    wh = embeddings[:, 0, 0, 5:7]  # Assuming width/height same across contour
+    size = wh[:, 0] * wh[:, 1]  # [O]
+    diff = size.unsqueeze(1) - size.unsqueeze(0)
+    sim = torch.exp(- (diff ** 2) / (2 * sigma ** 2))
+    return sim

@@ -386,11 +386,13 @@ class CWS:
 
 
 class ClauseGenerator:
-    def __init__(self, img_head="image_target", grp_head="group_target", prox_thresh=0.9, sim_thresh=0.5):
+    def __init__(self, img_head="image_target", grp_head="group_target",
+                 prox_thresh=0.9, sim_thresh=0.5, soft_thresh=0.6):
         self.img_head = img_head
         self.grp_head = grp_head
         self.prox_thresh = prox_thresh
         self.sim_thresh = sim_thresh
+        self.soft_thresh = soft_thresh
 
     def _make_key(self, head, body, weight):
         # Use a tuple as hashable key (ignores weight for de-duplication if needed)
@@ -431,7 +433,6 @@ class ClauseGenerator:
                 mask = torch.zeros(O, dtype=torch.bool)
                 mask[i] = True
                 add(img_head, [("has_shape", "O", shape_val), ("in_group", "O", "G")], support_mask=mask)
-
 
         # (b) color
         for i in range(O):
@@ -514,7 +515,20 @@ class ClauseGenerator:
 
         # clause to represent the group number
         gn = int(len(hard["group_size"]))
-        add(img_head,[("group_num", "I", gn)], support_mask=torch.ones(G, dtype=torch.bool))
+        add(img_head, [("group_num", "I", gn)], support_mask=torch.ones(G, dtype=torch.bool))
+
+        # object-object soft similarity predicates
+        for pred_name in ["sim_color_soft", "sim_shape_soft", "sim_size_soft"]:
+            if pred_name in soft:
+                mat = soft[pred_name]  # [O, O]
+                for i in range(O):
+                    for j in range(i + 1, O):
+                        score = mat[i, j].item()
+                        if score >= self.soft_thresh:  # new threshold
+                            mask = torch.zeros(O, dtype=torch.bool)
+                            mask[i] = True
+                            mask[j] = True
+                            add(img_head, [(pred_name, "O1", "O2")], weight=score, support_mask=mask)
 
         # === Group-level clauses ===
         for g in range(G):
