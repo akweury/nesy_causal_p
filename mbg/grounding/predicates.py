@@ -134,6 +134,31 @@ def group_num_eval(
 ) -> torch.Tensor:
     return torch.tensor(len(hard["group_size"]) == a2).float()
 
+def sim_shape_soft_eval(
+        hard: Dict[str, torch.Tensor],
+        soft: Dict[str, torch.Tensor],
+        _: Any,
+        a2: int
+) -> torch.Tensor:
+    return soft["sim_shape_soft"].float()
+
+
+def sim_color_soft_eval(
+        hard: Dict[str, torch.Tensor],
+        soft: Dict[str, torch.Tensor],
+        _: Any,
+        a2: int
+) -> torch.Tensor:
+    return soft["sim_color_soft"].float()
+
+
+def sim_size_soft_eval(
+        hard: Dict[str, torch.Tensor],
+        soft: Dict[str, torch.Tensor],
+        _: Any,
+        a2: int
+) -> torch.Tensor:
+    return soft["sim_size_soft"].float()
 
 #
 # ————————————————

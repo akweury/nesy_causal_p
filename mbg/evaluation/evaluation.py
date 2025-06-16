@@ -147,6 +147,9 @@ EVAL_FN = {
     "unique_shapes": unique_shapes_eval,
     "unique_sizes": unique_sizes_eval,
     "group_num": group_num_eval,
+    "sim_shape_soft": sim_shape_soft_eval,
+    "sim_color_soft": sim_color_soft_eval,
+    "sim_size_soft": sim_size_soft_eval,
 
 }
 
@@ -261,8 +264,10 @@ def _eval_image(
     """
     if not body:
         return 1.0
-
-    O = hard["has_shape"].size(0)
+    if hard:
+        O = hard["has_shape"].size(0)
+    elif soft:
+        O = soft["sim_color_soft"].size(0)
     mats: List[torch.Tensor] = []
 
     for pred, _a1, _a2 in body:

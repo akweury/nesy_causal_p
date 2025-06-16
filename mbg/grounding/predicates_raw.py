@@ -7,6 +7,7 @@ import torch
 from typing import List, Dict, Any, Tuple, Callable
 from src import bk
 from mbg.patch_preprocess import shift_obj_patches_to_global_positions
+import torch.nn.functional as F
 
 # Head predicates (we learn clauses for these)
 HEAD_PREDICATES = {
@@ -17,7 +18,8 @@ HEAD_PREDICATES = {
 # Registries
 OBJ_HARD: Dict[str, Callable[..., torch.Tensor]] = {}
 GRP_HARD: Dict[str, Callable[..., torch.Tensor]] = {}
-SOFT: Dict[str, Callable[..., torch.Tensor]] = {}
+OBJ_SOFT: Dict[str, Callable[..., torch.Tensor]] = {}
+GRP_SOFT: Dict[str, Callable[..., torch.Tensor]] = {}
 
 
 def object_predicate(name: str):
@@ -32,8 +34,14 @@ def group_predicate(name: str):
     return dec
 
 
-def soft_predicate(name: str):
-    def dec(fn): SOFT[name] = fn; return fn
+def object_soft_predicate(name: str):
+    def dec(fn): OBJ_SOFT[name] = fn; return fn
+
+    return dec
+
+
+def group_soft_predicate(name: str):
+    def dec(fn): GRP_SOFT[name] = fn; return fn
 
     return dec
 
@@ -303,7 +311,7 @@ def same_group_counts(objects: List[Dict], groups: List[Dict], device="cpu"):
     return torch.tensor(results, dtype=torch.float, device=device)
 
 
-@soft_predicate("sim_color_soft")
+@object_soft_predicate("sim_color_soft")
 def sim_color_soft(objects=None, groups=None, device="cpu", soft=None, sigma=20.0):
     """
     Compare average RGB color per object.
@@ -319,7 +327,7 @@ def sim_color_soft(objects=None, groups=None, device="cpu", soft=None, sigma=20.
     return sim
 
 
-@soft_predicate("sim_shape_soft")
+@object_soft_predicate("sim_shape_soft")
 def sim_shape_soft(objects=None, groups=None, device="cpu", soft=None, sigma=0.1):
     """
     Compare contour shape (normalized).
@@ -336,7 +344,7 @@ def sim_shape_soft(objects=None, groups=None, device="cpu", soft=None, sigma=0.1
     return sim
 
 
-@soft_predicate("sim_size_soft")
+@object_soft_predicate("sim_size_soft")
 def sim_size_soft(objects=None, groups=None, device="cpu", soft=None, sigma=0.02):
     """
     Compare object sizes (w*h).
@@ -347,3 +355,4 @@ def sim_size_soft(objects=None, groups=None, device="cpu", soft=None, sigma=0.02
     diff = size.unsqueeze(1) - size.unsqueeze(0)
     sim = torch.exp(- (diff ** 2) / (2 * sigma ** 2))
     return sim
+

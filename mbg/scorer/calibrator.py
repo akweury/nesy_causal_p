@@ -39,11 +39,11 @@ class ConfidenceCalibrator(nn.Module):
             #     print(f"[Epoch {epoch + 1:3d}] Loss: {loss.item():.4f}")
 
         # Final diagnostic
-        if verbose:
-            print(f"\nInitial loss: {loss_history[0]:.4f} | Final loss: {loss_history[-1]:.4f}")
-            if loss_history[-1] > loss_history[0]:
-                print("⚠️ Loss increased — potential overfitting or bad learning rate.")
-            elif abs(loss_history[-1] - loss_history[0]) < 1e-3:
-                print("⚠️ Loss did not change much — may be underfitting.")
-            else:
-                print("✅ Loss decreased — model likely learned meaningful signal.")
+        # if verbose:
+        #     print(f"\nInitial loss: {loss_history[0]:.4f} | Final loss: {loss_history[-1]:.4f}")
+        #     if loss_history[-1] > loss_history[0]:
+        #         print("⚠️ Loss increased — potential overfitting or bad learning rate.")
+        #     elif abs(loss_history[-1] - loss_history[0]) < 1e-3:
+        #         print("⚠️ Loss did not change much — may be underfitting.")
+        #     else:
+        #         print("✅ Loss decreased — model likely learned meaningful signal.")

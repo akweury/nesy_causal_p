@@ -18,27 +18,6 @@ from mbg.training import training
 from mbg.evaluation import evaluation
 
 
-def init_io_folders(args, data_folder):
-    args.train_folder = data_folder / "train" / "task_true_pattern"
-    os.makedirs(args.train_folder, exist_ok=True)
-    args.test_true_folder = data_folder / "test" / "task_true_pattern"
-    os.makedirs(args.test_true_folder, exist_ok=True)
-    args.test_random_folder = data_folder / "test" / "task_random_pattern"
-    os.makedirs(args.test_random_folder, exist_ok=True)
-    args.test_cf_folder = data_folder / "test" / "task_cf_pattern"
-    os.makedirs(args.test_cf_folder, exist_ok=True)
-
-    exp_name = args.exp_setting["task_name"]
-    args.out_train_folder = config.output / exp_name / "train" / "task_true_pattern"
-    os.makedirs(args.out_train_folder, exist_ok=True)
-    args.out_positive_folder = config.output / exp_name / "test" / "task_true_pattern"
-    os.makedirs(args.out_positive_folder, exist_ok=True)
-    args.out_random_folder = config.output / exp_name / "test" / "task_random_pattern"
-    os.makedirs(args.out_random_folder, exist_ok=True)
-    args.out_cf_folder = config.output / exp_name / "test" / "task_cf_pattern"
-    os.makedirs(args.out_cf_folder, exist_ok=True)
-
-
 def main():
     # load exp arguments
     args = args_utils.get_args()
@@ -46,9 +25,9 @@ def main():
     train_principle = args.principle
 
     if train_principle == "similarity":
-        principle_path = config.grb_simi
+        principle_path = config.grb_similarity
     elif train_principle == "proximity":
-        principle_path = config.grb_prox
+        principle_path = config.grb_proximity
     elif train_principle == "closure":
         principle_path = config.grb_closure
     elif train_principle == "continuity":
@@ -62,7 +41,7 @@ def main():
     obj_model = eval_patch_classifier.load_model(args.device)
 
     # initialize wandb
-    # wandb.init(project=f"grb_{train_principle}", config=args.__dict__, name=args.exp_name)
+    wandb.init(project=f"grb_{train_principle}", config=args.__dict__, name=args.exp_name)
 
     # store metrics per property value
     property_stats = defaultdict(lambda: defaultdict(list))  # {prop_name: {True: [], False: []}}
@@ -70,8 +49,8 @@ def main():
     all_auc = []
     all_acc = []
     for task_idx, (train_data, val_data, test_data) in enumerate(combined_loader):
-        if task_idx < 27:
-            continue
+        # if task_idx < 27:
+        #     continue
         task_name = train_data["task"]
         properties = {
             "non_overlap": train_data["non_overlap"],
@@ -127,12 +106,6 @@ def main():
         # accumulate statistics
         for prop_name, prop_value in properties.items():
             property_stats[prop_name][prop_value].append(test_metrics)
-            # wandb.log({
-            #     f"{prop_name}_{prop_value}/task_name": task_name,
-            #     f"{prop_name}_{prop_value}/acc": test_metrics.get("acc", 0),
-            #     f"{prop_name}_{prop_value}/f1": test_metrics.get("f1", 0),
-            #     f"{prop_name}_{prop_value}/auc": test_metrics.get("auc", 0),
-            # })
     # analyze and log aggregated statistics
     analysis_summary = {}
     for prop_name, value_dict in property_stats.items():
@@ -144,12 +117,6 @@ def main():
                 avg_auc = sum(m.get("auc", 0) for m in metrics_list) / len(metrics_list)
 
                 key_prefix = f"{prop_name}_{value}"
-                # wandb.log({
-                #     f"{key_prefix}_avg_acc": avg_acc,
-                #     f"{key_prefix}_avg_f1": avg_f1,
-                #     f"{key_prefix}_avg_auc": avg_auc,
-                # })
-
                 analysis_summary[key_prefix] = {
                     "avg_acc": avg_acc,
                     "avg_f1": avg_f1,
@@ -164,53 +131,6 @@ def main():
     wandb.finish()
     return
 
-
-def monitor_cpu_memory(interval=0.1):
-    process = psutil.Process()
-    peak_cpu = 0
-    running = True
-
-    def monitor():
-        nonlocal peak_cpu
-        while running:
-            mem = process.memory_info().rss / 1024 ** 2  # Convert to MB
-            peak_cpu = max(peak_cpu, mem)
-            time.sleep(interval)
-
-    thread = threading.Thread(target=monitor)
-    thread.start()
-
-    def stop():
-        nonlocal running
-        running = False
-        thread.join()
-        return peak_cpu
-
-    return stop
-
-
-def monitor_memory(interval=0.1):
-    process = psutil.Process()
-    pynvml.nvmlInit()
-    handle = pynvml.nvmlDeviceGetHandleByIndex(0)
-
-    peak_cpu, peak_gpu = 0, 0
-    running = True
-
-    def monitor():
-        nonlocal peak_cpu, peak_gpu
-        while running:
-            cpu_mem = process.memory_info().rss / 1024 ** 2  # MB
-            gpu_mem = pynvml.nvmlDeviceGetMemoryInfo(handle).used / 1024 ** 2  # MB
-            peak_cpu = max(peak_cpu, cpu_mem)
-            peak_gpu = max(peak_gpu, gpu_mem)
-            time.sleep(interval)
-
-    thread = threading.Thread(target=monitor)
-    thread.start()
-    return thread, lambda: setattr(thread, 'running', False), lambda: (peak_cpu, peak_gpu), lambda: setattr(globals(),
-                                                                                                            'running',
-                                                                                                            False)
 
 
 if __name__ == '__main__':

@@ -44,7 +44,7 @@ def train_grouping_model(train_loader, device, epochs=10, LR=1e-3):
     return model
 
 
-def train_rules(hard_facts, soft_facts, num_groups, train_image_labels, hyp_params):
+def train_rules(hard_facts, soft_facts, num_groups, train_image_labels, hyp_params, ablation_flags):
     # 1) 收集每张图的频次 & group 数
     pos_per_task_train = []  # task_id -> List[Counter[Clause,int]] (正例)
     neg_per_task_train = []  # task_id -> List[Counter[Clause,int]] (负例)
@@ -56,7 +56,7 @@ def train_rules(hard_facts, soft_facts, num_groups, train_image_labels, hyp_para
         img_label = train_image_labels[i]
         hard, soft = hard_facts[i], soft_facts[i]
         cg = clause_generation.ClauseGenerator(prox_thresh=hyp_params["prox"], sim_thresh=hyp_params["sim"])
-        clauses = cg.generate(hard, soft)
+        clauses = cg.generate(hard, soft, ablation_flags)
         # freq = Counter(clauses)
         # --- 4. 存入对应容器 ---
         if img_label == 1:
@@ -144,19 +144,43 @@ def train_calibrator(final_rules, obj_list, group_list, hard_list, soft_list,img
     return calibrator
 
 
-def ground_facts(train_data, obj_model, hyp_params, train_principle, device):
+def ground_facts(train_data, obj_model, hyp_params, train_principle, device, ablation_flags):
+    if ablation_flags is None:
+        ablation_flags = {}
+
+    disable_soft = ablation_flags.get("disable_soft", False)
+    disable_hard = ablation_flags.get("disable_hard", False)
+    disable_group = ablation_flags.get("disable_group", False)
+    disable_object = ablation_flags.get("disable_object", False)
+
     hard_facts, soft_facts = [], []
     obj_lists, groups_list = [], []
     group_nums = []
+
+
     for data in train_data["positive"] + train_data["negative"]:
-        # --- 2. 物体 & 分组检测 ---
-        objs = eval_patch_classifier.evaluate_image(obj_model, data["image_path"][0])
-        groups = eval_groups.eval_groups(objs, hyp_params["prox"], train_principle, device, dim=hyp_params["patch_dim"])
-        # --- 3. Grounding & Clause Generation ---
-        hard, soft = grounding.ground_facts(objs, groups)
+        # --- 1. Object detection ---
+        if not disable_object:
+            objs = eval_patch_classifier.evaluate_image(obj_model, data["image_path"][0])
+        else:
+            objs = []  # no object-level facts
+        obj_lists.append(objs)
+
+
+        # --- 2. Group detection ---
+        if not disable_group:
+            groups = eval_groups.eval_groups(objs, hyp_params["prox"], train_principle, device, dim=hyp_params["patch_dim"])
+        else:
+            groups = []
+        groups_list.append(groups)
+        group_nums.append(len(groups))
+
+        # --- 3. Fact grounding ---
+        hard, soft = grounding.ground_facts(
+            objs, groups,
+            disable_hard=disable_hard,
+            disable_soft=disable_soft
+        )
         hard_facts.append(hard)
         soft_facts.append(soft)
-        group_nums.append(len(groups))
-        groups_list.append(groups)
-        obj_lists.append(objs)
     return hard_facts, soft_facts, group_nums, obj_lists, groups_list

@@ -2,7 +2,8 @@
 # grounding.py
 import torch
 from typing import List, Dict, Any, Tuple
-from mbg.grounding.predicates_raw import OBJ_HARD, GRP_HARD, SOFT
+from mbg.grounding.predicates_raw import OBJ_HARD, GRP_HARD, OBJ_SOFT
+
 
 # class GroundingModule:
 #     """
@@ -100,36 +101,42 @@ class GroundingModule:
         self.device = device
 
     def ground(
-        self,
-        objects: List[Dict[str, Any]],
-        groups:  List[Dict[str, Any]]
+            self,
+            objects: List[Dict[str, Any]],
+            groups: List[Dict[str, Any]],
+            disable_hard: bool = False,
+            disable_soft: bool = False
     ) -> Tuple[Dict[str, torch.Tensor], Dict[str, torch.Tensor]]:
 
-        # 1) Hard facts
         hard_facts: Dict[str, torch.Tensor] = {}
-        for pred, fn in OBJ_HARD.items():
-            hard_facts[pred] = fn(objects=objects, groups=groups, device=self.device)
-        for pred, fn in GRP_HARD.items():
-            hard_facts[pred] = fn(objects=objects, groups=groups, device=self.device)
+        soft_facts: Dict[str, torch.Tensor] = {}
+        # 1) Hard facts
+        if not disable_hard:
+            for pred, fn in OBJ_HARD.items():
+                try:
+                    hard_facts[pred] = fn(objects=objects, groups=groups, device=self.device)
+                except Exception as e:
+                    print(f"[Hard-OBJ] Failed predicate {pred}: {e}")
+
+            for pred, fn in GRP_HARD.items():
+                try:
+                    hard_facts[pred] = fn(objects=objects, groups=groups, device=self.device)
+                except Exception as e:
+                    print(f"[Hard-GRP] Failed predicate {pred}: {e}")
 
         # 2) Soft facts
-        soft_facts: Dict[str, torch.Tensor] = {}
-        for pred, fn in SOFT.items():
-            soft_facts[pred] = fn(objects=objects, groups=groups, device=self.device)
-
+        if not disable_soft:
+            for pred, fn in OBJ_SOFT.items():
+                try:
+                    soft_facts[pred] = fn(objects=objects, groups=groups, device=self.device)
+                except Exception as e:
+                    print(f"[Soft] Failed predicate {pred}: {e}")
         return hard_facts, soft_facts
 
 
-def ground_facts(objs, grps):
-    # assume you have
-    #   objs = [
-    #     {"id":"o0", "s":{"shape":"circle","color":"red","x":0.2,"y":0.3,"size":0.1}, "h": torch.rand(128)},
-    #     ...
-    #   ]
-    #   grps = [
-    #     {"id":"g0", "s":{...}, "h": torch.rand(128), "principle":"proximity", "members":["o0","o2"]},
-    #     ...
-    #   ]
+def ground_facts(objs, grps, disable_hard=False, disable_soft=False):
     grounder = GroundingModule()
-    hard, soft = grounder.ground(objs, grps)
+    hard, soft = grounder.ground(objs, grps,
+                                 disable_hard=disable_hard,
+                                 disable_soft=disable_soft)
     return hard, soft
