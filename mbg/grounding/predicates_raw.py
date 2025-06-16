@@ -54,10 +54,25 @@ def has_shape(objects: List[Dict[str, Any]], groups=None, device="cpu"):
                         dtype=torch.long, device=device)
 
 
+@object_soft_predicate("has_shape_soft")
+def has_shape_soft(objects: List[Dict[str, Any]], groups=None, device="cpu"):
+    return torch.stack([o["h"][:, :, :2] for o in objects])
+
+
 @object_predicate("has_color")
 def has_color(objects: List[Dict[str, Any]], groups=None, device="cpu"):
     return torch.tensor([o["s"]["color"] for o in objects],
                         dtype=torch.long, device=device)
+
+
+@object_soft_predicate("has_color_soft")
+def has_color_soft(objects: List[Dict[str, Any]], groups=None, device="cpu"):
+    return torch.stack([o["h"][:, :, 2:5] for o in objects])
+
+
+@object_soft_predicate("has_size_soft")
+def has_size_soft(objects: List[Dict[str, Any]], groups=None, device="cpu"):
+    return torch.stack([o["h"][:, :, 5:] for o in objects])
 
 
 @object_predicate("x")
@@ -120,12 +135,50 @@ def same_shape(objects: List[Dict], groups=None, device="cpu"):
     return (shape_ids.unsqueeze(0) == shape_ids.unsqueeze(1)).float()
 
 
+@object_soft_predicate("sim_shape_soft")
+def sim_shape_soft(objects=None, groups=None, device="cpu", soft=None, sigma=0.1):
+    """
+    Compare contour shape (normalized).
+    Returns [O, O] shape similarity.
+    """
+
+    embeddings = torch.stack([o["h"] for o in objects])  # [O, 6, 16, 7]
+    shape = embeddings[:, :, :, :2]  # [O, 6, 16, 2]
+    shape = shape.reshape(shape.size(0), -1)  # [O, 6*16*2]
+    shape = shape - shape.mean(dim=1, keepdim=True)  # mean-centering
+    shape = shape / (shape.norm(dim=1, keepdim=True) + 1e-5)
+
+    sim = shape @ shape.T  # cosine similarity
+    return sim
+
+
+
+
+
+
 @object_predicate("same_color")
 def same_color(objects: List[Dict], groups=None, device="cpu"):
     O = len(objects)
     colors = torch.tensor([o["s"]["color"] for o in objects], dtype=torch.float32, device=device)
     diff = colors.unsqueeze(1) - colors.unsqueeze(0)
     return (diff.norm(dim=2) < 1e-3).float()
+
+
+@object_soft_predicate("sim_color_soft")
+def sim_color_soft(objects=None, groups=None, device="cpu", soft=None, sigma=20.0):
+    """
+    Compare average RGB color per object.
+    Returns [O, O] soft similarity matrix.
+    """
+    embeddings = torch.stack([o["h"] for o in objects])  # [O, 6, 16, 7]
+    color = embeddings[:, :, :, 2:5]  # [O, 6, 16, 3]
+    avg_color = color.mean(dim=(1, 2))  # [O, 3]
+
+    diff = avg_color.unsqueeze(1) - avg_color.unsqueeze(0)  # [O, O, 3]
+    dist = diff.norm(dim=2)  # [O, O]
+    sim = torch.exp(- (dist ** 2) / (2 * sigma ** 2))
+    return sim
+
 
 
 @object_predicate("same_size")
@@ -138,6 +191,20 @@ def same_size(objects: List[Dict], groups=None, device="cpu"):
     # Compute pairwise difference matrix
     diff = sizes.unsqueeze(1) - sizes.unsqueeze(0)
     return (diff.abs() < 1e-2).float()
+
+
+@object_soft_predicate("sim_size_soft")
+def sim_size_soft(objects=None, groups=None, device="cpu", soft=None, sigma=0.02):
+    """
+    Compare object sizes (w*h).
+    """
+    embeddings = torch.stack([o["h"] for o in objects])  # [O, 6, 16, 7]
+    wh = embeddings[:, 0, 0, 5:7]  # Assuming width/height same across contour
+    size = wh[:, 0] * wh[:, 1]  # [O]
+    diff = size.unsqueeze(1) - size.unsqueeze(0)
+    sim = torch.exp(- (diff ** 2) / (2 * sigma ** 2))
+    return sim
+
 
 
 @object_predicate("mirror_x")
@@ -154,7 +221,6 @@ def same_y(objects: List[Dict], groups=None, device="cpu"):
 
 
 # --- Group‐level hard predicates ---
-
 @group_predicate("group_size")
 def group_size(objects=None, groups=None, device="cpu"):
     return torch.tensor([len(g["members"]) for g in groups],
@@ -207,7 +273,7 @@ def diverse_shapes(objects: List[Dict], groups: List[Dict], device="cpu"):
 
 
 @group_predicate("unique_shapes")
-def diverse_shapes(objects: List[Dict], groups: List[Dict], device="cpu"):
+def unique_shapes(objects: List[Dict], groups: List[Dict], device="cpu"):
     """
     Returns True if a group contains at least two different shapes.
     """
@@ -311,48 +377,7 @@ def same_group_counts(objects: List[Dict], groups: List[Dict], device="cpu"):
     return torch.tensor(results, dtype=torch.float, device=device)
 
 
-@object_soft_predicate("sim_color_soft")
-def sim_color_soft(objects=None, groups=None, device="cpu", soft=None, sigma=20.0):
-    """
-    Compare average RGB color per object.
-    Returns [O, O] soft similarity matrix.
-    """
-    embeddings = torch.stack([o["h"] for o in objects])  # [O, 6, 16, 7]
-    color = embeddings[:, :, :, 2:5]  # [O, 6, 16, 3]
-    avg_color = color.mean(dim=(1, 2))  # [O, 3]
-
-    diff = avg_color.unsqueeze(1) - avg_color.unsqueeze(0)  # [O, O, 3]
-    dist = diff.norm(dim=2)  # [O, O]
-    sim = torch.exp(- (dist ** 2) / (2 * sigma ** 2))
-    return sim
 
 
-@object_soft_predicate("sim_shape_soft")
-def sim_shape_soft(objects=None, groups=None, device="cpu", soft=None, sigma=0.1):
-    """
-    Compare contour shape (normalized).
-    Returns [O, O] shape similarity.
-    """
 
-    embeddings = torch.stack([o["h"] for o in objects])  # [O, 6, 16, 7]
-    shape = embeddings[:, :, :, :2]  # [O, 6, 16, 2]
-    shape = shape.reshape(shape.size(0), -1)  # [O, 6*16*2]
-    shape = shape - shape.mean(dim=1, keepdim=True)  # mean-centering
-    shape = shape / (shape.norm(dim=1, keepdim=True) + 1e-5)
-
-    sim = shape @ shape.T  # cosine similarity
-    return sim
-
-
-@object_soft_predicate("sim_size_soft")
-def sim_size_soft(objects=None, groups=None, device="cpu", soft=None, sigma=0.02):
-    """
-    Compare object sizes (w*h).
-    """
-    embeddings = torch.stack([o["h"] for o in objects])  # [O, 6, 16, 7]
-    wh = embeddings[:, 0, 0, 5:7]  # Assuming width/height same across contour
-    size = wh[:, 0] * wh[:, 1]  # [O]
-    diff = size.unsqueeze(1) - size.unsqueeze(0)
-    sim = torch.exp(- (diff ** 2) / (2 * sigma ** 2))
-    return sim
 

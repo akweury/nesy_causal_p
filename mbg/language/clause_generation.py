@@ -395,6 +395,8 @@ class ClauseGenerator:
         self.soft_thresh = soft_thresh
         self.img_head = (self.img_head, "X")
         self.grp_head = (self.grp_head, "G", "X")
+        self.shape_counter = 0
+        self.shape_memory = []
     def _make_key(self, head, body, weight):
         # Use a tuple as hashable key (ignores weight for de-duplication if needed)
         return (head, tuple(body), round(weight, 4) if weight is not None else None)
@@ -488,7 +490,7 @@ class ClauseGenerator:
 
 
 
-    def soft_obj(self, clauses_dict, soft, O):
+    def soft_obj(self, clauses_dict, soft,obj_list, O):
         # (e) proximity
         if "prox" in soft:
             prox = soft["prox"]
@@ -500,6 +502,7 @@ class ClauseGenerator:
                         mask[i] = True
                         mask[j] = True
                         self.add(clauses_dict, self.img_head, [("prox", "O1", "O2")], weight=score, support_mask=mask)
+
         # object-object soft similarity predicates
         for pred_name in ["sim_color_soft", "sim_shape_soft", "sim_size_soft"]:
             if pred_name in soft:
@@ -527,7 +530,7 @@ class ClauseGenerator:
                         mask[g2] = True
                         self.add(clauses_dict, self.img_head, [("grp_sim", "G1", "G2")], weight=score, support_mask=mask)
 
-    def generate(self, hard: Dict[str, torch.Tensor], soft: Dict[str, torch.Tensor], ablation_flags: Dict[str, bool]) -> List[CWS]:
+    def generate(self, hard: Dict[str, torch.Tensor], soft: Dict[str, torch.Tensor],obj_list, group_list, ablation_flags: Dict[str, bool]) -> List[CWS]:
         clauses_dict: Dict[Tuple, CWS] = {}
         if ablation_flags["use_hard"]:
             O = hard["has_shape"].size(0)
@@ -537,10 +540,10 @@ class ClauseGenerator:
             if ablation_flags["use_group"]:
                 self.hard_group(clauses_dict, hard, G)
         if ablation_flags["use_soft"]:
-            O = soft["sim_color_soft"].size(0)
-            G = hard["group_size"].size(0)
+            O = len(obj_list)
+            G = len(group_list)
             if ablation_flags["use_obj"]:
-                self.soft_obj(clauses_dict, soft, O)
+                self.soft_obj(clauses_dict, soft,obj_list, O)
             if ablation_flags["use_group"]:
                 self.soft_group(clauses_dict, soft, G)
         return list(clauses_dict.values())

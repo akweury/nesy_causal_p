@@ -5,6 +5,8 @@ import torch.nn.functional as F
 from PIL import Image
 import numpy as np
 import cv2
+
+import config
 from src import bk
 from mbg.object.patch_classifier_model import PatchClassifier
 import mbg.mbg_config as param
@@ -71,5 +73,45 @@ def evaluate_image(model, img_path):
             "h": patches[i]
         }
         objs.append(obj)
-
+    show_images_horizontally(obj_images)
     return objs
+
+
+from matplotlib import pyplot as plt
+
+
+def show_images_horizontally(image_list):
+    # Ensure all images have the same height
+    # Check height consistency
+    heights = [img.shape[0] for img in image_list]
+    if len(set(heights)) != 1:
+        raise ValueError("All images must have the same height")
+
+    height = heights[0]
+    channels = image_list[0].shape[2] if len(image_list[0].shape) == 3 else 1
+
+    # Create padding
+    pad_shape = (height, 5, channels)
+    padding = np.full(pad_shape, (255, 255, 255), dtype=np.uint8)
+
+    # Interleave images with padding
+    padded_images = []
+    for i, img in enumerate(image_list):
+        padded_images.append(img)
+        if i != len(image_list) - 1:
+            padded_images.append(padding)
+
+    # Concatenate horizontally
+    combined = np.concatenate(padded_images, axis=1)
+
+    # If using OpenCV for display
+    # cv2.imshow("Combined Image", combined)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
+
+    # Or using matplotlib (if images are RGB)
+    # Convert NumPy array to PIL Image
+    image_pil = Image.fromarray(combined)
+
+    # Save to PDF
+    image_pil.save(config.output / "object.pdf", "PDF", resolution=300.0)

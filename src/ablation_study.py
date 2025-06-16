@@ -12,15 +12,15 @@ from mbg.evaluation import evaluation
 import config
 
 ABLATED_CONFIGS = {
+    # "soft_og": {"use_hard": False, "use_soft": True, "use_obj": True, "use_group": True},
+    # "soft_group": {"use_hard": False, "use_soft": True, "use_obj": False, "use_group": True},
+    # "hs_og": {"use_hard": True, "use_soft": True, "use_obj": True, "use_group": True},
     "hard_obj": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": False},
     "hard_group": {"use_hard": True, "use_soft": False, "use_obj": False, "use_group": True},
     "hard_og": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": True},
     # "soft_obj": {"use_hard": False, "use_soft": True, "use_obj": True, "use_group": False},
-    # "soft_group": {"use_hard": False, "use_soft": True, "use_obj": False, "use_group": True},
-    # "soft_og": {"use_hard": False, "use_soft": True, "use_obj": True, "use_group": True},
     # "hs_obj": {"use_hard": True, "use_soft": True, "use_obj": True, "use_group": False},
     # "hs_group": {"use_hard": True, "use_soft": True, "use_obj": False, "use_group": True},
-    # "hs_og": {"use_hard": True, "use_soft": True, "use_obj": True, "use_group": True}
 
 }
 
@@ -38,7 +38,7 @@ def run_ablation(train_data, val_data, test_data, obj_model, train_principle, ar
     # train rule + calibrator
     hard, soft, group_nums, obj_list, group_list = training.ground_facts(train_val_data, obj_model, hyp_params,
                                                                          train_principle, args.device, ablation_flags)
-    base_rules = training.train_rules(hard, soft, group_nums, train_img_labels, hyp_params, ablation_flags)
+    base_rules = training.train_rules(hard, soft,obj_list, group_list, group_nums, train_img_labels, hyp_params, ablation_flags)
     final_rules = training.extend_rules(base_rules, hard, soft, train_img_labels, obj_list, group_list, hyp_params)
     calibrator = training.train_calibrator(final_rules, obj_list, group_list, hard, soft, train_img_labels, hyp_params)
 
@@ -55,11 +55,16 @@ def main_ablation():
 
     wandb.init(project=f"grb_ablation_{train_principle}", config=args.__dict__, name=args.exp_name)
     results_summary = defaultdict(lambda: defaultdict(list))  # setting -> metric -> list
-
+    all_f1 = {conf:[] for conf in ABLATED_CONFIGS}
+    all_auc = {conf:[] for conf in ABLATED_CONFIGS}
+    all_acc = {conf:[] for conf in ABLATED_CONFIGS}
     for task_idx, (train_data, val_data, test_data) in enumerate(combined_loader):
+        if task_idx < 125:
+            continue
         task_name = train_data["task"]
         print(f"\nTask {task_idx + 1}/{len(combined_loader)}: {task_name}")
 
+        log_dicts = {}
         for mode_name, ablation_flags in ABLATED_CONFIGS.items():
             print(f"  Running ablation: {mode_name}")
             test_metrics = run_ablation(train_data, val_data, test_data, obj_model,
@@ -67,7 +72,24 @@ def main_ablation():
             for k in ["acc", "f1", "auc"]:
                 results_summary[mode_name][k].append(test_metrics.get(k, 0))
                 print(f"task: {task_idx + 1}/{len(combined_loader)}: {k} {test_metrics.get(k, 0)}")
-            wandb.log({f"{mode_name}_{k}": test_metrics.get(k, 0) for k in test_metrics})
+            test_acc = test_metrics.get("acc", 0)
+            test_auc = test_metrics.get("auc", 0)
+            test_f1 = test_metrics.get("f1", 0)
+
+            all_f1[mode_name].append(test_f1)
+            all_auc[mode_name].append(test_auc)
+            all_acc[mode_name].append(test_acc)
+
+            log_dicts.update({f"{mode_name}_{k}": test_metrics.get(k, 0) for k in test_metrics})
+            log_dicts.update({f"{mode_name}_acc_avg": torch.tensor(all_acc[mode_name]).mean(),
+                f"{mode_name}_auc_avg": torch.tensor(all_auc[mode_name]).mean(),
+                f"{mode_name}_f1_avg": torch.tensor(all_f1[mode_name]).mean()})
+
+        wandb.log(log_dicts)
+        # wandb.log({
+        #     f"{mode_name}_{k}": test_metrics.get(k, 0) for k in test_metrics
+        # })
+        #
 
     # save and summarize
     final_summary = {

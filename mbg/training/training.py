@@ -19,8 +19,6 @@ from mbg.scorer.context_contour_scorer import ContextContourScorer
 from mbg.scorer.calibrator import ConfidenceCalibrator
 
 
-
-
 def train_grouping_model(train_loader, device, epochs=10, LR=1e-3):
     # pair_dataset = build_pairwise_grouping_dataset(train_loader)  # returns (patch_i, patch_j, label) pairs
     model = ContextContourScorer()  # a small convnet or MLP
@@ -44,7 +42,7 @@ def train_grouping_model(train_loader, device, epochs=10, LR=1e-3):
     return model
 
 
-def train_rules(hard_facts, soft_facts, num_groups, train_image_labels, hyp_params, ablation_flags):
+def train_rules(hard_facts, soft_facts,obj_list, group_list, num_groups, train_image_labels, hyp_params, ablation_flags):
     # 1) 收集每张图的频次 & group 数
     pos_per_task_train = []  # task_id -> List[Counter[Clause,int]] (正例)
     neg_per_task_train = []  # task_id -> List[Counter[Clause,int]] (负例)
@@ -56,7 +54,7 @@ def train_rules(hard_facts, soft_facts, num_groups, train_image_labels, hyp_para
         img_label = train_image_labels[i]
         hard, soft = hard_facts[i], soft_facts[i]
         cg = clause_generation.ClauseGenerator(prox_thresh=hyp_params["prox"], sim_thresh=hyp_params["sim"])
-        clauses = cg.generate(hard, soft, ablation_flags)
+        clauses = cg.generate(hard, soft,obj_list[i], group_list[i], ablation_flags)
         # freq = Counter(clauses)
         # --- 4. 存入对应容器 ---
         if img_label == 1:
@@ -75,7 +73,8 @@ def train_rules(hard_facts, soft_facts, num_groups, train_image_labels, hyp_para
     return rules_train
 
 
-def extend_rules(base_rules, hard_facts_list, soft_facts_list, img_labels, objs_list, groups_list,hyp_params, min_conf=0.6):
+def extend_rules(base_rules, hard_facts_list, soft_facts_list, img_labels, objs_list, groups_list, hyp_params,
+                 min_conf=0.6):
     # 1. combine rules
     combined_rules = []
     N_pos = len(img_labels) // 2
@@ -118,12 +117,12 @@ def extend_rules(base_rules, hard_facts_list, soft_facts_list, img_labels, objs_
         if support > 0:
             all_scored.append(ScoredRule(clause, score, scope))
 
-
     # sort by confidence descending
     all_scored.sort(key=lambda sr: sr.confidence, reverse=True)
     return all_scored[:hyp_params["top_k"]]
 
-def train_calibrator(final_rules, obj_list, group_list, hard_list, soft_list,img_labels, hyp_params):
+
+def train_calibrator(final_rules, obj_list, group_list, hard_list, soft_list, img_labels, hyp_params):
     calib_inputs = []
     calib_labels = []
 
@@ -132,7 +131,6 @@ def train_calibrator(final_rules, obj_list, group_list, hard_list, soft_list,img
 
         rule_score_dict = evaluation.apply_rules(final_rules, hard_facts, soft_facts, objs, groups)
         rule_scores = [v for v in rule_score_dict.values()]
-
 
         while len(rule_scores) < hyp_params["top_k"]:
             rule_scores.append(0.0)  # pad to k
@@ -148,15 +146,14 @@ def ground_facts(train_data, obj_model, hyp_params, train_principle, device, abl
     if ablation_flags is None:
         ablation_flags = {}
 
-    disable_soft = ablation_flags.get("disable_soft", False)
-    disable_hard = ablation_flags.get("disable_hard", False)
-    disable_group = ablation_flags.get("disable_group", False)
-    disable_object = ablation_flags.get("disable_object", False)
+    disable_soft = not ablation_flags.get("use_soft", True)
+    disable_hard = not ablation_flags.get("use_hard", True)
+    disable_group = not ablation_flags.get("use_group", True)
+    disable_object = not ablation_flags.get("use_obj", True)
 
     hard_facts, soft_facts = [], []
     obj_lists, groups_list = [], []
     group_nums = []
-
 
     for data in train_data["positive"] + train_data["negative"]:
         # --- 1. Object detection ---
@@ -166,10 +163,10 @@ def ground_facts(train_data, obj_model, hyp_params, train_principle, device, abl
             objs = []  # no object-level facts
         obj_lists.append(objs)
 
-
         # --- 2. Group detection ---
         if not disable_group:
-            groups = eval_groups.eval_groups(objs, hyp_params["prox"], train_principle, device, dim=hyp_params["patch_dim"])
+            groups = eval_groups.eval_groups(objs, hyp_params["prox"], train_principle, device,
+                                             dim=hyp_params["patch_dim"])
         else:
             groups = []
         groups_list.append(groups)
