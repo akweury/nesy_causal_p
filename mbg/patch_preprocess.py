@@ -90,6 +90,70 @@ def preprocess_image_to_patch_set(binary_image: np.ndarray, num_patches: int = 6
 
     return outputs
 
+# def preprocess_rgb_image_to_patch_set(rgb_image: np.ndarray, num_patches: int = 6, points_per_patch: int = 16,
+#                                       contour_uniform=True):
+#     """
+#     Extracts contour patch sets from RGB image using connected components.
+#     Returns:
+#         outputs: List of patch_set tensors [P, L, 7]
+#         positions: List of normalized top-left positions
+#         sizes: List of normalized (w, h)
+#     """
+#     H, W = rgb_image.shape[:2]
+#     gray = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2GRAY)
+#     binary_mask = np.where(gray == 211, 0, 255).astype(np.uint8)
+#
+#     num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(binary_mask, connectivity=8)
+#
+#     outputs = []
+#     positions = []
+#     sizes = []
+#
+#     for i in range(1, num_labels):  # skip background
+#         x, y, w, h, area = stats[i]
+#         if area < 10:
+#             continue
+#
+#         roi = (labels[y:y + h, x:x + w] == i).astype(np.uint8) * 255
+#         contours, _ = cv2.findContours(roi, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+#         if not contours or len(contours[0]) < num_patches * points_per_patch:
+#             continue
+#
+#         contour = contours[0].squeeze(1)  # shape [N, 2]
+#         if contour.ndim != 2 or contour.shape[1] != 2:
+#             continue
+#
+#         # Sample points uniformly
+#         contour = torch.from_numpy(contour)  # [N, 2]
+#         idxs = torch.linspace(0, len(contour) - 1, steps=num_patches * points_per_patch).long()
+#         sampled_xy = contour[idxs] + torch.tensor([x, y])  # absolute coords
+#
+#         # Fast batch RGB lookup
+#         # Clamp each coordinate separately (Y in [0, H-1], X in [0, W-1])
+#         clamp_min = torch.tensor([0, 0], dtype=sampled_xy.dtype, device=sampled_xy.device)
+#         clamp_max = torch.tensor([H - 1, W - 1], dtype=sampled_xy.dtype, device=sampled_xy.device)
+#         sampled_yx = torch.max(torch.min(sampled_xy[:, [1, 0]], clamp_max), clamp_min)
+#         rgb_tensor = torch.from_numpy(rgb_image).float() / 255.0  # [H, W, 3]
+#         flat_rgb = rgb_tensor[sampled_yx[:, 0], sampled_yx[:, 1]]  # [P*L, 3]
+#
+#         # Normalize coordinates and add size info
+#         sampled_xy = sampled_xy.float()
+#         norm_xy = sampled_xy / torch.tensor([W, H])
+#         patch_set = torch.cat([norm_xy, flat_rgb], dim=1).view(num_patches, points_per_patch, 5)
+#
+#         size_tensor = torch.tensor([w / W, h / H], dtype=torch.float32).view(1, 1, 2).expand_as(patch_set[:, :, :2])
+#         perceptual_set = torch.cat([patch_set, size_tensor], dim=-1)  # [P, L, 7]
+#
+#         outputs.append(perceptual_set)
+#         positions.append([x / W, y / H])
+#         sizes.append([w / W, h / H])
+#
+#     if len(outputs) == 0:
+#         outputs.append(torch.zeros(num_patches, points_per_patch, 7))
+#         positions.append([0.0, 0.0])
+#         sizes.append([0.0, 0.0])
+#
+#     return outputs, positions, sizes
 
 def preprocess_rgb_image_to_patch_set(rgb_image: np.ndarray, num_patches: int = 6, points_per_patch: int = 16,
                                       contour_uniform=True):
@@ -515,26 +579,15 @@ def align_data_and_imgs(objects: List[dict], obj_imgs: List[np.ndarray]) -> Tupl
 
 
 def rgb2patch(rgb_img, input_type):
+    patch_set, positions, sizes = preprocess_rgb_image_to_patch_set(rgb_img)
+    positions = positions[0]
+    sizes = sizes[0]
     if input_type == "pos":
-        patch_set, positions, sizes = preprocess_rgb_image_to_patch_set(rgb_img)
         patch_set = patch_set[0][:, :, :2]
-        positions = positions[0]
-        sizes = sizes[0]
     elif input_type == "pos_color":
-        patch_set, positions, sizes = preprocess_rgb_image_to_patch_set(rgb_img)
         patch_set = patch_set[0][:, :, :5]
-        positions = positions[0]
-        sizes = sizes[0]
     elif input_type == "pos_color_size":
-        patch_set, positions, sizes = preprocess_rgb_image_to_patch_set(rgb_img)
-        try:
-            patch_set = patch_set[0]
-        except IndexError:
-            patch_set, positions, sizes = preprocess_rgb_image_to_patch_set(rgb_img)
-
-            raise IndexError
-        positions = positions[0]
-        sizes = sizes[0]
+        patch_set = patch_set[0]
     else:
         raise ValueError
 

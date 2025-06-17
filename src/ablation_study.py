@@ -61,16 +61,16 @@ def run_ablation(train_data, val_data, test_data, obj_model, group_model, train_
                                          args.device, calibrator)
     t6 = time.time()
 
-    d1 = t2 - t1  # grounding facts
-    d2 = t3 - t2  # base rules
-    d3 = t4 - t3  # extend rules
-    d4 = t5 - t4  # train calibrator
-    d5 = t6 - t5  # eval rules
-    print(f"Grounding facts in {d1} seconds")
-    print(f"Base Rules in {d2} seconds")
-    print(f"Extension in {d3} seconds")
-    print(f"Calibrator in {d4} seconds")
-    print(f"Evaluation Metrics in {d5} seconds")
+    # d1 = t2 - t1  # grounding facts
+    # d2 = t3 - t2  # base rules
+    # d3 = t4 - t3  # extend rules
+    # d4 = t5 - t4  # train calibrator
+    # d5 = t6 - t5  # eval rules
+    # print(f"Grounding facts in {d1} seconds")
+    # print(f"Base Rules in {d2} seconds")
+    # print(f"Extension in {d3} seconds")
+    # print(f"Calibrator in {d4} seconds")
+    # print(f"Evaluation Metrics in {d5} seconds")
     return eval_metrics
 
 
@@ -93,12 +93,15 @@ def main_ablation():
 
         log_dicts = {}
         for mode_name, ablation_flags in ABLATED_CONFIGS.items():
-            print(f"  Running ablation: {mode_name}")
+
+            t1 = time.time()
             test_metrics = run_ablation(train_data, val_data, test_data, obj_model, group_model,
                                         train_principle, args, mode_name, ablation_flags)
+            t2 = time.time()
+            print(f"  Running ablation: {mode_name} in {t2 - t1} seconds")
             for k in ["acc", "f1", "auc"]:
                 results_summary[mode_name][k].append(test_metrics.get(k, 0))
-                print(f"task: {task_idx + 1}/{len(combined_loader)}: {k} {test_metrics.get(k, 0)}")
+                # print(f"task: {task_idx + 1}/{len(combined_loader)}: {k} {test_metrics.get(k, 0)}")
             test_acc = test_metrics.get("acc", 0)
             test_auc = test_metrics.get("auc", 0)
             test_f1 = test_metrics.get("f1", 0)
@@ -112,7 +115,7 @@ def main_ablation():
                               f"{mode_name}_auc_avg": torch.tensor(all_auc[mode_name]).mean(),
                               f"{mode_name}_f1_avg": torch.tensor(all_f1[mode_name]).mean()})
 
-        wandb.log(log_dicts)
+        # wandb.log(log_dicts)
         # wandb.log({
         #     f"{mode_name}_{k}": test_metrics.get(k, 0) for k in test_metrics
         # })

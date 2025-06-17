@@ -1,5 +1,5 @@
 # Created by MacBook Pro at 15.05.25
-
+import time
 
 # evaluation.py
 
@@ -12,7 +12,7 @@ from mbg.group import eval_groups
 from mbg.grounding import grounding
 from mbg.language.clause_generation import Clause, ScoredRule
 from mbg import patch_preprocess
-
+from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 
 def _evaluate_clause(
         clause: Clause,
@@ -95,9 +95,6 @@ def compute_metrics(
     aggregate each image’s rule scores into a single y_hat, then compute
     overall accuracy/f1/etc.
     """
-    import numpy as np
-    from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
-
     y_true, y_hat, y_score = [], [], []
     for scores, y in zip(all_scores, all_labels):
         # weighted average across *all* rules
@@ -409,28 +406,28 @@ def eval_rules(val_data, obj_model, group_model, learned_rules, hyp_params, eval
     per_task_scores = defaultdict(list)
     per_task_labels = defaultdict(list)
     conf_th = hyp_params["conf_th"]
-    prox_th = hyp_params["prox"]
     task_id = val_data["task"][0].split("_")[0]
 
     all_data = val_data["positive"] + val_data["negative"]
     img_paths = [d["image_path"][0] for d in all_data]
     imgs = patch_preprocess.load_images_fast(img_paths, device=device)
     gt_labels = [int(d["img_label"][0]) for d in all_data]
+
+    t1 = time.time()
     # for each rule, we need to know the valuation result, so either 1 or 0
     for i, img in enumerate(imgs):
         true_label = gt_labels[i]
         # 1) detect objects & groups
         objs = eval_patch_classifier.evaluate_image(obj_model, img, device)
         groups = eval_groups.eval_groups(objs, group_model, eval_principle, device, patch_dim)
-
         # 2) ground  & generate validation image’s clauses
         hard, soft = grounding.ground_facts(objs, groups)
 
         # 4) filter out very‐low confidence rules
         kept_rules = [r for r in learned_rules if r.confidence >= conf_th]
-
         # 5) soft‐match each rule on this image
         rule_score_dict = apply_rules(kept_rules, hard, soft, objs, groups)
+
         rule_score = list(rule_score_dict.values())
 
         # Pad if fewer than k
@@ -444,6 +441,8 @@ def eval_rules(val_data, obj_model, group_model, learned_rules, hyp_params, eval
         per_task_scores[task_id].append(img_score)
         per_task_labels[task_id].append(true_label)
 
+    t2 = time.time()
+    d1 = t2-t1
     # now compute metrics per task
     metrics = {}
     for task_id in per_task_scores:
@@ -454,5 +453,4 @@ def eval_rules(val_data, obj_model, group_model, learned_rules, hyp_params, eval
         # compute raw metrics (acc, f1, auc)
         metrics = compute_metrics(scores_list, labels, threshold=conf_th)
         # print(f"Task {task_id} →  acc={metrics['acc']:.3f}   f1={metrics['f1']:.3f}   auc={metrics['auc']:.3f}")
-
     return metrics

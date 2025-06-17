@@ -28,14 +28,19 @@ def load_model(device):
 
 def evaluate_shapes(model, obj_images):
     device = next(model.parameters()).device
-
+    t1= time.time()
     patch_sets, positions, sizes = patch_preprocess.obj_imgs2patches(obj_images)
+    t2 = time.time()
     predictions = []
     for o_i in range(len(patch_sets)):
         with torch.no_grad():
             logits = model(patch_sets[o_i][:, :, :2].unsqueeze(0).to(device))
             pred_label = logits.argmax(dim=1).item()
             predictions.append(pred_label)
+    t3 = time.time()
+
+    # d1= t2-t1
+    # d2 = t3-t2
 
     return predictions, patch_sets, positions, sizes
 
