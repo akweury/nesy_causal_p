@@ -39,8 +39,8 @@ def evaluate_shapes(model, obj_images):
             predictions.append(pred_label)
     t3 = time.time()
 
-    # d1= t2-t1
-    # d2 = t3-t2
+    d1= t2-t1
+    d2 = t3-t2
 
     return predictions, patch_sets, positions, sizes
 
@@ -93,10 +93,6 @@ def evaluate_image(model, img, device):
     t3 = time.time()
     colors = evaluate_colors(obj_images)
     t4 = time.time()
-
-
-
-
     objs = []
     for i in range(len(labels)):
         shape_one_hot = torch.zeros(len(bk.bk_shapes), dtype=torch.float32)
