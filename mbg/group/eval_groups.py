@@ -19,7 +19,7 @@ def embedding_principles(group_principle):
     return p_g
 
 
-def embedding_group_neural_features(group_objs, input_dim=7):
+def embedding_group_neural_features(group_objs,device, input_dim=7):
     group_patches = torch.stack([o["h"] for o in group_objs])
     # build the encoder (dims must match your patch-encoder settings):
     group_encoder = NeuralGroupEncoder(
@@ -27,7 +27,7 @@ def embedding_group_neural_features(group_objs, input_dim=7):
         obj_embed_dim=64,
         hidden_dim=128,
         group_embed_dim=128
-    )
+    ).to(device)
 
     # get one group-embedding h_g of size 128:
     h_g = group_encoder(group_patches)  # → torch.Size([128])
@@ -40,12 +40,12 @@ def dict_group_features(group_objs):
     return s_g
 
 
-def construct_group_representations(objs, group_obj_ids, principle, input_dim):
+def construct_group_representations(objs, group_obj_ids, principle, input_dim, device):
     rep_gs = []
     for g_i, group_obj_id in enumerate(group_obj_ids):
         group_objs = [objs[i] for i in group_obj_id]
         # s_g = dict_group_features(group_objs)
-        h_g = embedding_group_neural_features(group_objs, input_dim)
+        h_g = embedding_group_neural_features(group_objs,device, input_dim)
         p_g = principle
         grp = {
             "id": g_i,
@@ -101,5 +101,5 @@ def eval_groups(objs, group_model, principle, device, dim):
     neural_objs = [o["h"] for o in objs]
     group_ids = group_objects_with_model(group_model, neural_objs, device)
     # encoding the groups
-    groups = construct_group_representations(objs, group_ids, principle, dim)
+    groups = construct_group_representations(objs, group_ids, principle, dim, device)
     return groups
