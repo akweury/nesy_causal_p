@@ -6,6 +6,7 @@ from torch.utils.data import DataLoader, random_split
 import wandb
 import json
 
+from src.utils import args_utils
 import mbg.mbg_config as param
 from mbg.object.obj_patchset_dataset import ObjPatchSetDataset
 from mbg.object.patch_classifier_model import PatchClassifier
@@ -17,15 +18,16 @@ def is_jsonable(x):
     except:
         return False
 
+args = args_utils.get_args()
 
-device = "cpu"
+device = args.device
 
-wandb.init(
-    project="pam_synthetic_patch_classifier",
-    config={k: v for k, v in vars(param).items() if is_jsonable(v)}
-)
+# wandb.init(
+#     project="pam_synthetic_patch_classifier",
+#     config={k: v for k, v in vars(param).items() if is_jsonable(v)}
+# )
 
-dataset = ObjPatchSetDataset()
+dataset = ObjPatchSetDataset(device)
 train_size = int(0.8 * len(dataset))
 val_size = len(dataset) - train_size
 train_set, val_set = random_split(dataset, [train_size, val_size])
@@ -57,7 +59,7 @@ for epoch in range(param.EPOCHS):
         correct += (out.argmax(1) == y).sum().item()
 
     train_acc = correct / len(train_loader.dataset)
-    wandb.log({"train_loss": total_loss / len(train_loader.dataset), "train_acc": train_acc}, step=epoch)
+    # wandb.log({"train_loss": total_loss / len(train_loader.dataset), "train_acc": train_acc}, step=epoch)
 
     model.eval()
     val_loss, correct = 0.0, 0
@@ -69,7 +71,7 @@ for epoch in range(param.EPOCHS):
             correct += (out.argmax(1) == y).sum().item()
 
     val_acc = correct / len(val_loader.dataset)
-    wandb.log({"val_loss": val_loss / len(val_loader.dataset), "val_acc": val_acc}, step=epoch)
+    # wandb.log({"val_loss": val_loss / len(val_loader.dataset), "val_acc": val_acc}, step=epoch)
 
     if (epoch + 1) % 10 == 0:
         print(f"[Epoch {epoch+1}] Train Acc: {train_acc:.4f} | Val Acc: {val_acc:.4f}")

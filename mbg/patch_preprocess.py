@@ -525,7 +525,7 @@ import numpy as np
 from typing import List
 
 
-def match_objects_to_labels(object_images: List[np.ndarray], gt_objects: List[dict], threshold: float = 0.1) -> List[
+def match_objects_to_labels(object_images: List[torch.tensor], gt_objects: List[dict], threshold: float = 0.1) -> List[
     int]:
     """
     Match object images to ground truth objects based on centroid proximity,
@@ -540,7 +540,7 @@ def match_objects_to_labels(object_images: List[np.ndarray], gt_objects: List[di
         List[int]: List of predicted shape labels aligned with object_images.
     """
     labels = []
-
+    object_images = [img.permute(1,2,0).numpy() for img in object_images]
     for obj_img in object_images:
         # Compute centroid of the object in this image
         mask = (obj_img != 211).any(axis=-1).astype(np.uint8)  # Non-background pixels
@@ -631,9 +631,6 @@ def img_paths2obj_images(img_path: Path, device):
 
 def obj_imgs2patches(obj_images, input_type="pos_color_size"):
     # single object image to patch set
-    patch_sets = []
-    positions = []
-    sizes = []
     patch_sets, obj_positions, obj_sizes = rgbs2patches(obj_images, input_type)
     # for o_i, obj_img in enumerate(obj_images):
     #     patch_set, obj_position, obj_size = rgb2patch(obj_img, input_type)
@@ -643,26 +640,29 @@ def obj_imgs2patches(obj_images, input_type="pos_color_size"):
     return patch_sets, obj_positions, obj_sizes
 
 
-def img_path2patches_and_labels(image_path, gt_dict, device, input_type="pos_color_size"):
-    obj_images = img_path2obj_images(image_path, device)
+def img_path2patches_and_labels(obj_images, gt_dict, device, input_type="pos_color_size"):
     objects, obj_images, permutes = align_data_and_imgs(gt_dict, obj_images)
-
     labels = match_objects_to_labels(obj_images, objects)
     # single object image to patch set
-    patch_sets = []
-    sorted_labels = []
-    positions = []
-    sizes = []
-    for o_i, obj_img in enumerate(obj_images):
-        patch_set, obj_position, obj_size = rgb2patch(obj_img, input_type)
-        if labels[o_i] == -1:
-            continue
-        label = labels[o_i] - 1
-
-        patch_sets.append(patch_set)
-        sorted_labels.append(label)
-        positions.append(obj_position)
-        sizes.append(obj_size)
+    # patch_sets = []
+    # sorted_labels = []
+    # positions = []
+    # sizes = []
+    patch_sets, obj_positions, obj_sizes = rgbs2patches(obj_images, input_type)
+    sorted_labels = [labels[i]-1 for i in range(len(labels)) if labels[i]!=-1]
+    patch_sets = [patch_sets[i] for i in range(len(labels)) if labels[i]!=-1]
+    positions =  [obj_positions[i] for i in range(len(labels)) if labels[i]!=-1]
+    sizes = [obj_sizes[i] for i in range(len(labels)) if labels[i]!=-1]
+    # for o_i, obj_img in enumerate(obj_images):
+    #     patch_set, obj_position, obj_size = rgb2patch(obj_img, input_type)
+    #     if labels[o_i] == -1:
+    #         continue
+    #     label = labels[o_i] - 1
+    #
+    #     patch_sets.append(patch_set)
+    #     sorted_labels.append(label)
+    #     positions.append(obj_position)
+    #     sizes.append(obj_size)
     return patch_sets, sorted_labels, positions, sizes, permutes
 
 
@@ -696,8 +696,8 @@ def shift_obj_patches_to_global_positions(obj_patch, shift):
     return shifted_tensor
 
 
-def align_data_and_imgs(objects: List[dict], obj_imgs: List[np.ndarray]) -> Tuple[
-    List[dict], List[np.ndarray], List[int]]:
+def align_data_and_imgs(objects: List[dict], obj_imgs: List[torch.tensor]) -> Tuple[
+    List[dict], List[torch.tensor], List[int]]:
     """
     Align object metadata with object images based on centroid location matching.
     Each image contains a single colored object on a [211, 211, 211] gray background.
@@ -709,7 +709,7 @@ def align_data_and_imgs(objects: List[dict], obj_imgs: List[np.ndarray]) -> Tupl
     """
     resolution = 1024
     bg_color = np.array([211, 211, 211], dtype=np.uint8)
-
+    obj_imgs = [img.permute(1,2,0).numpy() for img in obj_imgs]
     def get_centroid(img: np.ndarray) -> Tuple[float, float]:
         mask = np.any(img != bg_color, axis=-1)
         ys, xs = np.where(mask)
@@ -739,7 +739,7 @@ def align_data_and_imgs(objects: List[dict], obj_imgs: List[np.ndarray]) -> Tupl
         aligned_imgs.append(obj_imgs[i])
         old_to_new_indices.append(match_idx)
         used_obj_idxs.add(match_idx)
-
+    aligned_imgs = [torch.from_numpy(img).permute(2,0,1) for img in aligned_imgs]
     return aligned_objects, aligned_imgs, old_to_new_indices
 
 

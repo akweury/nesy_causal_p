@@ -50,6 +50,7 @@ python -m src.ablation_study --device 1 --principle similarity
 python -m src.ablation_study --device 0 --principle proximity
 python -m src.ablation_study --device 3 --principle continuity
 python -m src.ablation_study --device 4 --principle symmetry
+
 python -m mbg.scorer.train_context_aware_scorer --device 1 --all
  
 ```
