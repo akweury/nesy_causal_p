@@ -122,7 +122,11 @@ def extend_rules(base_rules, hard_facts_list, soft_facts_list, img_labels, objs_
     return all_scored[:hyp_params["top_k"]]
 
 
-def train_calibrator(final_rules, obj_list, group_list, hard_list, soft_list, img_labels, hyp_params):
+def train_calibrator(final_rules, obj_list, group_list, hard_list, soft_list, img_labels, hyp_params, ablation_flags):
+    if not ablation_flags["use_calibrator"]:
+        return None
+
+
     calib_inputs = []
     calib_labels = []
 

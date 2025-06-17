@@ -117,12 +117,14 @@ class GroundingModule:
                     hard_facts[pred] = fn(objects=objects, groups=groups, device=self.device)
                 except Exception as e:
                     print(f"[Hard-OBJ] Failed predicate {pred}: {e}")
+                    raise ValueError
 
             for pred, fn in GRP_HARD.items():
                 try:
                     hard_facts[pred] = fn(objects=objects, groups=groups, device=self.device)
                 except Exception as e:
                     print(f"[Hard-GRP] Failed predicate {pred}: {e}")
+                    raise ValueError
 
         # 2) Soft facts
         if not disable_soft:

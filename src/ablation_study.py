@@ -15,9 +15,14 @@ ABLATED_CONFIGS = {
     # "soft_og": {"use_hard": False, "use_soft": True, "use_obj": True, "use_group": True},
     # "soft_group": {"use_hard": False, "use_soft": True, "use_obj": False, "use_group": True},
     # "hs_og": {"use_hard": True, "use_soft": True, "use_obj": True, "use_group": True},
-    "hard_obj": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": False},
-    "hard_group": {"use_hard": True, "use_soft": False, "use_obj": False, "use_group": True},
-    "hard_og": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": True},
+    "hard_obj": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": False, "use_calibrator": False},
+    "hard_obj_calib": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": False, "use_calibrator": True},
+    # "hard_group": {"use_hard": True, "use_soft": False, "use_obj": False, "use_group": True},
+    "hard_og": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": True, "use_calibrator": False},
+    "hard_ogc": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": True, "use_calibrator": True},
+
+
+
     # "soft_obj": {"use_hard": False, "use_soft": True, "use_obj": True, "use_group": False},
     # "hs_obj": {"use_hard": True, "use_soft": True, "use_obj": True, "use_group": False},
     # "hs_group": {"use_hard": True, "use_soft": True, "use_obj": False, "use_group": True},
@@ -38,9 +43,11 @@ def run_ablation(train_data, val_data, test_data, obj_model, train_principle, ar
     # train rule + calibrator
     hard, soft, group_nums, obj_list, group_list = training.ground_facts(train_val_data, obj_model, hyp_params,
                                                                          train_principle, args.device, ablation_flags)
-    base_rules = training.train_rules(hard, soft,obj_list, group_list, group_nums, train_img_labels, hyp_params, ablation_flags)
+    base_rules = training.train_rules(hard, soft, obj_list, group_list, group_nums, train_img_labels, hyp_params,
+                                      ablation_flags)
     final_rules = training.extend_rules(base_rules, hard, soft, train_img_labels, obj_list, group_list, hyp_params)
-    calibrator = training.train_calibrator(final_rules, obj_list, group_list, hard, soft, train_img_labels, hyp_params)
+    calibrator = training.train_calibrator(final_rules, obj_list, group_list, hard, soft, train_img_labels, hyp_params,
+                                           ablation_flags)
 
     return evaluation.eval_rules(test_data, obj_model, final_rules, hyp_params, train_principle, args.device,
                                  calibrator)
@@ -55,9 +62,9 @@ def main_ablation():
 
     wandb.init(project=f"grb_ablation_{train_principle}", config=args.__dict__, name=args.exp_name)
     results_summary = defaultdict(lambda: defaultdict(list))  # setting -> metric -> list
-    all_f1 = {conf:[] for conf in ABLATED_CONFIGS}
-    all_auc = {conf:[] for conf in ABLATED_CONFIGS}
-    all_acc = {conf:[] for conf in ABLATED_CONFIGS}
+    all_f1 = {conf: [] for conf in ABLATED_CONFIGS}
+    all_auc = {conf: [] for conf in ABLATED_CONFIGS}
+    all_acc = {conf: [] for conf in ABLATED_CONFIGS}
     for task_idx, (train_data, val_data, test_data) in enumerate(combined_loader):
         task_name = train_data["task"]
         print(f"\nTask {task_idx + 1}/{len(combined_loader)}: {task_name}")
@@ -80,8 +87,8 @@ def main_ablation():
 
             log_dicts.update({f"{mode_name}_{k}": test_metrics.get(k, 0) for k in test_metrics})
             log_dicts.update({f"{mode_name}_acc_avg": torch.tensor(all_acc[mode_name]).mean(),
-                f"{mode_name}_auc_avg": torch.tensor(all_auc[mode_name]).mean(),
-                f"{mode_name}_f1_avg": torch.tensor(all_f1[mode_name]).mean()})
+                              f"{mode_name}_auc_avg": torch.tensor(all_auc[mode_name]).mean(),
+                              f"{mode_name}_f1_avg": torch.tensor(all_f1[mode_name]).mean()})
 
         wandb.log(log_dicts)
         # wandb.log({

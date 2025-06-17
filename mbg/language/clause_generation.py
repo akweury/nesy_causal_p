@@ -420,20 +420,14 @@ class ClauseGenerator:
         # (a) object-level shape
         for i in range(O):
             shape_val = int(hard["has_shape"][i].item())
-            group_ids = torch.where(hard["in_group"][i])[0]
-            for g in group_ids:
-                mask = torch.zeros(O, dtype=torch.bool)
-                mask[i] = True
-                self.add(clauses_dict, self.img_head,[("has_shape", "O", shape_val), ("in_group", "O", "G")],
-                         support_mask=mask)
+            mask = torch.zeros(O, dtype=torch.bool)
+            mask[i] = True
+            self.add(clauses_dict, self.img_head,[("has_shape", "O", shape_val)], support_mask=mask)
         for i in range(O):
             rgb = tuple(int(c) for c in hard["has_color"][i].tolist())
-            group_ids = torch.where(hard["in_group"][i])[0]
-            for g in group_ids:
-                mask = torch.zeros(O, dtype=torch.bool)
-                mask[i] = True
-                self.add(clauses_dict, self.img_head, [("has_color", "O", rgb), ("in_group", "O", "G")], support_mask=mask)
-
+            mask = torch.zeros(O, dtype=torch.bool)
+            mask[i] = True
+            self.add(clauses_dict, self.img_head, [("has_color", "O", rgb)], support_mask=mask)
         # (g) symmetry
         if all(k in hard for k in ["same_shape", "same_color", "mirror_x"]):
             mirror = hard["mirror_x"]
@@ -449,14 +443,27 @@ class ClauseGenerator:
                             self.add(clauses_dict, self.img_head, [("mirror_x", "O1", "O2"), ("same_shape", "O1", "O2")], support_mask=mask)
                         if same_color[i, j] > 0.5:
                             self.add(clauses_dict, self.img_head, [("mirror_x", "O1", "O2"), ("same_color", "O1", "O2")], support_mask=mask)
-
-
-
-    def hard_group(self,clauses_dict, hard, G):
+    def hard_group(self,clauses_dict, hard,O, G):
         # (c) group size & principle
         # clause to represent the group number
         gn = int(len(hard["group_size"]))
         self.add(clauses_dict, self.img_head, [("group_num", "I", gn)], support_mask=torch.ones(G, dtype=torch.bool))
+        for i in range(O):
+            shape_val = int(hard["has_shape"][i].item())
+            group_ids = torch.where(hard["in_group"][i])[0]
+            for g in group_ids:
+                mask = torch.zeros(O, dtype=torch.bool)
+                mask[i] = True
+                self.add(clauses_dict, self.img_head,[("has_shape", "O", shape_val), ("in_group", "O", "G")],
+                         support_mask=mask)
+        for i in range(O):
+            rgb = tuple(int(c) for c in hard["has_color"][i].tolist())
+            group_ids = torch.where(hard["in_group"][i])[0]
+            for g in group_ids:
+                mask = torch.zeros(O, dtype=torch.bool)
+                mask[i] = True
+                self.add(clauses_dict, self.img_head, [("has_color", "O", rgb), ("in_group", "O", "G")], support_mask=mask)
+
         for g in range(G):
             sz = int(hard["group_size"][g].item())
             pr = int(hard["principle"][g].item())
@@ -538,7 +545,7 @@ class ClauseGenerator:
             if ablation_flags["use_obj"]:
                 self.hard_obj(clauses_dict, hard, O)
             if ablation_flags["use_group"]:
-                self.hard_group(clauses_dict, hard, G)
+                self.hard_group(clauses_dict, hard,O, G)
         if ablation_flags["use_soft"]:
             O = len(obj_list)
             G = len(group_list)
