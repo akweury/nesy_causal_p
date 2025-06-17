@@ -35,7 +35,7 @@ def evaluate_shapes(model, obj_images):
     predictions = []
     for o_i in range(len(patch_sets)):
         with torch.no_grad():
-            logits = model(patch_sets[o_i][:, :, :2].unsqueeze(0).to(device))
+            logits = model(patch_sets[o_i][:, :, :2].unsqueeze(0))
             pred_label = logits.argmax(dim=1).item()
             predictions.append(pred_label)
     t3 = time.time()

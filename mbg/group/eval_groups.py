@@ -83,7 +83,7 @@ def group_objects_with_model(model, objects, input_type="pos_color_size", device
         if len(context) == 0:
             ctx_tensor = torch.zeros((1, 1, 6, 16, 7), device=device)
         else:
-            ctx_tensor = torch.stack(context).unsqueeze(0)
+            ctx_tensor = torch.stack(context).unsqueeze(0).to(device)
 
         logit = model(ci, cj, ctx_tensor)
         prob = torch.sigmoid(logit).item()

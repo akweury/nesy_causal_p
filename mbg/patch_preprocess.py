@@ -213,7 +213,7 @@ def preprocess_rgb_image_to_patch_set_batch(
         norm_xy = sampled_xy / torch.tensor([W, H], device=device)
         patch = torch.cat([norm_xy, sampled_rgb], dim=1).view(num_patches, points_per_patch, 5)
         size_tensor = torch.tensor([w / W, h / H], device=device).view(1, 1, 2).expand_as(patch[:, :, :2])
-        patch_with_size = torch.cat([patch, size_tensor], dim=-1)
+        patch_with_size = torch.cat([patch, size_tensor], dim=-1).to(device)
 
         patch_sets.append(patch_with_size)
         positions.append([x0 / W, y0 / H])
