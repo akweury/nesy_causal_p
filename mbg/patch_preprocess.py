@@ -709,7 +709,7 @@ def align_data_and_imgs(objects: List[dict], obj_imgs: List[torch.tensor]) -> Tu
     """
     resolution = 1024
     bg_color = np.array([211, 211, 211], dtype=np.uint8)
-    obj_imgs = [img.permute(1,2,0).numpy() for img in obj_imgs]
+    obj_imgs = [img.permute(1,2,0).to("cpu").numpy() for img in obj_imgs]
     def get_centroid(img: np.ndarray) -> Tuple[float, float]:
         mask = np.any(img != bg_color, axis=-1)
         ys, xs = np.where(mask)
