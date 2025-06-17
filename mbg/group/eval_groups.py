@@ -59,7 +59,7 @@ def construct_group_representations(objs, group_obj_ids, principle, input_dim):
 
 
 @torch.no_grad()
-def group_objects_with_model(model, objects, input_type="pos_color_size", device="cpu", threshold=0.5):
+def group_objects_with_model(model, objects, device, input_type="pos_color_size", threshold=0.5):
     """
     Args:
         model: trained ContextContourScorer model
@@ -96,10 +96,10 @@ def group_objects_with_model(model, objects, input_type="pos_color_size", device
     return groups
 
 
-def eval_groups(objs,group_model, principle, device, dim):
+def eval_groups(objs, group_model, principle, device, dim):
     # symbolic_objs = [o["s"] for o in objs]
     neural_objs = [o["h"] for o in objs]
-    group_ids = group_objects_with_model(group_model, neural_objs)
+    group_ids = group_objects_with_model(group_model, neural_objs, device)
     # encoding the groups
     groups = construct_group_representations(objs, group_ids, principle, dim)
     return groups
