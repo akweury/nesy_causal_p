@@ -407,7 +407,7 @@ def obj_imgs2patches(obj_images, input_type="pos_color_size"):
     positions = []
     sizes = []
     for o_i, obj_img in enumerate(obj_images):
-        patch_set, obj_position, obj_size = rgb2patch(obj_img.permute(1,2,0).numpy(), input_type)
+        patch_set, obj_position, obj_size = rgb2patch(obj_img.permute(1,2,0).detach().to("cpu").numpy(), input_type)
         patch_sets.append(patch_set)
         positions.append(obj_position)
         sizes.append(obj_size)
