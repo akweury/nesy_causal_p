@@ -1,10 +1,11 @@
 # evaluate_patch_classifier_on_image.py
+import time
 
 import torch
-import torch.nn.functional as F
+
 from PIL import Image
 import numpy as np
-import cv2
+
 
 import config
 from src import bk
@@ -39,24 +40,58 @@ def evaluate_shapes(model, obj_images):
     return predictions, patch_sets, positions, sizes
 
 
-def evaluate_colors(obj_images):
-    # obj_images = patch_preprocess.img_path2obj_images(img_path)
+# def evaluate_colors(obj_images):
+#     colors = []
+#     bk_color = np.array([211, 211, 211], dtype=np.uint8)
+#     for o_i in range(len(obj_images)):
+#         img = obj_images[o_i]
+#         mask = np.any(img != bk_color, axis=-1)
+#         filtered_pixels = img[mask]
+#         color = filtered_pixels.mean(axis=0).astype(int)
+#         colors.append(color)
+#     return colors
 
+# import numpy as np
+
+
+def evaluate_colors(obj_images, bk_color=(211, 211, 211)):
+    """
+    Args:
+        obj_images: list of [3, H, W] torch.uint8 tensors (CPU or GPU)
+        bk_color: background color to ignore
+
+    Returns:
+        List[torch.Tensor]: list of [3] uint8 mean colors per object
+    """
+    device = obj_images[0].device
+    bk = torch.tensor(bk_color, device=device, dtype=torch.uint8).view(3, 1, 1)
     colors = []
-    bk_color = np.array([211, 211, 211], dtype=np.uint8)
-    for o_i in range(len(obj_images)):
-        img = obj_images[o_i]
-        mask = np.any(img != bk_color, axis=-1)
-        filtered_pixels = img[mask]
-        color = filtered_pixels.mean(axis=0).astype(int)
-        colors.append(color)
+
+    for img in obj_images:
+        mask = torch.any(img != bk, dim=0)  # [H, W]
+        if not mask.any():
+            colors.append(torch.tensor([0, 0, 0], dtype=torch.uint8, device=device))
+            continue
+
+        fg = img[:, mask]  # [3, N]
+        mean_color = fg.float().mean(dim=1).to(torch.uint8)  # [3]
+        colors.append(mean_color)
+
     return colors
 
+def evaluate_image(model, img, device):
 
-def evaluate_image(model, img_path):
-    obj_images = patch_preprocess.img_path2obj_images(img_path)
+    t1 = time.time()
+    obj_images = patch_preprocess.split_image_into_objects_torch(img)
+    t2 = time.time()
     labels, patches, positions, sizes = evaluate_shapes(model, obj_images)
+    t3 = time.time()
     colors = evaluate_colors(obj_images)
+    t4 = time.time()
+
+
+
+
     objs = []
     for i in range(len(labels)):
         shape_one_hot = torch.zeros(len(bk.bk_shapes), dtype=torch.float32)
@@ -73,9 +108,48 @@ def evaluate_image(model, img_path):
             "h": patches[i]
         }
         objs.append(obj)
-    show_images_horizontally(obj_images)
+    t5 = time.time()
+    d1 = t2 - t1
+    d2 = t3 - t2
+    d3 = t4 - t3
+    d4 = t5 - t4
     return objs
 
+
+# def evaluate_images(model, img_paths, device):
+#
+#     t1 = time.time()
+#     t2 = time.time()
+#     obj_images = patch_preprocess.img_path2obj_images(imgs, device)
+#     t3 = time.time()
+#     labels, patches, positions, sizes = evaluate_shapes(model, obj_images)
+#     t4 = time.time()
+#     colors = evaluate_colors(obj_images)
+#     t5 = time.time()
+#     d1 = t2 - t1
+#     d2 = t3 - t2
+#     d3 = t4 - t3
+#     d4 = t5 - t4
+#
+#     objs = []
+#     for i in range(len(labels)):
+#         shape_one_hot = torch.zeros(len(bk.bk_shapes), dtype=torch.float32)
+#         shape_one_hot[labels[i] + 1] = 1.0
+#         obj = {
+#             "id": i,
+#             "s": {"shape": shape_one_hot,
+#                   "color": [int(colors[i][0]), int(colors[i][1]), int(colors[i][2])],
+#                   "x": positions[i][0],
+#                   "y": positions[i][1],
+#                   "w": sizes[i][0],
+#                   "h": sizes[i][1],
+#                   },
+#             "h": patches[i]
+#         }
+#         objs.append(obj)
+#     # show_images_horizontally(obj_images)
+#     return objs
+#
 
 from matplotlib import pyplot as plt
 

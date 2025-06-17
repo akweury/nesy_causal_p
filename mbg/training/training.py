@@ -1,6 +1,6 @@
 # Created by MacBook Pro at 16.05.25
 from typing import List, Tuple, Set, NamedTuple, Dict, Optional, Any
-
+import time
 import itertools
 from collections import Counter
 import torch.nn as nn
@@ -17,6 +17,7 @@ from mbg.language.clause_generation import ScoredRule
 from mbg.evaluation import evaluation
 from mbg.scorer.context_contour_scorer import ContextContourScorer
 from mbg.scorer.calibrator import ConfidenceCalibrator
+from mbg import patch_preprocess
 
 
 def train_grouping_model(train_loader, device, epochs=10, LR=1e-3):
@@ -42,7 +43,8 @@ def train_grouping_model(train_loader, device, epochs=10, LR=1e-3):
     return model
 
 
-def train_rules(hard_facts, soft_facts,obj_list, group_list, num_groups, train_image_labels, hyp_params, ablation_flags):
+def train_rules(hard_facts, soft_facts, obj_list, group_list, num_groups, train_image_labels, hyp_params,
+                ablation_flags):
     # 1) 收集每张图的频次 & group 数
     pos_per_task_train = []  # task_id -> List[Counter[Clause,int]] (正例)
     neg_per_task_train = []  # task_id -> List[Counter[Clause,int]] (负例)
@@ -54,7 +56,7 @@ def train_rules(hard_facts, soft_facts,obj_list, group_list, num_groups, train_i
         img_label = train_image_labels[i]
         hard, soft = hard_facts[i], soft_facts[i]
         cg = clause_generation.ClauseGenerator(prox_thresh=hyp_params["prox"], sim_thresh=hyp_params["sim"])
-        clauses = cg.generate(hard, soft,obj_list[i], group_list[i], ablation_flags)
+        clauses = cg.generate(hard, soft, obj_list[i], group_list[i], ablation_flags)
         # freq = Counter(clauses)
         # --- 4. 存入对应容器 ---
         if img_label == 1:
@@ -122,10 +124,10 @@ def extend_rules(base_rules, hard_facts_list, soft_facts_list, img_labels, objs_
     return all_scored[:hyp_params["top_k"]]
 
 
-def train_calibrator(final_rules, obj_list, group_list, hard_list, soft_list, img_labels, hyp_params, ablation_flags):
+def train_calibrator(final_rules, obj_list, group_list, hard_list, soft_list, img_labels,
+                     hyp_params, ablation_flags, device):
     if not ablation_flags["use_calibrator"]:
         return None
-
 
     calib_inputs = []
     calib_labels = []
@@ -141,12 +143,12 @@ def train_calibrator(final_rules, obj_list, group_list, hard_list, soft_list, im
 
         calib_inputs.append(rule_scores)
         calib_labels.append(float(label))
-    calibrator = ConfidenceCalibrator(input_dim=hyp_params["top_k"])
-    calibrator.train_from_data(calib_inputs, calib_labels)
+    calibrator = ConfidenceCalibrator(input_dim=hyp_params["top_k"]).to(device)
+    calibrator.train_from_data(calib_inputs, calib_labels, device=device)
     return calibrator
 
 
-def ground_facts(train_data, obj_model, hyp_params, train_principle, device, ablation_flags):
+def ground_facts(train_data, obj_model, group_model, hyp_params, train_principle, device, ablation_flags):
     if ablation_flags is None:
         ablation_flags = {}
 
@@ -159,29 +161,38 @@ def ground_facts(train_data, obj_model, hyp_params, train_principle, device, abl
     obj_lists, groups_list = [], []
     group_nums = []
 
-    for data in train_data["positive"] + train_data["negative"]:
+    all_data = train_data["positive"] + train_data["negative"]
+    img_paths = [d["image_path"][0] for d in all_data]
+    imgs = patch_preprocess.load_images_fast(img_paths, device=device)
+    for img in imgs:
         # --- 1. Object detection ---
         if not disable_object:
-            objs = eval_patch_classifier.evaluate_image(obj_model, data["image_path"][0])
+            t1 = time.time()
+            objs = eval_patch_classifier.evaluate_image(obj_model, img, device)
+            t2= time.time()
+            d1 = t2-t1
         else:
             objs = []  # no object-level facts
         obj_lists.append(objs)
 
         # --- 2. Group detection ---
         if not disable_group:
-            groups = eval_groups.eval_groups(objs, hyp_params["prox"], train_principle, device,
-                                             dim=hyp_params["patch_dim"])
+            groups = eval_groups.eval_groups(objs, group_model, train_principle, device, dim=hyp_params["patch_dim"])
         else:
             groups = []
         groups_list.append(groups)
         group_nums.append(len(groups))
 
+        t3 = time.time()
         # --- 3. Fact grounding ---
         hard, soft = grounding.ground_facts(
             objs, groups,
             disable_hard=disable_hard,
             disable_soft=disable_soft
         )
+
+        t4= time.time()
+        d2 = t4-t3
         hard_facts.append(hard)
         soft_facts.append(soft)
     return hard_facts, soft_facts, group_nums, obj_lists, groups_list

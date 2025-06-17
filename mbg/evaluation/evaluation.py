@@ -11,6 +11,7 @@ from mbg.object import eval_patch_classifier
 from mbg.group import eval_groups
 from mbg.grounding import grounding
 from mbg.language.clause_generation import Clause, ScoredRule
+from mbg import patch_preprocess
 
 
 def _evaluate_clause(
@@ -402,7 +403,7 @@ def compute_image_score(learned_rules, rule_scores, high_conf_th=0.99, fallback_
         return fallback_weight
 
 
-def eval_rules(val_data, obj_model, learned_rules, hyp_params, eval_principle, device, calibrator):
+def eval_rules(val_data, obj_model, group_model, learned_rules, hyp_params, eval_principle, device, calibrator):
     patch_dim = hyp_params["patch_dim"]
     # we’ll collect per‐task true / pred
     per_task_scores = defaultdict(list)
@@ -410,13 +411,17 @@ def eval_rules(val_data, obj_model, learned_rules, hyp_params, eval_principle, d
     conf_th = hyp_params["conf_th"]
     prox_th = hyp_params["prox"]
     task_id = val_data["task"][0].split("_")[0]
+
+    all_data = val_data["positive"] + val_data["negative"]
+    img_paths = [d["image_path"][0] for d in all_data]
+    imgs = patch_preprocess.load_images_fast(img_paths, device=device)
+    gt_labels = [int(d["img_label"][0]) for d in all_data]
     # for each rule, we need to know the valuation result, so either 1 or 0
-    for data in val_data["positive"] + val_data["negative"]:
-        true_label = int(data["img_label"][0])
+    for i, img in enumerate(imgs):
+        true_label = gt_labels[i]
         # 1) detect objects & groups
-        objs = eval_patch_classifier.evaluate_image(obj_model, data["image_path"][0])
-        groups = eval_groups.eval_groups(objs, prox_th, eval_principle, device, patch_dim)
-        num_groups = len(groups)
+        objs = eval_patch_classifier.evaluate_image(obj_model, img, device)
+        groups = eval_groups.eval_groups(objs, group_model, eval_principle, device, patch_dim)
 
         # 2) ground  & generate validation image’s clauses
         hard, soft = grounding.ground_facts(objs, groups)
@@ -433,7 +438,7 @@ def eval_rules(val_data, obj_model, learned_rules, hyp_params, eval_principle, d
             rule_score.append(0.0)
 
         if calibrator:
-            img_score = calibrator(torch.tensor(rule_score)).detach().cpu().numpy()
+            img_score = calibrator(torch.tensor(rule_score).to(device)).detach().cpu().numpy()
         else:
             img_score = compute_image_score(kept_rules, rule_score_dict)
         per_task_scores[task_id].append(img_score)

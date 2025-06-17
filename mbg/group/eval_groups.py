@@ -96,10 +96,9 @@ def group_objects_with_model(model, objects, input_type="pos_color_size", device
     return groups
 
 
-def eval_groups(objs, threshold, principle, device, dim):
+def eval_groups(objs,group_model, principle, device, dim):
     # symbolic_objs = [o["s"] for o in objs]
     neural_objs = [o["h"] for o in objs]
-    group_model = scorer_config.load_scorer_model(principle, device)
     group_ids = group_objects_with_model(group_model, neural_objs)
     # encoding the groups
     groups = construct_group_representations(objs, group_ids, principle, dim)

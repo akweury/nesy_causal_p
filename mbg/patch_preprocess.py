@@ -1,9 +1,40 @@
 import numpy as np
 import torch
 import cv2
-from typing import List, Tuple
+from typing import List, Tuple, Union
 from pathlib import Path
 from PIL import Image
+from torch.utils.data import Dataset, DataLoader
+from torchvision.transforms import Resize, Compose
+from torchvision.io import read_image
+import time
+def load_images_fast(image_paths: List[Union[str, Path]], image_size=None, device=None):
+    """
+    Fast image loader for small list of image paths.
+
+    Args:
+        image_paths: list of image paths (as str or Path)
+        image_size: optional (H, W) for resizing
+        device: 'cuda' or 'cpu'
+
+    Returns:
+        torch.Tensor: [N, 3, H, W] batch
+    """
+    transform = Resize(image_size) if image_size else None
+    images = []
+
+    for path in image_paths:
+        img = read_image(str(path))  # [3, H, W], uint8
+        if transform:
+            img = transform(img)
+        if device:
+            img = img.to(device, non_blocking=True)
+        images.append(img)
+
+    return torch.stack(images)  # [N, 3, H, W]
+
+
+
 
 
 def rgb_to_binary(image_rgb: np.ndarray, threshold: int = 210) -> np.ndarray:
@@ -159,32 +190,48 @@ def preprocess_image_to_one_patch_set(binary_image: np.ndarray, num_patches: int
     # return outputs
 
 
-def split_image_into_objects(rgb_image: np.ndarray) -> List[np.ndarray]:
+def split_image_into_objects_torch(rgb_image: torch.Tensor, bg_color=(211, 211, 211), min_area=10):
     """
-    Given an RGB image, returns a list of RGB images where each image contains only one object.
-    Objects are identified as connected components of the same color.
+    Split a [3, H, W] RGB image (uint8 tensor) into individual object masks using color-based object detection.
+
+    Args:
+        rgb_image: Tensor [3, H, W], on GPU
+        bg_color: Tuple[int, int, int]
+        min_area: int, minimum number of pixels for a valid object
+
+    Returns:
+        List[Tensor]: list of [3, H, W] tensors (on GPU), one per object
     """
-    # Convert to grayscale and then to binary mask
-    # gray = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2GRAY)
-    # binary = np.where(gray == 211, 0, 255).astype(np.uint8)
-    #
-    # # Find connected components
-    # num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(binary, connectivity=8)
-    #
-    # output_images = []
-    # for label in range(1, num_labels):  # skip background
-    #     # Create a mask for the current component
-    #     mask = (labels == label).astype(np.uint8) * 255
-    #     mask_3ch = cv2.merge([mask] * 3)
-    #
-    #     # Mask the original image
-    #     isolated = cv2.bitwise_and(rgb_image, mask_3ch)
-    #
-    #     # Set the background to light gray (211,211,211)
-    #     background = np.full_like(rgb_image, 211, dtype=np.uint8)
-    #     final_image = np.where(mask_3ch == 0, background, isolated)
-    #
-    #     output_images.append(final_image)
+    C, H, W = rgb_image.shape
+    device = rgb_image.device
+    bg = torch.tensor(bg_color, dtype=rgb_image.dtype, device=device).view(3, 1, 1)
+
+    # Create a mask of foreground pixels
+    fg_mask = torch.any(rgb_image != bg, dim=0)  # [H, W]
+
+    if not fg_mask.any():
+        return []
+
+    # Get foreground pixels and their colors
+    fg_pixels = rgb_image[:, fg_mask].T  # shape: [N, 3]
+    unique_colors = torch.unique(fg_pixels, dim=0)  # [K, 3]
+
+    outputs = []
+    for color in unique_colors:
+        # Create binary mask for this color
+        color_mask = torch.all(rgb_image == color.view(3, 1, 1), dim=0)  # [H, W]
+        if color_mask.sum() < min_area:
+            continue
+
+        # Create RGB output image
+        obj_image = torch.full_like(rgb_image, fill_value=bg_color[0], device=device)  # start from gray
+        for c in range(3):
+            obj_image[c][color_mask] = color[c]
+
+        outputs.append(obj_image)
+
+    return outputs
+def split_image_into_objects(rgb_image: torch.tensor):
     """
     Extract individual object regions from an RGB image, each returned as a cropped RGB image.
 
@@ -198,71 +245,42 @@ def split_image_into_objects(rgb_image: np.ndarray) -> List[np.ndarray]:
     min_area = 10
     bg_color = (211, 211, 211)
 
-    H, W = rgb_image.shape[:2]
-    bg_color = np.array(bg_color)
+    H, W = rgb_image.shape[1:]
+    bg_color = torch.tensor(bg_color)
 
     # Step 1: Create foreground mask
-    fg_mask = np.any(rgb_image != bg_color, axis=-1)
+    fg_mask = torch.any(rgb_image != bg_color, dim=-1)
 
     # Step 2: Extract foreground pixels and get unique object colors
     fg_pixels = rgb_image[fg_mask]
     # if len(fg_pixels) == 0:
     #     return []
 
-    unique_colors = np.unique(fg_pixels.reshape(-1, 3), axis=0)
+    unique_colors = torch.unique(fg_pixels.reshape(-1, 3), dim=0)
 
     output_images = []
     for color in unique_colors:
         # Step 3: Mask for current color
-        color_mask = np.all(rgb_image == color, axis=-1).astype(np.uint8)
+        color_mask = torch.all(rgb_image == color, dim=-1).to(torch.uint8)
 
         # Step 4: Connected component analysis to split disconnected shapes
-        num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(color_mask, connectivity=8)
-
+        num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(color_mask.numpy(), connectivity=8)
+        labels = torch.from_numpy(labels)
         for label in range(1, num_labels):  # skip background
             area = stats[label, cv2.CC_STAT_AREA]
             if area < min_area:
                 continue
 
             obj_mask = (labels == label)
-            obj_rgb = np.full_like(rgb_image, fill_value=bg_color)  # start from background
+            obj_rgb = np.full_like(rgb_image.numpy(), fill_value=bg_color)  # start from background
             obj_rgb[obj_mask] = color  # set object color
 
             output_images.append(obj_rgb)
 
-    #
-    # import matplotlib.pyplot as plt
-    # target_height = 1024
-    # resized_images = []
-    # for img in output_images:
-    #     h, w = img.shape[:2]
-    #     scale = target_height / h
-    #     new_w = int(w * scale)
-    #     resized = cv2.resize(img, (new_w, target_height), interpolation=cv2.INTER_AREA)
-    #     resized_images.append(resized)
-    #
-    # # Determine max width to pad uniformly if needed
-    # max_w = max(img.shape[1] for img in resized_images)
-    # pad_color = (211, 211, 211)
-    # padded_images = []
-    # for img in resized_images:
-    #     h, w = img.shape[:2]
-    #     pad_left = (max_w - w) // 2
-    #     pad_right = max_w - w - pad_left
-    #     padded = cv2.copyMakeBorder(img, 0, 0, pad_left, pad_right, cv2.BORDER_CONSTANT, value=pad_color)
-    #     padded_images.append(padded)
-    #
-    # # Concatenate horizontally
-    # combined = np.hstack(padded_images)
-    # # Show with matplotlib
-    # plt.imshow(combined)
-    # plt.axis('off')
-    # plt.show()
-
     return output_images
 
 
-def load_rgb_image(image_path: Path) -> np.ndarray:
+def load_rgb_image(image_path: Path) -> torch.tensor:
     """
     Load an RGB image from the given path and return it as a NumPy array.
 
@@ -273,7 +291,7 @@ def load_rgb_image(image_path: Path) -> np.ndarray:
         np.ndarray: Image in RGB format as a NumPy array.
     """
     image = Image.open(image_path).convert("RGB")
-    return np.array(image)
+    return torch.from_numpy(np.array(image)).permute(2,0,1).float()
 
 
 import numpy as np
@@ -358,11 +376,30 @@ def match_objects_to_glabels(object_images: List[np.ndarray], gt_objects: List[d
     return new_group_pairs
 
 
-def img_path2obj_images(img_path: Path) -> List[np.ndarray]:
-    image = load_rgb_image(img_path)
-    obj_images = split_image_into_objects(image)
+def img_path2obj_images(img_path: Path, device):
+    t1 = time.time()
+    image = load_rgb_image(img_path).to(device)
+    t2 = time.time()
+    obj_images = split_image_into_objects_torch(image)
+    t3 = time.time()
+
+    d1 = t2-t1
+    d2 = t3-t2
+
     return obj_images
 
+
+def img_paths2obj_images(img_path: Path, device):
+    t1 = time.time()
+    image = load_rgb_image(img_path).to(device)
+    t2 = time.time()
+    obj_images = split_image_into_objects_torch(image)
+    t3 = time.time()
+
+    d1 = t2-t1
+    d2 = t3-t2
+
+    return obj_images
 
 def obj_imgs2patches(obj_images, input_type="pos_color_size"):
     # single object image to patch set
@@ -370,7 +407,7 @@ def obj_imgs2patches(obj_images, input_type="pos_color_size"):
     positions = []
     sizes = []
     for o_i, obj_img in enumerate(obj_images):
-        patch_set, obj_position, obj_size = rgb2patch(obj_img, input_type)
+        patch_set, obj_position, obj_size = rgb2patch(obj_img.permute(1,2,0).numpy(), input_type)
         patch_sets.append(patch_set)
         positions.append(obj_position)
         sizes.append(obj_size)
