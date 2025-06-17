@@ -14,6 +14,7 @@ from mbg import mbg_config as param
 from mbg import patch_preprocess
 from src import bk
 
+
 class ObjPatchSetDataset(Dataset):
     def __init__(self, root_dir=param.ROOT_DATASET_DIR, num_patches=param.PATCHES_PER_SET,
                  points_per_patch=param.POINTS_PER_PATCH):
@@ -24,8 +25,8 @@ class ObjPatchSetDataset(Dataset):
         self._build()
 
     def _build(self):
-        task_dirs = [d/"positive" for d in self.root_dir.iterdir() if d.is_dir()]
-        task_dirs += [d/"negative" for d in self.root_dir.iterdir() if d.is_dir()]
+        task_dirs = [d / "positive" for d in self.root_dir.iterdir() if d.is_dir()]
+        task_dirs += [d / "negative" for d in self.root_dir.iterdir() if d.is_dir()]
         task_dirs = random.sample(task_dirs, 100)
         for task_dir in task_dirs:
             json_files = sorted(task_dir.glob("*.json"))
@@ -37,7 +38,8 @@ class ObjPatchSetDataset(Dataset):
                 image_path = png_files[f_i]
                 for o in objects:
                     o["shape"] = bk.bk_shapes_2.index(o['shape'])
-                patch_sets, labels, _, _, _ = patch_preprocess.img_path2patches_and_labels(image_path, objects)
+                patch_sets, labels, _, _, _ = patch_preprocess.img_path2patches_and_labels(image_path, objects,
+                                                                                           device="cpu")
                 image_paths = [image_path] * len(patch_sets)
                 self.data += zip(patch_sets, labels, image_paths)
 
@@ -46,4 +48,4 @@ class ObjPatchSetDataset(Dataset):
 
     def __getitem__(self, idx):
         patch_set, label, _ = self.data[idx]
-        return patch_set[:,:,:2], torch.tensor(label)
+        return patch_set[:, :, :2], torch.tensor(label)

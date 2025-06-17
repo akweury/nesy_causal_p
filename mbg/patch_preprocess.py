@@ -8,6 +8,9 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision.transforms import Resize, Compose
 from torchvision.io import read_image
 import time
+import kornia
+
+
 def load_images_fast(image_paths: List[Union[str, Path]], image_size=None, device=None):
     """
     Fast image loader for small list of image paths.
@@ -32,9 +35,6 @@ def load_images_fast(image_paths: List[Union[str, Path]], image_size=None, devic
         images.append(img)
 
     return torch.stack(images)  # [N, 3, H, W]
-
-
-
 
 
 def rgb_to_binary(image_rgb: np.ndarray, threshold: int = 210) -> np.ndarray:
@@ -89,6 +89,7 @@ def preprocess_image_to_patch_set(binary_image: np.ndarray, num_patches: int = 6
         outputs.append(patch_set)
 
     return outputs
+
 
 # def preprocess_rgb_image_to_patch_set(rgb_image: np.ndarray, num_patches: int = 6, points_per_patch: int = 16,
 #                                       contour_uniform=True):
@@ -156,12 +157,74 @@ def preprocess_image_to_patch_set(binary_image: np.ndarray, num_patches: int = 6
 #     return outputs, positions, sizes
 
 
+def preprocess_rgb_image_to_patch_set_batch(
+        image_list: torch.Tensor,
+        num_patches: int = 6,
+        points_per_patch: int = 16,
+        min_area: int = 10,
+        bg_val: int = 211
+) -> Tuple[List[torch.Tensor], List[List[float]], List[List[float]]]:
+    """
+    Args:
+        image_list: list of [3, H, W] RGB tensors (uint8), can be on GPU
+    Returns:
+        patch_sets: list of [P, L, 7] tensors (x, y, r, g, b, w, h)
+        positions: list of [x/W, y/H]
+        sizes: list of [w/W, h/H]
+    """
+    patch_sets, positions, sizes = [], [], []
+
+    for img in image_list:
+        assert img.shape[0] == 3
+        device = img.device
+        H, W = img.shape[1:]
+
+        # Convert to grayscale
+        img_f = img.float() / 255.0
+        gray = kornia.color.rgb_to_grayscale(img_f.unsqueeze(0))[0, 0]  # [H, W]
+
+        # Binary mask: everything not equal to bg_val (~0.827)
+        mask = (torch.abs(gray - 0.8275) > 1e-3).to(torch.uint8)  # [H, W]
+
+        # Connected components (approximate with PyTorch ops)
+        from torchvision.ops import masks_to_boxes
+        bin_mask = mask.bool()
+        ys, xs = torch.where(bin_mask)
+        if len(xs) == 0:
+            continue
+
+        x0, y0 = xs.min().item(), ys.min().item()
+        x1, y1 = xs.max().item(), ys.max().item()
+        w, h = x1 - x0 + 1, y1 - y0 + 1
+        if w * h < min_area:
+            continue
+
+        coords = torch.stack([xs, ys], dim=1).float()
+        if coords.shape[0] < num_patches * points_per_patch:
+            continue
+        idxs = torch.linspace(0, len(coords) - 1, steps=num_patches * points_per_patch).long()
+        sampled_xy = coords[idxs]
+
+        # RGB lookup (vectorized)
+        rgb_f = img_f.permute(1, 2, 0)  # [H, W, 3]
+        sampled_rgb = rgb_f[sampled_xy[:, 1].long(), sampled_xy[:, 0].long()]  # [N, 3]
+
+        norm_xy = sampled_xy / torch.tensor([W, H], device=device)
+        patch = torch.cat([norm_xy, sampled_rgb], dim=1).view(num_patches, points_per_patch, 5)
+        size_tensor = torch.tensor([w / W, h / H], device=device).view(1, 1, 2).expand_as(patch[:, :, :2])
+        patch_with_size = torch.cat([patch, size_tensor], dim=-1)
+
+        patch_sets.append(patch_with_size)
+        positions.append([x0 / W, y0 / H])
+        sizes.append([w / W, h / H])
+
+    return patch_sets, positions, sizes
 
 
 def preprocess_rgb_image_to_patch_set_torch(rgb_image: torch.Tensor,
-                                      num_patches: int = 6,
-                                      points_per_patch: int = 16,
-                                      contour_uniform=True):
+                                            num_patches: int = 6,
+                                            points_per_patch: int = 16,
+                                            contour_uniform=True):
     """
     Input:
         rgb_image: Tensor [3, H, W], dtype=torch.uint8, CPU (or GPU but converted to CPU internally)
@@ -199,7 +262,7 @@ def preprocess_rgb_image_to_patch_set_torch(rgb_image: torch.Tensor,
         if area < 10:
             continue
 
-        obj_mask = (labels[y:y+h, x:x+w] == i).astype(np.uint8) * 255
+        obj_mask = (labels[y:y + h, x:x + w] == i).astype(np.uint8) * 255
         contours, _ = cv2.findContours(obj_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
         if not contours or len(contours[0]) < num_patches * points_per_patch:
             continue
@@ -261,8 +324,8 @@ def preprocess_rgb_image_to_patch_set(rgb_image: np.ndarray, num_patches: int = 
     t2 = time.time()
     num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(binary_mask, connectivity=8)
     t3 = time.time()
-    d1 = t2-t1
-    d2 = t3-t2
+    d1 = t2 - t1
+    d2 = t3 - t2
 
     outputs = []
     positions = []
@@ -300,8 +363,6 @@ def preprocess_rgb_image_to_patch_set(rgb_image: np.ndarray, num_patches: int = 
         sampled_xy = sampled_xy.float()
         sampled_xy += torch.tensor([x, y], dtype=torch.float32)  # convert to absolute coords
 
-
-
         patch_set = torch.cat([sampled_xy, sampled_rgb], dim=1).view(num_patches, points_per_patch, 5)
         patch_set[:, :, :2] /= rgb_image.shape[0]
 
@@ -319,7 +380,7 @@ def preprocess_rgb_image_to_patch_set(rgb_image: np.ndarray, num_patches: int = 
 
     t4 = time.time()
 
-    d3 = t4-t3
+    d3 = t4 - t3
     return outputs, positions, sizes
 
 
@@ -394,6 +455,8 @@ def split_image_into_objects_torch(rgb_image: torch.Tensor, bg_color=(211, 211, 
         outputs.append(obj_image)
 
     return outputs
+
+
 def split_image_into_objects(rgb_image: torch.tensor):
     """
     Extract individual object regions from an RGB image, each returned as a cropped RGB image.
@@ -454,7 +517,7 @@ def load_rgb_image(image_path: Path) -> torch.tensor:
         np.ndarray: Image in RGB format as a NumPy array.
     """
     image = Image.open(image_path).convert("RGB")
-    return torch.from_numpy(np.array(image)).permute(2,0,1).float()
+    return torch.from_numpy(np.array(image)).permute(2, 0, 1).float()
 
 
 import numpy as np
@@ -546,8 +609,8 @@ def img_path2obj_images(img_path: Path, device):
     obj_images = split_image_into_objects_torch(image)
     t3 = time.time()
 
-    d1 = t2-t1
-    d2 = t3-t2
+    d1 = t2 - t1
+    d2 = t3 - t2
 
     return obj_images
 
@@ -559,26 +622,28 @@ def img_paths2obj_images(img_path: Path, device):
     obj_images = split_image_into_objects_torch(image)
     t3 = time.time()
 
-    d1 = t2-t1
-    d2 = t3-t2
+    d1 = t2 - t1
+    d2 = t3 - t2
 
     return obj_images
+
 
 def obj_imgs2patches(obj_images, input_type="pos_color_size"):
     # single object image to patch set
     patch_sets = []
     positions = []
     sizes = []
-    for o_i, obj_img in enumerate(obj_images):
-        patch_set, obj_position, obj_size = rgb2patch(obj_img, input_type)
-        patch_sets.append(patch_set)
-        positions.append(obj_position)
-        sizes.append(obj_size)
-    return patch_sets, positions, sizes
+    patch_sets, obj_positions, obj_sizes = rgbs2patches(obj_images, input_type)
+    # for o_i, obj_img in enumerate(obj_images):
+    #     patch_set, obj_position, obj_size = rgb2patch(obj_img, input_type)
+    #     patch_sets.append(patch_set)
+    #     positions.append(obj_position)
+    #     sizes.append(obj_size)
+    return patch_sets, obj_positions, obj_sizes
 
 
-def img_path2patches_and_labels(image_path, gt_dict, input_type="pos_color_size"):
-    obj_images = img_path2obj_images(image_path)
+def img_path2patches_and_labels(image_path, gt_dict, device, input_type="pos_color_size"):
+    obj_images = img_path2obj_images(image_path, device)
     objects, obj_images, permutes = align_data_and_imgs(gt_dict, obj_images)
 
     labels = match_objects_to_labels(obj_images, objects)
@@ -691,3 +756,16 @@ def rgb2patch(rgb_img, input_type):
         raise ValueError
 
     return patch_set, positions, sizes
+
+
+def rgbs2patches(rgb_imgs, input_type):
+    patch_sets, positions, sizes = preprocess_rgb_image_to_patch_set_batch(rgb_imgs)
+    if input_type == "pos":
+        patch_sets = [p[:, :, :2] for p in patch_sets]
+    elif input_type == "pos_color":
+        patch_sets = [p[:, :, :5] for p in patch_sets]
+    elif input_type == "pos_color_size":
+        patch_sets = patch_sets
+    else:
+        raise ValueError
+    return patch_sets, positions, sizes

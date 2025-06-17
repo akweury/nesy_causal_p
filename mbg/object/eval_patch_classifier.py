@@ -29,6 +29,7 @@ def load_model(device):
 def evaluate_shapes(model, obj_images):
     device = next(model.parameters()).device
     t1= time.time()
+    obj_images = torch.stack(obj_images).to(device)
     patch_sets, positions, sizes = patch_preprocess.obj_imgs2patches(obj_images)
     t2 = time.time()
     predictions = []
