@@ -8,7 +8,8 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision.transforms import Resize, Compose
 from torchvision.io import read_image
 import time
-import kornia
+import kornia.color
+import kornia.morphology
 
 
 def load_images_fast(image_paths: List[Union[str, Path]], image_size=None, device=None):
