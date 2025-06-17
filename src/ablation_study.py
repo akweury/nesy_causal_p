@@ -82,7 +82,7 @@ def main_ablation():
     obj_model = eval_patch_classifier.load_model(args.device)
     group_model = scorer_config.load_scorer_model(train_principle, args.device)
 
-    # wandb.init(project=f"grb_ablation_{train_principle}", config=args.__dict__, name=args.exp_name)
+    wandb.init(project=f"grb_ablation_{train_principle}", config=args.__dict__, name=args.exp_name)
     results_summary = defaultdict(lambda: defaultdict(list))  # setting -> metric -> list
     all_f1 = {conf: [] for conf in ABLATED_CONFIGS}
     all_auc = {conf: [] for conf in ABLATED_CONFIGS}
@@ -110,16 +110,13 @@ def main_ablation():
             all_auc[mode_name].append(test_auc)
             all_acc[mode_name].append(test_acc)
 
-            log_dicts.update({f"{mode_name}_{k}": test_metrics.get(k, 0) for k in test_metrics})
+            # log_dicts.update({f"{mode_name}_{k}": test_metrics.get(k, 0) for k in test_metrics})
             log_dicts.update({f"{mode_name}_acc_avg": torch.tensor(all_acc[mode_name]).mean(),
-                              f"{mode_name}_auc_avg": torch.tensor(all_auc[mode_name]).mean(),
-                              f"{mode_name}_f1_avg": torch.tensor(all_f1[mode_name]).mean()})
+                              # f"{mode_name}_auc_avg": torch.tensor(all_auc[mode_name]).mean(),
+                              # f"{mode_name}_f1_avg": torch.tensor(all_f1[mode_name]).mean()
+                              })
 
-        # wandb.log(log_dicts)
-        # wandb.log({
-        #     f"{mode_name}_{k}": test_metrics.get(k, 0) for k in test_metrics
-        # })
-        #
+        wandb.log(log_dicts)
 
     # save and summarize
     final_summary = {
