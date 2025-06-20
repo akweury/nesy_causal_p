@@ -27,7 +27,7 @@ RANDOM_SEED = 42
 # ==== 训练参数 ====
 BATCH_SIZE = 32
 LEARNING_RATE = 1e-3
-EPOCHS = 2000
+EPOCHS = 100
 
 
 # ==== 可视化 ====
