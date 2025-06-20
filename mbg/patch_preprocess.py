@@ -14,6 +14,9 @@ import torchvision
 from torchvision.transforms import functional as F
 from torchvision.models.detection import MaskRCNN_ResNet50_FPN_Weights
 from scipy.ndimage import label
+from scipy.optimize import linear_sum_assignment
+
+
 def load_images_fast(image_paths: List[Union[str, Path]], image_size=None, device=None):
     """
     Fast image loader for small list of image paths.
@@ -735,6 +738,41 @@ def shift_obj_patches_to_global_positions(obj_patch, shift):
 
     shifted_tensor = torch.stack([x_shift, y_shift], dim=2)
     return shifted_tensor
+
+
+
+def align_gt_data_and_pred_data(
+    objects: List[dict], pred_objects: List[dict]
+) -> Tuple[List[dict], List[dict], List[int]]:
+    """
+    Align GT metadata with predicted objects based on centroid (x, y) distance using Hungarian matching.
+
+    Args:
+        objects: list of GT objects (each with 'x', 'y' keys)
+        pred_objects: list of predicted objects (each with 'x', 'y' keys)
+
+    Returns:
+        aligned_gt: list of GT objects matched
+        aligned_pred: list of predicted objects matched to GTs
+        gt_to_pred_indices: indices such that pred_objects[i] matches objects[gt_to_pred_indices[i]]
+    """
+    if len(objects) == 0 or len(pred_objects) == 0:
+        return [], [], []
+
+    gt_coords = np.array([[obj["x"], obj["y"]] for obj in objects])
+    pred_coords = np.array([[pred["s"]["x"], pred["s"]["y"]] for pred in pred_objects])
+
+    # Compute pairwise distance matrix
+    dists = np.linalg.norm(gt_coords[:, None, :] - pred_coords[None, :, :], axis=-1)
+
+    # Hungarian algorithm for minimum distance matching
+    gt_indices, pred_indices = linear_sum_assignment(dists)
+
+    aligned_gt = [objects[i] for i in gt_indices]
+    aligned_pred = [pred_objects[j] for j in pred_indices]
+    gt_to_pred_indices = pred_indices.tolist()
+
+    return aligned_gt, aligned_pred, gt_to_pred_indices
 
 
 def align_data_and_imgs(objects: List[dict], obj_imgs: List[torch.tensor]) -> Tuple[
