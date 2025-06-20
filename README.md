@@ -55,5 +55,5 @@ python -m mbg.scorer.train_context_aware_scorer --device 1 --all
 python -m mbg.object.train_patch_classifier --device 0 
 ```
 
-
+pip uninstall flash_attn flash_attn_2
 

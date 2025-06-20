@@ -4,6 +4,9 @@ import config
 
 # ==== 数据路径 ====
 ROOT_DATASET_DIR = config.grb_proximity / "train"
+
+obj_train = config.grb_base / "od"/"train"
+
 CONTOUR_DATASET_DIR = config.mb_outlines
 GT_EXTENSION = "gt.json"
 

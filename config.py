@@ -95,6 +95,8 @@ data_file_test_cha = storage / "dataset" / "arc-prize-2024" / "arc-agi_test_chal
 data_file_eval_cha = storage / "dataset" / "arc-prize-2024" / "arc-agi_evaluation_challenges.json"
 data_file_eval_sol = storage / "dataset" / "arc-prize-2024" / "arc-agi_evaluation_solutions.json"
 
+wandb_path = root / 'wandb'/ "export"
+
 alpha_mode = {
     'inter_input_group': 0,
     'inter_output_group': 1,

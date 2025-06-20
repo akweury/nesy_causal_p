@@ -20,3 +20,4 @@ gym
 numpy
 debugpy
 faiss-cpu
+kornia

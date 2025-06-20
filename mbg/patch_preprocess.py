@@ -10,8 +10,10 @@ from torchvision.io import read_image
 import time
 import kornia.color
 import kornia.morphology
-
-
+import torchvision
+from torchvision.transforms import functional as F
+from torchvision.models.detection import MaskRCNN_ResNet50_FPN_Weights
+from scipy.ndimage import label
 def load_images_fast(image_paths: List[Union[str, Path]], image_size=None, device=None):
     """
     Fast image loader for small list of image paths.
@@ -415,9 +417,36 @@ def preprocess_image_to_one_patch_set(binary_image: np.ndarray, num_patches: int
     # return outputs
 
 
+def detect_objects_maskrcnn(rgb_image: torch.Tensor, device):
+    """
+    Use pretrained Mask R-CNN to detect object masks on GPU.
+
+    Args:
+        rgb_image: [3, H, W] uint8 tensor, values in [0,255], on GPU
+
+    Returns:
+        List of [3, H, W] images with one object per image
+    """
+    model = torchvision.models.detection.maskrcnn_resnet50_fpn(weights=MaskRCNN_ResNet50_FPN_Weights.COCO_V1).eval()
+    with torch.no_grad():
+        img_input = F.convert_image_dtype(rgb_image, dtype=torch.float)  # [0,1]
+        output = model([img_input])[0]
+
+    results = []
+    for mask, score in zip(output['masks'], output['scores']):
+        if score < 0.7:
+            continue
+        obj_mask = mask[0] > 0.5  # [H, W]
+        obj_img = torch.full_like(rgb_image, 211)  # background
+        obj_img[:, obj_mask] = rgb_image[:, obj_mask]
+        results.append(obj_img)
+
+    return results
+
+
 def split_image_into_objects_torch(rgb_image: torch.Tensor, bg_color=(211, 211, 211), min_area=10):
     """
-    Split a [3, H, W] RGB image (uint8 tensor) into individual object masks using color-based object detection.
+    Split a [3, H, W] RGB image (uint8 tensor) into individual object masks using connected component analysis.
 
     Args:
         rgb_image: Tensor [3, H, W], on GPU
@@ -433,7 +462,6 @@ def split_image_into_objects_torch(rgb_image: torch.Tensor, bg_color=(211, 211, 
 
     # Create a mask of foreground pixels
     fg_mask = torch.any(rgb_image != bg, dim=0)  # [H, W]
-
     if not fg_mask.any():
         return []
 
@@ -448,12 +476,21 @@ def split_image_into_objects_torch(rgb_image: torch.Tensor, bg_color=(211, 211, 
         if color_mask.sum() < min_area:
             continue
 
-        # Create RGB output image
-        obj_image = torch.full_like(rgb_image, fill_value=bg_color[0], device=device)  # start from gray
-        for c in range(3):
-            obj_image[c][color_mask] = color[c]
+        # Move mask to CPU for connected components
+        labeled_mask, num_labels = label(color_mask.cpu().numpy())
+        for i in range(1, num_labels + 1):
+            single_obj_mask = (labeled_mask == i)
+            if single_obj_mask.sum() < min_area:
+                continue
 
-        outputs.append(obj_image)
+            single_obj_mask_torch = torch.from_numpy(single_obj_mask).to(device)
+
+            # Create RGB image for this object
+            obj_image = torch.full_like(rgb_image, fill_value=bg_color[0], device=device)
+            for c in range(3):
+                obj_image[c][single_obj_mask_torch] = color[c]
+
+            outputs.append(obj_image)
 
     return outputs
 
@@ -652,7 +689,7 @@ def img_path2patches_and_labels(obj_images, gt_dict, device, input_type="pos_col
     patch_sets, obj_positions, obj_sizes = rgbs2patches(obj_images, input_type)
     if len(labels)!=len(patch_sets):
         print(f"len(labels)={len(labels)}, len(patch_sets)={len(patch_sets)}")
-        raise ValueError
+        return None, None, None, None, None
     sorted_labels = [labels[i] - 1 for i in range(len(labels)) if labels[i] != -1]
     patch_sets = [patch_sets[i] for i in range(len(labels)) if labels[i] != -1]
     positions = [obj_positions[i] for i in range(len(labels)) if labels[i] != -1]

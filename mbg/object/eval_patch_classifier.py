@@ -156,9 +156,10 @@ def evaluate_image(model, img, device):
 from matplotlib import pyplot as plt
 
 
-def show_images_horizontally(image_list):
+def show_images_horizontally(image_torch):
     # Ensure all images have the same height
     # Check height consistency
+    image_list = [img.permute(1,2,0).numpy() for img in image_torch]
     heights = [img.shape[0] for img in image_list]
     if len(set(heights)) != 1:
         raise ValueError("All images must have the same height")
