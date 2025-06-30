@@ -1,4 +1,12 @@
+wandb/
+wandb-debug.log
+wandb-settings/
+.idea/
+mbg/group/wandb/
+storage/dataset/
+storage/
 # Byte-compiled / optimized / DLL files
+
 __pycache__/
 *.py[cod]
 *$py.class

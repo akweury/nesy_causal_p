@@ -1,13 +1,12 @@
 # Created by MacBook Pro at 16.05.25
 from typing import List, Tuple, Set, NamedTuple, Dict, Optional, Any
 import time
-import itertools
-from collections import Counter
 import torch.nn as nn
 import torch.optim as optim
 import torch
 from itertools import combinations
 from copy import deepcopy
+
 
 from mbg.object import eval_patch_classifier
 from mbg.group import eval_groups
@@ -16,7 +15,8 @@ from mbg.language import clause_generation
 from mbg.language.clause_generation import ScoredRule
 from mbg.evaluation import evaluation
 from mbg.scorer.context_contour_scorer import ContextContourScorer
-from mbg.scorer.calibrator import ConfidenceCalibrator
+from mbg.scorer.calibrator import ConfidenceCalibrator, DeepProbLogCalibrator, InMemoryDataset
+from mbg.scorer import dpl_utils, dpl
 from mbg import patch_preprocess
 
 
@@ -34,7 +34,8 @@ def train_grouping_model(train_loader, device, epochs=10, LR=1e-3):
         total_loss, correct, total = 0, 0, 0
 
         for data in train_loader:
-            patch_i, patch_j, label = patch_i.to(device), patch_j.to(device), label.to(device)
+            patch_i, patch_j, label = patch_i.to(
+                device), patch_j.to(device), label.to(device)
             pred = model(patch_i, patch_j)
             loss = criterion(pred, label)
             loss.backward()
@@ -48,15 +49,19 @@ def train_rules(hard_facts, soft_facts, obj_list, group_list, num_groups, train_
     # 1) 收集每张图的频次 & group 数
     pos_per_task_train = []  # task_id -> List[Counter[Clause,int]] (正例)
     neg_per_task_train = []  # task_id -> List[Counter[Clause,int]] (负例)
-    pos_group_counts_train = num_groups[:len(num_groups) // 2]  # task_id -> List[int] 每张正例图的 group 数
-    neg_group_counts_train = num_groups[len(num_groups) // 2:]  # task_id -> List[int] 每张负例图的 group 数
+    # task_id -> List[int] 每张正例图的 group 数
+    pos_group_counts_train = num_groups[:len(num_groups) // 2]
+    # task_id -> List[int] 每张负例图的 group 数
+    neg_group_counts_train = num_groups[len(num_groups) // 2:]
 
     # base rule learning
     for i in range(len(train_image_labels)):
         img_label = train_image_labels[i]
         hard, soft = hard_facts[i], soft_facts[i]
-        cg = clause_generation.ClauseGenerator(prox_thresh=hyp_params["prox"], sim_thresh=hyp_params["sim"])
-        clauses = cg.generate(hard, soft, obj_list[i], group_list[i], ablation_flags)
+        cg = clause_generation.ClauseGenerator(
+            prox_thresh=hyp_params["prox"], sim_thresh=hyp_params["sim"])
+        clauses = cg.generate(
+            hard, soft, obj_list[i], group_list[i], ablation_flags)
         # freq = Counter(clauses)
         # --- 4. 存入对应容器 ---
         if img_label == 1:
@@ -65,8 +70,10 @@ def train_rules(hard_facts, soft_facts, obj_list, group_list, num_groups, train_
         else:
             neg_per_task_train.append(clauses)
 
-    rules_img = clause_generation.filter_image_level_rules(pos_per_task_train, neg_per_task_train)
-    rules_g_exist = clause_generation.filter_group_existential_rules(pos_per_task_train, neg_per_task_train)
+    rules_img = clause_generation.filter_image_level_rules(
+        pos_per_task_train, neg_per_task_train)
+    rules_g_exist = clause_generation.filter_group_existential_rules(
+        pos_per_task_train, neg_per_task_train)
     rules_g_universal = clause_generation.filter_group_universal_rules(pos_per_task_train, neg_per_task_train,
                                                                        pos_group_counts_train, neg_group_counts_train)
     rules_train = clause_generation.assemble_final_rules(rules_img, rules_g_exist, rules_g_universal,
@@ -106,7 +113,8 @@ def extend_rules(base_rules, hard_facts_list, soft_facts_list, img_labels, objs_
             if len(objs) == 0 or len(groups) == 0:
                 clause_image_score = 0
             else:
-                clause_image_score = fn(clause.body, hard_facts, soft_facts, objs, groups)
+                clause_image_score = fn(
+                    clause.body, hard_facts, soft_facts, objs, groups)
 
             if label == 1 and clause_image_score > min_conf:
                 pos_count += 1
@@ -131,20 +139,28 @@ def train_calibrator(final_rules, obj_list, group_list, hard_list, soft_list, im
 
     calib_inputs = []
     calib_labels = []
+    if ablation_flags["use_deepproblog"]:
+        calibrator, scores = dpl.train_dpl_baseline(final_rules, hard_list, img_labels, max_epochs=10)
+        # arg_domains_dict = dpl_utils.get_dpl_args(final_rules, group_list[0])
+        # calibrator = dpl_utils.train_dpl(final_rules, hard_list, obj_list, group_list,
+        #                                  img_labels, arg_domains_dict)
+    else:
+        for hard_facts, soft_facts, objs, groups, label in zip(hard_list, soft_list, obj_list, group_list,
+                                                               img_labels):
 
-    for hard_facts, soft_facts, objs, groups, label in zip(hard_list, soft_list, obj_list, group_list,
-                                                           img_labels):
+            rule_score_dict = evaluation.apply_rules(
+                final_rules, hard_facts, soft_facts, objs, groups)
+            rule_scores = [v for v in rule_score_dict.values()]
 
-        rule_score_dict = evaluation.apply_rules(final_rules, hard_facts, soft_facts, objs, groups)
-        rule_scores = [v for v in rule_score_dict.values()]
+            while len(rule_scores) < hyp_params["top_k"]:
+                rule_scores.append(0.0)  # pad to k
 
-        while len(rule_scores) < hyp_params["top_k"]:
-            rule_scores.append(0.0)  # pad to k
+            calib_inputs.append(rule_scores)
+            calib_labels.append(float(label))
+        calibrator = ConfidenceCalibrator(
+            input_dim=hyp_params["top_k"]).to(device)
+        calibrator.train_from_data(calib_inputs, calib_labels, device=device)
 
-        calib_inputs.append(rule_scores)
-        calib_labels.append(float(label))
-    calibrator = ConfidenceCalibrator(input_dim=hyp_params["top_k"]).to(device)
-    calibrator.train_from_data(calib_inputs, calib_labels, device=device)
     return calibrator
 
 
@@ -169,7 +185,7 @@ def ground_facts(train_data, obj_model, group_model, hyp_params, train_principle
         if not disable_object:
             t1 = time.time()
             objs = eval_patch_classifier.evaluate_image(obj_model, img, device)
-            t2= time.time()
+            t2 = time.time()
             d1 = t2-t1
         else:
             objs = []  # no object-level facts
@@ -177,7 +193,8 @@ def ground_facts(train_data, obj_model, group_model, hyp_params, train_principle
 
         # --- 2. Group detection ---
         if not disable_group:
-            groups = eval_groups.eval_groups(objs, group_model, train_principle, device, dim=hyp_params["patch_dim"])
+            groups = eval_groups.eval_groups(
+                objs, group_model, train_principle, device, dim=hyp_params["patch_dim"])
         else:
             groups = []
         groups_list.append(groups)
@@ -191,7 +208,7 @@ def ground_facts(train_data, obj_model, group_model, hyp_params, train_principle
             disable_soft=disable_soft
         )
 
-        t4= time.time()
+        t4 = time.time()
         d2 = t4-t3
         hard_facts.append(hard)
         soft_facts.append(soft)

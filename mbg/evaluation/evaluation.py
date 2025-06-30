@@ -13,7 +13,7 @@ from mbg.grounding import grounding
 from mbg.language.clause_generation import Clause, ScoredRule
 from mbg import patch_preprocess
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
-
+from mbg.scorer import dpl_utils 
 def _evaluate_clause(
         clause: Clause,
         hard: Dict[str, torch.Tensor],
@@ -400,7 +400,7 @@ def compute_image_score(learned_rules, rule_scores, high_conf_th=0.99, fallback_
         return fallback_weight
 
 
-def eval_rules(val_data, obj_model, group_model, learned_rules, hyp_params, eval_principle, device, calibrator):
+def eval_rules(val_data, obj_model, group_model, learned_rules, hyp_params, eval_principle, device, calibrator, ablation_flags):
     patch_dim = hyp_params["patch_dim"]
     # we’ll collect per‐task true / pred
     per_task_scores = defaultdict(list)
@@ -435,7 +435,14 @@ def eval_rules(val_data, obj_model, group_model, learned_rules, hyp_params, eval
             rule_score.append(0.0)
 
         if calibrator:
-            img_score = calibrator(torch.tensor(rule_score).to(device)).detach().cpu().numpy()
+            if ablation_flags["use_deepproblog"]:
+                arg_domains_dict = dpl_utils.get_dpl_args(kept_rules, groups)
+                img_score =  dpl_utils.test_dpl_any_head(calibrator, kept_rules, hard, arg_domains_dict)
+            else:
+                
+                img_score = calibrator(torch.tensor(rule_score).to(device)).detach().cpu().numpy()
+            
+            
         else:
             img_score = compute_image_score(kept_rules, rule_score_dict)
         per_task_scores[task_id].append(img_score)

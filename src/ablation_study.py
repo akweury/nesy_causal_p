@@ -1,6 +1,7 @@
 # Created by MacBook Pro at 12.06.25
 # ablation_main.py
-import os, json
+import os
+import json
 import time
 
 import torch
@@ -15,19 +16,12 @@ import config
 from mbg.scorer import scorer_config
 
 ABLATED_CONFIGS = {
-    # "soft_og": {"use_hard": False, "use_soft": True, "use_obj": True, "use_group": True},
-    # "soft_group": {"use_hard": False, "use_soft": True, "use_obj": False, "use_group": True},
-    # "hs_og": {"use_hard": True, "use_soft": True, "use_obj": True, "use_group": True},
-    "hard_obj": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": False, "use_calibrator": False},
-    "hard_obj_calib": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": False,
-                       "use_calibrator": True},
-    # "hard_group": {"use_hard": True, "use_soft": False, "use_obj": False, "use_group": True},
-    "hard_og": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": True, "use_calibrator": False},
-    "hard_ogc": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": True, "use_calibrator": True},
+    "hard_ogd": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": True, "use_calibrator": True, "use_deepproblog": True},
 
-    # "soft_obj": {"use_hard": False, "use_soft": True, "use_obj": True, "use_group": False},
-    # "hs_obj": {"use_hard": True, "use_soft": True, "use_obj": True, "use_group": False},
-    # "hs_group": {"use_hard": True, "use_soft": True, "use_obj": False, "use_group": True},
+    "hard_obj": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": False, "use_calibrator": False, "use_deepproblog": False},
+    "hard_obj_calib": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": False, "use_calibrator": True, "use_deepproblog": False},
+    "hard_og": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": True, "use_calibrator": False, "use_deepproblog": False},
+    "hard_ogc": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": True, "use_calibrator": True, "use_deepproblog": False},
 
 }
 
@@ -40,8 +34,10 @@ def run_ablation(train_data, val_data, test_data, obj_model, group_model, train_
         "positive": train_data["positive"] + val_data["positive"],
         "negative": train_data["negative"] + val_data["negative"]
     }
-    hyp_params = {"prox": 0.9, "sim": 0.5, "top_k": 5, "conf_th": 0.5, "patch_dim": 7}
-    train_img_labels = [1] * len(train_val_data["positive"]) + [0] * len(train_val_data["negative"])
+    hyp_params = {"prox": 0.9, "sim": 0.5,
+                  "top_k": 5, "conf_th": 0.5, "patch_dim": 7}
+    train_img_labels = [
+        1] * len(train_val_data["positive"]) + [0] * len(train_val_data["negative"])
 
     t1 = time.time()
     # train rule + calibrator
@@ -52,13 +48,16 @@ def run_ablation(train_data, val_data, test_data, obj_model, group_model, train_
     base_rules = training.train_rules(hard, soft, obj_list, group_list, group_nums, train_img_labels, hyp_params,
                                       ablation_flags)
     t3 = time.time()
-    final_rules = training.extend_rules(base_rules, hard, soft, train_img_labels, obj_list, group_list, hyp_params)
+    final_rules = training.extend_rules(
+        base_rules, hard, soft, train_img_labels, obj_list, group_list, hyp_params)
     t4 = time.time()
+    
+    
     calibrator = training.train_calibrator(final_rules, obj_list, group_list, hard, soft, train_img_labels, hyp_params,
                                            ablation_flags, args.device)
     t5 = time.time()
     eval_metrics = evaluation.eval_rules(test_data, obj_model, group_model, final_rules, hyp_params, train_principle,
-                                         args.device, calibrator)
+                                         args.device, calibrator, ablation_flags)
     t6 = time.time()
 
     # d1 = t2 - t1  # grounding facts
@@ -82,8 +81,10 @@ def main_ablation():
     obj_model = eval_patch_classifier.load_model(args.device)
     group_model = scorer_config.load_scorer_model(train_principle, args.device)
 
-    wandb.init(project=f"grb_ablation_{train_principle}", config=args.__dict__, name=args.exp_name)
-    results_summary = defaultdict(lambda: defaultdict(list))  # setting -> metric -> list
+    # wandb.init(project=f"grb_ablation_{train_principle}",
+            #    config=args.__dict__, name=args.exp_name)
+    # setting -> metric -> list
+    results_summary = defaultdict(lambda: defaultdict(list))
     all_f1 = {conf: [] for conf in ABLATED_CONFIGS}
     all_auc = {conf: [] for conf in ABLATED_CONFIGS}
     all_acc = {conf: [] for conf in ABLATED_CONFIGS}
@@ -120,7 +121,8 @@ def main_ablation():
 
     # save and summarize
     final_summary = {
-        mode: {f"avg_{k}": float(torch.tensor(v).mean()) for k, v in metric_dict.items()}
+        mode: {f"avg_{k}": float(torch.tensor(v).mean())
+               for k, v in metric_dict.items()}
         for mode, metric_dict in results_summary.items()
     }
     with open(f"ablation_summary_{args.exp_name}.json", "w") as f:

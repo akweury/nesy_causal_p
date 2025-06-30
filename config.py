@@ -119,6 +119,7 @@ model_group_kp_triangle = storage / "output" / "kp_sy_triangle" / "triangle_dete
 
 model_group_kp_triangle_only = storage / "output" / "kp_sy_triangle_only" / "triangle_only_detector_model.pth"
 
+dpl_file_path = storage / "output" / "dpl_program.pl"
 # nn settings
 kernel_size = 3
 
