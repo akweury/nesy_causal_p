@@ -1,19 +1,12 @@
-import os
 import json
-import time
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-from PIL import Image
 import torch
 import wandb
-import random
-from collections import defaultdict
 from src.utils import args_utils
 from src import dataset
 from mbg.object import eval_patch_classifier
-from mbg.training import training
-from mbg.evaluation import evaluation
 import config
 from mbg.scorer import scorer_config
 from mbg import patch_preprocess
@@ -34,7 +27,7 @@ def main_metric():
         principles = [args.principle]
     else:
         principles = all_principles
-    # wandb.init(project="gestalt_eval", config=args.__dict__)
+    wandb.init(project="gestalt_eval", config=args.__dict__)
     obj_model = eval_patch_classifier.load_model(args.device)
     results = run_all_principles(principles, args, obj_model)
     obj_metrics = {f"{m}_mean": float(
@@ -79,8 +72,7 @@ def run_one_principle(principle, args, obj_model, results):
     group_scores = {k: [] for k in ["mAP", "precision", "recall", "f1", "acc", "binary_f1"]}
 
     for task_idx, (train_data, val_data, test_data) in enumerate(combined_loader):
-        run_one_task(principle, task_idx, train_data, args,
-                     obj_model, group_model, obj_scores, group_scores)
+        run_one_task(principle, task_idx, train_data, args, obj_model, group_model, obj_scores, group_scores)
     for metric in obj_scores:
         results["per_principle"][principle][f"obj_{metric}"] = obj_scores[metric]
     results["per_principle"][principle]["group_mAP"] = group_scores["mAP"]
@@ -235,7 +227,7 @@ def evaluate_group_detection(groups_list, gt_objects_list, obj_lists, iou_thresh
             )
             for pred_idx, gt_idx, iou_score in matches:
                 all_matches.append(1)
-                all_pred_scores.append(1.0)
+                all_pred_scores.append(iou_score)
             for pred_idx in unmatched_pred:
                 all_matches.append(0)
                 all_pred_scores.append(1.0)
