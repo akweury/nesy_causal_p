@@ -27,6 +27,8 @@ def main_metric():
         principles = [args.principle]
     else:
         principles = all_principles
+    principles = all_principles
+
     wandb.init(project="gestalt_eval", config=args.__dict__)
     obj_model = eval_patch_classifier.load_model(args.device)
     results = run_all_principles(principles, args, obj_model)
