@@ -72,6 +72,7 @@ def run_one_principle(principle, args, obj_model, results):
     group_scores = {k: [] for k in ["mAP", "precision", "recall", "f1", "acc", "binary_f1"]}
 
     for task_idx, (train_data, val_data, test_data) in enumerate(combined_loader):
+        print(f"\nRunning principle: {principle}, Task {task_idx + 1}/{len(combined_loader)}")
         run_one_task(principle, task_idx, train_data, args, obj_model, group_model, obj_scores, group_scores)
     for metric in obj_scores:
         results["per_principle"][principle][f"obj_{metric}"] = obj_scores[metric]
