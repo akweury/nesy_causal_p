@@ -41,7 +41,7 @@ def main_metric():
     wandb.log({"overall/obj": obj_metrics, "overall/group": group_metrics})
     save_results = build_save_results(
         results, obj_metrics, group_metrics, principles)
-    with open("od_gd_evaluation_results.json", 'w') as f:
+    with open(config.output / "od_gd_evaluation_results.json", 'w') as f:
         json.dump(save_results, f, indent=2)
     wandb.save("od_gd_evaluation_results.json")
     return save_results
@@ -66,7 +66,7 @@ def run_all_principles(principles, args, obj_model):
 def run_one_principle(principle, args, obj_model, results):
     group_model = scorer_config.load_scorer_model(principle, args.device)
     principle_path = getattr(config, f"grb_{principle}")
-    combined_loader = dataset.load_combined_dataset(principle_path, task_num=20)
+    combined_loader = dataset.load_combined_dataset(principle_path, task_num=args.top_data)
     obj_scores = {k: [] for k in ["mAP", "precision",
                                   "recall", "f1", "shape_accuracy", "color_accuracy"]}
     group_scores = {k: [] for k in ["mAP", "precision", "recall", "f1", "acc", "binary_f1"]}
