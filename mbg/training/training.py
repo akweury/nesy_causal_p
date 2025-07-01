@@ -15,8 +15,7 @@ from mbg.language import clause_generation
 from mbg.language.clause_generation import ScoredRule
 from mbg.evaluation import evaluation
 from mbg.scorer.context_contour_scorer import ContextContourScorer
-from mbg.scorer.calibrator import ConfidenceCalibrator, DeepProbLogCalibrator, InMemoryDataset
-from mbg.scorer import dpl_utils, dpl
+from mbg.scorer.calibrator import ConfidenceCalibrator
 from mbg import patch_preprocess
 
 
@@ -139,27 +138,22 @@ def train_calibrator(final_rules, obj_list, group_list, hard_list, soft_list, im
 
     calib_inputs = []
     calib_labels = []
-    if ablation_flags["use_deepproblog"]:
-        calibrator, scores = dpl.train_dpl_baseline(final_rules, hard_list, img_labels, max_epochs=10)
-        # arg_domains_dict = dpl_utils.get_dpl_args(final_rules, group_list[0])
-        # calibrator = dpl_utils.train_dpl(final_rules, hard_list, obj_list, group_list,
-        #                                  img_labels, arg_domains_dict)
-    else:
-        for hard_facts, soft_facts, objs, groups, label in zip(hard_list, soft_list, obj_list, group_list,
-                                                               img_labels):
 
-            rule_score_dict = evaluation.apply_rules(
-                final_rules, hard_facts, soft_facts, objs, groups)
-            rule_scores = [v for v in rule_score_dict.values()]
+    for hard_facts, soft_facts, objs, groups, label in zip(hard_list, soft_list, obj_list, group_list,
+                                                           img_labels):
 
-            while len(rule_scores) < hyp_params["top_k"]:
-                rule_scores.append(0.0)  # pad to k
+        rule_score_dict = evaluation.apply_rules(
+            final_rules, hard_facts, soft_facts, objs, groups)
+        rule_scores = [v for v in rule_score_dict.values()]
 
-            calib_inputs.append(rule_scores)
-            calib_labels.append(float(label))
-        calibrator = ConfidenceCalibrator(
-            input_dim=hyp_params["top_k"]).to(device)
-        calibrator.train_from_data(calib_inputs, calib_labels, device=device)
+        while len(rule_scores) < hyp_params["top_k"]:
+            rule_scores.append(0.0)  # pad to k
+
+        calib_inputs.append(rule_scores)
+        calib_labels.append(float(label))
+    calibrator = ConfidenceCalibrator(
+        input_dim=hyp_params["top_k"]).to(device)
+    calibrator.train_from_data(calib_inputs, calib_labels, device=device)
 
     return calibrator
 

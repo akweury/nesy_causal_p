@@ -114,11 +114,13 @@ def shape_to_id(name):
     return n
 
 class GrbDataset(Dataset):
-    def __init__(self, folder_path: str, mode: str, val_split: float = 0.2):
+    def __init__(self, folder_path: str, mode: str, val_split: float = 0.2, task_num=None):
         assert mode in ["train", "val", "test"]
         self.samples = []
+        if task_num is None:
+            task_num = len(os.listdir(folder_path))
 
-        for task_folder in sorted(os.listdir(folder_path)):
+        for task_folder in sorted(os.listdir(folder_path))[:task_num]:
             full_task_path = os.path.join(folder_path, task_folder)
             if not os.path.isdir(full_task_path):
                 continue
@@ -159,6 +161,7 @@ class GrbDataset(Dataset):
                         task_data["prop_color"] = json_data["prop_color"]
                         task_data["prop_size"] = json_data["prop_size"]
                         task_data["prop_count"] = json_data["prop_count"]
+                        
                         meta_data_loaded = True
 
                     sym_data = [{
@@ -169,6 +172,7 @@ class GrbDataset(Dataset):
                         'color_g': od['color_g'],
                         'color_b': od['color_b'],
                         'shape': shape_to_id(od["shape"]),
+                        "group_id": od["group_id"] if "group_id" in od else None,
                     } for od in json_data["img_data"]]
 
                     entry = {
@@ -341,9 +345,9 @@ class MultiSplitTaskLoader(Dataset):
         )
 
 
-def load_combined_dataset(principle_path):
-    combined_dataset = MultiSplitTaskLoader(GrbDataset(principle_path / "train", "train"),
-                                            GrbDataset(principle_path / "train", "val"),
-                                            GrbDataset(principle_path / "test", "test"))
+def load_combined_dataset(principle_path, task_num=None):
+    combined_dataset = MultiSplitTaskLoader(GrbDataset(principle_path / "train", "train", task_num=task_num),
+                                            GrbDataset(principle_path / "train", "val", task_num =task_num),
+                                            GrbDataset(principle_path / "test", "test", task_num = task_num))
     combined_loader = DataLoader(combined_dataset, batch_size=1, shuffle=False)
     return combined_loader
