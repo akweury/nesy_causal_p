@@ -7,7 +7,6 @@ import logging
 
 import config
 from . import log_utils
-from src import bk
 
 
 def init_logger():
@@ -60,8 +59,7 @@ def get_args():
     parser.add_argument("--variable_symbol", type=str, default="O")
     parser.add_argument("--im_step", type=int, default=5)
     parser.add_argument("--cim_step", type=int, default=5)
-    parser.add_argument('--gamma', default=0.001, type=float,
-                        help='Smooth parameter in the softor function')
+    parser.add_argument('--gamma', default=0.001, type=float)
     parser.add_argument("--bs_clause_eval", type=int, default=5)
     parser.add_argument("--top_fm_k", type=int, default=5)
     parser.add_argument("--top_k", type=int, default=10)
@@ -74,8 +72,6 @@ def get_args():
     parser.add_argument("--line_min_size", type=int, default=6)
     parser.add_argument("--task_id", type=int, default=0)
     parser.add_argument("--principle", type=str, default="proximity")
-
-
     args = parser.parse_args()
     args.logger = init_logger()
     if args.device != "cpu":
@@ -85,7 +81,4 @@ def get_args():
 
     os.makedirs(config.output / f"{args.exp_name}", exist_ok=True)
     args.batch_size = 1
-
-
-    # args.exp_setting = eval(f"bk.{args.exp_name}")
     return args

@@ -266,7 +266,6 @@ def visualize_multiple_tasks(device="cpu", save_path=None):
 
 
 def visualize_multiple_tasks_grp(device="cpu", save_path=None):
-
     prin = "proximity"
 
     for prin in ["proximity", "closure", "similarity", "continuity", "symmetry"]:
@@ -314,7 +313,6 @@ def visualize_multiple_tasks_grp(device="cpu", save_path=None):
 
 def main():
     visualize_multiple_tasks_grp()
-    # visualize_multiple_tasks()
 
 
 if __name__ == "__main__":

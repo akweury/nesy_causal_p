@@ -41,6 +41,7 @@ def compare_attributes(pred_obj, gt_obj):
         else:
             gt_shape_idx = gt_shape
         scores["shape"] = 1.0 if pred_shape_idx.argmax() == gt_shape_idx else 0.0
+
     if "color" in pred_obj.get("s", {}) and all(k in gt_obj for k in ["color_r", "color_g", "color_b"]):
         pred_color = pred_obj["s"]["color"]
         gt_color = [gt_obj["color_r"].item(), gt_obj["color_g"].item(), gt_obj["color_b"].item()]
@@ -52,6 +53,15 @@ def compare_attributes(pred_obj, gt_obj):
             scores["color"] = max(0.0, 1.0 - (color_diff / max_diff))
         else:
             scores["color"] = 0.0
+
+    # Size score (normalized absolute error)
+    pred_size = pred_obj["s"].get("w", None)
+    gt_size = gt_obj.get("size", None)
+    if pred_size is not None and gt_size is not None and gt_size > 0:
+        size_error = abs(pred_size - gt_size) / gt_size
+        scores["size"] = (max(0.0, 1.0 - size_error)).item()
+    else:
+        scores["size"] = 0.0
     return scores
 
 

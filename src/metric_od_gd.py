@@ -12,8 +12,8 @@ from mbg.scorer import scorer_config
 from mbg import patch_preprocess
 from mbg.group import eval_groups
 from sklearn.metrics import accuracy_score, f1_score
-from src.metric_od_gd_utils import compute_iou, compare_attributes, match_objects, compute_ap, get_group_bounding_box, \
-    extract_ground_truth_groups, extract_predicted_groups
+from src.metric_od_gd_utils import compare_attributes, match_objects, compute_ap, extract_ground_truth_groups, \
+    extract_predicted_groups
 
 
 def main_metric():
@@ -32,17 +32,12 @@ def main_metric():
     wandb.init(project="gestalt_eval", config=args.__dict__)
     obj_model = eval_patch_classifier.load_model(args.device)
     results = run_all_principles(principles, args, obj_model)
-    obj_metrics = {f"{m}_mean": float(
-        np.mean(results["obj_detection"][m])) for m in results["obj_detection"]}
-    obj_metrics.update({f"{m}_std": float(
-        np.std(results["obj_detection"][m])) for m in results["obj_detection"]})
-    group_metrics = {f"{m}_mean": float(
-        np.mean(results["group_detection"][m])) for m in results["group_detection"]}
-    group_metrics.update({f"{m}_std": float(
-        np.std(results["group_detection"][m])) for m in results["group_detection"]})
+    obj_metrics = {f"{m}_mean": float(np.mean(results["obj_detection"][m])) for m in results["obj_detection"]}
+    obj_metrics.update({f"{m}_std": float(np.std(results["obj_detection"][m])) for m in results["obj_detection"]})
+    group_metrics = {f"{m}_mean": float(np.mean(results["group_detection"][m])) for m in results["group_detection"]}
+    group_metrics.update({f"{m}_std": float(np.std(results["group_detection"][m])) for m in results["group_detection"]})
     wandb.log({"overall/obj": obj_metrics, "overall/group": group_metrics})
-    save_results = build_save_results(
-        results, obj_metrics, group_metrics, principles)
+    save_results = build_save_results(results, obj_metrics, group_metrics, principles)
     with open(config.output / "od_gd_evaluation_results.json", 'w') as f:
         json.dump(save_results, f, indent=2)
     wandb.save("od_gd_evaluation_results.json")
@@ -53,12 +48,10 @@ def run_all_principles(principles, args, obj_model):
     results = {
         "obj_detection": {k: [] for k in ["mAP", "precision", "recall", "f1", "shape_accuracy", "color_accuracy"]},
         "group_detection": {k: [] for k in ["mAP", "precision", "recall", "f1", "binary_accuracy", "binary_f1"]},
-        "per_principle": {p: {
-            "obj_mAP": [], "obj_precision": [], "obj_recall": [], "obj_f1": [], "obj_shape_acc": [],
-            "obj_color_acc": [],
-            "group_mAP": [], "group_precision": [], "group_recall": [], "group_f1": [], "group_acc": [],
-            "group_binary_f1": []
-        } for p in principles}
+        "per_principle": {p: {"obj_mAP": [], "obj_precision": [], "obj_recall": [], "obj_f1": [], "obj_shape_acc": [],
+                              "obj_color_acc": [], "group_mAP": [], "group_precision": [], "group_recall": [],
+                              "group_f1": [], "group_acc": [], "group_binary_f1": []
+                              } for p in principles}
     }
     for principle in principles:
         run_one_principle(principle, args, obj_model, results)
@@ -70,8 +63,10 @@ def run_one_principle(principle, args, obj_model, results):
     principle_path = getattr(config, f"grb_{principle}")
     combined_loader = dataset.load_combined_dataset(principle_path, task_num=args.top_data)
     obj_scores = {k: [] for k in ["mAP", "precision",
-                                  "recall", "f1", "shape_accuracy", "color_accuracy"]}
-    group_scores = {k: [] for k in ["mAP", "precision", "recall", "f1", "acc", "binary_f1"]}
+                                  "recall", "f1", "shape_accuracy",
+                                  "color_accuracy", "size_accuracy", "count_accuracy"]}
+    group_scores = {k: [] for k in ["mAP", "precision", "recall", "f1", "acc", "binary_f1",
+                                    "group_count_accuracy", "group_obj_num_accuracy"]}
 
     for task_idx, (train_data, val_data, test_data) in enumerate(combined_loader):
         print(f"\nRunning principle: {principle}, Task {task_idx + 1}/{len(combined_loader)}")
@@ -123,19 +118,14 @@ def run_one_task(principle, task_idx, train_data, args, obj_model, group_model, 
         # Debug: plot group bounding boxes
         gt_group_boxes, _ = extract_ground_truth_groups(gt_objects[img_idx])
         pred_group_boxes, _ = extract_predicted_groups(groups, objs)
-        # plot_group_bboxes(
-        #     img, gt_group_boxes, pred_group_boxes,
-        #     img_name=f"{principle}_task{task_idx}_img{img_idx}",
-        #     save_path=config.output / f"group_bbox_{principle}_task{task_idx}_img{img_idx}.png"
-        # )
     obj_metrics = evaluate_object_detection(obj_lists, gt_objects)
     for k in obj_scores:
         obj_scores[k].append(obj_metrics[k])
-
     group_metrics = evaluate_group_detection(groups_list, gt_objects, obj_lists)
-
     group_scores["acc"].append(group_metrics["binary_accuracy"])
     group_scores["binary_f1"].append(group_metrics["binary_f1"])
+    group_scores["group_count_accuracy"].append(group_metrics["group_count_accuracy"])
+    group_scores["group_obj_num_accuracy"].append(group_metrics["group_obj_num_accuracy"])
     for k in ["mAP", "precision", "recall", "f1"]:
         if k not in group_scores:
             group_scores[k] = []
@@ -169,12 +159,15 @@ def evaluate_object_detection(obj_lists, ground_truth_objects, iou_threshold=0.5
     all_pred_scores = []
     all_gt_count = 0
     all_pred_count = 0
-    attribute_scores = {"shape": [], "color": []}
+    attribute_scores = {"shape": [], "color": [], "size": []}
+    count_scores = []
+
     for obj_list, gt_objs in zip(obj_lists, ground_truth_objects):
         if not gt_objs:
             continue
         all_gt_count += len(gt_objs)
         all_pred_count += len(obj_list)
+        count_scores.append(1.0 if len(obj_list) == len(gt_objs) else 0.0)
         matches, unmatched_pred, unmatched_gt = match_objects(obj_list, gt_objs, iou_threshold)
         for pred_idx, gt_idx, iou_score in matches:
             attr_scores = compare_attributes(obj_list[pred_idx], gt_objs[gt_idx])
@@ -187,7 +180,8 @@ def evaluate_object_detection(obj_lists, ground_truth_objects, iou_threshold=0.5
             all_matches.append(0)
             all_pred_scores.append(1.0)
     if not all_matches:
-        return {"mAP": 0.0, "precision": 0.0, "recall": 0.0, "f1": 0.0, "shape_accuracy": 0.0, "color_accuracy": 0.0}
+        return {"mAP": 0.0, "precision": 0.0, "recall": 0.0, "f1": 0.0,
+                "shape_accuracy": 0.0, "color_accuracy": 0.0, "size_accuracy": 0.0, "count_accuracy": 0.0}
     sorted_indices = np.argsort(all_pred_scores)[::-1]
     sorted_matches = np.array(all_matches)[sorted_indices]
     tp_cumsum = np.cumsum(sorted_matches)
@@ -199,10 +193,14 @@ def evaluate_object_detection(obj_lists, ground_truth_objects, iou_threshold=0.5
     precision = total_tp / len(sorted_matches) if len(sorted_matches) > 0 else 0.0
     recall = total_tp / all_gt_count if all_gt_count > 0 else 0.0
     f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+
     shape_acc = np.mean(attribute_scores["shape"]) if attribute_scores["shape"] else 0.0
     color_acc = np.mean(attribute_scores["color"]) if attribute_scores["color"] else 0.0
+    size_acc = np.mean(attribute_scores["size"]) if attribute_scores["size"] else 0.0
+    count_acc = np.mean(count_scores) if count_scores else 0.0
+
     return {"mAP": mAP, "precision": precision, "recall": recall, "f1": f1, "shape_accuracy": shape_acc,
-            "color_accuracy": color_acc}
+            "color_accuracy": color_acc, "size_accuracy": size_acc, "count_accuracy": count_acc}
 
 
 def evaluate_group_detection(groups_list, gt_objects_list, obj_lists, iou_threshold=0.5):
@@ -212,16 +210,64 @@ def evaluate_group_detection(groups_list, gt_objects_list, obj_lists, iou_thresh
     all_pred_count = 0
     y_true_binary = []
     y_pred_binary = []
+    group_count_accs = []
+    group_obj_num_accs = []
+
+    def compute_iou(box1, box2):
+        x1, y1, w1, h1 = box1
+        x2, y2, w2, h2 = box2
+        xi1 = max(x1, x2)
+        yi1 = max(y1, y2)
+        xi2 = min(x1 + w1, x2 + w2)
+        yi2 = min(y1 + h1, y2 + h2)
+        inter_area = max(0, xi2 - xi1) * max(0, yi2 - yi1)
+        box1_area = w1 * h1
+        box2_area = w2 * h2
+        union_area = box1_area + box2_area - inter_area
+        return inter_area / union_area if union_area > 0 else 0.0
+
     for groups, gt_objects, pred_objects in zip(groups_list, gt_objects_list, obj_lists):
         gt_group_boxes, gt_group_info = extract_ground_truth_groups(gt_objects)
-        pred_group_boxes, pred_group_info = extract_predicted_groups(
-            groups, pred_objects)
+        pred_group_boxes, pred_group_info = extract_predicted_groups(groups, pred_objects)
         all_gt_count += len(gt_group_boxes)
         all_pred_count += len(pred_group_boxes)
         has_gt_groups = len(gt_group_boxes) > 0
         has_pred_groups = len(pred_group_boxes) > 0
         y_true_binary.append(int(has_gt_groups))
         y_pred_binary.append(int(has_pred_groups))
+
+        # Group-level count accuracy: match predicted groups to gt groups by IoU
+        matched_gt = set()
+        correct_count = 0
+        total_matched = 0
+
+        for pred_idx, pred_group in enumerate(pred_group_info):
+            best_iou = 0
+            best_gt_idx = -1
+            pred_box = pred_group_boxes[pred_idx]
+            for gt_idx, gt_group in enumerate(gt_group_info):
+                if gt_idx in matched_gt:
+                    continue
+                gt_box = gt_group_boxes[gt_idx]
+                iou = compute_iou(pred_box, gt_box)
+                if iou > best_iou:
+                    best_iou = iou
+                    best_gt_idx = gt_idx
+            if best_iou >= iou_threshold and best_gt_idx >= 0:
+                matched_gt.add(best_gt_idx)
+                pred_count = len(pred_group)
+                gt_count = len(gt_group_info[best_gt_idx])
+                if pred_count == gt_count:
+                    correct_count += 1
+                total_matched += 1
+                gt_len = len(gt_group_info[best_gt_idx]["object_indices"])
+                pred_len = len(pred_group["child_obj_ids"])
+                group_obj_num_accs.append(1.0 if gt_len == pred_len else 0.0)
+            else:
+                group_obj_num_accs.append(0.0)
+        group_count_accs.append(correct_count / total_matched if total_matched > 0 else 0.0)
+
+        # Detection metrics
         if gt_group_boxes and pred_group_boxes:
             matches, unmatched_pred, unmatched_gt = match_objects(
                 [{"s": {"x": box[0], "y": box[1], "w": box[2], "h": box[3]}} for box in pred_group_boxes],
@@ -238,6 +284,7 @@ def evaluate_group_detection(groups_list, gt_objects_list, obj_lists, iou_thresh
             for _ in pred_group_boxes:
                 all_matches.append(0)
                 all_pred_scores.append(1.0)
+
     if all_matches:
         sorted_indices = np.argsort(all_pred_scores)[::-1]
         sorted_matches = np.array(all_matches)[sorted_indices]
@@ -252,12 +299,21 @@ def evaluate_group_detection(groups_list, gt_objects_list, obj_lists, iou_thresh
         f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
     else:
         mAP = precision = recall = f1 = 0.0
-    binary_acc = accuracy_score(
-        y_true_binary, y_pred_binary) if y_true_binary else 0.0
-    binary_f1 = f1_score(
-        y_true_binary, y_pred_binary) if y_true_binary else 0.0
-    return {"mAP": mAP, "precision": precision, "recall": recall, "f1": f1, "binary_accuracy": binary_acc,
-            "binary_f1": binary_f1}
+
+    binary_acc = accuracy_score(y_true_binary, y_pred_binary) if y_true_binary else 0.0
+    binary_f1 = f1_score(y_true_binary, y_pred_binary) if y_true_binary else 0.0
+    group_count_acc = np.mean(group_count_accs) if group_count_accs else 0.0
+
+    return {
+        "mAP": mAP,
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
+        "binary_accuracy": binary_acc,
+        "binary_f1": binary_f1,
+        "group_count_accuracy": group_count_acc,
+        "group_obj_num_accuracy": np.mean(group_obj_num_accs) if group_obj_num_accs else 0.0
+    }
 
 
 def visualize_bounding_boxes(img_tensor, pred_objects, gt_objects, img_name="image",
@@ -325,8 +381,8 @@ def visualize_bounding_boxes(img_tensor, pred_objects, gt_objects, img_name="ima
             ax.add_patch(rect)
 
             # Add label
-            ax.text(x_corner, y_corner - 5, f'GT: {gt_obj.get("shape", "?")}',
-                    color='red', fontsize=8, fontweight='bold')
+            ax.text(x_corner, y_corner - 5, f'GT: {gt_obj.get("shape", "?")}', color='red', fontsize=8,
+                    fontweight='bold')
 
     # Draw predicted boxes in blue
     for pred_obj in pred_objects:
@@ -349,10 +405,8 @@ def visualize_bounding_boxes(img_tensor, pred_objects, gt_objects, img_name="ima
             y_corner = y
 
             # Create rectangle patch
-            rect = patches.Rectangle(
-                (x_corner, y_corner), w, h,
-                linewidth=2, edgecolor='blue', facecolor='none', alpha=0.8
-            )
+            rect = patches.Rectangle((x_corner, y_corner), w, h, linewidth=2, edgecolor='blue', facecolor='none',
+                                     alpha=0.8)
             ax.add_patch(rect)
 
             # Add label with shape if available
@@ -362,13 +416,11 @@ def visualize_bounding_boxes(img_tensor, pred_objects, gt_objects, img_name="ima
                 if isinstance(shape, (list, np.ndarray, torch.Tensor)):
                     shape_idx = np.argmax(shape)
                     shape_names = ["tri", "sq", "cir"]
-                    shape_text = shape_names[shape_idx] if shape_idx < len(
-                        shape_names) else str(shape_idx)
+                    shape_text = shape_names[shape_idx] if shape_idx < len(shape_names) else str(shape_idx)
                 else:
                     shape_text = str(shape)
 
-            ax.text(x_corner, y_corner - 5, f'Pred: {shape_text}',
-                    color='blue', fontsize=8, fontweight='bold')
+            ax.text(x_corner, y_corner - 5, f'Pred: {shape_text}', color='blue', fontsize=8, fontweight='bold')
 
     # Add legend
     red_patch = patches.Patch(color='red', label='Ground Truth')
@@ -409,8 +461,7 @@ def plot_group_bboxes(img, gt_group_boxes, pred_group_boxes, img_name, save_path
             y *= img_height
             w *= img_width
             h *= img_height
-        rect = patches.Rectangle(
-            (x, y), w, h, linewidth=3, edgecolor='red', facecolor='none', alpha=0.7)
+        rect = patches.Rectangle((x, y), w, h, linewidth=3, edgecolor='red', facecolor='none', alpha=0.7)
         ax.add_patch(rect)
     for box in pred_group_boxes:
         x, y, w, h = box
@@ -419,8 +470,7 @@ def plot_group_bboxes(img, gt_group_boxes, pred_group_boxes, img_name, save_path
             y *= img_height
             w *= img_width
             h *= img_height
-        rect = patches.Rectangle(
-            (x, y), w, h, linewidth=2, edgecolor='blue', facecolor='none', alpha=0.7)
+        rect = patches.Rectangle((x, y), w, h, linewidth=2, edgecolor='blue', facecolor='none', alpha=0.7)
         ax.add_patch(rect)
     ax.set_title(f'{img_name} - GT(red) vs Pred(blue) group boxes')
     ax.axis('off')
