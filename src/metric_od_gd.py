@@ -58,6 +58,8 @@ def run_all_principles(principles, args, obj_model):
     for principle in principles:
         run_one_principle(principle, args, obj_model, results)
     return results
+
+
 def run_one_principle(principle, args, obj_model, results):
     group_model = scorer_config.load_scorer_model(principle, args.device)
     principle_path = getattr(config, f"grb_{principle}")
@@ -140,9 +142,11 @@ def build_save_results(results, obj_metrics, group_metrics, principles):
     save_results = {
         "overall": {
             "object_detection": {m: {"mean": obj_metrics[f"{m}_mean"], "std": obj_metrics[f"{m}_std"]} for m in
-                                 ["mAP", "precision", "recall", "f1", "shape_accuracy", "color_accuracy"]},
+                                 ["mAP", "precision", "recall", "f1", "shape_accuracy", "color_accuracy",
+                                  "size_accuracy", "count_accuracy"]},
             "group_detection": {m: {"mean": group_metrics[f"{m}_mean"], "std": group_metrics[f"{m}_std"]} for m in
-                                ["mAP", "precision", "recall", "f1", "binary_accuracy", "binary_f1"]}
+                                ["mAP", "precision", "recall", "f1", "binary_accuracy", "binary_f1",
+                                 "group_count_accuracy", "group_obj_num_accuracy"]}
         },
         "per_principle": {}
     }
