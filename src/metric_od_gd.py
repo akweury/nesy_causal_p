@@ -46,8 +46,10 @@ def main_metric():
 
 def run_all_principles(principles, args, obj_model):
     results = {
-        "obj_detection": {k: [] for k in ["mAP", "precision", "recall", "f1", "shape_accuracy", "color_accuracy"]},
-        "group_detection": {k: [] for k in ["mAP", "precision", "recall", "f1", "binary_accuracy", "binary_f1"]},
+        "obj_detection": {k: [] for k in ["mAP", "precision", "recall", "f1", "shape_accuracy", "color_accuracy",
+                                          "size_accuracy", "count_accuracy"]},
+        "group_detection": {k: [] for k in ["mAP", "precision", "recall", "f1", "binary_accuracy", "binary_f1",
+                                            "group_count_accuracy", "group_obj_num_accuracy"]},
         "per_principle": {p: {"obj_mAP": [], "obj_precision": [], "obj_recall": [], "obj_f1": [], "obj_shape_acc": [],
                               "obj_color_acc": [], "group_mAP": [], "group_precision": [], "group_recall": [],
                               "group_f1": [], "group_acc": [], "group_binary_f1": []
@@ -56,8 +58,6 @@ def run_all_principles(principles, args, obj_model):
     for principle in principles:
         run_one_principle(principle, args, obj_model, results)
     return results
-
-
 def run_one_principle(principle, args, obj_model, results):
     group_model = scorer_config.load_scorer_model(principle, args.device)
     principle_path = getattr(config, f"grb_{principle}")
@@ -85,6 +85,9 @@ def run_one_principle(principle, args, obj_model, results):
         results["group_detection"][metric].extend(group_scores[metric])
     results["group_detection"]["binary_accuracy"].extend(group_scores["acc"])
     results["group_detection"]["binary_f1"].extend(group_scores["binary_f1"])
+    results["group_detection"]["group_count_accuracy"].extend(group_scores["group_count_accuracy"])
+    results["group_detection"]["group_obj_num_accuracy"].extend(group_scores["group_obj_num_accuracy"])
+
     wandb.log({f"{principle}/summary": {
         **{f"obj_{k}_mean": float(np.mean(obj_scores[k])) for k in obj_scores},
         **{f"group_{k}_mean": float(np.mean(group_scores[k])) for k in group_scores}
