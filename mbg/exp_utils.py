@@ -57,6 +57,8 @@ def draw_time_cost_line_chart(time_cost_dict, save_path):
     import numpy as np
     import matplotlib.pyplot as plt
 
+    plt.rcParams.update({'font.size': 16})  # Set default font size
+
     x = sorted(time_cost_dict.keys())
     y_obj = np.array([time_cost_dict[n]['avg_obj_time'] for n in x])
     y_obj_group = np.array([time_cost_dict[n]['avg_group_time'] for n in x])
@@ -82,21 +84,21 @@ def draw_time_cost_line_chart(time_cost_dict, save_path):
     plt.figure()
 
     # Object extraction time
-    plt.plot(x, y_obj, marker='o', label='Object Extraction Time')
-    plt.fill_between(x, y_obj - ci_obj, y_obj + ci_obj, alpha=0.25, color='C0', linestyle='--', label='Obj 95% CI')
+    plt.plot(x, y_obj, marker='o', label='Obj. Facts Extraction ')
+    plt.fill_between(x, y_obj - ci_obj, y_obj + ci_obj, alpha=0.25, color='C0', linestyle='--')
 
     # Obj+Group extraction time (cumulative)
-    plt.plot(x, y_obj_group, marker='s', label='Obj+Group Extraction Time')
-    plt.fill_between(x, y_obj_group - ci_obj_group, y_obj_group + ci_obj_group, alpha=0.25, color='C1', linestyle='--', label='Obj+Group 95% CI')
+    plt.plot(x, y_obj_group, marker='s', label='Obj.+Group Facts Extraction')
+    plt.fill_between(x, y_obj_group - ci_obj_group, y_obj_group + ci_obj_group, alpha=0.25, color='C1', linestyle='--')
 
     # Group extraction time (group only)
-    plt.plot(x, y_group_only, marker='^', label='Group Extraction Time (Group Only)')
-    plt.fill_between(x, y_group_only - ci_group_only, y_group_only + ci_group_only, alpha=0.25, color='C2', linestyle='--', label='Group Only 95% CI')
+    plt.plot(x, y_group_only, marker='^', label='Grp. Facts Extraction')
+    plt.fill_between(x, y_group_only - ci_group_only, y_group_only + ci_group_only, alpha=0.25, color='C2', linestyle='--')
 
-    plt.xlabel('Number of Objects')
-    plt.ylabel('Average Time Cost (s)')
-    plt.title('Time Cost vs Number of Objects')
-    plt.legend()
+    plt.xlabel('Number of Objects', fontsize=18)
+    plt.ylabel('Average Time Cost (s)', fontsize=18)
+    plt.title('Time Cost vs Number of Objects', fontsize=20)
+    plt.legend(fontsize=13)
     plt.grid(True, which='both', axis='y', linestyle='--', linewidth=0.5)
     plt.tight_layout()
     plt.savefig(save_path)
@@ -108,6 +110,7 @@ def draw_fact_number_line_chart(analysis_dict, save_path):
     y-axis is avg object facts and avg group facts (log scale),
     with shaded error regions (std).
     """
+    plt.rcParams.update({'font.size': 16})  # Set default font size
     x = sorted(analysis_dict.keys())
     y_obj = np.array([analysis_dict[n]['avg_obj_facts'] for n in x])
     y_group = np.array([analysis_dict[n]['avg_group_facts'] for n in x])
@@ -133,21 +136,21 @@ def draw_fact_number_line_chart(analysis_dict, save_path):
     ci_obj_group = 1.96 * se_obj_group
 
     plt.figure()
-    plt.plot(x, y_obj, marker='o', label='Avg Object Facts')
-    plt.fill_between(x, y_obj - ci_obj, y_obj + ci_obj, alpha=0.25, color='C0', linestyle='--', label='Obj 95% CI')
+    plt.plot(x, y_obj, marker='o', label='Obj. Facts')
+    plt.fill_between(x, y_obj - ci_obj, y_obj + ci_obj, alpha=0.25, color='C0', linestyle='--')
 
-    plt.plot(x, y_group, marker='s', label='Avg Group Facts')
-    plt.fill_between(x, y_group - ci_group, y_group + ci_group, alpha=0.25, color='C1', linestyle='--', label='Group 95% CI')
+    plt.plot(x, y_group, marker='s', label='Grp. Facts')
+    plt.fill_between(x, y_group - ci_group, y_group + ci_group, alpha=0.25, color='C1', linestyle='--')
 
-    plt.plot(x, y_obj_group, marker='^', label='Avg Obj+Group Facts')
-    plt.fill_between(x, y_obj_group - ci_obj_group, y_obj_group + ci_obj_group, alpha=0.25, color='C2', linestyle='--', label='Obj+Group 95% CI')
+    plt.plot(x, y_obj_group, marker='^', label='Obj.+Grp. Facts')
+    plt.fill_between(x, y_obj_group - ci_obj_group, y_obj_group + ci_obj_group, alpha=0.25, color='C2', linestyle='--')
 
 
-    plt.xlabel('Number of Objects')
-    plt.ylabel('Average Number of Symbolic Facts')
-    plt.title('Symbolic Facts vs Number of Objects')
+    plt.xlabel('Number of Objects', fontsize=18)
+    plt.ylabel('Average Number of Symbolic Facts', fontsize=18)
+    plt.title('Symbolic Facts vs Number of Objects', fontsize=20)
     plt.yscale('log')
-    plt.legend()
+    plt.legend(fontsize=13)
     plt.grid(True, which='both', axis='y', linestyle='--', linewidth=0.5)
     plt.tight_layout()
     plt.savefig(save_path)

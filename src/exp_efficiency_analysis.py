@@ -50,7 +50,7 @@ def run_analysis(train_data, val_data, obj_model, group_model, train_principle, 
 
     ablation_flags = ABLATED_CONFIGS["hard_ogc"]
     hard, soft, group_nums, obj_list, group_list = training.ground_facts(train_val_data, obj_model, group_model,
-                                                                                      hyp_params, train_principle, args.device, ablation_flags, group_times)
+                                                                         hyp_params, train_principle, args.device, ablation_flags, group_times)
     base_rules = training.train_rules(hard, soft, obj_list, group_list, group_nums, train_img_labels, hyp_params,
                                       ablation_flags, group_times)
     final_rules = training.extend_rules(base_rules, hard, soft, train_img_labels, obj_list, group_list, hyp_params)
@@ -79,6 +79,11 @@ def run_analysis(train_data, val_data, obj_model, group_model, train_principle, 
         std_obj_facts = np.std(stats["obj_facts"]) if count > 0 else 0.0
         std_group_facts = np.std(stats["group_facts"]) if count > 0 else 0.0
         obj_num_avg[n_obj] = (avg_obj_facts, avg_group_facts, avg_groups, std_obj_facts, std_group_facts)
+
+    for n_obj in time_stats:
+        time_stats[n_obj]["obj_time"] = [float(t) for t in time_stats[n_obj]["obj_time"]]
+        time_stats[n_obj]["group_time"] = [float(t) for t in time_stats[n_obj]["group_time"]]
+
     return obj_num_avg, time_stats
 
 
@@ -134,6 +139,32 @@ def main_eff_analysis():
         all_results[train_principle] = avg_analysis
         all_time_stats[train_principle] = time_dict
 
+
+
+    # Save to JSON
+    saved_json_file = config.output / f"efficiency_analysis.json"
+    with open(saved_json_file, "w") as f:
+        json.dump(
+            {
+                "all_results": all_results,
+                "all_time_stats": all_time_stats
+            }, f, indent=2)
+    print("\n=== Efficiency Analysis Summary ===")
+    for principle, analysis in all_results.items():
+        print(f"{principle}: {analysis}")
+
+    return saved_json_file
+
+
+
+def draw_figures(saved_json_file):
+
+    # Load data from JSON and draw charts
+    with open(saved_json_file, "r") as f:
+        data = json.load(f)
+    all_results = data["all_results"]
+    all_time_stats = data["all_time_stats"]
+
     # Merge all_results across principles
     merged = {}
     for principle_result in all_results.values():
@@ -178,20 +209,14 @@ def main_eff_analysis():
             "n_group_time": count_group
         }
 
+
     # Draw and save the combined line chart
     chart_path = config.output / "fact_number_line_chart_all_principles.png"
     exp_utils.draw_fact_number_line_chart(merged_avg, chart_path)
     time_chart_path = config.output / "time_cost_line_chart_all_principles.png"
     exp_utils.draw_time_cost_line_chart(merged_time_avg, time_chart_path)
 
-    # Save to JSON
-    saved_json_file = config.output / f"efficiency_analysis.json"
-    with open(saved_json_file, "w") as f:
-        json.dump(all_results, f, indent=2)
-    print("\n=== Efficiency Analysis Summary ===")
-    for principle, analysis in all_results.items():
-        print(f"{principle}: {analysis}")
-
 
 if __name__ == "__main__":
-    main_eff_analysis()
+    json_file = main_eff_analysis()
+    draw_figures(json_file)
