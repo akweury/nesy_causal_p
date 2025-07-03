@@ -13,7 +13,7 @@ from mbg.grounding import grounding
 from mbg.language.clause_generation import Clause, ScoredRule
 from mbg import patch_preprocess
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
-from mbg.scorer import dpl_utils 
+# from mbg.scorer import dpl_utils
 def _evaluate_clause(
         clause: Clause,
         hard: Dict[str, torch.Tensor],
