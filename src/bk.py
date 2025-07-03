@@ -201,9 +201,9 @@ bk_shapes_2 = ["none", "triangle", "square", "circle"]
 gestalt_principles = [
     "proximity",
     "continuity",
-    # "similarity",
-    # "closure",
-    # "symmetry",
+    "similarity",
+    "closure",
+    "symmetry",
 ]
 
 rule_logic_types = [
