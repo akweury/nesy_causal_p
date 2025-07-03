@@ -7,7 +7,6 @@ import torch
 from itertools import combinations
 from copy import deepcopy
 
-
 from mbg.object import eval_patch_classifier
 from mbg.group import eval_groups
 from mbg.grounding import grounding
@@ -44,7 +43,7 @@ def train_grouping_model(train_loader, device, epochs=10, LR=1e-3):
 
 
 def train_rules(hard_facts, soft_facts, obj_list, group_list, num_groups, train_image_labels, hyp_params,
-                ablation_flags):
+                ablation_flags, task_times):
     # 1) 收集每张图的频次 & group 数
     pos_per_task_train = []  # task_id -> List[Counter[Clause,int]] (正例)
     neg_per_task_train = []  # task_id -> List[Counter[Clause,int]] (负例)
@@ -54,20 +53,21 @@ def train_rules(hard_facts, soft_facts, obj_list, group_list, num_groups, train_
     neg_group_counts_train = num_groups[len(num_groups) // 2:]
 
     # base rule learning
+
     for i in range(len(train_image_labels)):
+        t1 = time.time()
         img_label = train_image_labels[i]
         hard, soft = hard_facts[i], soft_facts[i]
-        cg = clause_generation.ClauseGenerator(
-            prox_thresh=hyp_params["prox"], sim_thresh=hyp_params["sim"])
-        clauses = cg.generate(
-            hard, soft, obj_list[i], group_list[i], ablation_flags)
+        cg = clause_generation.ClauseGenerator(prox_thresh=hyp_params["prox"], sim_thresh=hyp_params["sim"])
+        clauses = cg.generate(hard, soft, obj_list[i], group_list[i], ablation_flags)
         # freq = Counter(clauses)
         # --- 4. 存入对应容器 ---
         if img_label == 1:
             pos_per_task_train.append(clauses)
-
         else:
             neg_per_task_train.append(clauses)
+        t2 = time.time()
+        task_times[i] += t2 - t1
 
     rules_img = clause_generation.filter_image_level_rules(
         pos_per_task_train, neg_per_task_train)
@@ -112,8 +112,7 @@ def extend_rules(base_rules, hard_facts_list, soft_facts_list, img_labels, objs_
             if len(objs) == 0 or len(groups) == 0:
                 clause_image_score = 0
             else:
-                clause_image_score = fn(
-                    clause.body, hard_facts, soft_facts, objs, groups)
+                clause_image_score = fn(clause.body, hard_facts, soft_facts, objs, groups)
 
             if label == 1 and clause_image_score > min_conf:
                 pos_count += 1
@@ -158,10 +157,9 @@ def train_calibrator(final_rules, obj_list, group_list, hard_list, soft_list, im
     return calibrator
 
 
-def ground_facts(train_data, obj_model, group_model, hyp_params, train_principle, device, ablation_flags):
+def ground_facts(train_data, obj_model, group_model, hyp_params, train_principle, device, ablation_flags, task_times):
     if ablation_flags is None:
         ablation_flags = {}
-
     disable_soft = not ablation_flags.get("use_soft", True)
     disable_hard = not ablation_flags.get("use_hard", True)
     disable_group = not ablation_flags.get("use_group", True)
@@ -174,36 +172,30 @@ def ground_facts(train_data, obj_model, group_model, hyp_params, train_principle
     all_data = train_data["positive"] + train_data["negative"]
     img_paths = [d["image_path"][0] for d in all_data]
     imgs = patch_preprocess.load_images_fast(img_paths, device=device)
-    for img in imgs:
+
+
+    for i, img in enumerate(imgs):
+        t1 = time.time()
         # --- 1. Object detection ---
         if not disable_object:
-            t1 = time.time()
             objs = eval_patch_classifier.evaluate_image(obj_model, img, device)
-            t2 = time.time()
-            d1 = t2-t1
         else:
             objs = []  # no object-level facts
         obj_lists.append(objs)
 
         # --- 2. Group detection ---
         if not disable_group:
-            groups = eval_groups.eval_groups(
-                objs, group_model, train_principle, device, dim=hyp_params["patch_dim"])
+            groups = eval_groups.eval_groups(objs, group_model, train_principle, device, dim=hyp_params["patch_dim"])
         else:
             groups = []
         groups_list.append(groups)
         group_nums.append(len(groups))
 
-        t3 = time.time()
         # --- 3. Fact grounding ---
-        hard, soft = grounding.ground_facts(
-            objs, groups,
-            disable_hard=disable_hard,
-            disable_soft=disable_soft
-        )
-
-        t4 = time.time()
-        d2 = t4-t3
+        hard, soft = grounding.ground_facts(objs, groups, disable_hard=disable_hard, disable_soft=disable_soft)
         hard_facts.append(hard)
         soft_facts.append(soft)
+        t2 = time.time()
+        task_times[i] += t2 - t1
+
     return hard_facts, soft_facts, group_nums, obj_lists, groups_list

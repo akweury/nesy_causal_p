@@ -65,8 +65,7 @@ def run_one_principle(principle, args, obj_model, results):
     principle_path = getattr(config, f"grb_{principle}")
     combined_loader = dataset.load_combined_dataset(principle_path, task_num=args.top_data)
     obj_scores = {k: [] for k in ["mAP", "precision",
-                                  "recall", "f1", "shape_accuracy",
-                                  "color_accuracy", "size_accuracy", "count_accuracy"]}
+                                  "recall", "f1", "shape_accuracy", "color_accuracy", "size_accuracy", "count_accuracy"]}
     group_scores = {k: [] for k in ["mAP", "precision", "recall", "f1", "acc", "binary_f1",
                                     "group_count_accuracy", "group_obj_num_accuracy"]}
 

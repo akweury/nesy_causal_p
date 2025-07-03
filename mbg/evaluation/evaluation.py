@@ -421,7 +421,7 @@ def eval_rules(val_data, obj_model, group_model, learned_rules, hyp_params, eval
         objs = eval_patch_classifier.evaluate_image(obj_model, img, device)
         groups = eval_groups.eval_groups(objs, group_model, eval_principle, device, patch_dim)
         # 2) ground  & generate validation image’s clauses
-        hard, soft = grounding.ground_facts(objs, groups)
+        hard, soft, _, _  = grounding.ground_facts(objs, groups)
 
         # 4) filter out very‐low confidence rules
         kept_rules = [r for r in learned_rules if r.confidence >= conf_th]

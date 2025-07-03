@@ -199,14 +199,11 @@ cir_index = bk_shapes.index("circle") - 1
 
 bk_shapes_2 = ["none", "triangle", "square", "circle"]
 gestalt_principles = [
-    # 'position_closure',
-    # "feature_closure",
     "proximity",
-    # "symmetry",
-    # "similarity_shape",
-    # "similarity_color",
-    # "continuity",
-    # "none",
+    "continuity",
+    "similarity",
+    "closure",
+    "symmetry",
 ]
 
 rule_logic_types = [
