@@ -51,9 +51,7 @@ def train_rules(hard_facts, soft_facts, obj_list, group_list, num_groups, train_
     pos_group_counts_train = num_groups[:len(num_groups) // 2]
     # task_id -> List[int] 每张负例图的 group 数
     neg_group_counts_train = num_groups[len(num_groups) // 2:]
-
     # base rule learning
-
     for i in range(len(train_image_labels)):
         t1 = time.time()
         img_label = train_image_labels[i]
@@ -81,7 +79,7 @@ def train_rules(hard_facts, soft_facts, obj_list, group_list, num_groups, train_
     return rules_train
 
 
-def extend_rules(base_rules, hard_facts_list, soft_facts_list, img_labels, objs_list, groups_list, hyp_params,
+def extend_rules_legacy(base_rules, hard_facts_list, soft_facts_list, img_labels, objs_list, groups_list, hyp_params,
                  min_conf=0.6):
     # 1. combine rules
     combined_rules = []
@@ -128,6 +126,88 @@ def extend_rules(base_rules, hard_facts_list, soft_facts_list, img_labels, objs_
     # sort by confidence descending
     all_scored.sort(key=lambda sr: sr.confidence, reverse=True)
     return all_scored[:hyp_params["top_k"]]
+
+
+
+def extend_rules(base_rules, hard_facts_list, soft_facts_list, img_labels, objs_list, groups_list, hyp_params,
+                 min_conf=0.6, n_iter=3):
+    """
+    Iteratively extend rules for n_iter times.
+    """
+    from collections import defaultdict
+
+    def _generate_combined_rules(base, current):
+        combined = []
+        seen = set()
+        for r1 in base:
+            for r2 in current:
+                if r1.c.head == r2.c.head and r1.scope == r2.scope:
+                    merged_body = tuple(sorted(set(r1.c.body) | set(r2.c.body)))
+                    if len(merged_body) == len(r1.c.body) + 1 and merged_body not in seen:
+                        new_clause = deepcopy(r1.c)
+                        new_clause.body = list(merged_body)
+                        combined.append((new_clause, r1.scope))
+                        seen.add(merged_body)
+        return combined
+
+    def _evaluate_rule_confidence(clause, scope, data, min_conf):
+        N_pos = data['N_pos']
+        N_neg = data['N_neg']
+        pos_count, neg_count = 0, 0
+        for hard_facts, soft_facts, objs, groups, label in zip(
+                data['hard_facts_list'], data['soft_facts_list'],
+                data['objs_list'], data['groups_list'], data['img_labels']):
+            fn = evaluation._SCOPE_FN.get(scope)
+            if fn is None:
+                raise ValueError(f"Unknown scope {scope}")
+            if len(objs) == 0 or len(groups) == 0:
+                clause_image_score = 0
+            else:
+                clause_image_score = fn(clause.body, hard_facts, soft_facts, objs, groups)
+            if label == 1 and clause_image_score > min_conf:
+                pos_count += 1
+            elif label == 0 and clause_image_score > min_conf:
+                neg_count += 1
+        support = pos_count / N_pos if N_pos > 0 else 0.0
+        fpr = (neg_count / N_neg) if N_neg > 0 else 0.0
+        score = support * (1.0 - fpr)
+        return support, score
+
+    data = {
+        'hard_facts_list': hard_facts_list,
+        'soft_facts_list': soft_facts_list,
+        'objs_list': objs_list,
+        'groups_list': groups_list,
+        'img_labels': img_labels,
+        'N_pos': len([l for l in img_labels if l == 1]),
+        'N_neg': len([l for l in img_labels if l == 0])
+    }
+
+    all_scored = list(base_rules)
+    current_rules = list(base_rules)
+    seen_bodies = set(tuple(sorted(r.c.body)) for r in base_rules)
+
+    for _ in range(n_iter):
+        combined_rules = _generate_combined_rules(base_rules, current_rules)
+        new_scored = []
+        for clause, scope in combined_rules:
+            body_tuple = tuple(sorted(clause.body))
+            if body_tuple in seen_bodies:
+                continue
+            support, score = _evaluate_rule_confidence(clause, scope, data, min_conf)
+            if support > 0:
+                sr = ScoredRule(clause, score, scope)
+                new_scored.append(sr)
+                seen_bodies.add(body_tuple)
+        if not new_scored:
+            break  # No new rules generated
+        all_scored.extend(new_scored)
+        current_rules = new_scored
+
+    all_scored.sort(key=lambda sr: sr.confidence, reverse=True)
+    return all_scored[:hyp_params["top_k"]]
+
+
 
 
 def train_calibrator(final_rules, obj_list, group_list, hard_list, soft_list, img_labels,

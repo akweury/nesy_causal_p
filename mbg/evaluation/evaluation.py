@@ -1,8 +1,7 @@
 # Created by MacBook Pro at 15.05.25
-import time
 
 # evaluation.py
-
+import time
 import torch
 from collections import defaultdict
 from typing import List, Dict
@@ -13,7 +12,8 @@ from mbg.grounding import grounding
 from mbg.language.clause_generation import Clause, ScoredRule
 from mbg import patch_preprocess
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
-# from mbg.scorer import dpl_utils
+
+
 def _evaluate_clause(
         clause: Clause,
         hard: Dict[str, torch.Tensor],
@@ -400,20 +400,154 @@ def compute_image_score(learned_rules, rule_scores, high_conf_th=0.99, fallback_
         return fallback_weight
 
 
-def eval_rules(val_data, obj_model, group_model, learned_rules, hyp_params, eval_principle, device, calibrator, ablation_flags):
+def is_grouping_error(pred_groups, symbolic_data, iou_threshold=0.5):
+    """
+    Evaluate grouping error by comparing predicted groups to ground truth groups
+    based on object-level group_id in symbolic_data.
+    """
+
+    # 1. Build GT groups: group_id -> set of obj indices
+    gt_group_dict = defaultdict(set)
+    for idx, obj in enumerate(symbolic_data):
+        group_id = int(obj["group_id"].item())
+        gt_group_dict[group_id].add(idx)
+    gt_groups = list(gt_group_dict.values())
+
+    # 2. Build predicted groups: list of sets
+    pred_groups_sets = [set(group["child_obj_ids"]) for group in pred_groups]
+
+    # 3. Compute alignment between predicted and gt groups
+    matched_gt = set()
+    matched_pred = set()
+
+    for pred_idx, pred_set in enumerate(pred_groups_sets):
+        for gt_idx, gt_set in enumerate(gt_groups):
+            iou = len(pred_set & gt_set) / len(pred_set | gt_set)
+            if iou >= iou_threshold:
+                matched_gt.add(gt_idx)
+                matched_pred.add(pred_idx)
+                break  # only allow one match per predicted group
+
+    # 4. Compute match rate and error
+    total_gt = len(gt_groups)
+    total_pred = len(pred_groups_sets)
+
+    if total_gt == 0 and total_pred == 0:
+        return False  # perfect (trivially)
+    if total_gt == 0 or total_pred == 0:
+        return True   # totally mismatched
+
+    match_rate = len(matched_gt) / total_gt
+    return match_rate < 1.0  # grouping error if not all GT groups matched
+
+def is_object_error(objs, symbolic_data):
+    """
+    Return True if there is a shape mismatch between predicted and ground truth objects.
+    Assumes objs and symbolic_data are aligned in order by position.
+    """
+
+    if len(objs) != len(symbolic_data):
+        return True  # mismatch in number of objects
+
+    for pred_obj, gt_obj in zip(objs, symbolic_data):
+        pred_shape_idx = torch.argmax(pred_obj["s"]["shape"]).item()
+        gt_shape_idx = gt_obj["shape"].item()
+        if pred_shape_idx != gt_shape_idx:
+            return True  # shape mismatch
+
+    return False  # all shapes match
+
+def eval_rules(val_data, obj_model, group_model, learned_rules, hyp_params, eval_principle, device, calibrator):
+    patch_dim = hyp_params["patch_dim"]
+    conf_th = hyp_params["conf_th"]
+    top_k = hyp_params["top_k"]
+
+    task_id = val_data["task"][0].split("_")[0]
+    all_data = val_data["positive"] + val_data["negative"]
+    img_paths = [d["image_path"][0] for d in all_data]
+    imgs = patch_preprocess.load_images_fast(img_paths, device=device)
+    gt_labels = [int(d["img_label"][0]) for d in all_data]
+
+    per_task_scores = defaultdict(list)
+    per_task_labels = defaultdict(list)
+
+    error_counters = {
+        "grouping_error": 0,
+        "object_error": 0,
+        "clause_mismatch": 0,
+        "total_errors": 0
+    }
+
+    for i, img in enumerate(imgs):
+        true_label = gt_labels[i]
+
+        # 1) detect objects & groups
+        objs = eval_patch_classifier.evaluate_image(obj_model, img, device)
+        # align the pred objects with gt objects
+        gt_objs = all_data[i]["symbolic_data"]
+        objs_gt_aligned, objs, _ = patch_preprocess.align_gt_data_and_pred_data(gt_objs, objs)
+
+        groups = eval_groups.eval_groups(objs, group_model, eval_principle, device, patch_dim)
+
+        # 2) ground symbolic facts
+        hard, soft = grounding.ground_facts(objs, groups)
+
+
+
+        # 3) filter rules
+        kept_rules = [r for r in learned_rules if r.confidence >= conf_th]
+
+        # 4) compute rule scores
+        rule_score_dict = apply_rules(kept_rules, hard, soft, objs, groups)
+        rule_score = list(rule_score_dict.values())
+        while len(rule_score) < top_k:
+            rule_score.append(0.0)
+
+        # 5) compute image-level score
+        if calibrator:
+            img_score = calibrator(torch.tensor(rule_score).to(device)).detach().cpu().numpy()
+        else:
+            img_score = compute_image_score(kept_rules, rule_score_dict)
+
+        per_task_scores[task_id].append(img_score)
+        per_task_labels[task_id].append(true_label)
+
+        # 6) classification decision
+        predicted_label = int(img_score >= conf_th)
+        if predicted_label != true_label:
+            error_counters["total_errors"] += 1
+            # === Error Attribution Logic ===
+            symbolic_data = all_data[i]["symbolic_data"]
+            if is_grouping_error(groups, symbolic_data):
+                error_counters["grouping_error"] += 1
+
+            elif is_object_error(objs, symbolic_data):
+                error_counters["object_error"] += 1
+            else:
+                error_counters["clause_mismatch"] += 1
+
+    # compute metrics per task
+    metrics = {}
+    for task_id in per_task_scores:
+        scores_list = per_task_scores[task_id]
+        labels = per_task_labels[task_id]
+        metrics = compute_metrics(scores_list, labels, threshold=conf_th)
+
+    metrics["error_stats"] = error_counters
+    return metrics
+
+
+def eval_rules_legacy(val_data, obj_model, group_model, learned_rules, hyp_params, eval_principle, device, calibrator):
     patch_dim = hyp_params["patch_dim"]
     # we’ll collect per‐task true / pred
     per_task_scores = defaultdict(list)
     per_task_labels = defaultdict(list)
     conf_th = hyp_params["conf_th"]
     task_id = val_data["task"][0].split("_")[0]
-
     all_data = val_data["positive"] + val_data["negative"]
     img_paths = [d["image_path"][0] for d in all_data]
     imgs = patch_preprocess.load_images_fast(img_paths, device=device)
     gt_labels = [int(d["img_label"][0]) for d in all_data]
-
-    t1 = time.time()
     # for each rule, we need to know the valuation result, so either 1 or 0
     for i, img in enumerate(imgs):
         true_label = gt_labels[i]
@@ -421,43 +555,27 @@ def eval_rules(val_data, obj_model, group_model, learned_rules, hyp_params, eval
         objs = eval_patch_classifier.evaluate_image(obj_model, img, device)
         groups = eval_groups.eval_groups(objs, group_model, eval_principle, device, patch_dim)
         # 2) ground  & generate validation image’s clauses
-        hard, soft, _, _  = grounding.ground_facts(objs, groups)
-
+        hard, soft = grounding.ground_facts(objs, groups)
         # 4) filter out very‐low confidence rules
         kept_rules = [r for r in learned_rules if r.confidence >= conf_th]
         # 5) soft‐match each rule on this image
         rule_score_dict = apply_rules(kept_rules, hard, soft, objs, groups)
-
         rule_score = list(rule_score_dict.values())
-
         # Pad if fewer than k
         while len(rule_score) < hyp_params["top_k"]:
             rule_score.append(0.0)
-
         if calibrator:
-            if ablation_flags["use_deepproblog"]:
-                arg_domains_dict = dpl_utils.get_dpl_args(kept_rules, groups)
-                img_score =  dpl_utils.test_dpl_any_head(calibrator, kept_rules, hard, arg_domains_dict)
-            else:
-                
-                img_score = calibrator(torch.tensor(rule_score).to(device)).detach().cpu().numpy()
-            
-            
+            img_score = calibrator(torch.tensor(rule_score).to(device)).detach().cpu().numpy()
         else:
             img_score = compute_image_score(kept_rules, rule_score_dict)
         per_task_scores[task_id].append(img_score)
         per_task_labels[task_id].append(true_label)
-
-    t2 = time.time()
-    d1 = t2-t1
     # now compute metrics per task
     metrics = {}
     for task_id in per_task_scores:
         # build lists of just the per‐image score dicts and labels
         scores_list = per_task_scores[task_id]
         labels = per_task_labels[task_id]
-
         # compute raw metrics (acc, f1, auc)
         metrics = compute_metrics(scores_list, labels, threshold=conf_th)
-        # print(f"Task {task_id} →  acc={metrics['acc']:.3f}   f1={metrics['f1']:.3f}   auc={metrics['auc']:.3f}")
     return metrics

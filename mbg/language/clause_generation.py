@@ -48,10 +48,10 @@ class Clause:
 
     def __eq__(self, other: Any) -> bool:
         return (
-            isinstance(other, Clause)
-            and self.head == other.head
-            and set(self.body) == set(other.body)
-            and (self.weight == other.weight)
+                isinstance(other, Clause)
+                and self.head == other.head
+                and set(self.body) == set(other.body)
+                and (self.weight == other.weight)
         )
 
     def __hash__(self) -> int:
@@ -74,6 +74,8 @@ class Clause:
             arg_str = ", ".join(map(str, args))
             body_atoms.append(f"{pred}({arg_str})")
         return head + " :- " + ", ".join(body_atoms)
+
+
 # class ClauseGenerator:
 #     """
 #     Enumerate all single‐atom clauses (and some simple multi‐atom bodies)
@@ -209,7 +211,7 @@ class ClauseExtender:
             all_atoms.update(facts.keys())
 
         body_clauses = [Clause(head=("image_target", "X"), body=[
-                               (a,)]) for a in sorted(all_atoms)]
+            (a,)]) for a in sorted(all_atoms)]
         final_rules = []
 
         for L in range(1, self.max_body_len + 1):
@@ -439,17 +441,17 @@ class ClauseGenerator:
     def hard_obj(self, clauses_dict, hard, O):
         # (a) object-level shape
         for i in range(O):
-            shape_val = int(hard["has_shape"][i].item())
+            shape_val = int(hard["has_shape"][i].item()) # has_shape
             mask = torch.zeros(O, dtype=torch.bool)
             mask[i] = True
             self.add(clauses_dict, self.img_head, [
-                     ("has_shape", "O", shape_val)], support_mask=mask)
+                ("has_shape", "O", shape_val)], support_mask=mask)
         for i in range(O):
             rgb = tuple(int(c) for c in hard["has_color"][i].tolist())
             mask = torch.zeros(O, dtype=torch.bool)
             mask[i] = True
             self.add(clauses_dict, self.img_head, [
-                     ("has_color", "O", rgb)], support_mask=mask)
+                ("has_color", "O", rgb)], support_mask=mask)
         # (g) symmetry
         if all(k in hard for k in ["same_shape", "same_color", "mirror_x"]):
             mirror = hard["mirror_x"]
@@ -463,17 +465,17 @@ class ClauseGenerator:
                         mask[j] = True
                         if same_shape[i, j] > 0.5:
                             self.add(clauses_dict, self.img_head, [
-                                     ("mirror_x", "O1", "O2"), ("same_shape", "O1", "O2")], support_mask=mask)
+                                ("mirror_x", "O1", "O2"), ("same_shape", "O1", "O2")], support_mask=mask)
                         if same_color[i, j] > 0.5:
                             self.add(clauses_dict, self.img_head, [
-                                     ("mirror_x", "O1", "O2"), ("same_color", "O1", "O2")], support_mask=mask)
+                                ("mirror_x", "O1", "O2"), ("same_color", "O1", "O2")], support_mask=mask)
 
     def hard_group(self, clauses_dict, hard, O, G):
         # (c) group size & principle
         # clause to represent the group number
         gn = int(len(hard["group_size"]))
         self.add(clauses_dict, self.img_head, [
-                 ("group_num", "I", gn)], support_mask=torch.ones(G, dtype=torch.bool))
+            ("group_num", "I", gn)], support_mask=torch.ones(G, dtype=torch.bool))
         for i in range(O):
             shape_val = int(hard["has_shape"][i].item())
             group_ids = torch.where(hard["in_group"][i])[0]
@@ -488,39 +490,30 @@ class ClauseGenerator:
             for g in group_ids:
                 mask = torch.zeros(O, dtype=torch.bool)
                 mask[i] = True
-                self.add(clauses_dict, self.img_head, [
-                         ("has_color", "O", rgb), ("in_group", "O", "G")], support_mask=mask)
+                self.add(clauses_dict, self.img_head, [("has_color", "O", rgb), ("in_group", "O", "G")], support_mask=mask)
 
         for g in range(G):
             sz = int(hard["group_size"][g].item())
             pr = int(hard["principle"][g].item())
             mask = torch.zeros(G, dtype=torch.bool)
             mask[g] = True
-            self.add(clauses_dict, self.img_head, [
-                     ("group_size", "G", sz)], support_mask=mask)
-            self.add(clauses_dict, self.img_head, [
-                     ("principle", "G", pr)], support_mask=mask)
-            self.add(clauses_dict, self.grp_head, [
-                     ("group_size", "G", sz)], support_mask=mask)
-            self.add(clauses_dict, self.grp_head, [
-                     ("principle", "G", pr)], support_mask=mask)
+            self.add(clauses_dict, self.img_head, [("group_size", "G", sz)], support_mask=mask)
+            self.add(clauses_dict, self.img_head, [("principle", "G", pr)], support_mask=mask)
+            self.add(clauses_dict, self.grp_head, [("group_size", "G", sz)], support_mask=mask)
+            self.add(clauses_dict, self.grp_head, [("principle", "G", pr)], support_mask=mask)
             for pred in hard:
                 if hard[pred].size() == 0:
                     continue
                 if pred.startswith("no_member_"):
                     shape_val = bk.bk_shapes.index(
                         pred.split("no_member_")[-1]) - 1
-                    self.add(clauses_dict, self.img_head, [
-                             (pred, "I", shape_val)], support_mask=mask)
-                    self.add(clauses_dict, self.grp_head, [
-                             (pred, "G", shape_val)], support_mask=mask)
+                    self.add(clauses_dict, self.img_head, [(pred, "I", shape_val)], support_mask=mask)
+                    self.add(clauses_dict, self.grp_head, [(pred, "G", shape_val)], support_mask=mask)
                 elif pred.startswith("diverse_") or pred.startswith("unique_"):
                     if pred == "diverse_counts":
                         continue
-                    self.add(clauses_dict, self.img_head, [
-                             (pred, "I", None)], support_mask=mask)
-                    self.add(clauses_dict, self.grp_head, [
-                             (pred, "G", None)], support_mask=mask)
+                    self.add(clauses_dict, self.img_head, [(pred, "I", None)], support_mask=mask)
+                    self.add(clauses_dict, self.grp_head, [ (pred, "G", None)], support_mask=mask)
             # (c) in-group object shape and color
             obj_ids = torch.where(hard["in_group"][:, g])[0]
             for i in obj_ids:
@@ -529,9 +522,9 @@ class ClauseGenerator:
                 o_mask = torch.zeros(G, dtype=torch.bool)
                 o_mask[g] = True
                 self.add(clauses_dict, self.grp_head, [
-                         ("has_shape", "O", shape_val), ("in_group", "O", "G")], support_mask=o_mask)
+                    ("has_shape", "O", shape_val), ("in_group", "O", "G")], support_mask=o_mask)
                 self.add(clauses_dict, self.grp_head, [
-                         ("has_color", "O", rgb), ("in_group", "O", "G")], support_mask=o_mask)
+                    ("has_color", "O", rgb), ("in_group", "O", "G")], support_mask=o_mask)
 
     def soft_obj(self, clauses_dict, soft, obj_list, O):
         # (e) proximity
@@ -545,7 +538,7 @@ class ClauseGenerator:
                         mask[i] = True
                         mask[j] = True
                         self.add(clauses_dict, self.img_head, [
-                                 ("prox", "O1", "O2")], weight=score, support_mask=mask)
+                            ("prox", "O1", "O2")], weight=score, support_mask=mask)
 
         # object-object soft similarity predicates
         for pred_name in ["sim_color_soft", "sim_shape_soft", "sim_size_soft"]:
@@ -559,7 +552,7 @@ class ClauseGenerator:
                             mask[i] = True
                             mask[j] = True
                             self.add(clauses_dict, self.img_head, [
-                                     (pred_name, "O1", "O2")], weight=score, support_mask=mask)
+                                (pred_name, "O1", "O2")], weight=score, support_mask=mask)
 
     def soft_group(self, clauses_dict, soft, G):
         # (f) group-group similarity
@@ -573,7 +566,7 @@ class ClauseGenerator:
                         mask[g1] = True
                         mask[g2] = True
                         self.add(clauses_dict, self.img_head, [
-                                 ("grp_sim", "G1", "G2")], weight=score, support_mask=mask)
+                            ("grp_sim", "G1", "G2")], weight=score, support_mask=mask)
 
     def generate(self, hard: Dict[str, torch.Tensor], soft: Dict[str, torch.Tensor], obj_list, group_list, ablation_flags: Dict[str, bool]) -> List[CWS]:
         clauses_dict: Dict[Tuple, CWS] = {}
@@ -598,48 +591,6 @@ class ScoredRule(NamedTuple):
     c: Clause
     confidence: float
     scope: str  # one of "image", "existential", "universal"
-
-# def generate_clauses(
-#         img_label: bool,
-#         hard_facts: Dict[str, torch.Tensor],
-#         soft_facts: Dict[str, torch.Tensor],
-#         prox_thresh: float = 0.9,
-#         sim_thresh: float = 0.5,
-# ) -> List[Clause]:
-#     """
-#     For a single example, produce all candidate clauses for *every*
-#     head predicate registered in HEAD_PREDICATES.
-#
-#     Args:
-#       img_label:  whether this example is positive (unused by default)
-#       hard_facts: object‐ and group‐level hard tensors
-#       soft_facts: soft (neural) tensors
-#       prox_thresh: threshold for soft['prox']
-#       sim_thresh:  threshold for soft['grp_sim']
-#
-#     Returns:
-#       A combined list of Clause(...) for each head in HEAD_PREDICATES.
-#     """
-#
-#     gen = ClauseGenerator(
-#         prox_thresh=prox_thresh,
-#         sim_thresh=sim_thresh
-#     )
-#     # generate clauses with head_pred, e.g. image_target(X) or group_target(G,X)
-#     cls = gen.generate(
-#         hard=hard_facts,
-#         soft=soft_facts
-#     )
-#     freq = Counter(cls)
-#
-#     return cls, freq
-
-
-# def generate_clauses(img_label, hard, soft):
-#     train_data = hard, soft
-#     cg = ClauseGenerator(pos_pred="image_target")
-#     candidates = cg.generate(img_label, hard, soft)
-#     return candidates
 
 
 def finalize_rules_per_task(pos_per_task, neg_per_task):
@@ -712,11 +663,11 @@ def split_clauses_by_head(
         neg_per_task: Dict[str, List[List[Clause]]],
 ) -> Tuple[
     Dict[str, Counter],  # pos_image_counts[task] = Counter of image_target clauses
-    # pos_group_counts[task] = list of Counters of group_target clauses per positive image
+        # pos_group_counts[task] = list of Counters of group_target clauses per positive image
     Dict[str, List[Counter]],
-    # neg_image_union[task]  = set of all image_target clauses seen in any negative image
+        # neg_image_union[task]  = set of all image_target clauses seen in any negative image
     Dict[str, Set[Clause]],
-    # neg_group_counts[task]  = list of Counters of group_target clauses per negative image
+        # neg_group_counts[task]  = list of Counters of group_target clauses per negative image
     Dict[str, List[Counter]]
 ]:
     """
@@ -954,7 +905,7 @@ def filter_group_universal_rules(
         if pos_ratios and neg_ratios:
             pos_support = sum(pos_ratios) / len(pos_freqs)
             neg_support = sum(neg_ratios) / \
-                len(neg_freqs) if neg_ratios else 0.0
+                          len(neg_freqs) if neg_ratios else 0.0
             final_support = pos_support * (1.0 - neg_support)
             if final_support > 0:
                 results.append((clause, final_support))

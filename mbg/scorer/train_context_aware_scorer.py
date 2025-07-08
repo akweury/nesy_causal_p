@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from tqdm import tqdm
 import wandb
 import argparse
 
@@ -25,11 +24,7 @@ def train_model(principle, input_type, device, log_wandb=True):
     data_path, model_path = path_map[principle]
 
     # Input dimension
-    input_dim_map = {
-        "pos": 2,
-        "pos_color": 5,
-        "pos_color_size": 7,
-    }
+    input_dim_map = {"pos": 2, "pos_color": 5, "pos_color_size": 7}
     if input_type not in input_dim_map:
         raise ValueError(f"Unsupported input type: {input_type}")
     input_dim = input_dim_map[input_type]
@@ -38,10 +33,8 @@ def train_model(principle, input_type, device, log_wandb=True):
     model = ContextContourScorer(input_dim=input_dim).to(device)
     dataset = ContextContourDataset(data_path, input_type, data_num=10000, task_num=100)
     data_loader = DataLoader(dataset, batch_size=1, shuffle=True, collate_fn=context_collate_fn)
-
     criterion = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
-
     avg_acc = 0
     avg_loss = 0
     for epoch in range(50):
@@ -51,7 +44,6 @@ def train_model(principle, input_type, device, log_wandb=True):
             ci, cj = ci.to(device), cj.to(device)
             label = label.to(device)
             ctx_tensor = ctx[0].unsqueeze(0).to(device)
-
             logits = model(ci, cj, ctx_tensor)
             loss = criterion(logits, label)
             optimizer.zero_grad()
@@ -62,19 +54,15 @@ def train_model(principle, input_type, device, log_wandb=True):
             pred = (torch.sigmoid(logits) > 0.5).float()
             correct += (pred == label).sum().item()
             total += len(label)
-
         acc = correct / total
         avg_loss = total_loss / total
         avg_acc = acc
         print(f"[Epoch {epoch + 1}] Loss: {avg_loss:.4f} | Acc: {acc:.4f}")
-
         if log_wandb:
             wandb.log({"epoch": epoch + 1, "loss": avg_loss, "accuracy": acc})
-
     torch.save(model.state_dict(), model_path)
     print(f"Model saved to {model_path}")
-
-    return avg_acc, avg_loss
+    return avg_acc,  avg_loss
 
 
 def parse_device(device_str):
@@ -96,9 +84,7 @@ if __name__ == "__main__":
     input_types = ["pos", "pos_color", "pos_color_size"]
 
     wandb.init(project="grb-context-train", config={
-        "epochs": 50,
-        "batch_size": 1,
-        "learning_rate": 1e-3,
+        "epochs": 50, "batch_size": 1, "learning_rate": 1e-3,
     })
     report = []
     if args.all:

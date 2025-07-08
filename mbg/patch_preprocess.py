@@ -759,8 +759,8 @@ def align_gt_data_and_pred_data(
     if len(objects) == 0 or len(pred_objects) == 0:
         return [], [], []
 
-    gt_coords = np.array([[obj["x"], obj["y"]] for obj in objects])
-    pred_coords = np.array([[pred["s"]["x"], pred["s"]["y"]] for pred in pred_objects])
+    gt_coords = np.array([[float(obj["x"]), float(obj["y"]) ] for obj in objects])
+    pred_coords = np.array([[ float(pred["s"]["x"]), float(pred["s"]["y"])] for pred in pred_objects])
 
     # Compute pairwise distance matrix
     dists = np.linalg.norm(gt_coords[:, None, :] - pred_coords[None, :, :], axis=-1)

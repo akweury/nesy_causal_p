@@ -18,41 +18,33 @@ from mbg import exp_utils
 from src import bk
 
 ABLATED_CONFIGS = {
-    "hard_obj_calib": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": False, "use_calibrator": True,
-                       "use_deepproblog": False},
-    "hard_ogc": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": True, "use_calibrator": True,
-                 "use_deepproblog": False},
+    "hard_obj_calib": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": False, "use_calibrator": True, "use_deepproblog": False},
+    "hard_ogc": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": True, "use_calibrator": True, "use_deepproblog": False},
 
 }
 
 
 def run_analysis(train_data, val_data, obj_model, group_model, train_principle, args):
     task_name = train_data["task"]
-    train_val_data = {
-        "task": task_name,
-        "positive": train_data["positive"] + val_data["positive"],
-        "negative": train_data["negative"] + val_data["negative"]
-    }
+    train_val_data = {"task": task_name, "positive": train_data["positive"] + val_data["positive"], "negative": train_data["negative"] + val_data["negative"]}
     hyp_params = {"prox": 0.9, "sim": 0.5, "top_k": 5, "conf_th": 0.5, "patch_dim": 7}
     train_img_labels = [1] * len(train_val_data["positive"]) + [0] * len(train_val_data["negative"])
 
     obj_times = torch.zeros(len(train_img_labels))
     group_times = torch.zeros(len(train_img_labels))
 
-    ablation_flags = ABLATED_CONFIGS["hard_obj_calib"]
-
-    hard, soft, group_nums, obj_list, group_list = training.ground_facts(
-        train_val_data, obj_model, group_model, hyp_params, train_principle, args.device, ablation_flags, obj_times)
-
-    base_rules = training.train_rules(hard, soft, obj_list, group_list, group_nums, train_img_labels,
-                                      hyp_params, ablation_flags, obj_times)
+    # obj-group-level rule reasoning
+    ablation_flags = ABLATED_CONFIGS["hard_ogc"]
+    hard, soft, group_nums, obj_list, group_list = training.ground_facts(train_val_data, obj_model, group_model, hyp_params, train_principle, args.device, ablation_flags, group_times)
+    base_rules = training.train_rules(hard, soft, obj_list, group_list, group_nums, train_img_labels, hyp_params, ablation_flags, group_times)
     final_rules = training.extend_rules(base_rules, hard, soft, train_img_labels, obj_list, group_list, hyp_params)
 
-    ablation_flags = ABLATED_CONFIGS["hard_ogc"]
-    hard, soft, group_nums, obj_list, group_list = training.ground_facts(train_val_data, obj_model, group_model,
-                                                                         hyp_params, train_principle, args.device, ablation_flags, group_times)
-    base_rules = training.train_rules(hard, soft, obj_list, group_list, group_nums, train_img_labels, hyp_params,
-                                      ablation_flags, group_times)
+    # only object-level rule reasoning
+    ablation_flags = ABLATED_CONFIGS["hard_obj_calib"]
+
+    hard, soft, group_nums, obj_list, group_list = training.ground_facts(train_val_data, obj_model, group_model, hyp_params, train_principle, args.device, ablation_flags,
+                                                                         obj_times)
+    base_rules = training.train_rules(hard, soft, obj_list, group_list, group_nums, train_img_labels, hyp_params, ablation_flags, obj_times)
     final_rules = training.extend_rules(base_rules, hard, soft, train_img_labels, obj_list, group_list, hyp_params)
 
     # Dict: n_obj -> list of (obj_facts, group_facts, n_groups)
@@ -99,11 +91,12 @@ def main_eff_analysis():
         combined_loader = dataset.load_combined_dataset(principle_path, task_num=args.top_data)
         obj_model = eval_patch_classifier.load_model(args.device)
         group_model = scorer_config.load_scorer_model(train_principle, args.device)
-
         # Dict: n_obj -> list of (obj_facts, group_facts, n_groups) for all tasks
         analysis_dict = {}
         time_dict = {}
         for task_idx, (train_data, val_data, test_data) in enumerate(combined_loader):
+            # if task_idx!=36:
+            #     continue
             print(f"\nPrinciple: {train_principle} | Task {task_idx + 1}/{len(combined_loader)}: {train_data['task']}")
             obj_num_avg, time_stats = run_analysis(train_data, val_data, obj_model, group_model, train_principle, args)
             for n_obj, tup in obj_num_avg.items():
@@ -130,25 +123,15 @@ def main_eff_analysis():
             std_obj_facts = np.std(stats["obj_facts"]) if count > 0 else 0.0
             std_group_facts = np.std(stats["group_facts"]) if count > 0 else 0.0
             avg_analysis[n_obj] = {
-                "avg_obj_facts": avg_obj_facts,
-                "avg_group_facts": avg_group_facts,
-                "avg_groups": avg_groups,
-                "std_obj_facts": std_obj_facts,
-                "std_group_facts": std_group_facts
-            }
+                "avg_obj_facts": avg_obj_facts, "avg_group_facts": avg_group_facts,
+                "avg_groups": avg_groups, "std_obj_facts": std_obj_facts, "std_group_facts": std_group_facts}
         all_results[train_principle] = avg_analysis
         all_time_stats[train_principle] = time_dict
-
-
 
     # Save to JSON
     saved_json_file = config.output / f"efficiency_analysis.json"
     with open(saved_json_file, "w") as f:
-        json.dump(
-            {
-                "all_results": all_results,
-                "all_time_stats": all_time_stats
-            }, f, indent=2)
+        json.dump({"all_results": all_results, "all_time_stats": all_time_stats}, f, indent=2)
     print("\n=== Efficiency Analysis Summary ===")
     for principle, analysis in all_results.items():
         print(f"{principle}: {analysis}")
@@ -156,9 +139,7 @@ def main_eff_analysis():
     return saved_json_file
 
 
-
 def draw_figures(saved_json_file):
-
     # Load data from JSON and draw charts
     with open(saved_json_file, "r") as f:
         data = json.load(f)
@@ -209,7 +190,6 @@ def draw_figures(saved_json_file):
             "n_group_time": count_group
         }
 
-
     # Draw and save the combined line chart
     chart_path = config.output / "fact_number_line_chart_all_principles.png"
     exp_utils.draw_fact_number_line_chart(merged_avg, chart_path)
@@ -219,4 +199,5 @@ def draw_figures(saved_json_file):
 
 if __name__ == "__main__":
     json_file = main_eff_analysis()
+    json_file = config.output / "efficiency_analysis.json"
     draw_figures(json_file)

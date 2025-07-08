@@ -118,7 +118,6 @@ class GroundingModule:
         if not disable_hard:
             t1 = time.time()
             for pred, fn in OBJ_HARD.items():
-
                 try:
                     hard_facts[pred] = fn(objects=objects, groups=groups, device=self.device)
                 except Exception as e:
