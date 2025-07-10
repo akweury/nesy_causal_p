@@ -435,10 +435,11 @@ def is_grouping_error(pred_groups, symbolic_data, iou_threshold=0.5):
     if total_gt == 0 and total_pred == 0:
         return False  # perfect (trivially)
     if total_gt == 0 or total_pred == 0:
-        return True   # totally mismatched
+        return True  # totally mismatched
 
     match_rate = len(matched_gt) / total_gt
     return match_rate < 1.0  # grouping error if not all GT groups matched
+
 
 def is_object_error(objs, symbolic_data):
     """
@@ -456,6 +457,7 @@ def is_object_error(objs, symbolic_data):
             return True  # shape mismatch
 
     return False  # all shapes match
+
 
 def eval_rules(val_data, obj_model, group_model, learned_rules, hyp_params, eval_principle, device, calibrator):
     patch_dim = hyp_params["patch_dim"]
@@ -477,6 +479,11 @@ def eval_rules(val_data, obj_model, group_model, learned_rules, hyp_params, eval
         "clause_mismatch": 0,
         "total_errors": 0
     }
+    # top-k clause selection analysis
+    topk_hits = 0
+    topk_total_valid = 0
+    topk_precision_sum = 0
+    topk_precision_count = 0
 
     for i, img in enumerate(imgs):
         true_label = gt_labels[i]
@@ -492,14 +499,14 @@ def eval_rules(val_data, obj_model, group_model, learned_rules, hyp_params, eval
         # 2) ground symbolic facts
         hard, soft = grounding.ground_facts(objs, groups)
 
-
-
         # 3) filter rules
         kept_rules = [r for r in learned_rules if r.confidence >= conf_th]
 
         # 4) compute rule scores
         rule_score_dict = apply_rules(kept_rules, hard, soft, objs, groups)
-        rule_score = list(rule_score_dict.values())
+        sorted_rules = sorted(rule_score_dict.items(), key=lambda x: x[1], reverse=True)
+        topk_rules = [r[0] for r in sorted_rules[:top_k]]
+        rule_score = [s for (_, s) in sorted_rules[:top_k]]
         while len(rule_score) < top_k:
             rule_score.append(0.0)
 
@@ -516,15 +523,23 @@ def eval_rules(val_data, obj_model, group_model, learned_rules, hyp_params, eval
         predicted_label = int(img_score >= conf_th)
         if predicted_label != true_label:
             error_counters["total_errors"] += 1
-            # === Error Attribution Logic ===
-            symbolic_data = all_data[i]["symbolic_data"]
-            if is_grouping_error(groups, symbolic_data):
+            if is_grouping_error(groups, gt_objs):
                 error_counters["grouping_error"] += 1
-
-            elif is_object_error(objs, symbolic_data):
+            elif is_object_error(objs, gt_objs):
                 error_counters["object_error"] += 1
             else:
                 error_counters["clause_mismatch"] += 1
+        # 7) top-k clause selection analysis
+        correct_clauses = [r for r in kept_rules if r.confidence > conf_th]
+        if len(correct_clauses) > 0:
+            topk_total_valid += 1
+            if any(r in topk_rules for r in correct_clauses):
+                topk_hits += 1
+
+        if len(topk_rules) > 0:
+            correct_in_topk = sum(1 for r in topk_rules if bool(r.confidence>conf_th) == bool(true_label))
+            topk_precision_sum += correct_in_topk / top_k
+            topk_precision_count += 1
 
     # compute metrics per task
     metrics = {}
@@ -532,8 +547,14 @@ def eval_rules(val_data, obj_model, group_model, learned_rules, hyp_params, eval
         scores_list = per_task_scores[task_id]
         labels = per_task_labels[task_id]
         metrics = compute_metrics(scores_list, labels, threshold=conf_th)
-
     metrics["error_stats"] = error_counters
+
+    # 9) top-k clause metrics
+    if topk_total_valid > 0:
+        metrics["topk_clause_recall"] = topk_hits / topk_total_valid
+    if topk_precision_count > 0:
+        metrics["topk_clause_precision"] = topk_precision_sum / topk_precision_count
+
     return metrics
 
 

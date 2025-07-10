@@ -123,13 +123,11 @@ def main():
                     "avg_auc": avg_auc,
                     "count": len(metrics_list)
                 }
-
     # save analysis to file
-    with open(f"analysis_summary_{args.exp_name}.json", "w") as f:
+    with open(config.output / f"analysis_summary_{args.principle}.json", "w") as f:
         json.dump(analysis_summary, f, indent=2)
 
     wandb.finish()
-    return
 
 
 
