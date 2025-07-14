@@ -15,14 +15,15 @@ import config
 from mbg.scorer import scorer_config
 
 ABLATED_CONFIGS = {
+    "hard_ogc": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": True, "use_calibrator": True,
+                 "use_deepproblog": False},
     "hard_obj": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": False, "use_calibrator": False,
                  "use_deepproblog": False},
     "hard_obj_calib": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": False, "use_calibrator": True,
                        "use_deepproblog": False},
     "hard_og": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": True, "use_calibrator": False,
                 "use_deepproblog": False},
-    "hard_ogc": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": True, "use_calibrator": True,
-                 "use_deepproblog": False},
+
 
 }
 
@@ -38,18 +39,16 @@ def run_ablation(train_data, val_data, test_data, obj_model, group_model, train_
     hyp_params = {"prox": 0.9, "sim": 0.5, "top_k": 5, "conf_th": 0.5, "patch_dim": 7}
     train_img_labels = [1] * len(train_val_data["positive"]) + [0] * len(train_val_data["negative"])
     # train rule + calibrator
-
     obj_times = torch.zeros(len(train_img_labels))
     group_times = torch.zeros(len(train_img_labels))
-    hard, soft, group_nums, obj_list, group_list = training.ground_facts(train_val_data, obj_model, group_model, hyp_params, train_principle, args.device, ablation_flags,
-                                                                         obj_times)
+
+    hard, soft, group_nums, obj_list, group_list = training.ground_facts(train_val_data, obj_model, group_model, hyp_params, train_principle, args.device, ablation_flags, obj_times)
     base_rules = training.train_rules(hard, soft, obj_list, group_list, group_nums, train_img_labels, hyp_params, ablation_flags, obj_times)
     final_rules = training.extend_rules(base_rules, hard, soft, train_img_labels, obj_list, group_list, hyp_params)
 
-    calibrator = training.train_calibrator(final_rules, obj_list, group_list, hard, soft, train_img_labels, hyp_params,
-                                           ablation_flags, args.device)
-    eval_metrics = evaluation.eval_rules(test_data, obj_model, group_model, final_rules, hyp_params, train_principle,
-                                         args.device, calibrator)
+    calibrator = training.train_calibrator(final_rules, obj_list, group_list, hard, soft, train_img_labels, hyp_params, ablation_flags, args.device)
+    eval_metrics = evaluation.eval_rules(test_data, obj_model, group_model, final_rules, hyp_params, train_principle, args.device, calibrator)
+
     return eval_metrics
 
 
@@ -157,5 +156,7 @@ def main_ablation():
     for mode, stats in final_error_stats.items():
         print(f"{mode}: {stats}")
     wandb.finish()
+
+
 if __name__ == "__main__":
     main_ablation()

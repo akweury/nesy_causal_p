@@ -120,6 +120,6 @@ def print_ablation_results(json_path):
             print(f"(From summary) avg_acc: {avg_acc:.4f}, avg_f1: {avg_f1:.4f}")
 
 if __name__ == "__main__":
-    print_ablation_results(config.output/"ablation_summary_similarity_20250710_115911.json")
+    print_ablation_results(config.output/"ablation_summary_symmetry_20250710_101526.json")
     # main_ablation()
     # run_ablation()

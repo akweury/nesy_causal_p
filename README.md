@@ -54,6 +54,6 @@ python -m src.ablation_study --device 4 --principle symmetry
 python -m mbg.scorer.train_context_aware_scorer --device 1 --all
 python -m mbg.object.train_patch_classifier --device 0 
 ```
-
+pip install -r requirements.txt
 pip uninstall flash_attn flash_attn_2
 

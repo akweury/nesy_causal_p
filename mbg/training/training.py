@@ -67,14 +67,10 @@ def train_rules(hard_facts, soft_facts, obj_list, group_list, num_groups, train_
         t2 = time.time()
         task_times[i] += t2 - t1
 
-    rules_img = clause_generation.filter_image_level_rules(
-        pos_per_task_train, neg_per_task_train)
-    rules_g_exist = clause_generation.filter_group_existential_rules(
-        pos_per_task_train, neg_per_task_train)
-    rules_g_universal = clause_generation.filter_group_universal_rules(pos_per_task_train, neg_per_task_train,
-                                                                       pos_group_counts_train, neg_group_counts_train)
-    rules_train = clause_generation.assemble_final_rules(rules_img, rules_g_exist, rules_g_universal,
-                                                         top_k=hyp_params["top_k"])
+    rules_img = clause_generation.filter_image_level_rules(pos_per_task_train, neg_per_task_train)
+    rules_g_exist = clause_generation.filter_group_existential_rules(pos_per_task_train, neg_per_task_train)
+    rules_g_universal = clause_generation.filter_group_universal_rules(pos_per_task_train, neg_per_task_train, pos_group_counts_train, neg_group_counts_train)
+    rules_train = clause_generation.assemble_final_rules(rules_img, rules_g_exist, rules_g_universal, top_k=hyp_params["top_k"])
 
     return rules_train
 
@@ -187,7 +183,7 @@ def extend_rules(base_rules, hard_facts_list, soft_facts_list, img_labels, objs_
     current_rules = list(base_rules)
     seen_bodies = set(tuple(sorted(r.c.body)) for r in base_rules)
 
-    for _ in range(n_iter):
+    for _ in range(2):
         combined_rules = _generate_combined_rules(base_rules, current_rules)
         new_scored = []
         for clause, scope in combined_rules:

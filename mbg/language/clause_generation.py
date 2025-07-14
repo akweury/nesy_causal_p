@@ -505,15 +505,16 @@ class ClauseGenerator:
                 if hard[pred].size() == 0:
                     continue
                 if pred.startswith("no_member_"):
-                    shape_val = bk.bk_shapes.index(
-                        pred.split("no_member_")[-1]) - 1
-                    self.add(clauses_dict, self.img_head, [(pred, "I", shape_val)], support_mask=mask)
-                    self.add(clauses_dict, self.grp_head, [(pred, "G", shape_val)], support_mask=mask)
+                    if hard[pred][g]==1:
+                        shape_val = bk.bk_shapes.index(pred.split("no_member_")[-1]) - 1
+                        self.add(clauses_dict, self.img_head, [(pred, "I", shape_val)], support_mask=mask)
+                        self.add(clauses_dict, self.grp_head, [(pred, "G", shape_val)], support_mask=mask)
                 elif pred.startswith("diverse_") or pred.startswith("unique_"):
                     if pred == "diverse_counts":
                         continue
-                    self.add(clauses_dict, self.img_head, [(pred, "I", None)], support_mask=mask)
-                    self.add(clauses_dict, self.grp_head, [ (pred, "G", None)], support_mask=mask)
+                    if hard[pred][g]==1:
+                        self.add(clauses_dict, self.img_head, [(pred, "I", None)], support_mask=mask)
+                        self.add(clauses_dict, self.grp_head, [ (pred, "G", None)], support_mask=mask)
             # (c) in-group object shape and color
             obj_ids = torch.where(hard["in_group"][:, g])[0]
             for i in obj_ids:
@@ -521,10 +522,8 @@ class ClauseGenerator:
                 rgb = tuple(int(c) for c in hard["has_color"][i].tolist())
                 o_mask = torch.zeros(G, dtype=torch.bool)
                 o_mask[g] = True
-                self.add(clauses_dict, self.grp_head, [
-                    ("has_shape", "O", shape_val), ("in_group", "O", "G")], support_mask=o_mask)
-                self.add(clauses_dict, self.grp_head, [
-                    ("has_color", "O", rgb), ("in_group", "O", "G")], support_mask=o_mask)
+                self.add(clauses_dict, self.grp_head, [("has_shape", "O", shape_val), ("in_group", "O", "G")], support_mask=o_mask)
+                self.add(clauses_dict, self.grp_head, [("has_color", "O", rgb), ("in_group", "O", "G")], support_mask=o_mask)
 
     def soft_obj(self, clauses_dict, soft, obj_list, O):
         # (e) proximity
@@ -537,8 +536,7 @@ class ClauseGenerator:
                         mask = torch.zeros(O, dtype=torch.bool)
                         mask[i] = True
                         mask[j] = True
-                        self.add(clauses_dict, self.img_head, [
-                            ("prox", "O1", "O2")], weight=score, support_mask=mask)
+                        self.add(clauses_dict, self.img_head, [("prox", "O1", "O2")], weight=score, support_mask=mask)
 
         # object-object soft similarity predicates
         for pred_name in ["sim_color_soft", "sim_shape_soft", "sim_size_soft"]:

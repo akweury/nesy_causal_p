@@ -102,14 +102,7 @@ class GroundingModule:
     def __init__(self, device: str = "cpu"):
         self.device = device
 
-    def ground(
-            self,
-            objects: List[Dict[str, Any]],
-            groups: List[Dict[str, Any]],
-            disable_hard: bool = False,
-            disable_soft: bool = False
-    ):
-
+    def ground(self, objects: List[Dict[str, Any]], groups: List[Dict[str, Any]], disable_hard: bool = False, disable_soft: bool = False):
         hard_facts: Dict[str, torch.Tensor] = {}
         soft_facts: Dict[str, torch.Tensor] = {}
         obj_time = 0.0
