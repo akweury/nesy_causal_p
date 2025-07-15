@@ -2,6 +2,9 @@
 import pandas as pd
 import json
 import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from scipy.stats import ttest_ind
 
 import config
 
@@ -19,16 +22,16 @@ def legacy_fun():
     cont = pd.read_csv(cont_path)
     symm = pd.read_csv(symm_path)
 
-    prox_mean =  prox["prox_01 - hard_ogc_acc_avg"].mean()
-    prox_std =  prox["prox_01 - hard_ogc_acc_avg"].std()
-    simi_mean  = simi["simi_01 - hard_ogc_acc_avg"].mean()
-    simi_std  = simi["simi_01 - hard_ogc_acc_avg"].std()
-    closure_mean\
+    prox_mean = prox["prox_01 - hard_ogc_acc_avg"].mean()
+    prox_std = prox["prox_01 - hard_ogc_acc_avg"].std()
+    simi_mean = simi["simi_01 - hard_ogc_acc_avg"].mean()
+    simi_std = simi["simi_01 - hard_ogc_acc_avg"].std()
+    closure_mean \
         = closure["closure_01 - hard_ogc_acc_avg"].mean()
-    closure_std  = closure["closure_01 - hard_ogc_acc_avg"].std()
+    closure_std = closure["closure_01 - hard_ogc_acc_avg"].std()
 
-    cont_mean  = cont["cont_01 - hard_ogc_acc_avg"].mean()
-    cont_std  = cont["cont_01 - hard_ogc_acc_avg"].std()
+    cont_mean = cont["cont_01 - hard_ogc_acc_avg"].mean()
+    cont_std = cont["cont_01 - hard_ogc_acc_avg"].std()
 
     prin = "prox"
     prox_o_mean = pd.read_csv(config.wandb_path / f"{prin}_o.csv")[f"{prin}_01 - hard_obj_acc_avg"].mean()
@@ -40,8 +43,6 @@ def legacy_fun():
     prox_og_mean = pd.read_csv(config.wandb_path / f"{prin}_og.csv")[f"{prin}_01 - hard_og_acc_avg"].mean()
     prox_og_std = pd.read_csv(config.wandb_path / f"{prin}_og.csv")[f"{prin}_01 - hard_og_acc_avg"].std()
 
-
-
     prin = "simi"
     simi_o_mean = pd.read_csv(config.wandb_path / f"{prin}_o.csv")[f"{prin}_01 - hard_obj_acc_avg"].mean()
     simi_o_std = pd.read_csv(config.wandb_path / f"{prin}_o.csv")[f"{prin}_01 - hard_obj_acc_avg"].std()
@@ -51,8 +52,6 @@ def legacy_fun():
 
     simi_og_mean = pd.read_csv(config.wandb_path / f"{prin}_og.csv")[f"{prin}_01 - hard_og_acc_avg"].mean()
     simi_og_std = pd.read_csv(config.wandb_path / f"{prin}_og.csv")[f"{prin}_01 - hard_og_acc_avg"].std()
-
-
 
     prin = "cont"
     cont_o_mean = pd.read_csv(config.wandb_path / f"{prin}_o.csv")[f"{prin}_01 - hard_obj_acc_avg"].mean()
@@ -74,9 +73,8 @@ def legacy_fun():
     closure_og_mean = pd.read_csv(config.wandb_path / f"{prin}_og.csv")[f"{prin}_01 - hard_og_acc_avg"].mean()
     closure_og_std = pd.read_csv(config.wandb_path / f"{prin}_og.csv")[f"{prin}_01 - hard_og_acc_avg"].std()
 
-
-    symm_mean  = symm["symm_01 - hard_ogc_acc_avg"].mean()
-    symm_std  = symm["symm_01 - hard_ogc_acc_avg"].std()
+    symm_mean = symm["symm_01 - hard_ogc_acc_avg"].mean()
+    symm_std = symm["symm_01 - hard_ogc_acc_avg"].std()
 
     symm_o_mean = pd.read_csv(config.wandb_path / "symm_o.csv")["symm_01 - hard_obj_acc_avg"].mean()
     symm_o_std = pd.read_csv(config.wandb_path / "symm_o.csv")["symm_01 - hard_obj_acc_avg"].std()
@@ -86,7 +84,6 @@ def legacy_fun():
 
     symm_og_mean = pd.read_csv(config.wandb_path / "symm_og.csv")["symm_01 - hard_og_acc_avg"].mean()
     symm_og_std = pd.read_csv(config.wandb_path / "symm_og.csv")["symm_01 - hard_og_acc_avg"].std()
-
 
     print("")
 
@@ -119,7 +116,69 @@ def print_ablation_results(json_path):
         if avg_acc is not None and avg_f1 is not None:
             print(f"(From summary) avg_acc: {avg_acc:.4f}, avg_f1: {avg_f1:.4f}")
 
+
+
+def draw_chart_a_boxplot_with_stats(json_path):
+    # Load JSON file
+    with open(json_path, "r") as f:
+        data = json.load(f)
+
+    # Extract analysis from hard_obj_calib mode
+    results = data["per_task_results"]["hard_obj_calib"]
+    gain_with_clause = []
+    gain_without_clause = []
+
+    for task in results:
+        analysis = task.get("analysis", {})
+        cal_scores = analysis.get("calibrated_scores", [])
+        van_scores = analysis.get("vanilla_scores", [])
+        clause_flags = analysis.get("rule_pool_has_good_clause", [])
+
+        for c, v, has_good in zip(cal_scores, van_scores, clause_flags):
+            gain = c - v
+            if has_good:
+                gain_with_clause.append(gain)
+            else:
+                gain_without_clause.append(gain)
+
+    print(f"Number of examples with good clause: {len(gain_with_clause)}")
+    print(f"Number of examples without good clause: {len(gain_without_clause)}")
+
+    # Run t-test
+    t_stat, p_value = ttest_ind(gain_with_clause, gain_without_clause, equal_var=False)
+
+    # Prepare data for plotting
+    labels = ["Good Clause Exists", "No Good Clause"]
+    data_to_plot = [gain_with_clause, gain_without_clause]
+    means = [np.mean(gain_with_clause), np.mean(gain_without_clause)]
+
+    # Plot
+    plt.figure(figsize=(6, 5))
+    bplot = plt.boxplot(data_to_plot, labels=labels, patch_artist=True, widths=0.5)
+    colors = ["lightblue", "salmon"]
+    for patch, color in zip(bplot["boxes"], colors):
+        patch.set_facecolor(color)
+
+    # Add individual means
+    for i, mean in enumerate(means):
+        plt.plot(i + 1, mean, marker='o', color='black')
+
+    # Annotate p-value
+    p_label = f"p = {p_value:.3e}"
+    plt.text(1.5, max(max(gain_with_clause + gain_without_clause), 0), p_label,
+             ha="center", fontsize=10, bbox=dict(boxstyle="round,pad=0.3", edgecolor="gray", facecolor="white"))
+
+    plt.axhline(0, color="gray", linestyle="--")
+    plt.ylabel("Score Gain (Calibrated − Vanilla)")
+    plt.title("Chart A: Calibrator Improvement vs Clause Quality")
+    plt.grid(axis="y", linestyle="--", linewidth=0.5)
+    plt.tight_layout()
+    plt.show()
+
+
 if __name__ == "__main__":
-    print_ablation_results(config.output/"ablation_summary_symmetry_20250710_101526.json")
+    # print_ablation_results(config.output/"ablation_summary_symmetry_20250710_101526.json")
+    draw_chart_a_boxplot_with_stats(config.output / "ablation_summary_proximity_20250715_193856.json")
+
     # main_ablation()
     # run_ablation()

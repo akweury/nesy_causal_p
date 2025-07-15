@@ -479,6 +479,15 @@ def eval_rules(val_data, obj_model, group_model, learned_rules, hyp_params, eval
         "clause_mismatch": 0,
         "total_errors": 0
     }
+
+    analysis = {
+        "calibrated_scores": [],
+        "vanilla_scores": [],
+        "groundtruth_labels": [],
+        "rule_pool_has_good_clause": [],  # True if any rule has confidence > 0.95
+        "topk_clause_precision": [],
+    }
+
     # top-k clause selection analysis
     topk_hits = 0
     topk_total_valid = 0
@@ -512,9 +521,13 @@ def eval_rules(val_data, obj_model, group_model, learned_rules, hyp_params, eval
 
         # 5) compute image-level score
         if calibrator:
-            img_score = calibrator(torch.tensor(rule_score).to(device)).detach().cpu().numpy()
+            calibrated_score = float(calibrator(torch.tensor(rule_score).to(device)).detach().cpu().numpy())
         else:
-            img_score = compute_image_score(kept_rules, rule_score_dict)
+            calibrated_score = None
+        vanilla_score = compute_image_score(kept_rules, rule_score_dict)
+
+        # choose score for main metric
+        img_score = calibrated_score if calibrator else vanilla_score
 
         per_task_scores[task_id].append(img_score)
         per_task_labels[task_id].append(true_label)
@@ -540,6 +553,18 @@ def eval_rules(val_data, obj_model, group_model, learned_rules, hyp_params, eval
             correct_in_topk = sum(1 for r in topk_rules if bool(r.confidence>conf_th) == bool(true_label))
             topk_precision_sum += correct_in_topk / top_k
             topk_precision_count += 1
+            analysis["topk_clause_precision"].append(correct_in_topk / top_k)
+        else:
+            analysis["topk_clause_precision"].append(0.0)
+
+
+
+        # 8) record additional analysis fields
+        analysis["calibrated_scores"].append(calibrated_score)
+        analysis["vanilla_scores"].append(vanilla_score)
+        analysis["groundtruth_labels"].append(true_label)
+        analysis["rule_pool_has_good_clause"].append(any(r.confidence > 0.5 for r in kept_rules))
+
 
     # compute metrics per task
     metrics = {}
@@ -555,6 +580,7 @@ def eval_rules(val_data, obj_model, group_model, learned_rules, hyp_params, eval
     if topk_precision_count > 0:
         metrics["topk_clause_precision"] = topk_precision_sum / topk_precision_count
 
+    metrics["analysis"] = analysis
     return metrics
 
 

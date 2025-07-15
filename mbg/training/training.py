@@ -206,19 +206,12 @@ def extend_rules(base_rules, hard_facts_list, soft_facts_list, img_labels, objs_
 
 
 
-def train_calibrator(final_rules, obj_list, group_list, hard_list, soft_list, img_labels,
-                     hyp_params, ablation_flags, device):
-    if not ablation_flags["use_calibrator"]:
-        return None
-
+def train_calibrator(final_rules, obj_list, group_list, hard_list, soft_list, img_labels, hyp_params, ablation_flags, device):
     calib_inputs = []
     calib_labels = []
 
-    for hard_facts, soft_facts, objs, groups, label in zip(hard_list, soft_list, obj_list, group_list,
-                                                           img_labels):
-
-        rule_score_dict = evaluation.apply_rules(
-            final_rules, hard_facts, soft_facts, objs, groups)
+    for hard_facts, soft_facts, objs, groups, label in zip(hard_list, soft_list, obj_list, group_list, img_labels):
+        rule_score_dict = evaluation.apply_rules(final_rules, hard_facts, soft_facts, objs, groups)
         rule_scores = [v for v in rule_score_dict.values()]
 
         while len(rule_scores) < hyp_params["top_k"]:
@@ -226,8 +219,7 @@ def train_calibrator(final_rules, obj_list, group_list, hard_list, soft_list, im
 
         calib_inputs.append(rule_scores)
         calib_labels.append(float(label))
-    calibrator = ConfidenceCalibrator(
-        input_dim=hyp_params["top_k"]).to(device)
+    calibrator = ConfidenceCalibrator(input_dim=hyp_params["top_k"]).to(device)
     calibrator.train_from_data(calib_inputs, calib_labels, device=device)
 
     return calibrator

@@ -15,16 +15,10 @@ import config
 from mbg.scorer import scorer_config
 
 ABLATED_CONFIGS = {
-    "hard_ogc": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": True, "use_calibrator": True,
-                 "use_deepproblog": False},
-    "hard_obj": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": False, "use_calibrator": False,
-                 "use_deepproblog": False},
-    "hard_obj_calib": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": False, "use_calibrator": True,
-                       "use_deepproblog": False},
-    "hard_og": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": True, "use_calibrator": False,
-                "use_deepproblog": False},
-
-
+    # "hard_ogc": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": True, "use_calibrator": True},
+    # "hard_obj": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": False, "use_calibrator": False},
+    # "hard_og": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": True, "use_calibrator": False},
+    "hard_obj_calib": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": False, "use_calibrator": True},
 }
 
 
@@ -61,20 +55,20 @@ def main_ablation():
     obj_model = eval_patch_classifier.load_model(args.device)
     group_model = scorer_config.load_scorer_model(train_principle, args.device)
 
-    # wandb.init(project=f"grb_ablation_{train_principle}",
-    #            config=args.__dict__, name=args.exp_name)
+    wandb.init(project=f"grb_ablation_{train_principle}",
+               config=args.__dict__, name=args.exp_name)
 
     results_summary = defaultdict(lambda: defaultdict(list))
     error_summary = defaultdict(lambda: defaultdict(list))  # mode -> error_type -> list of counts
     topk_summary = defaultdict(lambda: defaultdict(list))  # mode -> topk_metric -> list
     per_task_results = defaultdict(list)  # mode -> list of dicts
-
+    analysis_summary = defaultdict(lambda: defaultdict(list))
 
     all_f1 = {conf: [] for conf in ABLATED_CONFIGS}
     all_auc = {conf: [] for conf in ABLATED_CONFIGS}
     all_acc = {conf: [] for conf in ABLATED_CONFIGS}
     for task_idx, (train_data, val_data, test_data) in enumerate(combined_loader):
-        if task_idx!=116:
+        if task_idx>10:
             continue
 
         task_name = train_data["task"]
@@ -109,6 +103,10 @@ def main_ablation():
                 if k in test_metrics:
                     topk_summary[mode_name][k].append(test_metrics[k])
 
+            if "analysis" in test_metrics:
+                for k, values in test_metrics["analysis"].items():
+                    analysis_summary[mode_name][k].extend(values)
+
             log_dicts.update({f"{mode_name}_{k}": test_metrics.get(k, 0) for k in test_metrics})
             log_dicts.update({f"{mode_name}_acc_avg": torch.tensor(all_acc[mode_name]).mean(),
                               f"{mode_name}_auc_avg": torch.tensor(all_auc[mode_name]).mean(),
@@ -132,6 +130,10 @@ def main_ablation():
     for mode, topk_metrics in topk_summary.items():
         for k, values in topk_metrics.items():
             final_summary[mode][f"avg_{k}"] = float(torch.tensor(values).mean())
+    for mode, analysis_dict in analysis_summary.items():
+        for k, values in analysis_dict.items():
+            final_summary[mode][f"avg_{k}"] = float(torch.tensor(values).float().mean())
+
     # Save both per-task and average results
     output_json = {
         "per_task_results": per_task_results,
