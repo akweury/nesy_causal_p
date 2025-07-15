@@ -62,7 +62,7 @@ def train_model(principle, input_type, device, log_wandb=True):
             wandb.log({"epoch": epoch + 1, "loss": avg_loss, "accuracy": acc})
     torch.save(model.state_dict(), model_path)
     print(f"Model saved to {model_path}")
-    return avg_acc,  avg_loss
+    return avg_acc, avg_loss
 
 
 def parse_device(device_str):
@@ -80,7 +80,10 @@ if __name__ == "__main__":
     parser.add_argument("--all", action="store_true", help="Train all principles and input types")
     args = parser.parse_args()
     args.device = parse_device(args.device)
-    principles = ["closure", "proximity", "continuity", "symmetry", "similarity"]
+    # principles = ["closure", "proximity", "continuity", "symmetry", "similarity"]
+    principles = [
+        "continuity"
+    ]
     input_types = ["pos", "pos_color", "pos_color_size"]
 
     wandb.init(project="grb-context-train", config={

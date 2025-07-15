@@ -61,9 +61,9 @@ def main_ablation():
     obj_model = eval_patch_classifier.load_model(args.device)
     group_model = scorer_config.load_scorer_model(train_principle, args.device)
 
-    wandb.init(project=f"grb_ablation_{train_principle}",
-               config=args.__dict__, name=args.exp_name)
-    # setting -> metric -> list
+    # wandb.init(project=f"grb_ablation_{train_principle}",
+    #            config=args.__dict__, name=args.exp_name)
+
     results_summary = defaultdict(lambda: defaultdict(list))
     error_summary = defaultdict(lambda: defaultdict(list))  # mode -> error_type -> list of counts
     topk_summary = defaultdict(lambda: defaultdict(list))  # mode -> topk_metric -> list
@@ -74,6 +74,9 @@ def main_ablation():
     all_auc = {conf: [] for conf in ABLATED_CONFIGS}
     all_acc = {conf: [] for conf in ABLATED_CONFIGS}
     for task_idx, (train_data, val_data, test_data) in enumerate(combined_loader):
+        if task_idx!=116:
+            continue
+
         task_name = train_data["task"]
         print(f"\nTask {task_idx + 1}/{len(combined_loader)}: {task_name}")
 

@@ -51,7 +51,7 @@ class ContextContourDataset(Dataset):
             [x - half_size, y + half_size],
         ]
 
-    def _load(self):
+    def _load(self, device="cpu"):
         task_dirs = [d for d in self.root_dir.iterdir() if d.is_dir()]
         task_dirs = random.sample(task_dirs, self.task_num)
         for task_dir in task_dirs:
@@ -70,7 +70,7 @@ class ContextContourDataset(Dataset):
                         metadata = json.load(f)
                     objects = metadata.get("img_data", [])
 
-                    obj_imgs = patch_preprocess.img_path2obj_images(png_files[f_i])
+                    obj_imgs = patch_preprocess.img_path2obj_images(png_files[f_i], device)
                     if len(objects) != len(obj_imgs):
                         continue
                     if len(objects) > 10:
@@ -85,13 +85,13 @@ class ContextContourDataset(Dataset):
 
                             obj_i = objects[i]
                             obj_j = objects[j]
-                            c_i = patch_preprocess.rgb2patch(obj_imgs[i], self.input_type)
-                            c_j = patch_preprocess.rgb2patch(obj_imgs[j], self.input_type)
+                            c_i, _, _ = patch_preprocess.rgb2patch(obj_imgs[i], self.input_type)
+                            c_j, _, _ = patch_preprocess.rgb2patch(obj_imgs[j], self.input_type)
                             # Context objects (excluding i and j)
                             others = []
                             for k in range(len(objects)):
                                 if k != i and k != j:
-                                    c_k = patch_preprocess.rgb2patch(obj_imgs[k], self.input_type)
+                                    c_k, _, _ = patch_preprocess.rgb2patch(obj_imgs[k], self.input_type)
                                     others.append(c_k)
                             if others:
                                 others_tensor = torch.stack(others, dim=0)  # (N_ctx, 4, 2)
