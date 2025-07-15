@@ -22,7 +22,7 @@ CLOSURE_MODEL = config.models / "neural_closure_model.pt"
 CONTINUITY_MODEL = config.models / "neural_continuity_model.pt"
 SYMMETRY_MODEL = config.models / "neural_symmetry_model.pt"
 
-EPOCHS = 50
+EPOCHS = 10
 BATCH_SIZE = 32
 LR = 1e-3
 DEVICE = "cpu"

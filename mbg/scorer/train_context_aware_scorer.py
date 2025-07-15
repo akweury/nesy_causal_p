@@ -97,7 +97,7 @@ if __name__ == "__main__":
                 acc, loss = train_model(p, t, args.device, log_wandb=True)
                 report.append((p, t, acc, loss))
     else:
-        acc, loss = train_model("similarity", "pos_color", args.device, log_wandb=True)
+        acc, loss = train_model("similarity", "pos_color_size", args.device, log_wandb=True)
         report.append(("similarity", "pos_color", acc, loss))
 
     wandb.finish()
