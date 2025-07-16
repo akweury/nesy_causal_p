@@ -92,7 +92,7 @@ if __name__ == "__main__":
     for p in principles:
         for t in input_types:
             print(f"\n=== Training {p} with {t} ===")
-            acc, loss = train_model(p, t, args.device, log_wandb=True, n=n)
+            acc, loss = train_model(p, t, args.device, log_wandb=True, n=args.n)
             report.append((p, t, acc, loss))
 
     wandb.finish()
