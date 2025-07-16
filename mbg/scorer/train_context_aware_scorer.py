@@ -31,13 +31,13 @@ def train_model(principle, input_type, device, log_wandb=True):
 
     # Setup
     model = ContextContourScorer(input_dim=input_dim).to(device)
-    dataset = ContextContourDataset(data_path, input_type, device=device, data_num=100000, task_num=100)
+    dataset = ContextContourDataset(data_path, input_type, device=device, data_num=10000, task_num=10)
     data_loader = DataLoader(dataset, batch_size=1, shuffle=True, collate_fn=context_collate_fn)
     criterion = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
     avg_acc = 0
     avg_loss = 0
-    for epoch in range(50):
+    for epoch in range(scorer_config.EPOCHS):
         model.train()
         total_loss, correct, total = 0, 0, 0
         for ci, cj, ctx, label in data_loader:
