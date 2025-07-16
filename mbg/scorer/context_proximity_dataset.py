@@ -93,10 +93,11 @@ class ContextContourDataset(Dataset):
 
     def _load(self, device="cpu"):
         task_dirs = self._get_task_dirs()
-        for task_dir in tqdm(task_dirs):
+        for task_dir in task_dirs:
+            if len(self.data) > self.data_num:
+                break
+            print(f"Processing task directory: {task_dir}")
             for label_dir in ["positive", "negative"]:
-                if len(self.data) > self.data_num:
-                    continue
                 labeled_dir = task_dir / label_dir
                 if not labeled_dir.exists():
                     continue
