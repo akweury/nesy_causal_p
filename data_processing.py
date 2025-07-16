@@ -117,8 +117,7 @@ def print_ablation_results(json_path):
             print(f"(From summary) avg_acc: {avg_acc:.4f}, avg_f1: {avg_f1:.4f}")
 
 
-
-def draw_chart_a_boxplot_with_stats(json_path):
+def draw_final_calibrator_gain_figure(json_path, output_path=config.output / "calibrator_gain_vs_clause_quality.pdf"):
     # Load JSON file
     with open(json_path, "r") as f:
         data = json.load(f)
@@ -141,44 +140,57 @@ def draw_chart_a_boxplot_with_stats(json_path):
             else:
                 gain_without_clause.append(gain)
 
-    print(f"Number of examples with good clause: {len(gain_with_clause)}")
-    print(f"Number of examples without good clause: {len(gain_without_clause)}")
+    # Compute stats
+    def describe(gains):
+        return np.mean(gains), np.std(gains), len(gains)
+
+    mean_with, std_with, n_with = describe(gain_with_clause)
+    mean_without, std_without, n_without = describe(gain_without_clause)
 
     # Run t-test
     t_stat, p_value = ttest_ind(gain_with_clause, gain_without_clause, equal_var=False)
 
-    # Prepare data for plotting
-    labels = ["Good Clause Exists", "No Good Clause"]
-    data_to_plot = [gain_with_clause, gain_without_clause]
-    means = [np.mean(gain_with_clause), np.mean(gain_without_clause)]
+    # Plot setup
+    plt.figure(figsize=(7, 5))
+    categories = ["Good Clause Exists", "No Good Clause"]
+    means = [mean_with, mean_without]
+    stds = [std_with, std_without]
 
-    # Plot
-    plt.figure(figsize=(6, 5))
-    bplot = plt.boxplot(data_to_plot, labels=labels, patch_artist=True, widths=0.5)
-    colors = ["lightblue", "salmon"]
-    for patch, color in zip(bplot["boxes"], colors):
-        patch.set_facecolor(color)
+    # Bar plot
+    bars = plt.bar(categories, means, yerr=stds, capsize=8, color=["#4C72B0", "#DD8452"], edgecolor="black")
 
-    # Add individual means
-    for i, mean in enumerate(means):
-        plt.plot(i + 1, mean, marker='o', color='black')
+    # Overlay jittered dots
+    jitter = 0.08
+    for i, data in enumerate([gain_with_clause, gain_without_clause]):
+        x = np.random.normal(i, jitter, size=len(data))
+        plt.scatter(x, data, color="black", alpha=0.4, s=10)
+
+    # Labels and formatting
+    plt.axhline(0, color="gray", linestyle="--", linewidth=1)
+    plt.ylabel("Average Score Gain (Calibrated − Vanilla)", fontsize=12)
+    plt.xticks(fontsize=11)
+    plt.yticks(fontsize=11)
+    plt.title("Calibrator Score Gain Relative to Clause Pool Quality", fontsize=13)
+    plt.grid(axis="y", linestyle="--", linewidth=0.5)
 
     # Annotate p-value
-    p_label = f"p = {p_value:.3e}"
-    plt.text(1.5, max(max(gain_with_clause + gain_without_clause), 0), p_label,
+    p_label = f"t-test p = {p_value:.1e}"
+    plt.text(0.5, max(means) + max(stds) * 1.2, p_label,
              ha="center", fontsize=10, bbox=dict(boxstyle="round,pad=0.3", edgecolor="gray", facecolor="white"))
 
-    plt.axhline(0, color="gray", linestyle="--")
-    plt.ylabel("Score Gain (Calibrated − Vanilla)")
-    plt.title("Chart A: Calibrator Improvement vs Clause Quality")
-    plt.grid(axis="y", linestyle="--", linewidth=0.5)
     plt.tight_layout()
-    plt.show()
+    plt.savefig(output_path)
+    plt.close()
+
+    print(f"Figure saved to {output_path}")
+    print(f"Good Clause Exists: n={n_with}, mean={mean_with:.4f}, std={std_with:.4f}")
+    print(f"No Good Clause:     n={n_without}, mean={mean_without:.4f}, std={std_without:.4f}")
+    print(f"T-test p-value: {p_value:.4e}")
 
 
 if __name__ == "__main__":
     # print_ablation_results(config.output/"ablation_summary_symmetry_20250710_101526.json")
-    draw_chart_a_boxplot_with_stats(config.output / "ablation_summary_proximity_20250715_193856.json")
+    draw_final_calibrator_gain_figure(config.output / "ablation_summary_proximity_20250715_175509.json")
 
     # main_ablation()
     # run_ablation()
