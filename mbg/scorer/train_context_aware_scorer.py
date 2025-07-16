@@ -10,7 +10,7 @@ from mbg.scorer.context_contour_scorer import ContextContourScorer
 from mbg.scorer import scorer_config
 
 
-def train_model(principle, input_type, device, log_wandb=True):
+def train_model(principle, input_type, device, log_wandb=True, n=100):
     # Resolve paths
     path_map = {
         "closure": (scorer_config.closure_path, scorer_config.CLOSURE_MODEL),
@@ -31,7 +31,8 @@ def train_model(principle, input_type, device, log_wandb=True):
 
     # Setup
     model = ContextContourScorer(input_dim=input_dim).to(device)
-    dataset = ContextContourDataset(data_path, input_type, device=device, data_num=10000, task_num=1)
+
+    dataset = ContextContourDataset(data_path, input_type, device=device, data_num=10000, task_num=n)
     data_loader = DataLoader(dataset, batch_size=1, shuffle=True, collate_fn=context_collate_fn)
     criterion = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
@@ -77,7 +78,7 @@ def parse_device(device_str):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--device", default="cuda:0" if torch.cuda.is_available() else "cpu", help="Device to train on")
-    parser.add_argument("--all", action="store_true", help="Train all principles and input types")
+    parser.add_argument("--n", default=100)
     args = parser.parse_args()
     args.device = parse_device(args.device)
     # principles = ["closure", "proximity", "continuity", "symmetry", "similarity"]
@@ -91,7 +92,7 @@ if __name__ == "__main__":
     for p in principles:
         for t in input_types:
             print(f"\n=== Training {p} with {t} ===")
-            acc, loss = train_model(p, t, args.device, log_wandb=True)
+            acc, loss = train_model(p, t, args.device, log_wandb=True, n=n)
             report.append((p, t, acc, loss))
 
     wandb.finish()
