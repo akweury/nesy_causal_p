@@ -10,7 +10,7 @@ from mbg.scorer.context_contour_scorer import ContextContourScorer
 from mbg.scorer import scorer_config
 
 
-def train_model(principle, input_type, device, log_wandb=True, n=100):
+def train_model(principle, input_type, device, log_wandb=True, n=100, epochs=10):
     # Resolve paths
     path_map = {
         "closure": (scorer_config.closure_path, scorer_config.CLOSURE_MODEL),
@@ -38,7 +38,7 @@ def train_model(principle, input_type, device, log_wandb=True, n=100):
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
     avg_acc = 0
     avg_loss = 0
-    for epoch in range(scorer_config.EPOCHS):
+    for epoch in range(epochs):
         model.train()
         total_loss, correct, total = 0, 0, 0
         for ci, cj, ctx, label in data_loader:
@@ -79,6 +79,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--device", default="cuda:0" if torch.cuda.is_available() else "cpu", help="Device to train on")
     parser.add_argument("--n", type=int, default=100)
+    parser.add_argument("--epochs", type=int, default=10)
     args = parser.parse_args()
     args.device = parse_device(args.device)
     # principles = ["closure", "proximity", "continuity", "symmetry", "similarity"]
@@ -92,7 +93,7 @@ if __name__ == "__main__":
     for p in principles:
         for t in input_types:
             print(f"\n=== Training {p} with {t} ===")
-            acc, loss = train_model(p, t, args.device, log_wandb=True, n=args.n)
+            acc, loss = train_model(p, t, args.device, log_wandb=True, n=args.n, epochs=args.epochs)
             report.append((p, t, acc, loss))
 
     wandb.finish()
