@@ -96,7 +96,7 @@ class ContextContourDataset(Dataset):
         for task_dir in task_dirs:
             if len(self.data) > self.data_num:
                 break
-            print(f"Processing task directory: {task_dir}")
+            print(f"Processing task directory: {task_dir}, current data size: {len(self.data)}")
             for label_dir in ["positive", "negative"]:
                 labeled_dir = task_dir / label_dir
                 if not labeled_dir.exists():
