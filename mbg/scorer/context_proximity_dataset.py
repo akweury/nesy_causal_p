@@ -41,6 +41,7 @@ class ContextContourDataset(Dataset):
         self.data_num = data_num
         self.task_num = task_num
         self._load(device)
+        self.balance_labels()
 
     def _get_bbox_corners(self, x, y, size):
         half_size = size / 2
@@ -109,6 +110,17 @@ class ContextContourDataset(Dataset):
                     continue
                 self._process_label_dir(labeled_dir, device)
 
+    def balance_labels(self):
+        # Separate data by label
+        positives = [d for d in self.data if d[3] == 1]
+        negatives = [d for d in self.data if d[3] == 0]
+        min_count = min(len(positives), len(negatives))
+        # Sample min_count from each
+        positives = random.sample(positives, min_count)
+        negatives = random.sample(negatives, min_count)
+        # Combine and shuffle
+        self.data = positives + negatives
+        random.shuffle(self.data)
 
     # def _load(self, device="cpu"):
     #     task_dirs = [d for d in self.root_dir.iterdir() if d.is_dir()]

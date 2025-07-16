@@ -70,13 +70,10 @@ def group_objects_with_model(model, objects, device, input_type="pos_color_size"
     Returns:
         List of groups, each group is a list of object indices
     """
-
     model = model.to(device).eval()
     n = len(objects)
-
     G = nx.Graph()
     G.add_nodes_from(range(n))
-
     for i, j in combinations(range(n), 2):
         ci, cj = objects[i].unsqueeze(0), objects[j].unsqueeze(0)
         context = [x for k, x in enumerate(objects) if k != i and k != j]
@@ -87,10 +84,8 @@ def group_objects_with_model(model, objects, device, input_type="pos_color_size"
 
         logit = model(ci, cj, ctx_tensor)
         prob = torch.sigmoid(logit).item()
-
         if prob > threshold:
             G.add_edge(i, j)
-
     # Extract connected components as groups
     groups = [list(comp) for comp in nx.connected_components(G)]
     return groups
