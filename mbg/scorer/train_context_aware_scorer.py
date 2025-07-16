@@ -78,7 +78,7 @@ def parse_device(device_str):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--device", default="cuda:0" if torch.cuda.is_available() else "cpu", help="Device to train on")
-    parser.add_argument("--n", default=100)
+    parser.add_argument("--n", type=int, default=100)
     args = parser.parse_args()
     args.device = parse_device(args.device)
     # principles = ["closure", "proximity", "continuity", "symmetry", "similarity"]
