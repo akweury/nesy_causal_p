@@ -34,13 +34,13 @@ def obj2context_pair_data(i, j, patches):
 
 
 class ContextContourDataset(Dataset):
-    def __init__(self, root_dir, input_type, task_num=20, data_num=1000):
+    def __init__(self, root_dir, input_type,device, task_num=20, data_num=100000):
         self.root_dir = Path(root_dir)
         self.data = []
         self.input_type = input_type
         self.data_num = data_num
         self.task_num = task_num
-        self._load()
+        self._load(device)
 
     def _get_bbox_corners(self, x, y, size):
         half_size = size / 2
@@ -51,10 +51,55 @@ class ContextContourDataset(Dataset):
             [x + half_size, y + half_size],
             [x - half_size, y + half_size],
         ]
+    def _get_task_dirs(self):
+        task_dirs = [d for d in self.root_dir.iterdir() if d.is_dir()]
+        return random.sample(task_dirs, self.task_num)
+
+    def _process_label_dir(self, labeled_dir, device):
+        json_files = sorted(labeled_dir.glob("*.json"))
+        png_files = sorted(labeled_dir.glob("*.png"))
+        for f_i, json_file in enumerate(json_files):
+            with open(json_file) as f:
+                metadata = json.load(f)
+            objects = metadata.get("img_data", [])
+            obj_imgs = patch_preprocess.img_path2obj_images(png_files[f_i], device)
+            if len(objects) != len(obj_imgs) or len(objects) < 2:
+                continue
+            objects, obj_imgs, permutes = patch_preprocess.align_data_and_imgs(objects, obj_imgs)
+            self._process_object_pairs(objects, obj_imgs, device)
+
+    def _process_object_pairs(self, objects, obj_imgs, device="cpu"):
+        patches = [patch_preprocess.rgb2patch(img, self.input_type)[0].to(device) for img in obj_imgs]
+        for i in range(len(objects)):
+            for j in range(len(objects)):
+                if i == j:
+                    continue
+                obj_i = objects[i]
+                obj_j = objects[j]
+                c_i = patches[i]
+                c_j = patches[j]
+                # c_i, _, _ = patch_preprocess.rgb2patch(obj_imgs[i], self.input_type)
+                # c_j, _, _ = patch_preprocess.rgb2patch(obj_imgs[j], self.input_type)
+                others = [patches[k] for k in range(len(objects)) if k!=i and k!=j]
+                if others:
+                    others_tensor = torch.stack(others, dim=0).to(device)
+                else:
+                    others_tensor = torch.zeros((1, 6, 16, c_i.shape[-1]), device=device)
+
+                # for k in range(len(objects)):
+                #     if k != i and k != j:
+                #         c_k, _, _ = patch_preprocess.rgb2patch(obj_imgs[k], self.input_type)
+                #         others.append(c_k)
+                # if others:
+                #     others_tensor = torch.stack(others, dim=0)
+                # else:
+                #     others_tensor = torch.zeros((1, 6, 16, c_i.shape[-1]))
+                label = 1 if obj_i["group_id"] == obj_j["group_id"] and obj_i["group_id"] != -1 else 0
+                self.data.append((c_i, c_j, others_tensor, label))
+
 
     def _load(self, device="cpu"):
-        task_dirs = [d for d in self.root_dir.iterdir() if d.is_dir()]
-        task_dirs = random.sample(task_dirs, self.task_num)
+        task_dirs = self._get_task_dirs()
         for task_dir in tqdm(task_dirs):
             for label_dir in ["positive", "negative"]:
                 if len(self.data) > self.data_num:
@@ -62,42 +107,57 @@ class ContextContourDataset(Dataset):
                 labeled_dir = task_dir / label_dir
                 if not labeled_dir.exists():
                     continue
+                self._process_label_dir(labeled_dir, device)
 
-                json_files = sorted(labeled_dir.glob("*.json"))
-                png_files = sorted(labeled_dir.glob("*.png"))
 
-                for f_i, json_file in enumerate(json_files):
-                    with open(json_file) as f:
-                        metadata = json.load(f)
-                    objects = metadata.get("img_data", [])
-                    obj_imgs = patch_preprocess.img_path2obj_images(png_files[f_i], device)
-                    if len(objects) != len(obj_imgs):
-                        continue
-                    if len(objects) < 2:
-                        continue
-                    objects, obj_imgs, permutes = patch_preprocess.align_data_and_imgs(objects, obj_imgs)
-                    for i in range(len(objects)):
-                        for j in range(len(objects)):
-                            if i == j:
-                                continue
+    # def _load(self, device="cpu"):
+    #     task_dirs = [d for d in self.root_dir.iterdir() if d.is_dir()]
+    #     task_dirs = random.sample(task_dirs, self.task_num)
+    #     for task_dir in tqdm(task_dirs):
+    #         for label_dir in ["positive", "negative"]:
+    #             if len(self.data) > self.data_num:
+    #                 continue
+    #             labeled_dir = task_dir / label_dir
+    #             if not labeled_dir.exists():
+    #                 continue
+    #
+    #             json_files = sorted(labeled_dir.glob("*.json"))
+    #             png_files = sorted(labeled_dir.glob("*.png"))
+    #
+    #             for f_i, json_file in enumerate(json_files):
+    #                 with open(json_file) as f:
+    #                     metadata = json.load(f)
+    #                 objects = metadata.get("img_data", [])
+    #                 obj_imgs = patch_preprocess.img_path2obj_images(png_files[f_i], device)
+    #                 if len(objects) != len(obj_imgs):
+    #                     continue
+    #                 if len(objects) < 2:
+    #                     continue
+    #                 objects, obj_imgs, permutes = patch_preprocess.align_data_and_imgs(objects, obj_imgs)
+    #                 for i in range(len(objects)):
+    #                     for j in range(len(objects)):
+    #                         if i == j:
+    #                             continue
+    #
+    #                         obj_i = objects[i]
+    #                         obj_j = objects[j]
+    #                         c_i, _, _ = patch_preprocess.rgb2patch(obj_imgs[i], self.input_type)
+    #                         c_j, _, _ = patch_preprocess.rgb2patch(obj_imgs[j], self.input_type)
+    #                         # Context objects (excluding i and j)
+    #                         others = []
+    #                         for k in range(len(objects)):
+    #                             if k != i and k != j:
+    #                                 c_k, _, _ = patch_preprocess.rgb2patch(obj_imgs[k], self.input_type)
+    #                                 others.append(c_k)
+    #                         if others:
+    #                             others_tensor = torch.stack(others, dim=0)  # (N_ctx, 4, 2)
+    #                         else:
+    #                             others_tensor = torch.zeros((1, 6, 16, c_i.shape[-1]))  # placeholder if no context
+    #
+    #                         label = 1 if obj_i["group_id"] == obj_j["group_id"] and obj_i["group_id"] != -1 else 0
+    #                         self.data.append((c_i, c_j, others_tensor, label))
 
-                            obj_i = objects[i]
-                            obj_j = objects[j]
-                            c_i, _, _ = patch_preprocess.rgb2patch(obj_imgs[i], self.input_type)
-                            c_j, _, _ = patch_preprocess.rgb2patch(obj_imgs[j], self.input_type)
-                            # Context objects (excluding i and j)
-                            others = []
-                            for k in range(len(objects)):
-                                if k != i and k != j:
-                                    c_k, _, _ = patch_preprocess.rgb2patch(obj_imgs[k], self.input_type)
-                                    others.append(c_k)
-                            if others:
-                                others_tensor = torch.stack(others, dim=0)  # (N_ctx, 4, 2)
-                            else:
-                                others_tensor = torch.zeros((1, 6, 16, c_i.shape[-1]))  # placeholder if no context
 
-                            label = 1 if obj_i["group_id"] == obj_j["group_id"] and obj_i["group_id"] != -1 else 0
-                            self.data.append((c_i, c_j, others_tensor, label))
 
     def __len__(self):
         return len(self.data)

@@ -31,7 +31,7 @@ def train_model(principle, input_type, device, log_wandb=True):
 
     # Setup
     model = ContextContourScorer(input_dim=input_dim).to(device)
-    dataset = ContextContourDataset(data_path, input_type, data_num=10000, task_num=100)
+    dataset = ContextContourDataset(data_path, input_type, device=device, data_num=100000, task_num=100)
     data_loader = DataLoader(dataset, batch_size=1, shuffle=True, collate_fn=context_collate_fn)
     criterion = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
@@ -86,7 +86,7 @@ if __name__ == "__main__":
     ]
     input_types = ["pos_color_size"]
 
-    wandb.init(project="grb-context-train", config={"epochs": 50, "batch_size": 1, "learning_rate": 1e-3,})
+    wandb.init(project="grb-context-train", config={"epochs": 50, "batch_size": 1, "learning_rate": 1e-3, })
     report = []
     for p in principles:
         for t in input_types:
