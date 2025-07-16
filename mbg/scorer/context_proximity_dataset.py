@@ -53,8 +53,11 @@ class ContextContourDataset(Dataset):
             [x - half_size, y + half_size],
         ]
     def _get_task_dirs(self):
-        task_dirs = [d for d in self.root_dir.iterdir() if d.is_dir()]
-        return random.sample(task_dirs, self.task_num)
+        task_dirs = sorted([d for d in self.root_dir.iterdir() if d.is_dir()])
+
+        # sampled_dirs =random.sample(task_dirs, self.task_num)
+        sampled_dirs = task_dirs[96:99]
+        return sampled_dirs
 
     def _process_label_dir(self, labeled_dir, device):
         json_files = sorted(labeled_dir.glob("*.json"))
