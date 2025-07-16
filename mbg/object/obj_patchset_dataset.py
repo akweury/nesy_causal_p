@@ -1,19 +1,13 @@
 # Created by MacBook Pro at 22.04.25
 # pam_patchset_dataset.py
 
-import os
 import json
 import torch
-import random
-import numpy as np
-from pathlib import Path
 from torch.utils.data import Dataset
-from PIL import Image
 from tqdm import tqdm
 from mbg import mbg_config as param
 from mbg import patch_preprocess
 from src import bk
-from mbg.object import  eval_patch_classifier
 
 class ObjPatchSetDataset(Dataset):
     def __init__(self, device, root_dir=param.ROOT_DATASET_DIR, num_patches=param.PATCHES_PER_SET,

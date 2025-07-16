@@ -86,19 +86,13 @@ if __name__ == "__main__":
     ]
     input_types = ["pos_color_size"]
 
-    wandb.init(project="grb-context-train", config={
-        "epochs": 50, "batch_size": 1, "learning_rate": 1e-3,
-    })
+    wandb.init(project="grb-context-train", config={"epochs": 50, "batch_size": 1, "learning_rate": 1e-3,})
     report = []
-    if args.all:
-        for p in principles:
-            for t in input_types:
-                print(f"\n=== Training {p} with {t} ===")
-                acc, loss = train_model(p, t, args.device, log_wandb=True)
-                report.append((p, t, acc, loss))
-    else:
-        acc, loss = train_model("similarity", "pos_color_size", args.device, log_wandb=True)
-        report.append(("similarity", "pos_color", acc, loss))
+    for p in principles:
+        for t in input_types:
+            print(f"\n=== Training {p} with {t} ===")
+            acc, loss = train_model(p, t, args.device, log_wandb=True)
+            report.append((p, t, acc, loss))
 
     wandb.finish()
     # Final report

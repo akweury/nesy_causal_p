@@ -6,6 +6,7 @@ import torch
 from pathlib import Path
 from torch.utils.data import Dataset
 import random
+from tqdm import tqdm
 
 from mbg import patch_preprocess
 
@@ -54,7 +55,7 @@ class ContextContourDataset(Dataset):
     def _load(self, device="cpu"):
         task_dirs = [d for d in self.root_dir.iterdir() if d.is_dir()]
         task_dirs = random.sample(task_dirs, self.task_num)
-        for task_dir in task_dirs:
+        for task_dir in tqdm(task_dirs):
             for label_dir in ["positive", "negative"]:
                 if len(self.data) > self.data_num:
                     continue
@@ -69,11 +70,8 @@ class ContextContourDataset(Dataset):
                     with open(json_file) as f:
                         metadata = json.load(f)
                     objects = metadata.get("img_data", [])
-
                     obj_imgs = patch_preprocess.img_path2obj_images(png_files[f_i], device)
                     if len(objects) != len(obj_imgs):
-                        continue
-                    if len(objects) > 10:
                         continue
                     if len(objects) < 2:
                         continue
