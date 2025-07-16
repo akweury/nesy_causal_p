@@ -59,11 +59,15 @@ class ContextContourDataset(Dataset):
         # sampled_dirs = task_dirs[96:99]
         return sampled_dirs
 
-    def _process_label_dir(self, labeled_dir, device):
+    def _process_label_dir(self, labeled_dir, device, file_sample_size=3):
         json_files = sorted(labeled_dir.glob("*.json"))
         png_files = sorted(labeled_dir.glob("*.png"))
-        for f_i, json_file in enumerate(json_files):
-            with open(json_file) as f:
+        file_indices = list(range(len(json_files)))
+        if len(file_indices) > file_sample_size:
+            file_indices = random.sample(file_indices, file_sample_size)
+
+        for f_i in file_indices:
+            with open(json_files[f_i]) as f:
                 metadata = json.load(f)
             objects = metadata.get("img_data", [])
             obj_imgs = patch_preprocess.img_path2obj_images(png_files[f_i], device)
