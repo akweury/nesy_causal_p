@@ -34,13 +34,13 @@ def obj2context_pair_data(i, j, patches):
 
 
 class ContextContourDataset(Dataset):
-    def __init__(self, root_dir, input_type,device, task_num=20, data_num=100000):
+    def __init__(self, root_dir, input_type, sample_size, device, task_num=20, data_num=100000):
         self.root_dir = Path(root_dir)
         self.data = []
         self.input_type = input_type
         self.data_num = data_num
         self.task_num = task_num
-        self._load(device)
+        self._load(sample_size, device)
         self.balance_labels()
 
     def _get_bbox_corners(self, x, y, size):
@@ -52,14 +52,15 @@ class ContextContourDataset(Dataset):
             [x + half_size, y + half_size],
             [x - half_size, y + half_size],
         ]
+
     def _get_task_dirs(self):
         task_dirs = sorted([d for d in self.root_dir.iterdir() if d.is_dir()])
 
-        sampled_dirs =random.sample(task_dirs, self.task_num)
+        sampled_dirs = random.sample(task_dirs, self.task_num)
         # sampled_dirs = task_dirs[96:99]
         return sampled_dirs
 
-    def _process_label_dir(self, labeled_dir, device, file_sample_size=3):
+    def _process_label_dir(self, labeled_dir, device, file_sample_size=3, sample_size=10):
         json_files = sorted(labeled_dir.glob("*.json"))
         png_files = sorted(labeled_dir.glob("*.png"))
         file_indices = list(range(len(json_files)))
@@ -74,9 +75,9 @@ class ContextContourDataset(Dataset):
             if len(objects) != len(obj_imgs) or len(objects) < 2:
                 continue
             objects, obj_imgs, permutes = patch_preprocess.align_data_and_imgs(objects, obj_imgs)
-            self._process_object_pairs(objects, obj_imgs, device)
+            self._process_object_pairs(objects, obj_imgs, sample_size, device)
 
-    def _process_object_pairs(self, objects, obj_imgs, device="cpu", sample_size=10):
+    def _process_object_pairs(self, objects, obj_imgs, sample_size, device="cpu", ):
         patches = [patch_preprocess.rgb2patch(img, self.input_type)[0].to(device) for img in obj_imgs]
         pair_indices = [(i, j) for i in range(len(objects)) for j in range(len(objects)) if i != j]
         if len(pair_indices) > sample_size:
@@ -94,8 +95,7 @@ class ContextContourDataset(Dataset):
             label = 1 if obj_i["group_id"] == obj_j["group_id"] and obj_i["group_id"] != -1 else 0
             self.data.append((c_i, c_j, others_tensor, label))
 
-
-    def _load(self, device="cpu"):
+    def _load(self, sample_size, device="cpu"):
         task_dirs = self._get_task_dirs()
         for task_dir in task_dirs:
             if len(self.data) > self.data_num:
@@ -105,7 +105,7 @@ class ContextContourDataset(Dataset):
                 labeled_dir = task_dir / label_dir
                 if not labeled_dir.exists():
                     continue
-                self._process_label_dir(labeled_dir, device)
+                self._process_label_dir(labeled_dir, device, sample_size=sample_size)
 
     def balance_labels(self):
         # Separate data by label
@@ -165,8 +165,6 @@ class ContextContourDataset(Dataset):
     #
     #                         label = 1 if obj_i["group_id"] == obj_j["group_id"] and obj_i["group_id"] != -1 else 0
     #                         self.data.append((c_i, c_j, others_tensor, label))
-
-
 
     def __len__(self):
         return len(self.data)

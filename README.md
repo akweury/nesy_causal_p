@@ -49,7 +49,7 @@ python -m src.ablation_study --device 0 --principle proximity
 python -m src.ablation_study --device 3 --principle continuity
 python -m src.ablation_study --device 4 --principle symmetry
 
-python -m mbg.scorer.train_context_aware_scorer --device 1 --n 120 --epochs 50
+python -m mbg.scorer.train_context_aware_scorer --device 1 --n 150 --epochs 50 --principle closure
 python -m mbg.object.train_patch_classifier --device 0 
 ```
 pip install -r requirements.txt

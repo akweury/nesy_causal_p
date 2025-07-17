@@ -10,7 +10,7 @@ from mbg.scorer.context_contour_scorer import ContextContourScorer
 from mbg.scorer import scorer_config
 
 
-def train_model(principle, input_type, device, log_wandb=True, n=100, epochs=10):
+def train_model(principle, input_type, sample_size, device, log_wandb=True, n=100, epochs=10):
     # Resolve paths
     path_map = {
         "closure": (scorer_config.closure_path, scorer_config.CLOSURE_MODEL),
@@ -32,7 +32,7 @@ def train_model(principle, input_type, device, log_wandb=True, n=100, epochs=10)
     # Setup
     model = ContextContourScorer(input_dim=input_dim).to(device)
 
-    dataset = ContextContourDataset(data_path, input_type, device=device, data_num=10000, task_num=n)
+    dataset = ContextContourDataset(data_path, input_type, sample_size, device=device, data_num=10000, task_num=n)
     data_loader = DataLoader(dataset, batch_size=1, shuffle=True, collate_fn=context_collate_fn)
     criterion = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
@@ -79,6 +79,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--device", default="cuda:0" if torch.cuda.is_available() else "cpu", help="Device to train on")
     parser.add_argument("--epochs", type=int, default=10)
+    parser.add_argument("--sample_size", type=int, default=10)
     parser.add_argument("--n", type=int, default=100)
     parser.add_argument("--principle", type=str)
     args = parser.parse_args()
@@ -96,7 +97,7 @@ if __name__ == "__main__":
     p = args.principle
     for t in input_types:
         print(f"\n=== Training {p} with {t} ===")
-        acc, loss = train_model(p, t, args.device, log_wandb=True, n=args.n, epochs=args.epochs)
+        acc, loss = train_model(p, t, args.sample_size, args.device, log_wandb=True, n=args.n, epochs=args.epochs)
         report.append((p, t, acc, loss))
 
     wandb.finish()
