@@ -84,8 +84,9 @@ if __name__ == "__main__":
     args.device = parse_device(args.device)
     # principles = ["closure", "proximity", "continuity", "symmetry", "similarity"]
     principles = [
-        "continuity"
-                  ]
+        # "continuity",
+        "symmetry"
+    ]
     input_types = ["pos_color_size"]
 
     wandb.init(project="grb-context-train", config={"epochs": 50, "batch_size": 1, "learning_rate": 1e-3})
