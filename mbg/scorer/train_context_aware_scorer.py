@@ -10,7 +10,7 @@ from mbg.scorer.context_contour_scorer import ContextContourScorer
 from mbg.scorer import scorer_config
 
 
-def train_model(principle, input_type, sample_size, device, log_wandb=True, n=100, epochs=10):
+def train_model(principle, input_type, sample_size, device, log_wandb=True, n=100, epochs=10, data_num=100000):
     # Resolve paths
     path_map = {
         "closure": (scorer_config.closure_path, scorer_config.CLOSURE_MODEL),
@@ -32,7 +32,7 @@ def train_model(principle, input_type, sample_size, device, log_wandb=True, n=10
     # Setup
     model = ContextContourScorer(input_dim=input_dim).to(device)
 
-    dataset = ContextContourDataset(data_path, input_type, sample_size, device=device, data_num=10000, task_num=n)
+    dataset = ContextContourDataset(data_path, input_type, sample_size, device=device, data_num=data_num, task_num=n)
     data_loader = DataLoader(dataset, batch_size=1, shuffle=True, collate_fn=context_collate_fn)
     criterion = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
@@ -83,6 +83,7 @@ if __name__ == "__main__":
     parser.add_argument("--n", type=int, default=100)
     parser.add_argument("--principle", type=str)
     parser.add_argument("--input_types", type=str, default="pos_color_size")
+    parser.add_argument("--data_num", type=int, default=10000)
 
     args = parser.parse_args()
     args.device = parse_device(args.device)
@@ -93,7 +94,7 @@ if __name__ == "__main__":
     p = args.principle
 
     print(f"\n=== Training {p} with {input_type} ===")
-    acc, loss = train_model(p, input_type, args.sample_size, args.device, log_wandb=True, n=args.n, epochs=args.epochs)
+    acc, loss = train_model(p, input_type, args.sample_size, args.device, log_wandb=True, n=args.n, epochs=args.epochs, data_num=args.data_num)
     report.append((p, input_type, acc, loss))
 
     wandb.finish()
