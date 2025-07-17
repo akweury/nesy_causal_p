@@ -89,7 +89,10 @@ if __name__ == "__main__":
     args.device = parse_device(args.device)
     input_type = args.input_types
 
-    wandb.init(project=f"grp-{args.principle}", config={"epochs": args.epochs, "batch_size": 1, "learning_rate": 1e-3})
+    wandb.init(project=f"grp-{args.principle}", config={"epochs": args.epochs, "batch_size": 1, "learning_rate": 1e-3,
+                                                        "sample_size": args.sample_size, "device": args.device,
+                                                        "input_type": input_type, "data_num": args.data_num},
+               name=f"{args.principle}_{input_type}_epochs{args.epochs}_sample{args.sample_size}_n{args.n}")
     report = []
     p = args.principle
 
