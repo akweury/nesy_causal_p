@@ -219,9 +219,11 @@ def train_calibrator(final_rules, obj_list, group_list, hard_list, soft_list, im
 
         calib_inputs.append(rule_scores)
         calib_labels.append(float(label))
-    calibrator = ConfidenceCalibrator(input_dim=hyp_params["top_k"]).to(device)
-    calibrator.train_from_data(calib_inputs, calib_labels, device=device)
-
+    if ablation_flags["use_calibrator"]:
+        calibrator = ConfidenceCalibrator(input_dim=hyp_params["top_k"]).to(device)
+        calibrator.train_from_data(calib_inputs, calib_labels, device=device)
+    else:
+        calibrator = None
     return calibrator
 
 

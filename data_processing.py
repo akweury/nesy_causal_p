@@ -105,7 +105,7 @@ def print_ablation_results(json_path):
             f1 = task.get("f1", None)
             accs.append(acc)
             f1s.append(f1)
-            print(f"  Task {task.get('task_idx', '?')}: {task.get('task_name', '?')}, acc={acc:.4f}, f1={f1:.4f}")
+            # print(f"  Task {task.get('task_idx', '?')}: {task.get('task_name', '?')}, acc={acc:.4f}, f1={f1:.4f}")
         accs = np.array(accs)
         f1s = np.array(f1s)
         print(f"\nAverage acc: {accs.mean():.4f} ± {accs.std():.4f}")
@@ -189,8 +189,8 @@ def draw_final_calibrator_gain_figure(json_path, output_path=config.output / "ca
 
 
 if __name__ == "__main__":
-    print_ablation_results(config.output/"ablation_summary_continuity_20250717_084756.json")
-    # draw_final_calibrator_gain_figure(config.output / "ablation_summary_continuity_20250717_084756.json")
+    print_ablation_results(config.output/"ablation_summary_continuity_20250717_141123.json")
+    draw_final_calibrator_gain_figure(config.output / "ablation_summary_continuity_20250717_084756.json")
 
     # main_ablation()
     # run_ablation()
