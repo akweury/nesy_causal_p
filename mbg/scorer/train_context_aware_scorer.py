@@ -85,10 +85,10 @@ if __name__ == "__main__":
     # principles = ["closure", "proximity", "continuity", "symmetry", "similarity"]
     principles = [
         "continuity"
-    ]
+                  ]
     input_types = ["pos_color_size"]
 
-    wandb.init(project="grb-context-train", config={"epochs": 50, "batch_size": 1, "learning_rate": 1e-3, })
+    wandb.init(project="grb-context-train", config={"epochs": 50, "batch_size": 1, "learning_rate": 1e-3})
     report = []
     for p in principles:
         for t in input_types:
