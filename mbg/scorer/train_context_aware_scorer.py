@@ -78,24 +78,26 @@ def parse_device(device_str):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--device", default="cuda:0" if torch.cuda.is_available() else "cpu", help="Device to train on")
-    parser.add_argument("--n", type=int, default=100)
     parser.add_argument("--epochs", type=int, default=10)
+    parser.add_argument("--n", type=int, default=100)
+    parser.add_argument("--principle", type=str)
     args = parser.parse_args()
     args.device = parse_device(args.device)
     # principles = ["closure", "proximity", "continuity", "symmetry", "similarity"]
     principles = [
         # "continuity",
-        "symmetry"
+        # "symmetry"
+
     ]
     input_types = ["pos_color_size"]
 
     wandb.init(project="grb-context-train", config={"epochs": 50, "batch_size": 1, "learning_rate": 1e-3})
     report = []
-    for p in principles:
-        for t in input_types:
-            print(f"\n=== Training {p} with {t} ===")
-            acc, loss = train_model(p, t, args.device, log_wandb=True, n=args.n, epochs=args.epochs)
-            report.append((p, t, acc, loss))
+    p = args.principle
+    for t in input_types:
+        print(f"\n=== Training {p} with {t} ===")
+        acc, loss = train_model(p, t, args.device, log_wandb=True, n=args.n, epochs=args.epochs)
+        report.append((p, t, acc, loss))
 
     wandb.finish()
     # Final report
