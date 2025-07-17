@@ -132,7 +132,7 @@ def similarity_fast(img_fm, fm_repo):
     group2_flat = fm_repo.view(fm_repo.size(0), -1)  # Shape: (N2, 192 * 64 * 64)
 
     # Compute cosine similarity between all pairs (N1 x N2 matrix)
-    similarity_matrix = torch.mm(group1_flat, group2_flat.t()) / group2_flat.sum(dim=1).unsqueeze(0)  # Shape: (N1, N2)
+    similarity_matrix = torch.mm(group1_flat, group2_flat.input_type()) / group2_flat.sum(dim=1).unsqueeze(0)  # Shape: (N1, N2)
 
     # Find the maximum similarity value and the corresponding indices
     max_similarity = int(torch.max(similarity_matrix).item() * 100)
@@ -201,7 +201,7 @@ def get_pair(args, img_fm, fm_repo):
     g1_flat = img_fm_shifts.view(img_fm_shifts.size(0), -1)  # Shape: (N1, 192 * 64 * 64)
     g2_flat = fm_repo.view(fm_repo.size(0), -1)  # Shape: (N2, 192 * 64 * 64)
     # Compute cosine similarity between all pairs (N1 x N2 matrix)
-    similarity_matrix = torch.mm(g1_flat, g2_flat.t()) / g2_flat.sum(dim=1).unsqueeze(0)  # Shape: (N1, N2)
+    similarity_matrix = torch.mm(g1_flat, g2_flat.input_type()) / g2_flat.sum(dim=1).unsqueeze(0)  # Shape: (N1, N2)
 
     top_values, top_indices = torch.topk(similarity_matrix.flatten(), args.top_fm_k)
     # Filter out values below the threshold
@@ -232,7 +232,7 @@ def fm_intersection(img_fm, fm_repo):
     g1_flat = img_fm_shifts.view(img_fm_shifts.size(0), -1)  # Shape: (N1, 192 * 64 * 64)
     g2_flat = fm_repo.view(fm_repo.size(0), -1)  # Shape: (N2, 192 * 64 * 64)
 
-    similarity_matrix = torch.mm(g1_flat, g2_flat.t()) / g2_flat.sum(dim=1).unsqueeze(0)  # Shape: (N1, N2)
+    similarity_matrix = torch.mm(g1_flat, g2_flat.input_type()) / g2_flat.sum(dim=1).unsqueeze(0)  # Shape: (N1, N2)
     top_values, top_indices = torch.topk(similarity_matrix.flatten(), 5)
     # top_indices_2d: (best_shift_idx_1d, best_fm_idx)
     top_indices_2d = torch.stack(torch.unravel_index(top_indices, similarity_matrix.shape)).t()

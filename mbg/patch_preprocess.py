@@ -690,7 +690,7 @@ def img_path2patches_and_labels(obj_images, gt_dict, device, input_type="pos_col
     # sizes = []
 
     patch_sets, obj_positions, obj_sizes = rgbs2patches(obj_images, input_type)
-    if len(labels)!=len(patch_sets):
+    if len(labels) != len(patch_sets):
         print(f"len(labels)={len(labels)}, len(patch_sets)={len(patch_sets)}")
         return None, None, None, None, None
     sorted_labels = [labels[i] - 1 for i in range(len(labels)) if labels[i] != -1]
@@ -740,9 +740,8 @@ def shift_obj_patches_to_global_positions(obj_patch, shift):
     return shifted_tensor
 
 
-
 def align_gt_data_and_pred_data(
-    objects: List[dict], pred_objects: List[dict]
+        objects: List[dict], pred_objects: List[dict]
 ) -> Tuple[List[dict], List[dict], List[int]]:
     """
     Align GT metadata with predicted objects based on centroid (x, y) distance using Hungarian matching.
@@ -759,8 +758,8 @@ def align_gt_data_and_pred_data(
     if len(objects) == 0 or len(pred_objects) == 0:
         return [], [], []
 
-    gt_coords = np.array([[float(obj["x"]), float(obj["y"]) ] for obj in objects])
-    pred_coords = np.array([[ float(pred["s"]["x"]), float(pred["s"]["y"])] for pred in pred_objects])
+    gt_coords = np.array([[float(obj["x"]), float(obj["y"])] for obj in objects])
+    pred_coords = np.array([[float(pred["s"]["x"]), float(pred["s"]["y"])] for pred in pred_objects])
 
     # Compute pairwise distance matrix
     dists = np.linalg.norm(gt_coords[:, None, :] - pred_coords[None, :, :], axis=-1)
@@ -833,6 +832,8 @@ def rgb2patch(rgb_img, input_type):
         patch_set = patch_set[0][:, :, :5]
     elif input_type == "pos_color_size":
         patch_set = patch_set[0]
+    elif input_type == "color_size":
+        patch_set = patch_set[0][:, :, 2:]
     else:
         raise ValueError
 

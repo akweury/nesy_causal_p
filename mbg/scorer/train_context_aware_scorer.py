@@ -24,7 +24,7 @@ def train_model(principle, input_type, sample_size, device, log_wandb=True, n=10
     data_path, model_path = path_map[principle]
 
     # Input dimension
-    input_dim_map = {"pos": 2, "pos_color": 5, "pos_color_size": 7}
+    input_dim_map = {"pos": 2, "pos_color": 5, "pos_color_size": 7, "color_size": 4}
     if input_type not in input_dim_map:
         raise ValueError(f"Unsupported input type: {input_type}")
     input_dim = input_dim_map[input_type]
@@ -82,22 +82,24 @@ if __name__ == "__main__":
     parser.add_argument("--sample_size", type=int, default=10)
     parser.add_argument("--n", type=int, default=100)
     parser.add_argument("--principle", type=str)
+    parser.add_argument("--input_types", type=str, default="pos_color_size")
+
     args = parser.parse_args()
     args.device = parse_device(args.device)
-    input_types = ["pos_color_size"]
+    input_type = args.input_types
 
     wandb.init(project="grb-context-train", config={"epochs": 50, "batch_size": 1, "learning_rate": 1e-3})
     report = []
     p = args.principle
-    for t in input_types:
-        print(f"\n=== Training {p} with {t} ===")
-        acc, loss = train_model(p, t, args.sample_size, args.device, log_wandb=True, n=args.n, epochs=args.epochs)
-        report.append((p, t, acc, loss))
+
+    print(f"\n=== Training {p} with {input_type} ===")
+    acc, loss = train_model(p, input_type, args.sample_size, args.device, log_wandb=True, n=args.n, epochs=args.epochs)
+    report.append((p, input_type, acc, loss))
 
     wandb.finish()
     # Final report
     print("\n==== Final Report ====")
     print(f"{'Principle':<12} {'Input Type':<16} {'Accuracy':>10} {'Loss':>10}")
     print("-" * 52)
-    for p, t, a, l in report:
-        print(f"{p:<12} {t:<16} {a:>10.4f} {l:>10.4f}")
+    for p, input_type, a, l in report:
+        print(f"{p:<12} {input_type:<16} {a:>10.4f} {l:>10.4f}")

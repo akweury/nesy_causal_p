@@ -49,6 +49,8 @@ python -m src.ablation_study --device 0 --principle proximity
 python -m src.ablation_study --device 3 --principle continuity
 python -m src.ablation_study --device 4 --principle symmetry
 
+python -m mbg.scorer.train_context_aware_scorer --device 1 --n 200 --epochs 50 --principle proximity --sample_size 50
+python -m mbg.scorer.train_context_aware_scorer --device 1 --n 150 --epochs 50 --principle similarity --sample_size 50
 python -m mbg.scorer.train_context_aware_scorer --device 1 --n 150 --epochs 50 --principle closure --sample_size 50
 python -m mbg.object.train_patch_classifier --device 0 
 ```

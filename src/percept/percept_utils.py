@@ -15,7 +15,7 @@ def matrix_similarity(mat1, mat2):
     g1_flat = mat1.view(mat1.size(0), -1)  # Shape: (N1, 192 * 64 * 64)
     g2_flat = mat2.view(mat2.size(0), -1)  # Shape: (N2, 192 * 64 * 64)
     # Compute cosine similarity between all pairs (N1 x N2 matrix)
-    similarity_matrix = torch.mm(g1_flat, g2_flat.t()) / (
+    similarity_matrix = torch.mm(g1_flat, g2_flat.input_type()) / (
             g2_flat.sum(dim=1).unsqueeze(0) + 1e-20)  # Shape: (N1, N2)
     return similarity_matrix
 
