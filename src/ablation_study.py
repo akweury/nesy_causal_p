@@ -129,7 +129,11 @@ def main_ablation():
             final_summary[mode][f"avg_{k}"] = float(torch.tensor(values).mean())
     for mode, analysis_dict in analysis_summary.items():
         for k, values in analysis_dict.items():
-            final_summary[mode][f"avg_{k}"] = float(torch.tensor(values).float().mean())
+            valid_values = [v for v in values if v is not None]
+            if valid_values:
+                final_summary[mode][f"avg_{k}"] = float(torch.tensor(valid_values).mean())
+            else:
+                final_summary[mode][f"avg_{k}"] = None
 
     # Save both per-task and average results
     output_json = {
