@@ -68,6 +68,8 @@ def main_ablation():
     all_auc = {conf: [] for conf in ABLATED_CONFIGS}
     all_acc = {conf: [] for conf in ABLATED_CONFIGS}
     for task_idx, (train_data, val_data, test_data) in enumerate(combined_loader):
+        if task_idx>2:
+            continue
         task_name = train_data["task"]
         print(f"\nTask {task_idx + 1}/{len(combined_loader)}: {task_name}")
 
@@ -131,7 +133,7 @@ def main_ablation():
         for k, values in analysis_dict.items():
             valid_values = [v for v in values if v is not None]
             if valid_values:
-                final_summary[mode][f"avg_{k}"] = float(torch.tensor(valid_values).mean())
+                final_summary[mode][f"avg_{k}"] = float(torch.tensor(valid_values, dtype=torch.float).mean())
             else:
                 final_summary[mode][f"avg_{k}"] = None
 

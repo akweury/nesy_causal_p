@@ -46,8 +46,8 @@ python -m src.ablation_study --device 10 --task_id 6 --line_min_size 3
 python -m src.ablation_study --device 4 --principle closure
 python -m src.ablation_study --device 1 --principle similarity
 python -m src.ablation_study --device 2 --principle proximity
-python -m src.ablation_study --device 3 --principle continuity
-python -m src.ablation_study --device 4 --principle symmetry
+python -m src.ablation_study --device 0 --principle continuity
+python -m src.ablation_study --device 3 --principle symmetry
 
 python -m mbg.scorer.train_context_aware_scorer --device 1 --n 200 --epochs 50 --principle proximity --sample_size 50
 python -m mbg.scorer.train_context_aware_scorer --device 1 --n 150 --epochs 50 --principle similarity --sample_size 50 --input_types color_size
