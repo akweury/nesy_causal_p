@@ -33,7 +33,8 @@ def train_model(principle, input_type, sample_size, device, log_wandb=True, n=10
 
     # Setup
     model = ContextContourScorer(input_dim=input_dim).to(device)
-    orders = random.shuffle(list(range(n)))  # Randomly shuffle task orders
+    orders = list(range(n))
+    random.shuffle(orders)  # Randomly shuffle task orders
     train_dataset = ContextContourDataset(data_path, orders, input_type, sample_size, device=device, data_num=data_num, task_num=n)
     test_dataset = ContextContourDataset(data_path, orders, input_type, sample_size, device=device, data_num=data_num, split="test", task_num=n)
     train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True, collate_fn=context_collate_fn)
