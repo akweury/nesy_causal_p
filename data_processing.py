@@ -189,8 +189,8 @@ def draw_final_calibrator_gain_figure(json_path, output_path=config.output / "ca
 
 
 if __name__ == "__main__":
-    print_ablation_results(config.output/"ablation_summary_continuity_20250717_141123.json")
-    draw_final_calibrator_gain_figure(config.output / "ablation_summary_continuity_20250717_084756.json")
+    # print_ablation_results(config.output/"ablation_summary_proximity_20250718_110456.json")
+    draw_final_calibrator_gain_figure(config.output / "ablation_summary_proximity_20250718_110456.json")
 
     # main_ablation()
     # run_ablation()

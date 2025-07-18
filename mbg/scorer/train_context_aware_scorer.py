@@ -92,7 +92,7 @@ if __name__ == "__main__":
     wandb.init(project=f"grp-{args.principle}", config={"epochs": args.epochs, "batch_size": 1, "learning_rate": 1e-3,
                                                         "sample_size": args.sample_size, "device": args.device,
                                                         "input_type": input_type, "data_num": args.data_num},
-               name=f"{args.principle}_{input_type}_epochs{args.epochs}_sample{args.sample_size}_n{args.n}")
+               name=f"{args.principle}_{input_type}_ep_{args.epochs}_sample_{args.sample_size}_n_{args.n}_data_{args.data_num}")
     report = []
     p = args.principle
 
