@@ -1,3 +1,5 @@
+import random
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -31,9 +33,11 @@ def train_model(principle, input_type, sample_size, device, log_wandb=True, n=10
 
     # Setup
     model = ContextContourScorer(input_dim=input_dim).to(device)
-
-    dataset = ContextContourDataset(data_path, input_type, sample_size, device=device, data_num=data_num, task_num=n)
-    data_loader = DataLoader(dataset, batch_size=1, shuffle=True, collate_fn=context_collate_fn)
+    orders = random.shuffle(list(range(n)))  # Randomly shuffle task orders
+    train_dataset = ContextContourDataset(data_path, orders, input_type, sample_size, device=device, data_num=data_num, task_num=n)
+    test_dataset = ContextContourDataset(data_path, orders, input_type, sample_size, device=device, data_num=data_num, split="test", task_num=n)
+    train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True, collate_fn=context_collate_fn)
+    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, collate_fn=context_collate_fn)
     criterion = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
     avg_acc = 0
@@ -41,7 +45,7 @@ def train_model(principle, input_type, sample_size, device, log_wandb=True, n=10
     for epoch in range(epochs):
         model.train()
         total_loss, correct, total = 0, 0, 0
-        for ci, cj, ctx, label in data_loader:
+        for ci, cj, ctx, label in train_loader:
             ci, cj = ci.to(device), cj.to(device)
             label = label.to(device)
             ctx_tensor = ctx[0].unsqueeze(0).to(device)
@@ -59,8 +63,32 @@ def train_model(principle, input_type, sample_size, device, log_wandb=True, n=10
         avg_loss = total_loss / total
         avg_acc = acc
         print(f"[Epoch {epoch + 1}] Loss: {avg_loss:.4f} | Acc: {acc:.4f}")
+
+        # Test loop
+        model.eval()
+        test_loss, test_correct, test_total = 0, 0, 0
+        with torch.no_grad():
+            for ci, cj, ctx, label in test_loader:
+                ci, cj = ci.to(device), cj.to(device)
+                label = label.to(device)
+                ctx_tensor = ctx[0].unsqueeze(0).to(device)
+                logits = model(ci, cj, ctx_tensor)
+                loss = criterion(logits, label)
+                test_loss += loss.item() * len(label)
+                pred = (torch.sigmoid(logits) > 0.5).float()
+                test_correct += (pred == label).sum().item()
+                test_total += len(label)
+        test_acc = test_correct / test_total if test_total > 0 else 0
+        test_avg_loss = test_loss / test_total if test_total > 0 else 0
+        print(f"[Epoch {epoch + 1}] Test Loss: {test_avg_loss:.4f} | Test Acc: {test_acc:.4f}")
         if log_wandb:
-            wandb.log({"epoch": epoch + 1, "loss": avg_loss, "accuracy": acc})
+            wandb.log({
+                "epoch": epoch + 1,
+                "loss": avg_loss,
+                "accuracy": acc,
+                "test_loss": test_avg_loss,
+                "test_accuracy": test_acc
+            })
     torch.save(model.state_dict(), model_path)
     print(f"Model saved to {model_path}")
     return avg_acc, avg_loss

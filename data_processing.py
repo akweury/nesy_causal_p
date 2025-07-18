@@ -108,13 +108,13 @@ def print_ablation_results(json_path):
             # print(f"  Task {task.get('task_idx', '?')}: {task.get('task_name', '?')}, acc={acc:.4f}, f1={f1:.4f}")
         accs = np.array(accs)
         f1s = np.array(f1s)
-        print(f"\nAverage acc: {accs.mean():.4f} ± {accs.std():.4f}")
-        print(f"Average f1:  {f1s.mean():.4f} ± {f1s.std():.4f}")
+        print(f"\nAverage acc: {accs.mean():.2f} ± {accs.std():.2f}")
+        print(f"Average f1:  {f1s.mean():.2f} ± {f1s.std():.2f}")
 
         avg_acc = summary.get(mode, {}).get("avg_acc", None)
         avg_f1 = summary.get(mode, {}).get("avg_f1", None)
         if avg_acc is not None and avg_f1 is not None:
-            print(f"(From summary) avg_acc: {avg_acc:.4f}, avg_f1: {avg_f1:.4f}")
+            print(f"(From summary) avg_acc: {avg_acc:.2f}, avg_f1: {avg_f1:.2f}")
 
 
 def draw_final_calibrator_gain_figure(json_path, output_path=config.output / "calibrator_gain_vs_clause_quality.pdf"):
@@ -189,8 +189,21 @@ def draw_final_calibrator_gain_figure(json_path, output_path=config.output / "ca
 
 
 if __name__ == "__main__":
-    # print_ablation_results(config.output/"ablation_summary_proximity_20250718_110456.json")
-    draw_final_calibrator_gain_figure(config.output / "ablation_summary_proximity_20250718_110456.json")
+    # print_ablation_results(config.output/"ablation_summary_closure_20250718_110518.json")
+    # draw_final_calibrator_gain_figure(config.output / "ablation_summary_closure_20250718_110518.json")
+
+    # continuity
+    # print_ablation_results(config.output/"ablation_summary_continuity_20250718_110525.json")
+    # draw_final_calibrator_gain_figure(config.output / "ablation_summary_continuity_20250718_110525.json")
+
+    # symmetry
+    # print_ablation_results(config.output/"ablation_summary_symmetry_20250718_110533.json")
+    # draw_final_calibrator_gain_figure(config.output / "ablation_summary_symmetry_20250718_110533.json")
+
+    # proximity
+    print_ablation_results(config.output/"ablation_summary_proximity_20250718_110331.json")
+    draw_final_calibrator_gain_figure(config.output / "ablation_summary_proximity_20250718_110331.json")
+
 
     # main_ablation()
     # run_ablation()

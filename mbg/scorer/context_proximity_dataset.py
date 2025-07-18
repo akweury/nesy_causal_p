@@ -34,14 +34,20 @@ def obj2context_pair_data(i, j, patches):
 
 
 class ContextContourDataset(Dataset):
-    def __init__(self, root_dir, input_type, sample_size, device, task_num=20, data_num=100000):
+    def __init__(self, root_dir, orders, input_type, sample_size, device, task_num=20, data_num=100000, split="train", test_ratio=0.2):
         self.root_dir = Path(root_dir)
         self.data = []
         self.input_type = input_type
         self.data_num = data_num
         self.task_num = task_num
-        self._load(sample_size, device)
+        self._load(sample_size, orders, device)
         self.balance_labels()
+
+        split_idx = int(len(self.data) * (1 - test_ratio))
+        if split == "train":
+            self.data = self.data[:split_idx]
+        else:
+            self.data = self.data[split_idx:]
 
     def _get_bbox_corners(self, x, y, size):
         half_size = size / 2
@@ -53,12 +59,12 @@ class ContextContourDataset(Dataset):
             [x - half_size, y + half_size],
         ]
 
-    def _get_task_dirs(self):
+    def _get_task_dirs(self, orders):
         task_dirs = sorted([d for d in self.root_dir.iterdir() if d.is_dir()])
+        task_dirs = [task_dirs[i] for i in orders]
+        task_dirs = task_dirs[:self.task_num] if self.task_num < len(task_dirs) else task_dirs
 
-        sampled_dirs = random.sample(task_dirs, self.task_num)
-        # sampled_dirs = task_dirs[96:99]
-        return sampled_dirs
+        return task_dirs
 
     def _process_label_dir(self, labeled_dir, device, file_sample_size=3, sample_size=10):
         json_files = sorted(labeled_dir.glob("*.json"))
@@ -95,8 +101,8 @@ class ContextContourDataset(Dataset):
             label = 1 if obj_i["group_id"] == obj_j["group_id"] and obj_i["group_id"] != -1 else 0
             self.data.append((c_i, c_j, others_tensor, label))
 
-    def _load(self, sample_size, device="cpu"):
-        task_dirs = self._get_task_dirs()
+    def _load(self, sample_size, orders, device="cpu"):
+        task_dirs = self._get_task_dirs(orders)
         for task_dir in task_dirs:
             if len(self.data) > self.data_num:
                 break
