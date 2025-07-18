@@ -68,8 +68,6 @@ def main_ablation():
     all_auc = {conf: [] for conf in ABLATED_CONFIGS}
     all_acc = {conf: [] for conf in ABLATED_CONFIGS}
     for task_idx, (train_data, val_data, test_data) in enumerate(combined_loader):
-        if task_idx>2:
-            continue
         task_name = train_data["task"]
         print(f"\nTask {task_idx + 1}/{len(combined_loader)}: {task_name}")
 
