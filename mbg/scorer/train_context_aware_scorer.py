@@ -92,7 +92,7 @@ def train_model(principle, input_type, sample_size, device, log_wandb=True, n=10
             })
     torch.save(model.state_dict(), model_path)
     print(f"Model saved to {model_path}")
-    return avg_acc, avg_loss
+    return test_acc, test_avg_loss
 
 
 def parse_device(device_str):
@@ -112,35 +112,32 @@ if __name__ == "__main__":
     parser.add_argument("--n", type=int, default=100)
     parser.add_argument("--principle", type=str)
     parser.add_argument("--input_types", type=str, default="pos_color_size")
-    parser.add_argument("--data_nums", type=str, default="10000,50000,100000",)
+    parser.add_argument("--data_nums", type=str, default="10000,50000,100000", )
 
     args = parser.parse_args()
     args.device = parse_device(args.device)
     input_type = args.input_types
-
 
     data_num_list = [int(x) for x in args.data_nums.split(",")]
     sample_size_list = [int(x) for x in args.sample_size_list.split(",")]
     report = []
     p = args.principle
 
-    data_num = data_num_list[0]
+    for data_num in args.data_num_list:
+        for sample_size in sample_size_list:
+            wandb.init(project=f"grp-{args.principle}", config={"epochs": args.epochs, "batch_size": 1, "learning_rate": 1e-3,
+                                                                "sample_size": sample_size, "device": args.device,
+                                                                "input_type": input_type, "data_num": data_num},
+                       name=f"s_{sample_size}_n_{args.n}_d_{data_num}ep_{args.epochs}")
 
-    for sample_size in sample_size_list:
-        wandb.init(project=f"grp-{args.principle}", config={"epochs": args.epochs, "batch_size": 1, "learning_rate": 1e-3,
-                                                            "sample_size": sample_size, "device": args.device,
-                                                            "input_type": input_type, "data_num": data_num},
-                   name=f"{args.principle}_{input_type}_ep_{args.epochs}_sample_{sample_size}_n_{args.n}_data_{data_num}")
-
-        print(f"\n=== Training {p} with {input_type} ===")
-        acc, loss = train_model(p, input_type, sample_size, args.device, log_wandb=True, n=args.n, epochs=args.epochs, data_num=data_num)
-        report.append((p, input_type, acc, loss))
-        wandb.finish()
-
+            print(f"\n=== Training {p} with {input_type} ===")
+            acc, loss = train_model(p, input_type, sample_size, args.device, log_wandb=True, n=args.n, epochs=args.epochs, data_num=data_num)
+            report.append((p, input_type, data_num, sample_size, acc, loss))
+            wandb.finish()
 
     # Final report
     print("\n==== Final Report ====")
-    print(f"{'Principle':<12} {'Input Type':<16} {'Accuracy':>10} {'Loss':>10}")
-    print("-" * 52)
-    for p, input_type, a, l in report:
-        print(f"{p:<12} {input_type:<16} {a:>10.4f} {l:>10.4f}")
+    print(f"{'Principle':<12} {'Input Type':<16} {'Data Num':>10} {'Sample Size':>10} {'Accuracy':>10} {'Loss':>10}")
+    print("-" * 62)
+    for p, input_type, data_num, sample_size, a, l in report:
+        print(f"{p:<12} {input_type:<16} {data_num:>10} {sample_size:>10} {a:>10.4f} {l:>10.4f}")
