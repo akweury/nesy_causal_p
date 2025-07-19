@@ -128,7 +128,7 @@ if __name__ == "__main__":
             wandb.init(project=f"grp-{args.principle}", config={"epochs": args.epochs, "batch_size": 1, "learning_rate": 1e-3,
                                                                 "sample_size": sample_size, "device": args.device,
                                                                 "input_type": input_type, "data_num": data_num},
-                       name=f"s_{sample_size}_n_{args.n}_d_{data_num}ep_{args.epochs}")
+                       name=f"s{sample_size}_n{args.n}_d{data_num}_ep{args.epochs}")
 
             print(f"\n=== Training {p} with {input_type} ===")
             acc, loss = train_model(p, input_type, sample_size, args.device, log_wandb=True, n=args.n, epochs=args.epochs, data_num=data_num)
