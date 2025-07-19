@@ -128,8 +128,8 @@ if __name__ == "__main__":
 
     for sample_size in sample_size_list:
         wandb.init(project=f"grp-{args.principle}", config={"epochs": args.epochs, "batch_size": 1, "learning_rate": 1e-3,
-                                                            "sample_size": args.sample_size, "device": args.device,
-                                                            "input_type": input_type, "data_num": args.data_num},
+                                                            "sample_size": sample_size, "device": args.device,
+                                                            "input_type": input_type, "data_num": data_num},
                    name=f"{args.principle}_{input_type}_ep_{args.epochs}_sample_{args.sample_size}_n_{args.n}_data_{args.data_num}")
 
         print(f"\n=== Training {p} with {input_type} ===")
