@@ -103,16 +103,18 @@ class ContextContourDataset(Dataset):
 
     def _load(self, sample_size, orders, device="cpu"):
         task_dirs = self._get_task_dirs(orders)
+        total_tasks = 0
         for task_dir in task_dirs:
             if len(self.data) > self.data_num:
                 break
             print(f"Processing task directory: {task_dir}, current data size: {len(self.data)}")
+            total_tasks+=1
             for label_dir in ["positive", "negative"]:
                 labeled_dir = task_dir / label_dir
                 if not labeled_dir.exists():
                     continue
                 self._process_label_dir(labeled_dir, device, sample_size=sample_size)
-
+        print(f"Total tasks processed: {total_tasks}, total data collected: {len(self.data)}")
     def balance_labels(self):
         # Separate data by label
         positives = [d for d in self.data if d[3] == 1]
