@@ -108,11 +108,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--device", default="cuda:0" if torch.cuda.is_available() else "cpu", help="Device to train on")
     parser.add_argument("--epochs", type=int, default=10)
-    parser.add_argument("--sample_size", type=int, default=10)
+    parser.add_argument("--sample_size_list", type=str, default="5,10,20,50,100")
     parser.add_argument("--n", type=int, default=100)
     parser.add_argument("--principle", type=str)
     parser.add_argument("--input_types", type=str, default="pos_color_size")
-    parser.add_argument("--data_nums", type=int, default="10,20,50,100,200,500,1000",)
+    parser.add_argument("--data_nums", type=str, default="10000,50000,100000",)
 
     args = parser.parse_args()
     args.device = parse_device(args.device)
@@ -120,18 +120,20 @@ if __name__ == "__main__":
 
 
     data_num_list = [int(x) for x in args.data_nums.split(",")]
+    sample_size_list = [int(x) for x in args.sample_size_list.split(",")]
     report = []
     p = args.principle
 
+    data_num = data_num_list[0]
 
-    for data_num in data_num_list:
+    for sample_size in sample_size_list:
         wandb.init(project=f"grp-{args.principle}", config={"epochs": args.epochs, "batch_size": 1, "learning_rate": 1e-3,
                                                             "sample_size": args.sample_size, "device": args.device,
                                                             "input_type": input_type, "data_num": args.data_num},
                    name=f"{args.principle}_{input_type}_ep_{args.epochs}_sample_{args.sample_size}_n_{args.n}_data_{args.data_num}")
 
         print(f"\n=== Training {p} with {input_type} ===")
-        acc, loss = train_model(p, input_type, args.sample_size, args.device, log_wandb=True, n=args.n, epochs=args.epochs, data_num=args.data_num)
+        acc, loss = train_model(p, input_type, sample_size, args.device, log_wandb=True, n=args.n, epochs=args.epochs, data_num=data_num)
         report.append((p, input_type, acc, loss))
         wandb.finish()
 
