@@ -123,7 +123,7 @@ if __name__ == "__main__":
     report = []
     p = args.principle
 
-    for data_num in args.data_num_list:
+    for data_num in data_num_list:
         for sample_size in sample_size_list:
             wandb.init(project=f"grp-{args.principle}", config={"epochs": args.epochs, "batch_size": 1, "learning_rate": 1e-3,
                                                                 "sample_size": sample_size, "device": args.device,
