@@ -43,11 +43,11 @@ docker build -t grm:latest .
 docker run -it --gpus all -v /home/ml-jsha/nesy_causal_p:/app --rm grm:latest
   
 python -m src.ablation_study --device 10 --task_id 6 --line_min_size 3
-python -m src.ablation_study --device 4 --principle closure
+python -m src.ablation_study --device 0 --principle closure
 python -m src.ablation_study --device 1 --principle similarity
 python -m src.ablation_study --device 0 --principle proximity
 python -m src.ablation_study --device 0 --principle continuity
-python -m src.ablation_study --device 3 --principle symmetry
+python -m src.ablation_study --device 0 --principle symmetry
 
 python -m mbg.scorer.train_context_aware_scorer --device 0 --n 200 --epochs 50 --principle proximity --sample_size 200 --data_num 100000
 python -m mbg.scorer.train_context_aware_scorer --device 0 --n 120 --epochs 50 --principle symmetry --sample_size 200 --data_num 100000

@@ -197,12 +197,12 @@ if __name__ == "__main__":
     # draw_final_calibrator_gain_figure(config.output / "ablation_summary_continuity_20250718_110525.json")
 
     # symmetry
-    # print_ablation_results(config.output/"ablation_summary_symmetry_20250718_110533.json")
-    # draw_final_calibrator_gain_figure(config.output / "ablation_summary_symmetry_20250718_110533.json")
+    print_ablation_results(config.output/"ablation_summary_symmetry_20250721_092532.json")
+    # draw_final_calibrator_gain_figure(config.output / "ablation_summary_symmetry_20250721_092532.json")
 
     # proximity
-    print_ablation_results(config.output/"ablation_summary_proximity_20250718_110331.json")
-    draw_final_calibrator_gain_figure(config.output / "ablation_summary_proximity_20250718_110331.json")
+    # print_ablation_results(config.output/"ablation_summary_proximity_20250720_070246.json")
+    # draw_final_calibrator_gain_figure(config.output / "ablation_summary_proximity_20250720_070246.json")
 
 
     # main_ablation()

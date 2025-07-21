@@ -86,8 +86,8 @@ class ContextContourDataset(Dataset):
     def _process_object_pairs(self, objects, obj_imgs, sample_size, device="cpu", ):
         patches = [patch_preprocess.rgb2patch(img, self.input_type)[0].to(device) for img in obj_imgs]
         pair_indices = [(i, j) for i in range(len(objects)) for j in range(len(objects)) if i != j]
-        if len(pair_indices) > sample_size:
-            pair_indices = random.sample(pair_indices, sample_size)
+        # if len(pair_indices) > sample_size:
+        #     pair_indices = random.sample(pair_indices, sample_size)
         for i, j in pair_indices:
             obj_i = objects[i]
             obj_j = objects[j]
@@ -119,10 +119,10 @@ class ContextContourDataset(Dataset):
         # Separate data by label
         positives = [d for d in self.data if d[3] == 1]
         negatives = [d for d in self.data if d[3] == 0]
-        min_count = min(len(positives), len(negatives))
+        # min_count = min(len(positives), len(negatives))
         # Sample min_count from each
-        positives = random.sample(positives, min_count)
-        negatives = random.sample(negatives, min_count)
+        # positives = random.sample(positives, min_count)
+        # negatives = random.sample(negatives, min_count)
         # Combine and shuffle
         self.data = positives + negatives
         random.shuffle(self.data)
