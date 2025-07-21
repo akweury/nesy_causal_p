@@ -6,6 +6,7 @@ import torch
 from pathlib import Path
 from torch.utils.data import Dataset
 import random
+import pickle
 from tqdm import tqdm
 
 from mbg import patch_preprocess
@@ -40,8 +41,27 @@ class ContextContourDataset(Dataset):
         self.input_type = input_type
         self.data_num = data_num
         self.task_num = task_num
-        self._load(sample_size, orders, device)
-        self.balance_labels()
+        # self._load(sample_size, orders, device)
+        # self.balance_labels()
+
+
+        # Cache file path
+        cache_name = f"cache_{input_type}_ss{sample_size}_tn{task_num}_dn{data_num}.pkl"
+        cache_path = self.root_dir / cache_name
+
+        if cache_path.exists():
+            print(f"Loading cached dataset from {cache_path}")
+            with open(cache_path, "rb") as f:
+                self.data = pickle.load(f)
+        else:
+            print("No cache found, processing dataset...")
+            self.data = []
+            self._load(sample_size, orders, device)
+            self.balance_labels()
+            with open(cache_path, "wb") as f:
+                pickle.dump(self.data, f)
+            print(f"Dataset cached to {cache_path}")
+
 
         split_idx = int(len(self.data) * (1 - test_ratio))
         if split == "train":
