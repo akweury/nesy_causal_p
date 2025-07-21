@@ -12,7 +12,7 @@ from mbg.scorer.context_contour_scorer import ContextContourScorer
 from mbg.scorer import scorer_config
 
 
-def train_model(principle, input_type, sample_size, device, log_wandb=True, n=100, epochs=10, data_num=100000):
+def train_model(args, principle, input_type, sample_size, device, log_wandb=True, n=100, epochs=10, data_num=100000):
     # Resolve paths
     path_map = {
         "closure": (scorer_config.closure_path, scorer_config.CLOSURE_MODEL),
@@ -35,7 +35,7 @@ def train_model(principle, input_type, sample_size, device, log_wandb=True, n=10
     model = ContextContourScorer(input_dim=input_dim).to(device)
     orders = list(range(n))
     random.shuffle(orders)  # Randomly shuffle task orders
-    train_dataset = ContextContourDataset(data_path, orders, input_type, sample_size, device=device, data_num=data_num, task_num=n)
+    train_dataset = ContextContourDataset(data_path, orders, input_type, sample_size, device=device, data_num=data_num, task_num=n, remove_cache=args.remove_cache)
     test_dataset = ContextContourDataset(data_path, orders, input_type, sample_size, device=device, data_num=data_num, split="test", task_num=n)
     train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True, collate_fn=context_collate_fn)
     test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, collate_fn=context_collate_fn)
@@ -113,7 +113,7 @@ if __name__ == "__main__":
     parser.add_argument("--principle", type=str)
     parser.add_argument("--input_types", type=str, default="pos_color_size")
     parser.add_argument("--data_nums", type=str, default="10000,50000,100000", )
-
+    parser.add_argument("--remove_cache", action="store_true", help="Remove existing cache files before processing")
     args = parser.parse_args()
     args.device = parse_device(args.device)
     input_type = args.input_types
@@ -131,7 +131,7 @@ if __name__ == "__main__":
                        name=f"s{sample_size}_n{args.n}_d{data_num}_ep{args.epochs}")
 
             print(f"\n=== Training {p} with {input_type} ===")
-            acc, loss = train_model(p, input_type, sample_size, args.device, log_wandb=True, n=args.n, epochs=args.epochs, data_num=data_num)
+            acc, loss = train_model(args, p, input_type, sample_size, args.device, log_wandb=True, n=args.n, epochs=args.epochs, data_num=data_num)
             report.append((p, input_type, data_num, sample_size, acc, loss))
             wandb.finish()
 

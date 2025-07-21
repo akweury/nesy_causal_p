@@ -35,7 +35,7 @@ def obj2context_pair_data(i, j, patches):
 
 
 class ContextContourDataset(Dataset):
-    def __init__(self, root_dir, orders, input_type, sample_size, device, task_num=20, data_num=100000, split="train", test_ratio=0.2):
+    def __init__(self, root_dir, orders, input_type, sample_size, device, task_num=20, data_num=100000, split="train", test_ratio=0.2, remove_cache=False):
         self.root_dir = Path(root_dir)
         self.data = []
         self.input_type = input_type
@@ -48,6 +48,10 @@ class ContextContourDataset(Dataset):
         # Cache file path
         cache_name = f"cache_{input_type}_ss{sample_size}_tn{task_num}_dn{data_num}.pkl"
         cache_path = self.root_dir / cache_name
+
+        if remove_cache and cache_path.exists():
+            print(f"Removing existing cache at {cache_path}")
+            cache_path.unlink()
 
         if cache_path.exists():
             print(f"Loading cached dataset from {cache_path}")
