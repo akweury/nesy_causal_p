@@ -1,7 +1,7 @@
 seaborn
 opencv-python==4.8.0.74
 colorlog
-numpy
+numpy==1.24.0
 Pillow
 ipython
 imageio
@@ -24,4 +24,5 @@ faiss-cpu
 kornia
 transformers==4.51.0
 apex
+timm
 

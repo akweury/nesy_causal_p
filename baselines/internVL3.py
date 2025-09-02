@@ -27,8 +27,8 @@ timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 DTYPE = torch.bfloat16  # or torch.float16
 
 
-def init_wandb(batch_size, principle):
-    wandb.init(project=f"ELVIS-InternVL-{principle}", config={"batch_size": batch_size})
+def init_wandb(batch_size, principle, model_name):
+    wandb.init(project=f"ELVIS-{model_name}-{principle}", config={"batch_size": batch_size})
 
 
 def load_internVL3_2B_model(device):
@@ -311,13 +311,26 @@ def build_device_map_3gpus(model_id: str):
 
 def load_internX_model(MODEL_ID, device_map=None, dtype=DTYPE):
     tok = AutoTokenizer.from_pretrained(MODEL_ID, trust_remote_code=True, use_fast=False)
+    # inside load_internX_model(...)
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_ID,
-        trust_remote_code=True,
         torch_dtype=dtype,
-        device_map=device_map,
-        low_cpu_mem_usage=True
-    ).eval()
+        trust_remote_code=True,
+        device_map=None,  # delay device mapping
+        low_cpu_mem_usage=False,  # do not use the empty weight path
+    )
+    # if you want automatic device split after init:
+    from accelerate import dispatch_model
+    model = dispatch_model(model, device_map=device_map)  # your existing map
+
+    #
+    # model = AutoModelForCausalLM.from_pretrained(
+    #     MODEL_ID,
+    #     trust_remote_code=True,
+    #     torch_dtype=dtype,
+    #     device_map=device_map,
+    #     low_cpu_mem_usage=True
+    # ).eval()
     torch.set_grad_enabled(False)
     torch.backends.cuda.matmul.allow_tf32 = True
     model.config.use_cache = False
@@ -384,8 +397,9 @@ def run_internVL3_2B(args, data_path, img_size, principle, batch_size, device, i
 
 
 def run_internVL3_78B(args):
+    MODEL_ID = "OpenGVLab/InternVL3-78B"
     os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
-    init_wandb(args.batch_size, args.principle)
+    init_wandb(args.batch_size, args.principle, MODEL_ID)
     principle_path = Path(args.data_path)
     pattern_folders = sorted(file_utils.list_folders(str(principle_path / "train")))
 
@@ -393,7 +407,7 @@ def run_internVL3_78B(args):
         print("No pattern folders found in", principle_path)
         return
 
-    MODEL_ID = "OpenGVLab/InternVL3-78B"
+
     task_num = args.task_num
     start_num = args.start_num
     principle = args.principle
