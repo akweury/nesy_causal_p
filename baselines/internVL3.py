@@ -331,6 +331,8 @@ def load_internX_model(MODEL_ID, device_map=None, dtype=DTYPE):
         device_map=device_map,
         low_cpu_mem_usage=True
     ).eval()
+
+
     torch.set_grad_enabled(False)
     torch.backends.cuda.matmul.allow_tf32 = True
     model.config.use_cache = False
@@ -413,6 +415,8 @@ def run_internVL3_78B(args):
     principle = args.principle
     img_size = args.img_size
     img_num = args.img_num
+    device = args.device
+
 
     total_accuracy, total_f1 = [], []
     results = {}
@@ -471,10 +475,3 @@ def run_internVL3_78B(args):
     wandb.finish()
     return avg_accuracy, avg_f1
 
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Evaluate LLaVA on Gestalt Reasoning Benchmark.")
-    parser.add_argument("--device_id", type=int, help="Specify GPU device ID. If not provided, CPU will be used.")
-    args = parser.parse_args()
-
-    device = f"cuda:{args.device_id}" if args.device_id is not None and torch.cuda.is_available() else "cpu"
