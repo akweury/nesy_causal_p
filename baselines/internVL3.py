@@ -311,26 +311,26 @@ def build_device_map_3gpus(model_id: str):
 
 def load_internX_model(MODEL_ID, device_map=None, dtype=DTYPE):
     tok = AutoTokenizer.from_pretrained(MODEL_ID, trust_remote_code=True, use_fast=False)
-    # inside load_internX_model(...)
-    model = AutoModelForCausalLM.from_pretrained(
-        MODEL_ID,
-        torch_dtype=dtype,
-        trust_remote_code=True,
-        device_map=None,  # delay device mapping
-        low_cpu_mem_usage=False,  # do not use the empty weight path
-    )
-    # if you want automatic device split after init:
-    from accelerate import dispatch_model
-    model = dispatch_model(model, device_map=device_map)  # your existing map
-
-    #
+    # # inside load_internX_model(...)
     # model = AutoModelForCausalLM.from_pretrained(
     #     MODEL_ID,
-    #     trust_remote_code=True,
     #     torch_dtype=dtype,
-    #     device_map=device_map,
-    #     low_cpu_mem_usage=True
-    # ).eval()
+    #     trust_remote_code=True,
+    #     device_map=None,  # delay device mapping
+    #     low_cpu_mem_usage=False,  # do not use the empty weight path
+    # )
+    # # if you want automatic device split after init:
+    # from accelerate import dispatch_model
+    # model = dispatch_model(model, device_map=device_map)  # your existing map
+
+
+    model = AutoModelForCausalLM.from_pretrained(
+        MODEL_ID,
+        trust_remote_code=True,
+        torch_dtype=dtype,
+        device_map=device_map,
+        low_cpu_mem_usage=True
+    ).eval()
     torch.set_grad_enabled(False)
     torch.backends.cuda.matmul.allow_tf32 = True
     model.config.use_cache = False
