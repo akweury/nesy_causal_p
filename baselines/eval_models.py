@@ -23,7 +23,7 @@ def main():
     parser.add_argument("--img_size", type=int, default=224, choices=[224, 448, 1024])
     parser.add_argument("--task_num", type=str, default="full")
     parser.add_argument("--start_num", type=int, default=0)
-    parser.add_argument("--batch_size", type=int)
+    parser.add_argument("--batch_size", type=int, default=1)
     args = parser.parse_args()
     # Determine device based on device_id flag
     if args.device_id is not None and torch.cuda.is_available():
