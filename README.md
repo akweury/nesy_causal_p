@@ -55,6 +55,7 @@ python -m src.play
 
 ##### InternVL-78B
 ``` 
+CUDA_VISIBLE_DEVICES=0,1,2 python -m baselines.eval_models --batch_size 1 --principle proximity --img_num 3 --model internVL3_78B --device_id 0 --img_size 224
 
 ```
 

@@ -33,7 +33,7 @@ def main():
 
     args.proj_name = "GRM"
     # Construct the data path based on the principle argument
-    args.data_path = config.get_raw_patterns_path(args.remote) / f"res_{args.img_size}_pin_False" / args.principle
+    args.data_path = config.get_raw_patterns_path(args.remote) / f"res_1024_pin_False" / args.principle
     print(f"Starting model evaluations with data from {args.data_path}...")
     model = baseline_models[args.model]
     print(f"{args.principle} Evaluating on {args.device}...")
