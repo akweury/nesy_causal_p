@@ -40,22 +40,29 @@ docker build -t grm:latest .
 
 ```
 docker run -it --gpus all -v /home/ml-jsha/nesy_causal_p:/app -v /home/ml-jsha/storage/GRM_output/:/grm_output -v /home/ml-jsha/storage/GRM_Data/:/gen_data --rm grm:latest
-```
-#### Train: GRM
-``` 
-python -m src.play
-```
-#### Train: Baseline Models
 
+``` 
+
+
+
+#### Train: Baseline Models
 
 ##### Llava-7B
 ``` 
-
+python -m baselines.eval_models --batch_size 1 --principle proximity --img_num 3 --model llava --device_id 0 --img_size 224 --remote
+python -m baselines.eval_models --batch_size 1 --principle similarity --img_num 3 --model llava --device_id 0 --img_size 224 --remote
+python -m baselines.eval_models --batch_size 1 --principle closure --img_num 3 --model llava --device_id 0 --img_size 224 --remote
+python -m baselines.eval_models --batch_size 1 --principle symmetry --img_num 3 --model llava --device_id 0 --img_size 224 --remote
+python -m baselines.eval_models --batch_size 1 --principle continuity --img_num 3 --model llava --device_id 0 --img_size 224 --remote
 ```
 
 ##### InternVL-78B
 ``` 
-CUDA_VISIBLE_DEVICES=0,1,2 python -m baselines.eval_models --batch_size 1 --principle proximity --img_num 3 --model internVL3_78B --device_id 0 --img_size 224
+CUDA_VISIBLE_DEVICES=0,1,2 python -m baselines.eval_models --batch_size 1 --principle proximity --img_num 3 --model internVL3_78B --device_id 0 --img_size 224 --remote
+CUDA_VISIBLE_DEVICES=3,4,5 python -m baselines.eval_models --batch_size 1 --principle similarity --img_num 3 --model internVL3_78B --device_id 0 --img_size 224 --remote
+CUDA_VISIBLE_DEVICES=3,4,5 python -m baselines.eval_models --batch_size 1 --principle closure --img_num 3 --model internVL3_78B --device_id 0 --img_size 224 --remote
+CUDA_VISIBLE_DEVICES=3,4,5 python -m baselines.eval_models --batch_size 1 --principle symmetry --img_num 3 --model internVL3_78B --device_id 0 --img_size 224 --remote
+CUDA_VISIBLE_DEVICES=3,4,5 python -m baselines.eval_models --batch_size 1 --principle continuity --img_num 3 --model internVL3_78B --device_id 0 --img_size 224 --remote
 
 ```
 
@@ -75,6 +82,36 @@ python -m mbg.scorer.train_context_aware_scorer --device 1 --n 150 --epochs 50 -
 python -m mbg.scorer.train_context_aware_scorer --device 1 --n 150 --epochs 50 --principle closure --sample_size 50
 python -m mbg.object.train_patch_classifier --device 0 
 ``` 
+
+
+#### Analysis Results
+
+``` 
+python -m src.analysis_results --model principle --model vit --principle proximity --img_num 3  
+python -m src.analysis_results --model principle --model vit --principle similarity --img_num 3  
+python -m src.analysis_results --model principle --model vit --principle closure --img_num 3  
+python -m src.analysis_results --model principle --model vit --principle symmetry --img_num 3  
+python -m src.analysis_results --model principle --model vit --principle continuity --img_num 3  
+
+python -m src.analysis_results --model principle --model llava --principle proximity --img_num 3  
+python -m src.analysis_results --model principle --model llava --principle similarity --img_num 3  
+python -m src.analysis_results --model principle --model llava --principle closure --img_num 3  
+python -m src.analysis_results --model principle --model llava --principle symmetry --img_num 3  
+python -m src.analysis_results --model principle --model llava --principle continuity --img_num 3  
+
+python -m src.analysis_results --model principle --model internVL3-78B --principle proximity --img_num 3  
+python -m src.analysis_results --model principle --model internVL3-78B --principle similarity --img_num 3  
+python -m src.analysis_results --model principle --model internVL3-78B --principle closure --img_num 3  
+python -m src.analysis_results --model principle --model internVL3-78B --principle symmetry --img_num 3  
+python -m src.analysis_results --model principle --model internVL3-78B --principle continuity --img_num 3  
+
+python -m src.analysis_results --model principle --model GRM --principle proximity --img_num 3  
+python -m src.analysis_results --model principle --model GRM --principle similarity --img_num 3  
+python -m src.analysis_results --model principle --model GRM --principle closure --img_num 3  
+python -m src.analysis_results --model principle --model GRM --principle symmetry --img_num 3  
+python -m src.analysis_results --model principle --model GRM --principle continuity --img_num 3
+
+```
 
 ---
 #### Others

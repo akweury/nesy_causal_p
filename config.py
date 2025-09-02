@@ -35,11 +35,17 @@ def get_proj_output_path(remote=False):
 
     if remote:
         output_dir = f"/grm_output/"
-        os.makedirs(output_dir, exist_ok=True)
+
     else:
-        raise NotImplementedError("Local output path not implemented yet.")
+        output_dir = root / "storage" / "results"
 
+    os.makedirs(output_dir, exist_ok=True)
+    return output_dir
 
+def get_figure_path(remote=False):
+    figure_path = get_proj_output_path(remote) / "figures"
+    os.makedirs(figure_path, exist_ok=True)
+    return figure_path
 
 ########################################################
 
@@ -144,6 +150,18 @@ dpl_file_path = storage / "output" / "dpl_program.pl"
 # nn settings
 kernel_size = 3
 
-# gestalt_action = ["proximity", "color_similarity", "shape_similarity", "closure"]
-
 group_index = 10
+
+categories = {
+    "proximity": ["red_triangle", "grid", "fixed_props","big_small", "circle_features"],
+    "similarity": ["fixed_number", "pacman", "palette"],
+    "closure": ["big_triangle", "big_square", "big_circle", "feature_triangle", "feature_square", "feature_circle"],
+    "symmetry": ["solar_sys", "feature_symmetry_circle"],
+    "continuity": ["one_split_n", "two_splines", "a_splines", "u_splines", "feature_continuity_x_splines"]
+}
+
+
+name_map = {
+    "solar_sys": "axis_symmetry_bkg",
+    "feature_symmetry_circle": "axis_symmetry_bkg_overlap",
+}

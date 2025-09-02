@@ -1,0 +1,377 @@
+# Created by jing at 03.03.25
+import argparse
+import os
+import ace_tools_open as tools
+import json
+import pandas as pd
+import scipy.stats as stats
+import torch
+from pathlib import Path
+import re
+import matplotlib.pyplot as plt
+import numpy as np
+import seaborn as sns
+import matplotlib
+
+import config
+from src.utils import analysis_utils
+
+model_dict = {
+    "vit_base_patch16_224": {"model": "vit", "img_num": 3},
+    "llava-onevision-qwen2-7b": {"model": "llava", "img_num": 3},
+    "InternVL3-78B": {"model": "internVL3_78B", "img_num": 3},
+    "GRM": {"model": "grm", "img_num": 3},
+}
+
+principles = ["proximity", "similarity", "closure", "symmetry", "continuity"]
+
+
+def json_to_csv(json_data, csv_file_path):
+    # Convert JSON to DataFrame
+    df = pd.DataFrame(json_data).T
+    df["accuracy"] /= 100  # Convert accuracy to percentage
+    # Calculate performance statistics
+    # mean_accuracy = df["accuracy"].mean()
+    precision = df["precision"].values
+    recall = df["recall"].values
+    f1_score = 2 * (precision * recall) / ((precision + recall) + 1e-20)
+    # Save F1-score to CSV with row names (index)
+    f1_score_df = pd.DataFrame({"F1 Score": f1_score}, index=df.index)
+    f1_score_df.to_csv(csv_file_path, index=True)
+    print(f"F1-score data saved to {csv_file_path}")
+    return df, f1_score
+
+
+def json_to_csv_llava(json_data, csv_file_path):
+    f1_score = torch.tensor([v["f1_score"] for k, v in json_data.items()])
+    # Convert JSON to DataFrame
+    # Remove the "logic_rules" field from each entry
+    for key in json_data.keys():
+        if "logic_rules" in json_data[key]:
+            del json_data[key]["logic_rules"]
+
+    # Convert to DataFrame
+    df = pd.DataFrame.from_dict(json_data, orient="index")
+
+    df["accuracy"] /= 100  # Convert accuracy to percentage
+    # Calculate performance statistics
+    # mean_accuracy = df["accuracy"].mean()
+    precision = df["precision"].values
+    recall = df["recall"].values
+    f1_score = 2 * (precision * recall) / ((precision + recall) + 1e-20)
+    # Save F1-score to CSV with row names (index)
+    f1_score_df = pd.DataFrame({"F1 Score": f1_score}, index=df.index)
+    f1_score_df.to_csv(csv_file_path, index=True)
+    print(f"F1-score data saved to {csv_file_path}")
+    return df, f1_score
+
+
+def get_per_task_data(json_path, principle):
+    # load the JSON data
+    with open(json_path, 'r') as f:
+        data = json.load(f)
+    if principle in data:
+        return data[principle]
+    else:
+        if "average" in data:
+            data.pop("average", None)
+        return data
+
+
+def analysis_average_performance(args, json_path):
+    principle, model_name, img_num = args.principle, args.model, args.img_num
+    # load the JSON data
+    with open(json_path, 'r') as f:
+        data = json.load(f)
+    if "vit" in model_name:
+        per_task_data = data[principle]
+    else:
+        per_task_data = data
+        per_task_data.pop("average", None)  # Remove 'average' if it exists
+
+    avg_acc = np.mean([v['accuracy'] for v in per_task_data.values()])
+    avg_f1 = np.mean([v['f1_score'] for v in per_task_data.values()])
+    avg_precision = np.mean([v['precision'] for v in per_task_data.values()])
+    avg_recall = np.mean([v['recall'] for v in per_task_data.values()])
+
+    std_acc = np.std([v['accuracy'] for v in per_task_data.values()])
+    std_f1 = np.std([v['f1_score'] for v in per_task_data.values()])
+    std_precision = np.std([v['precision'] for v in per_task_data.values()])
+    std_recall = np.std([v['recall'] for v in per_task_data.values()])
+
+    msg = (f"{principle}\n"
+           f"#task: {len(per_task_data)}\n"
+           f"#Img: {img_num}\n"
+           f"Acc: {avg_acc:.2f} ± {std_acc:.2f}\n"
+           f"F1: {avg_f1:.2f} ± {std_f1:.2f}\n"
+           f"Prec: {avg_precision:.2f} ± {std_precision:.2f}\n"
+           f"Recall: {avg_recall:.2f} ± {std_recall:.2f}")
+    # draw the performance as a line chart
+    x = list(range(1, len(per_task_data) + 1))
+    y = [v['accuracy'] for v in per_task_data.values()]
+    x_label = "Task Index"
+    y_label = "Accuracy"
+    title = f"{model_name}_{img_num} Accuracy for each task in {principle}"
+
+    figure_path = config.get_figure_path(args.remote)
+    analysis_utils.draw_line_chart(x, y, x_label, y_label, title, figure_path / f"{principle}_acc_{model_name}_{img_num}.pdf", msg)
+
+
+def analysis_models(args):
+    csv_files = {}
+    save_path = config.get_figure_path(args.remote) / f"all_category_all_principles_heat_map.pdf"
+    for principle in principles:
+        csv_files[principle] = []
+        # path = config.results / principle
+        for model_name, model_info in model_dict.items():
+            json_path = analysis_utils.get_results_path(args.remote, principle, model_info["model"], model_info["img_num"])
+            per_task_data = get_per_task_data(json_path, principle)
+            # replace the soloar with solar if exists in the keys of the per_task_data
+            per_task_data = {re.sub(r"soloar", "solar", k): v for k, v in per_task_data.items()}
+            new_per_task_data = {}
+            for k, v in per_task_data.items():
+                if "non_intersected_n_splines" in k:
+                    new_per_task_data[k] = v
+                elif "intersected_n_splines" in k:
+                    new_key = k.replace("intersected_n_splines", "with_intersected_n_splines")
+                    new_per_task_data[new_key] = v
+                else:
+                    new_per_task_data[k] = v
+            per_task_data = new_per_task_data
+            csv_file_name = config.get_proj_output_path(args.remote) / principle / f"{model_info['model']}_{model_info['img_num']}.csv"
+            if model_name == "llava":
+                df, f1_score = json_to_csv_llava(per_task_data, csv_file_name)
+            else:
+                df, f1_score = json_to_csv(per_task_data, csv_file_name)
+
+            csv_files[principle].append(csv_file_name)
+    analysis_utils.draw_f1_heat_map(args, csv_files, config.categories)
+
+
+def analysis_ablation_performance(args):
+    import matplotlib.pyplot as plt
+    import numpy as np
+    import seaborn as sns
+    import matplotlib
+
+    matplotlib.rcParams.update({
+        # "font.size": 24,  # Increase base font size
+        "font.family": "sans-serif",
+        "font.sans-serif": ["DejaVu Sans", "Arial"],
+        "ytick.labelsize": 30
+    })
+
+    props = ["group_num", "group_size"]
+    all_principles = ["proximity", "similarity", "closure", "symmetry", "continuity"]
+    model_names = list(model_dict.keys())
+
+    n_props = len(props)
+    n_principles = len(all_principles)
+    n_models = len(model_names)
+
+    fig, axes = plt.subplots(n_props, n_principles, figsize=(5 * n_principles, 5 * n_props), sharey='row')
+    palette = sns.color_palette("Set2", n_colors=n_models)
+    bar_width = 0.10
+    group_gap = 0.05
+
+    for row_idx, prop in enumerate(props):
+        results = {}
+        principle_categories = {}
+        # Collect results for each principle and property value
+        for principle in all_principles:
+            results[principle] = {}
+            categories = set()
+            for model_name, model_info in model_dict.items():
+                json_path = analysis_utils.get_results_path(args.remote, principle, model_info["model"], model_info["img_num"])
+                per_task_data = get_per_task_data(json_path, principle)
+                group_analysis = {}
+                for task_name, task_res in per_task_data.items():
+                    task_info = analysis_utils.parse_task_name(task_name)
+                    if prop not in task_info:
+                        continue
+                    value = task_info[prop]
+                    categories.add(value)
+                    if value not in group_analysis:
+                        group_analysis[value] = []
+                    group_analysis[value].append(task_res["accuracy"])
+                avg_acc = {k: np.mean(v) for k, v in group_analysis.items()}
+                results[principle][model_name] = avg_acc
+            if "s" in list(categories) and "m" in list(categories) and "l" in list(categories):
+                principle_categories[principle] = ["s", "m", "l", "xl"]
+            else:
+                principle_categories[principle] = sorted(list(categories))
+        for col_idx, principle in enumerate(all_principles):
+            ax = axes[row_idx, col_idx] if n_props > 1 else axes[col_idx]
+            categories = principle_categories[principle]
+            x = np.arange(len(categories))
+            n = n_models
+            group_width = n * bar_width + group_gap
+            for i, model_name in enumerate(model_names):
+                values = [results[principle][model_name].get(cat, np.nan) for cat in categories]
+                ax.bar(x * group_width + i * bar_width, values, width=bar_width, color=palette[i], label=model_name)
+                for j, v in enumerate(values):
+                    ax.text(x[j] * group_width + i * bar_width, v + 2, f"{v:.1f}", rotation=90, ha='center', va='bottom', fontsize=10)
+            ax.set_xticks(x * group_width + (n * bar_width) / 2 - bar_width / 2)
+            ax.set_xticklabels(categories, fontsize=30, ha='right')
+            ax.set_xlabel(prop, fontsize=25)
+            if row_idx == 0:
+                ax.set_title(principle, fontsize=35, fontweight='bold')
+            ax.set_ylim(0, 100)
+            if col_idx == 0:
+                ax.set_ylabel('Accuracy', fontsize=25)
+            ax.axhline(50, color='gray', linestyle='--', linewidth=1)
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+            if row_idx == 0 and col_idx == 0:
+                handles, labels = ax.get_legend_handles_labels()
+                # ax.legend(title="Model", fontsize=12, loc='best')
+    fig.legend(handles, labels, loc="lower center",
+               bbox_to_anchor=(0.5, -0.08), ncol=3,
+               fontsize=30, frameon=True)
+    plt.tight_layout(rect=[0, 0.08, 1, 1])  # leave space for legend at bottom
+    save_path = config.get_figure_path(args.remote) / f"ablation_all_props_all_principles_matrix.pdf"
+    plt.savefig(save_path, format="pdf", bbox_inches="tight")
+    plt.close()
+    print(f"Matrix of grouped ablation bar charts saved to: {save_path}")
+
+
+def analysis_obj_ablation_performance(args):
+    matplotlib.rcParams.update({"font.family": "sans-serif", "font.sans-serif": ["DejaVu Sans", "Arial"], "ytick.labelsize": 30})
+    props = ["color", "shape", "size"]
+    all_principles = ["proximity", "similarity", "closure", "symmetry", "continuity"]
+    model_names = ["M1", "M2", "M3", "M4", "M5"]
+    official_model_names = list(model_dict.keys())
+    n_props = len(props)
+    n_principles = len(all_principles)
+    fig, axes = plt.subplots(len(props), n_principles, figsize=(5 * n_principles, 5 * n_props), sharey='row')
+    palette = sns.color_palette("Set2", n_colors=2)
+    bar_width = 0.10
+    group_gap = 0.05
+
+    for row_idx, prop in enumerate(props):
+        results = {}
+        for principle in all_principles:
+            results[principle] = {}
+            # Collect results for each principle and property value
+            for model_name, model_info in model_dict.items():
+                results[principle][model_name] = {"related": [], "irrelated": []}
+                json_path = analysis_utils.get_results_path(args.remote, principle, model_info["model"], model_info["img_num"])
+                per_task_data = get_per_task_data(json_path, principle)
+                rel_acc = []
+                irrel_acc = []
+
+                for task_name, task_res in per_task_data.items():
+                    if task_name[-1] != "_":
+                        task_name += "_"
+                    task_info = analysis_utils.parse_task_name(task_name)
+                    if prop in task_info["related_concepts"]:
+                        rel_acc.append(task_res["accuracy"])
+                        results[principle][model_name]["related"].append(task_res["accuracy"])
+                    elif prop in task_info["irrelated_concepts"]:
+                        irrel_acc.append(task_res["accuracy"])
+                        results[principle][model_name]["irrelated"].append(task_res["accuracy"])
+                    else:
+                        continue
+        for col_idx, principle in enumerate(all_principles):
+            ax = axes[row_idx, col_idx] if n_props > 1 else axes[col_idx]
+            categories = ["related", "irrelated"]
+            x = np.arange(len(model_names))
+            n = 2
+            group_width = n * bar_width + group_gap
+
+            for i, cat in enumerate(categories):
+                values = [np.mean(results[principle][model_name][cat]) for model_name in official_model_names]
+                ax.bar(x * group_width + i * bar_width, values, width=bar_width, color=palette[i], label=model_names)
+
+                for j, model_name in enumerate(model_names):
+                    ax.text(x[j] * group_width + i * bar_width, values[j] + 2, f"{values[j]:.1f}", rotation=60, ha='center', va='bottom', fontsize=10)
+            ax.set_xticks(x * group_width + (n * bar_width) / 2)
+            ax.set_xticklabels(model_names, fontsize=30, ha='right')
+            ax.set_xlabel(prop, fontsize=25)
+            if row_idx == 0:
+                ax.set_title(principle, fontsize=35, fontweight='bold')
+            ax.set_ylim(0, 100)
+            if col_idx == 0:
+                ax.set_ylabel('Accuracy', fontsize=25)
+            ax.axhline(50, color='gray', linestyle='--', linewidth=1)
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+            if row_idx == 0 and col_idx == 0:
+                handles, labels = ax.get_legend_handles_labels()
+    legend_handles = [handles[0], handles[len(model_names)]]
+    fig.legend(legend_handles, ["related", "irrelated"], loc="lower center", bbox_to_anchor=(0.5, -0.02), ncol=2, fontsize=30)
+    plt.tight_layout(rect=[0, 0.08, 1, 1])  # leave space for legend at bottom
+    save_path = config.get_figure_path(args.remote) / f"ablation_obj_all_props_all_principles_matrix.pdf"
+    plt.savefig(save_path, format="pdf", bbox_inches="tight")
+    plt.close()
+
+    # Compute average accuracy for each prop across all principles and models
+    avg_results = {prop: [] for prop in props}
+    avg_irrel_results = {prop: [] for prop in props}
+    for prop in props:
+        for model_name in official_model_names:
+            rel_accs = []
+            irrel_accs = []
+            for principle in all_principles:
+                rel_accs.extend(results[principle][model_name]["related"])
+                irrel_accs.extend(results[principle][model_name]["irrelated"])
+            avg_results[prop].append(np.mean(rel_accs) if rel_accs else np.nan)
+            avg_irrel_results[prop].append(np.mean(irrel_accs) if irrel_accs else np.nan)
+
+    # Draw grouped bar chart: each subplot is a prop, bars are related/irrelated for each model
+    fig, axes = plt.subplots(1, len(props), figsize=(6 * len(props), 6), sharey=True)
+    if len(props) == 1:
+        axes = [axes]
+    bar_width = 0.35
+    x = np.arange(len(official_model_names))
+    palette = sns.color_palette("Set2", n_colors=2)
+    for idx, prop in enumerate(props):
+        ax = axes[idx]
+        rel_vals = avg_results[prop]
+        irrel_vals = avg_irrel_results[prop]
+        ax.bar(x - bar_width / 2, rel_vals, width=bar_width, color=palette[0], label="related")
+        ax.bar(x + bar_width / 2, irrel_vals, width=bar_width, color=palette[1], label="irrelated")
+        for i, v in enumerate(rel_vals):
+            ax.text(x[i] - bar_width / 2, v + 2, f"{v:.1f}", ha='center', va='bottom', fontsize=15, rotation=60)
+        for i, v in enumerate(irrel_vals):
+            ax.text(x[i] + bar_width / 2, v + 2, f"{v:.1f}", ha='center', va='bottom', fontsize=15, rotation=60)
+        ax.set_title(f"Acc: {prop}", fontsize=30, fontweight='bold')
+        if idx == 0:
+            ax.set_ylabel("Accuracy", fontsize=25)
+        ax.set_xticks(x)
+        ax.set_xticklabels(model_names, fontsize=25)
+        ax.set_ylim(0, 100)
+        ax.axhline(50, color='gray', linestyle='--', linewidth=1)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.legend(fontsize=20, loc='upper left')
+    plt.tight_layout()
+    save_path = config.get_figure_path(args.remote) / "obj_ablation_avg_accuracy_per_prop_grouped.pdf"
+    plt.savefig(save_path, format="pdf", bbox_inches="tight")
+    plt.show()
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Evaluate baseline models with CUDA support.")
+    parser.add_argument("--model", type=str, required=True, help="Specify the principle to filter data.")
+    parser.add_argument("--principle", type=str, required=True)
+    parser.add_argument("--remote", action="store_true")
+    parser.add_argument("--mode", type=str, default="avg_principle")
+    parser.add_argument("--img_num", type=int)
+    args = parser.parse_args()
+    json_path = analysis_utils.get_results_path(args.remote, args.principle, args.model, args.img_num)
+
+    if args.mode == "principle":
+        analysis_average_performance(args, json_path)
+    elif args.mode == "category":
+        analysis_models(args)
+    elif args.mode == "ablation":
+        analysis_ablation_performance(args)
+    elif args.mode == "obj_ablation":
+        analysis_obj_ablation_performance(args)
+    else:
+        raise ValueError(f"Unsupported mode: {args.mode}")
+
+
+if __name__ == "__main__":
+    main()
