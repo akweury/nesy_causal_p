@@ -31,10 +31,10 @@ def get_raw_patterns_path(remote=False):
     return raw_patterns_path
 
 
-def get_proj_output_path(proj_name, remote=False):
+def get_proj_output_path(remote=False):
 
     if remote:
-        output_dir = f"/{proj_name}_output/"
+        output_dir = f"/grm_output/"
         os.makedirs(output_dir, exist_ok=True)
     else:
         raise NotImplementedError("Local output path not implemented yet.")

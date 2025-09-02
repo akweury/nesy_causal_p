@@ -447,7 +447,7 @@ def run_internVL3_78B(args):
     avg_f1 = sum(total_f1) / len(total_f1) if total_f1 else 0
 
 
-    output_dir = config.get_proj_output_path(args.proj_name, args.remote)
+    output_dir = config.get_proj_output_path(args.remote)
     results_path = Path(output_dir) / f"internVL3_78B_eval_principle_{args.principle}_res_{img_size}_time_{timestamp}_img_num_{img_num}.json"
     with open(results_path, "w") as json_file:
         json.dump(results, json_file, indent=4)

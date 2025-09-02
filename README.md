@@ -28,6 +28,10 @@ python -m mbg.embedding_triangle --gpu 9
 
 /home/ml-jsha/storage/GRM_Data
 
+### Clone Repository
+```
+git clone https://github.com/akweury/nesy_causal_p.git
+```
 
 ### Docker
 ```
@@ -35,7 +39,7 @@ docker build -t grm:latest .
 ``` 
 
 ```
-docker run -it --gpus all -v /home/ml-jsha/nesy_causal_p:/app --rm grm:latest
+docker run -it --gpus all -v /home/ml-jsha/nesy_causal_p:/app -v /home/ml-jsha/storage/GRM_output/:/grm_output -v /home/ml-jsha/storage/GRM_Data/:/gen_data --rm grm:latest
 ```
 #### Train: GRM
 ``` 

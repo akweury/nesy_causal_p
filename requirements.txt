@@ -22,3 +22,6 @@ numpy
 debugpy
 faiss-cpu
 kornia
+transformers==4.51.0
+apex
+
