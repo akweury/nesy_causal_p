@@ -399,7 +399,7 @@ def run_internVL3_2B(args, data_path, img_size, principle, batch_size, device, i
 def run_internVL3_78B(args):
     MODEL_ID = "OpenGVLab/InternVL3-78B"
     os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
-    init_wandb(args.batch_size, args.principle, MODEL_ID)
+    init_wandb(args.batch_size, args.principle, MODEL_ID.split("/")[-1])
     principle_path = Path(args.data_path)
     pattern_folders = sorted(file_utils.list_folders(str(principle_path / "train")))
 
