@@ -51,6 +51,8 @@ def load_internVL3_2B_model(device):
 
 def load_images(image_dir, img_size, num_samples=5):
     image_paths = sorted(Path(image_dir).glob("*.png"))[:num_samples]
+    for path in image_paths:
+        print("Loading image:", path)
     return [Image.open(img_path).convert("RGB").resize((img_size, img_size)) for img_path in image_paths]
 
 
@@ -167,7 +169,7 @@ def infer_logic_rules(model, tokenizer, train_positive, train_negative, device, 
     response, history = model.chat(tokenizer, concat_pixel_values, question, generation_config,
                                    num_patches_list=num_patches_list,
                                    history=None, return_history=True)
-    # print(f"Logic Rules: {response}")
+    print(f"Logic Rules: {response}")
     return response
 
 
