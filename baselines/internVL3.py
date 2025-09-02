@@ -1,0 +1,466 @@
+# Created by MacBook Pro at 02.09.25
+
+import torch
+import argparse
+import json
+import wandb
+from pathlib import Path
+import config
+from PIL import Image
+from tqdm import tqdm
+from rtpt import RTPT
+from transformers import AutoModel, AutoTokenizer, AutoConfig, AutoModelForCausalLM
+import torchvision.transforms as transforms
+import torchvision.transforms as T
+import math
+from torchvision.transforms.functional import InterpolationMode
+import os
+
+# from transformers import AutoProcessor, AutoModelForImageTextToText
+from baselines import conversations
+from src.utils import data_utils, file_utils
+
+from datetime import datetime
+
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+DTYPE = torch.bfloat16  # or torch.float16
+
+
+def init_wandb(batch_size, principle):
+    wandb.init(project=f"ELVIS-InternVL-{principle}", config={"batch_size": batch_size})
+
+
+def load_internVL3_2B_model(device):
+    torch.backends.cuda.enable_flash_sdp(False)  # Disable Flash SDP
+    torch.backends.cuda.enable_mem_efficient_sdp(False)  # Disable Memory Efficient SDP
+    torch.backends.cuda.enable_math_sdp(True)  # Fallback to standard math-based SDP
+    torch_device = "cuda"
+    # model_checkpoint = "OpenGVLab/InternVL3-2B-hf"
+    path = "OpenGVLab/InternVL3-2B"
+    model = AutoModel.from_pretrained(
+        path,
+        torch_dtype=torch.bfloat16,
+        low_cpu_mem_usage=True,
+        trust_remote_code=True).eval().cuda()
+    # model = AutoModel.from_pretrained("OpenGVLab/InternVL3-2B", trust_remote_code=True, torch_dtype="auto"),
+    # processor = AutoProcessor.from_pretrained(model_checkpoint)
+    # model = AutoModelForImageTextToText.from_pretrained(model_checkpoint, device_map=torch_device, torch_dtype=torch.bfloat16)
+    return model.to(device)
+
+
+def load_images(image_dir, img_size, num_samples=5):
+    image_paths = sorted(Path(image_dir).glob("*.png"))[:num_samples]
+    return [Image.open(img_path).convert("RGB").resize((img_size, img_size)) for img_path in image_paths]
+
+
+def generate_reasoning_prompt(principle):
+    prompt = f"""You are an AI reasoning about visual patterns based on Gestalt principles.
+    You are given positive and negative examples and must deduce the common logic that differentiates them.
+
+    Principle: {principle}
+
+    Positive examples:
+    first half images.
+
+    Negative examples:
+    second half images.
+
+    What logical rule differentiates the positive from the negative examples?"""
+    return prompt
+
+
+IMAGENET_MEAN = (0.485, 0.456, 0.406)
+IMAGENET_STD = (0.229, 0.224, 0.225)
+
+
+def build_transform(input_size):
+    MEAN, STD = IMAGENET_MEAN, IMAGENET_STD
+    transform = T.Compose([
+        T.Lambda(lambda img: img.convert('RGB') if img.mode != 'RGB' else img),
+        T.Resize((input_size, input_size), interpolation=InterpolationMode.BICUBIC),
+        T.ToTensor(),
+        T.Normalize(mean=MEAN, std=STD)
+    ])
+    return transform
+
+
+def find_closest_aspect_ratio(aspect_ratio, target_ratios, width, height, image_size):
+    best_ratio_diff = float('inf')
+    best_ratio = (1, 1)
+    area = width * height
+    for ratio in target_ratios:
+        target_aspect_ratio = ratio[0] / ratio[1]
+        ratio_diff = abs(aspect_ratio - target_aspect_ratio)
+        if ratio_diff < best_ratio_diff:
+            best_ratio_diff = ratio_diff
+            best_ratio = ratio
+        elif ratio_diff == best_ratio_diff:
+            if area > 0.5 * image_size * image_size * ratio[0] * ratio[1]:
+                best_ratio = ratio
+    return best_ratio
+
+
+def dynamic_preprocess(image, min_num=1, max_num=12, image_size=448, use_thumbnail=False):
+    orig_width, orig_height = image.size
+    aspect_ratio = orig_width / orig_height
+
+    # calculate the existing image aspect ratio
+    target_ratios = set(
+        (i, j) for n in range(min_num, max_num + 1) for i in range(1, n + 1) for j in range(1, n + 1) if
+        i * j <= max_num and i * j >= min_num)
+    target_ratios = sorted(target_ratios, key=lambda x: x[0] * x[1])
+
+    # find the closest aspect ratio to the target
+    target_aspect_ratio = find_closest_aspect_ratio(
+        aspect_ratio, target_ratios, orig_width, orig_height, image_size)
+
+    # calculate the target width and height
+    target_width = image_size * target_aspect_ratio[0]
+    target_height = image_size * target_aspect_ratio[1]
+    blocks = target_aspect_ratio[0] * target_aspect_ratio[1]
+
+    # resize the image
+    resized_img = image.resize((target_width, target_height))
+    processed_images = []
+    for i in range(blocks):
+        box = (
+            (i % (target_width // image_size)) * image_size,
+            (i // (target_width // image_size)) * image_size,
+            ((i % (target_width // image_size)) + 1) * image_size,
+            ((i // (target_width // image_size)) + 1) * image_size
+        )
+        # split the image
+        split_img = resized_img.crop(box)
+        processed_images.append(split_img)
+    assert len(processed_images) == blocks
+    if use_thumbnail and len(processed_images) != 1:
+        thumbnail_img = image.resize((image_size, image_size))
+        processed_images.append(thumbnail_img)
+    return processed_images
+
+
+def load_image(image, input_size=448, max_num=12):
+    # image = Image.open(image_file).convert('RGB')
+    transform = build_transform(input_size=input_size)
+    images = dynamic_preprocess(image, image_size=input_size, use_thumbnail=True, max_num=max_num)
+    pixel_values = [transform(image) for image in images]
+    pixel_values = torch.stack(pixel_values)
+    return pixel_values
+
+
+def infer_logic_rules(model, tokenizer, train_positive, train_negative, device, principle):
+    """
+    Multi-turn approach: We feed each image individually, accumulating
+    conversation context so the model "remembers" what it has seen so far.
+    """
+    torch.cuda.empty_cache()
+    # Prepare a batch of two prompts, where the first one is a multi-turn conversation and the second is not
+    question = conversations.get_internVL_question(principle)
+
+    imgs = train_positive + train_negative
+    pixel_values = [load_image(img) for img in imgs]
+
+    concat_pixel_values = torch.cat(pixel_values, dim=0).to(device=device, dtype=torch.bfloat16)
+    num_patches_list = [pixel_value.size(0) for pixel_value in pixel_values]
+    generation_config = dict(max_new_tokens=1024, do_sample=True)
+    response, history = model.chat(tokenizer, concat_pixel_values, question, generation_config,
+                                   num_patches_list=num_patches_list,
+                                   history=None, return_history=True)
+    # print(f"Logic Rules: {response}")
+    return response
+
+
+def evaluate_llm(model, tokenizer, test_images, logic_rules, device, principle):
+    model.eval()
+    correct, total = 0, 0
+    all_labels, all_predictions = [], []
+    generation_config = dict(max_new_tokens=1024, do_sample=True)
+    torch.cuda.empty_cache()
+    for image, label in test_images:
+        question = conversations.internVL_eval_question(logic_rules)
+        img = load_image(image).to(device=device, dtype=torch.bfloat16)
+        response = model.chat(tokenizer, img, question, generation_config)
+        print(f"Answer: {response}")
+        # print(f"Prediction : {prediction_label}\n\n")
+        predicted_label = 1 if "positive" in response.lower() else 0
+        all_labels.append(label)
+        all_predictions.append(predicted_label)
+
+        total += 1
+        correct += (predicted_label == label)
+
+    accuracy = 100 * correct / total if total > 0 else 0
+
+    TN, FP, FN, TP = data_utils.confusion_matrix_elements(all_predictions, all_labels)
+    precision, recall, f1_score = data_utils.calculate_metrics(TN, FP, FN, TP)
+    # f1 = f1_score(all_labels, all_predictions, average='macro') if total > 0 else 0
+    wandb.log({f"{principle}/test_accuracy": accuracy,
+               f"{principle}/f1_score": f1_score,
+               f"{principle}/precision": precision,
+               f"{principle}/recall": recall
+               })
+    print(
+        f"({principle}) Test Accuracy: {accuracy:.2f}% | F1 Score: {f1_score:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
+
+    return accuracy, f1_score, precision, recall
+
+
+def split_model():
+    device_map = {}
+    world_size = torch.cuda.device_count()
+    config = AutoConfig.from_pretrained("OpenGVLab/InternVL3-78B", trust_remote_code=True)
+    num_layers = config.llm_config.num_hidden_layers
+    # Since the first GPU will be used for ViT, treat it as half a GPU.
+    num_layers_per_gpu = math.ceil(num_layers / (world_size - 0.5))
+    num_layers_per_gpu = [num_layers_per_gpu] * world_size
+    num_layers_per_gpu[0] = math.ceil(num_layers_per_gpu[0] * 0.5)
+    layer_cnt = 0
+    for i, num_layer in enumerate(num_layers_per_gpu):
+        for j in range(num_layer):
+            device_map[f'language_model.model.layers.{layer_cnt}'] = i
+            layer_cnt += 1
+    device_map['vision_model'] = 0
+    device_map['mlp1'] = 0
+    device_map['language_model.model.tok_embeddings'] = 0
+    device_map['language_model.model.embed_tokens'] = 0
+    device_map['language_model.output'] = 0
+    device_map['language_model.model.norm'] = 0
+    device_map['language_model.model.rotary_emb'] = 0
+    device_map['language_model.lm_head'] = 0
+    device_map[f'language_model.model.layers.{num_layers - 1}'] = 0
+
+    return device_map
+
+
+def build_device_map(model_id: str):
+    cfg = AutoConfig.from_pretrained(model_id, trust_remote_code=True)
+    L = cfg.llm_config.num_hidden_layers
+    g = torch.cuda.device_count()
+    assert g >= 2, "need at least two GPUs"
+
+    # quota for nonzero GPUs, GPU 0 gets only a tiny share
+    per = math.floor(L / (g + 1))  # even split baseline
+    tiny = max(1, math.floor(per * 0.25))  # give GPU 0 a quarter of that
+
+    plan = [0] * tiny  # a few early layers on GPU 0
+    rest = L - len(plan)
+    chunk = math.ceil(rest / (g - 1))
+
+    for dev in range(1, g):
+        for _ in range(chunk):
+            if len(plan) >= L: break
+            plan.append(dev)
+
+    dmap = {}
+    for idx, dev in enumerate(plan):
+        dmap[f"language_model.model.layers.{idx}"] = dev
+
+    # heavy shared parts away from GPU 0
+    last_dev = g - 1
+    dmap["language_model.model.tok_embeddings"] = last_dev
+    dmap["language_model.model.embed_tokens"] = last_dev
+    dmap["language_model.lm_head"] = last_dev
+    dmap["language_model.model.norm"] = last_dev
+    dmap["language_model.output"] = last_dev
+    dmap["language_model.model.rotary_emb"] = 1
+
+    # put the last decoder block with the head
+    dmap[f"language_model.model.layers.{L - 1}"] = last_dev
+
+    # vision on GPU 0
+    dmap["vision_model"] = 0
+    dmap["mlp1"] = 0
+
+    return dmap
+
+
+def build_device_map_3gpus(model_id: str):
+    cfg = AutoConfig.from_pretrained(model_id, trust_remote_code=True)
+    L = cfg.llm_config.num_hidden_layers
+    g = torch.cuda.device_count()
+    assert g >= 3, "need at least three GPUs"
+
+    # plan for exactly 3 logical ids: 0 1 2
+    # tiny share on 0 since it hosts vision
+    tiny = max(1, L // 24)  # ~4 percent
+    mid = max(1, (L - tiny) // 2)
+    rest = L - tiny - mid
+
+    plan = [0] * tiny + [1] * mid + [2] * rest
+
+    dmap = {f"language_model.model.layers.{i}": dev for i, dev in enumerate(plan)}
+
+    # shared parts off 0
+    dmap["language_model.model.tok_embeddings"] = 2
+    dmap["language_model.model.embed_tokens"] = 2
+    dmap["language_model.lm_head"] = 2
+    dmap["language_model.model.norm"] = 2
+    dmap["language_model.output"] = 2
+    dmap["language_model.model.rotary_emb"] = 1
+
+    # last block with head
+    dmap[f"language_model.model.layers.{L - 1}"] = 2
+
+    # vision on 0
+    dmap["vision_model"] = 0
+    dmap["mlp1"] = 0
+
+    return dmap
+
+
+def load_internX_model(MODEL_ID, device_map=None, dtype=DTYPE):
+    tok = AutoTokenizer.from_pretrained(MODEL_ID, trust_remote_code=True, use_fast=False)
+    model = AutoModelForCausalLM.from_pretrained(
+        MODEL_ID,
+        trust_remote_code=True,
+        torch_dtype=dtype,
+        device_map=device_map,
+        low_cpu_mem_usage=True
+    ).eval()
+    torch.set_grad_enabled(False)
+    torch.backends.cuda.matmul.allow_tf32 = True
+    model.config.use_cache = False
+    return model, tok
+
+
+def run_internVL3_2B(args, data_path, img_size, principle, batch_size, device, img_num, epochs, start_num, task_num):
+    init_wandb(batch_size, principle)
+
+    principle_path = Path(data_path)
+    pattern_folders = sorted(file_utils.list_folders(str(principle_path / "train")))
+    # pattern_folders = sorted((principle_path / "train").iterdir())
+    if not pattern_folders:
+        print("No pattern folders found in", principle_path)
+        return
+    total_accuracy, total_f1 = [], []
+    results = {}
+    total_precision_scores = []
+    total_recall_scores = []
+
+    if task_num != "full":
+        task_num = int(task_num)
+        pattern_folders = pattern_folders[start_num:start_num + task_num]
+
+    rtpt = RTPT(name_initials='JIS', experiment_name='Elvis-vit', max_iterations=len(pattern_folders))
+    rtpt.start()
+    model = load_internVL3_2B_model(device)
+    tokenizer = AutoTokenizer.from_pretrained('OpenGVLab/InternVL3-2B', trust_remote_code=True, use_fast=False)
+
+    # for pattern_folder in pattern_folders:
+    #     print(f"Processing pattern folder: {pattern_folder.name}")
+
+    for pattern_folder in tqdm(pattern_folders):
+        rtpt.step()
+        print(f"Evaluating pattern: {pattern_folder.name}")
+        train_positive = load_images(pattern_folder / "positive", img_size, img_num)
+        train_negative = load_images(pattern_folder / "negative", img_size, img_num)
+        test_positive = load_images((principle_path / "test" / pattern_folder.name) / "positive", img_size, img_num)
+        test_negative = load_images((principle_path / "test" / pattern_folder.name) / "negative", img_size, img_num)
+        logic_rules = infer_logic_rules(model, tokenizer, train_positive, train_negative, device, principle)
+
+        test_images = [(img, 1) for img in test_positive] + [(img, 0) for img in test_negative]
+        print("len test images", len(test_images))
+        accuracy, f1, precision, recall = evaluate_llm(model, tokenizer, test_images, logic_rules, device, principle)
+
+        results[pattern_folder.name] = {"accuracy": accuracy, "f1_score": f1, "logic_rules": logic_rules,
+                                        "precision": precision, "recall": recall}
+        total_accuracy.append(accuracy)
+        total_f1.append(f1)
+        total_precision_scores.append(precision)
+        total_recall_scores.append(recall)
+
+    avg_accuracy = sum(total_accuracy) / len(total_accuracy) if total_accuracy else 0
+    avg_f1 = sum(total_f1) / len(total_f1) if total_f1 else 0
+
+    results_path = Path(config.get_proj_output_path(args.proj_name, remote=args.remote)) / f"internVL3_2B_eval_res_{img_size}_{timestamp}_img_num_{img_num}.json"
+    with open(results_path, "w") as json_file:
+        json.dump(results, json_file, indent=4)
+
+    print("Evaluation complete. Results saved to evaluation_results.json.")
+    print(f"Overall Average Accuracy: {avg_accuracy:.2f}% | Average F1 Score: {avg_f1:.4f}")
+    wandb.finish()
+    return avg_accuracy, avg_f1
+
+
+def run_internVL3_78B(args):
+    os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+    init_wandb(args.batch_size, args.principle)
+    principle_path = Path(args.data_path)
+    pattern_folders = sorted(file_utils.list_folders(str(principle_path / "train")))
+
+    if not pattern_folders:
+        print("No pattern folders found in", principle_path)
+        return
+
+    MODEL_ID = "OpenGVLab/InternVL3-78B"
+    task_num = args.task_num
+    start_num = args.start_num
+    principle = args.principle
+    img_size = args.img_size
+    img_num = args.img_num
+
+    total_accuracy, total_f1 = [], []
+    results = {}
+    total_precision_scores = []
+    total_recall_scores = []
+
+    if task_num != "full":
+        task_num = int(task_num)
+        pattern_folders = pattern_folders[start_num:start_num + task_num]
+
+    rtpt = RTPT(name_initials='JIS', experiment_name=f'{args.proj_name}-InternVL3-78B-{principle}', max_iterations=len(pattern_folders))
+    rtpt.start()
+
+    device_map = build_device_map_3gpus(MODEL_ID)
+    model, tokenizer = load_internX_model(MODEL_ID, device_map=device_map, dtype=DTYPE)
+    for pattern_folder in tqdm(pattern_folders):
+        rtpt.step()
+        print(f"Evaluating pattern: {pattern_folder.name}")
+        train_positive = load_images(pattern_folder / "positive", img_size, img_num)
+        train_negative = load_images(pattern_folder / "negative", img_size, img_num)
+        test_positive = load_images((principle_path / "test" / pattern_folder.name) / "positive", img_size, img_num)
+        test_negative = load_images((principle_path / "test" / pattern_folder.name) / "negative", img_size, img_num)
+
+        logic_rules = infer_logic_rules(model, tokenizer, train_positive, train_negative, device, principle)
+
+        test_images = [(img, 1) for img in test_positive] + [(img, 0) for img in test_negative]
+        print("len test images", len(test_images))
+        accuracy, f1, precision, recall = evaluate_llm(model, tokenizer, test_images, logic_rules, device, principle)
+
+        results[pattern_folder.name] = {
+            "accuracy": accuracy,
+            "f1_score": f1,
+            "logic_rules": logic_rules,
+            "precision": precision,
+            "recall": recall
+        }
+        total_accuracy.append(accuracy)
+        total_f1.append(f1)
+        total_precision_scores.append(precision)
+        total_recall_scores.append(recall)
+
+        torch.cuda.ipc_collect()
+        torch.cuda.empty_cache()
+
+    avg_accuracy = sum(total_accuracy) / len(total_accuracy) if total_accuracy else 0
+    avg_f1 = sum(total_f1) / len(total_f1) if total_f1 else 0
+
+
+    output_dir = config.get_proj_output_path(args.proj_name, args.remote)
+    results_path = Path(output_dir) / f"internVL3_78B_eval_principle_{args.principle}_res_{img_size}_time_{timestamp}_img_num_{img_num}.json"
+    with open(results_path, "w") as json_file:
+        json.dump(results, json_file, indent=4)
+
+    print("Evaluation complete.")
+    print(f"Overall Average Accuracy: {avg_accuracy:.2f}% | Average F1 Score: {avg_f1:.4f}")
+    wandb.finish()
+    return avg_accuracy, avg_f1
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Evaluate LLaVA on Gestalt Reasoning Benchmark.")
+    parser.add_argument("--device_id", type=int, help="Specify GPU device ID. If not provided, CPU will be used.")
+    args = parser.parse_args()
+
+    device = f"cuda:{args.device_id}" if args.device_id is not None and torch.cuda.is_available() else "cpu"

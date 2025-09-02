@@ -1,0 +1,46 @@
+# Created by MacBook Pro at 02.09.25
+import argparse
+import torch
+import os
+
+import config
+from baselines import internVL3
+
+# List of baseline models
+baseline_models = {
+    "internVL3_78B": internVL3.run_internVL3_78B
+}
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Evaluate baseline models with CUDA support.")
+    parser.add_argument("--principle", type=str, required=True, help="Specify the principle to filter data.")
+    parser.add_argument("--model", type=str, required=True)
+    parser.add_argument("--device_id", type=int, help="Specify GPU device ID. If not provided, CPU will be used.")
+    parser.add_argument("--remote", action="store_true")
+    parser.add_argument("--epochs", type=int, default=10)
+    parser.add_argument("--img_num", type=int, default=5)
+    parser.add_argument("--img_size", type=int, default=224, choices=[224, 448, 1024])
+    parser.add_argument("--task_num", type=str, default="full")
+    parser.add_argument("--start_num", type=int, default=0)
+    parser.add_argument("--batch_size", type=int)
+    args = parser.parse_args()
+    # Determine device based on device_id flag
+    if args.device_id is not None and torch.cuda.is_available():
+        args.device = f"cuda:{args.device_id}"
+    else:
+        args.device = "cpu"
+
+    args.proj_name = "GRM"
+    # Construct the data path based on the principle argument
+    args.data_path = config.get_raw_patterns_path(args.remote) / f"res_{args.img_size}_pin_False" / args.principle
+    print(f"Starting model evaluations with data from {args.data_path}...")
+    model = baseline_models[args.model]
+    print(f"{args.principle} Evaluating on {args.device}...")
+    model(args)
+
+    print("All model evaluations completed.")
+
+
+if __name__ == "__main__":
+    main()

@@ -5,6 +5,11 @@ import os
 import config
 import torch
 import cv2
+from pathlib import Path
+
+def list_folders(path: str):
+    p = Path(path)
+    return [d for d in p.iterdir() if d.is_dir()]
 
 
 def get_raw_data():

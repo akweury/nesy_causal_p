@@ -95,6 +95,9 @@ def print_ablation_results(json_path):
     summary = data.get("summary", {})
     per_task = data.get("per_task_results", {})
 
+    # Get hard_obj average accuracy for comparison
+    hard_obj_acc = summary.get("hard_obj", {}).get("avg_acc", None)
+
     for mode, tasks in per_task.items():
         print(f"\n=== Mode: {mode} ===")
         accs = []
@@ -116,6 +119,10 @@ def print_ablation_results(json_path):
         if avg_acc is not None and avg_f1 is not None:
             print(f"(From summary) avg_acc: {avg_acc:.2f}, avg_f1: {avg_f1:.2f}")
 
+            # Print percentage change compared to hard_obj
+            if hard_obj_acc is not None and mode != "hard_obj":
+                pct_change = ((avg_acc - hard_obj_acc) / hard_obj_acc) * 100
+                print(f"Change vs hard_obj: {pct_change:+.0f}%")
 
 def draw_final_calibrator_gain_figure(json_path, output_path=config.output / "calibrator_gain_vs_clause_quality.pdf"):
     # Load JSON file
@@ -197,12 +204,16 @@ if __name__ == "__main__":
     # draw_final_calibrator_gain_figure(config.output / "ablation_summary_continuity_20250718_110525.json")
 
     # symmetry
-    print_ablation_results(config.output/"ablation_summary_symmetry_20250721_092532.json")
+    # print_ablation_results(config.output/"ablation_summary_symmetry_20250722_095458.json")
     # draw_final_calibrator_gain_figure(config.output / "ablation_summary_symmetry_20250721_092532.json")
 
     # proximity
     # print_ablation_results(config.output/"ablation_summary_proximity_20250720_070246.json")
     # draw_final_calibrator_gain_figure(config.output / "ablation_summary_proximity_20250720_070246.json")
+
+    # similarity
+    print_ablation_results(config.output/"ablation_summary_similarity_20250721_092307.json")
+    # draw_final_calibrator_gain_figure(config.output / "ablation_summary_similarity_20250721_092307.json")
 
 
     # main_ablation()

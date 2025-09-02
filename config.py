@@ -14,25 +14,46 @@ def print_list_summary(lst, max_items=10):
     for i, item in enumerate(lst[:max_items]):
         print(f"[{i}] {item}")
 
-
-########################################################
-
-root = Path(__file__).parents[0]
-
-
 def clear_folder(folder_path):
     if os.path.exists(folder_path) and os.path.isdir(folder_path):
         shutil.rmtree(folder_path)  # Removes a folder even if it's not empty
         print(f"Folder '{folder_path}' has been removed.")
     os.makedirs(folder_path, exist_ok=True)
 
+def get_raw_patterns_path(remote=False):
+    if remote:
+        raw_patterns_path = Path('/gen_data')
+    else:
+        raw_patterns_path = root / 'gen_data'
+
+    if not os.path.exists(raw_patterns_path):
+        os.makedirs(raw_patterns_path)
+    return raw_patterns_path
+
+
+def get_proj_output_path(proj_name, remote=False):
+
+    if remote:
+        output_dir = f"/{proj_name}_output/"
+        os.makedirs(output_dir, exist_ok=True)
+    else:
+        raise NotImplementedError("Local output path not implemented yet.")
+
+
+
+########################################################
+
+root = Path(__file__).parents[0]
+
+
 
 storage = root / 'storage'
 output = storage / 'output'
 lark_file = root / "src" / "alpha" / "exp.lark"
 models = storage / "models"
-# clear_folder(models)
 model_visual = models / "visual"
+
+
 if not os.path.exists(storage):
     os.mkdir(storage)
 if not os.path.exists(models):

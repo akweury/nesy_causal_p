@@ -1,14 +1,10 @@
 # Created by X at 22.10.24
-import os
+
+
 import config
-import psutil
-import pynvml
-import time
-import threading
 import wandb
 from collections import defaultdict
 import json
-
 import torch
 from src.utils import args_utils
 from src import dataset
@@ -21,9 +17,7 @@ from mbg.evaluation import evaluation
 def main():
     # load exp arguments
     args = args_utils.get_args()
-
     train_principle = args.principle
-
     if train_principle == "similarity":
         principle_path = config.grb_similarity
     elif train_principle == "proximity":
@@ -49,8 +43,6 @@ def main():
     all_auc = []
     all_acc = []
     for task_idx, (train_data, val_data, test_data) in enumerate(combined_loader):
-        if task_idx < 127:
-            continue
         task_name = train_data["task"]
         properties = {
             "non_overlap": train_data["non_overlap"],
@@ -70,7 +62,7 @@ def main():
         }
 
         hyp_params = {"prox": 0.9, "sim": 0.5, "top_k": 5, "conf_th": 0.5, "patch_dim": 7}
-
+        # train_data, obj_model, group_model, hyp_params, train_principle, device, ablation_flags, task_times
         # train
         hard, soft, group_nums, obj_list, group_list = training.ground_facts(train_val_data, obj_model, hyp_params,
                                                                              train_principle, args.device)
@@ -128,7 +120,6 @@ def main():
         json.dump(analysis_summary, f, indent=2)
 
     wandb.finish()
-
 
 
 if __name__ == '__main__':
