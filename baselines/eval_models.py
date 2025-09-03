@@ -5,9 +5,13 @@ import os
 
 import config
 from baselines import internVL3
+from baselines import vit
+from baselines import llava
 
 # List of baseline models
 baseline_models = {
+    "vit": vit.run_vit,
+    "llava": llava.run_llava,
     "internVL3_78B": internVL3.run_internVL3_78B
 }
 
