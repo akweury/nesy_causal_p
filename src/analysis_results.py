@@ -83,11 +83,9 @@ def analysis_average_performance(args, json_path):
     # load the JSON data
     with open(json_path, 'r') as f:
         data = json.load(f)
-    if "vit" in model_name:
-        per_task_data = data[principle]
-    else:
-        per_task_data = data
-        per_task_data.pop("average", None)  # Remove 'average' if it exists
+
+    per_task_data = data
+    per_task_data.pop("average", None)  # Remove 'average' if it exists
 
     avg_acc = np.mean([v['accuracy'] for v in per_task_data.values()])
     avg_f1 = np.mean([v['f1_score'] for v in per_task_data.values()])

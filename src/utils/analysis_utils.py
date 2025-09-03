@@ -36,13 +36,7 @@ def get_results_path(remote=False, principle=None, model_name=None, img_num=None
     results_path = config.get_proj_output_path(remote)
     prin_path = results_path / principle
 
-    # get all the json file start with vit_
-    if model_name == "vit":
-        all_json_files = list(prin_path.glob(f"{model_name}_*.json"))
-        all_json_files = [f for f in all_json_files if f"img_num_{img_num}" in f.name]
-
-    else:
-        all_json_files = list(prin_path.glob(f"{model_name}_*.json"))
+    all_json_files = list(prin_path.glob(f"{model_name}_*.json"))
     if all_json_files:
         latest_json_file = max(all_json_files, key=os.path.getmtime)
         json_path = latest_json_file
