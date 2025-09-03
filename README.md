@@ -47,6 +47,12 @@ docker run -it --gpus all -v /home/ml-jsha/nesy_causal_p:/app -v /home/ml-jsha/s
 
 #### Train: Baseline Models
 
+##### ViT
+``` 
+python -m baselines.eval_models --batch_size 1 --principle proximity --img_num 3 --model vit --device_id 8 --img_size 224 --remote
+
+```
+
 ##### Llava-7B
 ``` 
 python -m baselines.eval_models --batch_size 1 --principle proximity --img_num 3 --model llava --device_id 0 --img_size 224 --remote

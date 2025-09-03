@@ -15,9 +15,9 @@ from torch.utils.data import DataLoader, Subset
 from collections import defaultdict
 from rtpt import RTPT
 from tqdm import tqdm
-from scripts import config
+import config
 
-from scripts.utils import data_utils
+from src.utils import data_utils
 from datetime import datetime
 
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
