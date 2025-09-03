@@ -4,16 +4,16 @@ import argparse
 import json
 import wandb
 from pathlib import Path
-from scripts import config
+import config
 from PIL import Image
 from rtpt import RTPT
 import os
 
 from transformers import AutoProcessor, LlavaOnevisionForConditionalGeneration
 
-from scripts.baseline_models import conversations
+from baselines import conversations
 
-from scripts.utils import data_utils
+from src.utils import data_utils
 from datetime import datetime
 
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -193,12 +193,3 @@ def run_llava(data_path, img_size, principle, batch_size, device, img_num, epoch
     print(f"Overall Average Accuracy: {avg_accuracy:.2f}% | Average F1 Score: {avg_f1:.4f}")
     wandb.finish()
     return avg_accuracy, avg_f1
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Evaluate LLaVA on Gestalt Reasoning Benchmark.")
-    parser.add_argument("--device_id", type=int, help="Specify GPU device ID. If not provided, CPU will be used.")
-    args = parser.parse_args()
-
-    device = f"cuda:{args.device_id}" if args.device_id is not None and torch.cuda.is_available() else "cpu"
-    run_llava(config.raw_patterns, "proximity", 1, device, img_num=5)
