@@ -50,6 +50,10 @@ docker run -it --gpus all -v /home/ml-jsha/nesy_causal_p:/app -v /home/ml-jsha/s
 ##### ViT
 ``` 
 python -m baselines.eval_models --batch_size 1 --principle proximity --img_num 3 --model vit --device_id 8 --img_size 224 --remote
+python -m baselines.eval_models --batch_size 1 --principle similarity --img_num 3 --model vit --device_id 9 --img_size 224 --remote
+python -m baselines.eval_models --batch_size 1 --principle closure --img_num 3 --model vit --device_id 10 --img_size 224 --remote
+python -m baselines.eval_models --batch_size 1 --principle symmetry --img_num 3 --model vit --device_id 8 --img_size 224 --remote
+python -m baselines.eval_models --batch_size 1 --principle continuity --img_num 3 --model vit --device_id 7 --img_size 224 --remote
 
 ```
 

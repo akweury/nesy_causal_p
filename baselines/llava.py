@@ -20,7 +20,7 @@ timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
 
 def init_wandb(batch_size, principle):
-    wandb.init(project=f"Llava-Gestalt-{principle}", config={"batch_size": batch_size})
+    wandb.init(project=f"GRM-llava-{principle}", config={"batch_size": batch_size})
 
 
 def load_llava_model(device):
