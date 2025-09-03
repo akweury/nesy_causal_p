@@ -132,7 +132,16 @@ def evaluate_llm(model, processor, test_images, logic_rules, device, principle):
     return accuracy, f1_score, precision, recall
 
 
-def run_llava(data_path, img_size, principle, batch_size, device, img_num, epochs, start_num, task_num):
+def run_llava(args):
+    principle = args.principle
+    img_num = args.img_num
+    batch_size = args.batch_size
+    data_path = args.data_path
+    device = args.device
+    task_num = args.task_num
+    start_num = args.start_num
+    img_size = args.img_size
+
     init_wandb(batch_size, principle)
 
     model, processor = load_llava_model(device)
@@ -182,10 +191,8 @@ def run_llava(data_path, img_size, principle, batch_size, device, img_num, epoch
     avg_accuracy = sum(total_accuracy) / len(total_accuracy) if total_accuracy else 0
     avg_f1 = sum(total_f1) / len(total_f1) if total_f1 else 0
 
-    # results["average"] = {"accuracy": avg_accuracy, "f1_score": avg_f1}
-    output_dir = f"/elvis_result/{principle}"
-    os.makedirs(output_dir, exist_ok=True)
-    results_path = Path(output_dir) / f"llava_eval_res_{img_size}_{timestamp}_img_num_{img_num}.json"
+    output_dir = config.get_proj_output_path(args.remote)
+    results_path = Path(output_dir) / f"llava_eval_principle_{principle}_res_{img_size}_{timestamp}_img_num_{img_num}.json"
     with open(results_path, "w") as json_file:
         json.dump(results, json_file, indent=4)
 
