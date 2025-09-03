@@ -24,7 +24,7 @@ def get_raw_patterns_path(remote=False):
     if remote:
         raw_patterns_path = Path('/gen_data')
     else:
-        raw_patterns_path = root / 'gen_data'
+        raw_patterns_path = grb_base
 
     if not os.path.exists(raw_patterns_path):
         os.makedirs(raw_patterns_path)
