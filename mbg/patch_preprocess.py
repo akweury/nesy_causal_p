@@ -8,8 +8,8 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision.transforms import Resize, Compose
 from torchvision.io import read_image
 import time
-import kornia.color
-import kornia.morphology
+# import kornia.color
+# import kornia.morphology
 import torchvision
 from torchvision.transforms import functional as F
 from torchvision.models.detection import MaskRCNN_ResNet50_FPN_Weights
@@ -187,7 +187,7 @@ def preprocess_rgb_image_to_patch_set_batch(
 
         # Convert to grayscale
         img_f = img.float() / 255.0
-        gray = kornia.color.rgb_to_grayscale(img_f.unsqueeze(0))[0, 0]  # [H, W]
+        gray = (0.299 * img_f[0] + 0.587 * img_f[1] + 0.114 * img_f[2])  # [H, W]
 
         # Binary mask: everything not equal to bg_val (~0.827)
         mask = (torch.abs(gray - 0.8275) > 1e-3).to(torch.uint8)  # [H, W]

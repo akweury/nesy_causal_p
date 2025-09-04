@@ -49,21 +49,21 @@ docker run -it --gpus all -v /home/ml-jsha/nesy_causal_p:/app -v /home/ml-jsha/s
 
 ##### ViT
 ``` 
-python -m baselines.eval_models --batch_size 1 --principle proximity --img_num 3 --model vit --device_id 8 --img_size 224 --remote
+python -m baselines.eval_models --batch_size 1 --principle proximity --img_num 3 --model vit --device_id 6 --img_size 224 --remote
 python -m baselines.eval_models --batch_size 1 --principle similarity --img_num 3 --model vit --device_id 9 --img_size 224 --remote
 python -m baselines.eval_models --batch_size 1 --principle closure --img_num 3 --model vit --device_id 10 --img_size 224 --remote
 python -m baselines.eval_models --batch_size 1 --principle symmetry --img_num 3 --model vit --device_id 10 --img_size 224 --remote
-python -m baselines.eval_models --batch_size 1 --principle continuity --img_num 3 --model vit --device_id 7 --img_size 224 --remote
+python -m baselines.eval_models --batch_size 1 --principle continuity --img_num 3 --model vit --device_id 5 --img_size 224 --remote
 
 ```
 
 ##### Llava-7B
 ``` 
-python -m baselines.eval_models --batch_size 1 --principle proximity --img_num 3 --model llava --device_id 0 --img_size 224 --remote
-python -m baselines.eval_models --batch_size 1 --principle similarity --img_num 3 --model llava --device_id 0 --img_size 224 --remote
-python -m baselines.eval_models --batch_size 1 --principle closure --img_num 3 --model llava --device_id 0 --img_size 224 --remote
-python -m baselines.eval_models --batch_size 1 --principle symmetry --img_num 3 --model llava --device_id 0 --img_size 224 --remote
-python -m baselines.eval_models --batch_size 1 --principle continuity --img_num 3 --model llava --device_id 0 --img_size 224 --remote
+python -m baselines.eval_models --batch_size 1 --principle proximity --img_num 3 --model llava --device_id 6 --img_size 224 --remote
+python -m baselines.eval_models --batch_size 1 --principle similarity --img_num 3 --model llava --device_id 5 --img_size 224 --remote
+python -m baselines.eval_models --batch_size 1 --principle closure --img_num 3 --model llava --device_id 4 --img_size 224 --remote
+python -m baselines.eval_models --batch_size 1 --principle symmetry --img_num 3 --model llava --device_id 7 --img_size 224 --remote
+python -m baselines.eval_models --batch_size 1 --principle continuity --img_num 3 --model llava --device_id 5 --img_size 224 --remote
 ```
 
 ##### InternVL-78B
@@ -87,7 +87,7 @@ python -m src.ablation_study --device 0 --principle continuity
 python -m src.ablation_study --device 4 --principle symmetry
 
 python -m mbg.scorer.train_context_aware_scorer --device 0 --n 200 --epochs 50 --principle proximity --sample_size 200 --data_num 100000
-python -m mbg.scorer.train_context_aware_scorer --device 0 --n 120 --epochs 50 --principle symmetry --sample_size 200 --data_num 100000
+python -m mbg.scorer.train_context_aware_scorer --device 7 --n 200 --epochs 50 --principle symmetry --sample_size 200 --data_num 100000
 python -m mbg.scorer.train_context_aware_scorer --device 1 --n 150 --epochs 50 --principle similarity --sample_size 50 --input_types color_size
 python -m mbg.scorer.train_context_aware_scorer --device 1 --n 150 --epochs 50 --principle closure --sample_size 50
 python -m mbg.object.train_patch_classifier --device 0 
