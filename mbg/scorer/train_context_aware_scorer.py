@@ -24,7 +24,8 @@ def train_model(args, principle, input_type, sample_size, device, log_wandb=True
     }
     if principle not in path_map:
         raise ValueError(f"Unsupported principle: {principle}")
-    data_path, model_path = path_map[principle]
+    data_path = scorer_config.get_data_path(args.remote, principle)
+    model_path = scorer_config.get_model_file_name(args.remote, principle)
     model_path_best = str(model_path).replace(".pt", "_best.pt")
     model_path_latest = str(model_path).replace(".pt", "_latest.pt")
 
