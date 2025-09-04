@@ -25,6 +25,8 @@ def train_model(args, principle, input_type, sample_size, device, log_wandb=True
     if principle not in path_map:
         raise ValueError(f"Unsupported principle: {principle}")
     data_path, model_path = path_map[principle]
+    model_path_best = model_path.replace(".pt", "_best.pt")
+    model_path_latest = model_path.replace(".pt", "_latest.pt")
 
     # Input dimension
     input_dim_map = {"pos": 2, "pos_color": 5, "pos_color_size": 7, "color_size": 4}
@@ -42,6 +44,8 @@ def train_model(args, principle, input_type, sample_size, device, log_wandb=True
     test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, collate_fn=context_collate_fn)
     criterion = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
+
+    best_acc = 0.0
     for epoch in range(epochs):
         model.train()
         total_loss, correct, total = 0, 0, 0
@@ -88,7 +92,12 @@ def train_model(args, principle, input_type, sample_size, device, log_wandb=True
             "test_loss": test_avg_loss,
             "test_accuracy": test_acc
         })
-        torch.save(model.state_dict(), model_path)
+        # Save latest model
+        torch.save(model.state_dict(), model_path_latest)
+        # Save best model
+        if test_acc > best_acc:
+            best_acc = test_acc
+            torch.save(model.state_dict(), model_path_best)
     print(f"Model saved to {model_path}")
     return test_acc, test_avg_loss
 
@@ -141,6 +150,7 @@ def main():
     print("-" * 62)
     for p, input_type, data_num, sample_size, a, l in report:
         print(f"{p:<12} {input_type:<16} {data_num:>10} {sample_size:>10} {a:>10.4f} {l:>10.4f}")
+
 
 if __name__ == "__main__":
     main()
