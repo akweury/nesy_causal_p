@@ -15,16 +15,16 @@ from mbg.scorer import scorer_config
 
 def train_model(args, principle, input_type, sample_size, device, log_wandb=True, n=100, epochs=10, data_num=100000):
     # Resolve paths
-    path_map = {
-        "closure": (scorer_config.get_data_path(args.remote, principle), scorer_config.get_model_file_name(args.remote, principle)),
-        "proximity": (scorer_config.get_data_path(args.remote, principle), scorer_config.get_model_file_name(args.remote, principle)),
-        "continuity": (scorer_config.get_data_path(args.remote, principle), scorer_config.get_model_file_name(args.remote, principle)),
-        "symmetry": (scorer_config.get_data_path(args.remote, principle), scorer_config.get_model_file_name(args.remote, principle)),
-        "similarity": (scorer_config.get_data_path(args.remote, principle), scorer_config.get_model_file_name(args.remote, principle)),
-    }
-    if principle not in path_map:
-        raise ValueError(f"Unsupported principle: {principle}")
-    data_path = scorer_config.get_data_path(args.remote, principle)
+    # path_map = {
+    #     "closure": (scorer_config.get_data_path(args.remote, principle), scorer_config.get_model_file_name(args.remote, principle)),
+    #     "proximity": (scorer_config.get_data_path(args.remote, principle), scorer_config.get_model_file_name(args.remote, principle)),
+    #     "continuity": (scorer_config.get_data_path(args.remote, principle), scorer_config.get_model_file_name(args.remote, principle)),
+    #     "symmetry": (scorer_config.get_data_path(args.remote, principle), scorer_config.get_model_file_name(args.remote, principle)),
+    #     "similarity": (scorer_config.get_data_path(args.remote, principle), scorer_config.get_model_file_name(args.remote, principle)),
+    # }
+    # if principle not in path_map:
+    #     raise ValueError(f"Unsupported principle: {principle}")
+    data_path = scorer_config.get_data_path(args.remote, principle) / "train"
     model_path = scorer_config.get_model_file_name(args.remote, principle)
     model_path_best = str(model_path).replace(".pt", "_best.pt")
     model_path_latest = str(model_path).replace(".pt", "_latest.pt")
