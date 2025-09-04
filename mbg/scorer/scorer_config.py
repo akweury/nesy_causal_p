@@ -12,9 +12,9 @@ from mbg.scorer.slot_attention import SlotAttention  # import your saved module
 # config
 def get_data_path(remote, principle):
     if remote:
-        data_path = Path("/gen_data") / "res_1024_pin_False" / principle / "train"
+        data_path = Path("/gen_data") / "res_1024_pin_False" / principle
     else:
-        data_path = config.grb_base / principle / "train"
+        data_path = config.grb_base / principle
     return data_path
 
 
