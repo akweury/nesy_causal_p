@@ -47,6 +47,7 @@ def get_args():
     parser.add_argument("--batch_size", type=int, default=10)
     parser.add_argument("--kernel", type=int, default=10)
     parser.add_argument("--is_visual", action="store_true")
+    parser.add_argument("--remote", action="store_true")
     parser.add_argument("--is_done", action="store_true")
     parser.add_argument("--extend", action="store_true")
     parser.add_argument("--solid_pattern", action="store_true")

@@ -117,13 +117,6 @@ grb_closure = grb_base / "closure"
 grb_continuity = grb_base / "continuity"
 grb_symmetry = grb_base / "symmetry"
 
-# clear_folder(kp_gestalt_dataset)
-kp_gestalt_dataset_all = storage / "dataset" / "gestalt_all"
-data_file_train_cha = storage / "dataset" / "arc-prize-2024" / "arc-agi_training_challenges.json"
-data_file_train_sol = storage / "dataset" / "arc-prize-2024" / "arc-agi_training_solutions.json"
-data_file_test_cha = storage / "dataset" / "arc-prize-2024" / "arc-agi_test_challenges.json"
-data_file_eval_cha = storage / "dataset" / "arc-prize-2024" / "arc-agi_evaluation_challenges.json"
-data_file_eval_sol = storage / "dataset" / "arc-prize-2024" / "arc-agi_evaluation_solutions.json"
 
 wandb_path = root / 'wandb'/ "export"
 
