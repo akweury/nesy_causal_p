@@ -25,8 +25,8 @@ def train_model(args, principle, input_type, sample_size, device, log_wandb=True
     if principle not in path_map:
         raise ValueError(f"Unsupported principle: {principle}")
     data_path, model_path = path_map[principle]
-    model_path_best = model_path.replace(".pt", "_best.pt")
-    model_path_latest = model_path.replace(".pt", "_latest.pt")
+    model_path_best = str(model_path).replace(".pt", "_best.pt")
+    model_path_latest = str(model_path).replace(".pt", "_latest.pt")
 
     # Input dimension
     input_dim_map = {"pos": 2, "pos_color": 5, "pos_color_size": 7, "color_size": 4}
