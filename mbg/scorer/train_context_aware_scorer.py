@@ -15,11 +15,11 @@ from mbg.scorer import scorer_config
 def train_model(args, principle, input_type, sample_size, device, log_wandb=True, n=100, epochs=10, data_num=100000):
     # Resolve paths
     path_map = {
-        "closure": (scorer_config.closure_path, scorer_config.CLOSURE_MODEL),
-        "proximity": (scorer_config.proximity_path, scorer_config.PROXIMITY_MODEL),
-        "continuity": (scorer_config.continuity_path, scorer_config.CONTINUITY_MODEL),
-        "symmetry": (scorer_config.symmetry_path, scorer_config.SYMMETRY_MODEL),
-        "similarity": (scorer_config.SIMILARITY_PATH, scorer_config.SIMILARITY_MODEL),
+        "closure": (scorer_config.get_data_path(args.remote, principle), scorer_config.CLOSURE_MODEL),
+        "proximity": (scorer_config.get_data_path(args.remote, principle), scorer_config.PROXIMITY_MODEL),
+        "continuity": (scorer_config.get_data_path(args.remote, principle), scorer_config.CONTINUITY_MODEL),
+        "symmetry": (scorer_config.get_data_path(args.remote, principle), scorer_config.SYMMETRY_MODEL),
+        "similarity": (scorer_config.get_data_path(args.remote, principle), scorer_config.SIMILARITY_MODEL),
     }
     if principle not in path_map:
         raise ValueError(f"Unsupported principle: {principle}")
@@ -41,8 +41,6 @@ def train_model(args, principle, input_type, sample_size, device, log_wandb=True
     test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, collate_fn=context_collate_fn)
     criterion = nn.BCEWithLogitsLoss()
     optimizer = optim.Adam(model.parameters(), lr=1e-3)
-    avg_acc = 0
-    avg_loss = 0
     for epoch in range(epochs):
         model.train()
         total_loss, correct, total = 0, 0, 0
@@ -82,14 +80,13 @@ def train_model(args, principle, input_type, sample_size, device, log_wandb=True
         test_acc = test_correct / test_total if test_total > 0 else 0
         test_avg_loss = test_loss / test_total if test_total > 0 else 0
         print(f"[Epoch {epoch + 1}] Test Loss: {test_avg_loss:.4f} | Test Acc: {test_acc:.4f}")
-        if log_wandb:
-            wandb.log({
-                "epoch": epoch + 1,
-                "loss": avg_loss,
-                "accuracy": acc,
-                "test_loss": test_avg_loss,
-                "test_accuracy": test_acc
-            })
+        wandb.log({
+            "epoch": epoch + 1,
+            "loss": avg_loss,
+            "accuracy": acc,
+            "test_loss": test_avg_loss,
+            "test_accuracy": test_acc
+        })
     torch.save(model.state_dict(), model_path)
     print(f"Model saved to {model_path}")
     return test_acc, test_avg_loss
@@ -104,7 +101,7 @@ def parse_device(device_str):
         raise ValueError(f"Invalid device string: {device_str}")
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--device", default="cuda:0" if torch.cuda.is_available() else "cpu", help="Device to train on")
     parser.add_argument("--epochs", type=int, default=10)
@@ -114,6 +111,7 @@ if __name__ == "__main__":
     parser.add_argument("--input_types", type=str, default="pos_color_size")
     parser.add_argument("--data_nums", type=str, default="10000,50000,100000", )
     parser.add_argument("--remove_cache", action="store_true", help="Remove existing cache files before processing")
+    parser.add_argument("--remote", action="store_true")
     args = parser.parse_args()
     args.device = parse_device(args.device)
     input_type = args.input_types
@@ -141,3 +139,6 @@ if __name__ == "__main__":
     print("-" * 62)
     for p, input_type, data_num, sample_size, a, l in report:
         print(f"{p:<12} {input_type:<16} {data_num:>10} {sample_size:>10} {a:>10.4f} {l:>10.4f}")
+
+if __name__ == "__main__":
+    main()
