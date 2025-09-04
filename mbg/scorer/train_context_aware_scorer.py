@@ -130,7 +130,7 @@ def main():
     sample_size_list = [int(x) for x in args.sample_size_list.split(",")]
     report = []
     p = args.principle
-    rtpt = RTPT(name_initials='JIS', experiment_name=f'Elvis-InternVL3-78B-{args.principle}', max_iterations=1)
+    rtpt = RTPT(name_initials='JIS', experiment_name=f'GRM-Grp-{args.principle}', max_iterations=1)
     rtpt.start()
     for data_num in data_num_list:
         for sample_size in sample_size_list:
