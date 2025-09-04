@@ -41,3 +41,10 @@ LABEL_COLORS = {
 
 # ==== patch 生成 ====
 PATCH_STRATEGY = "random"  # 可扩展为：'grid', 'semantic', etc.
+
+def get_patch_model_path(remote):
+    if remote:
+        model_path = config.get_proj_output_path(remote)/ "patch_set_obj_classifier.pt"
+    else:
+        model_path = OBJ_MODEL_SAVE_PATH
+    return model_path

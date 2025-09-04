@@ -83,7 +83,7 @@ python -m src.ablation_study --device 0 --principle closure
 python -m src.ablation_study --device 1 --principle similarity
 python -m src.ablation_study --device 0 --principle proximity
 python -m src.ablation_study --device 0 --principle continuity
-python -m src.ablation_study --device 7 --principle symmetry
+python -m src.ablation_study --device 7 --principle symmetry --remote
 
 python -m mbg.scorer.train_context_aware_scorer --device 0 --n 200 --epochs 50 --principle proximity --sample_size 200 --data_num 100000
 python -m mbg.scorer.train_context_aware_scorer --device 4 --n 200 --epochs 10 --principle symmetry --sample_size 200 --data_num 100000 --remote
