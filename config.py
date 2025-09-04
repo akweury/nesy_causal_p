@@ -34,7 +34,7 @@ def get_raw_patterns_path(remote=False):
 def get_proj_output_path(remote=False):
 
     if remote:
-        output_dir = f"/grm_output/"
+        output_dir = Path(f"/grm_output/")
 
     else:
         output_dir = root / "storage" / "results"
