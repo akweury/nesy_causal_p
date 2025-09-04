@@ -88,7 +88,7 @@ def train_model(args, principle, input_type, sample_size, device, log_wandb=True
             "test_loss": test_avg_loss,
             "test_accuracy": test_acc
         })
-    torch.save(model.state_dict(), model_path)
+        torch.save(model.state_dict(), model_path)
     print(f"Model saved to {model_path}")
     return test_acc, test_avg_loss
 
