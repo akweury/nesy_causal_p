@@ -54,7 +54,7 @@ def main_ablation():
     principle_path = scorer_config.get_data_path(args.remote, train_principle)
     combined_loader = dataset.load_combined_dataset(principle_path)
     obj_model = eval_patch_classifier.load_model(args.device)
-    group_model = scorer_config.load_scorer_model(train_principle, args.device)
+    group_model = scorer_config.load_scorer_model(train_principle, args.device, args.remote)
 
     wandb.init(project=f"grb_ablation_{train_principle}",
                config=args.__dict__, name=args.exp_name)

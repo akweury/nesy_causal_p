@@ -4,10 +4,10 @@ import torch
 import config
 from pathlib import Path
 
-
 from mbg.scorer.context_contour_scorer import ContextContourScorer
 from mbg.scorer.similarity_scorer import ContextualSimilarityScorer
 from mbg.scorer.slot_attention import SlotAttention  # import your saved module
+
 
 # config
 def get_data_path(remote, principle):
@@ -18,7 +18,6 @@ def get_data_path(remote, principle):
     return data_path
 
 
-
 proximity_path = config.grb_base / "proximity" / "train"
 closure_path = config.grb_base / "closure" / "train"
 continuity_path = config.grb_base / "continuity" / "train"
@@ -27,9 +26,16 @@ symmetry_path = config.grb_base / "symmetry" / "train"
 
 POS_WEIGHT = 3
 
+
 def get_model_file_name(remote, principle):
     model_name = config.get_proj_output_path(remote) / f"neural_{principle}_model.pt"
     return model_name
+
+
+def get_model_file_name_best(remote, principle):
+    model_name = str(get_model_file_name(remote, principle)).replace(".pt", "_best.pt")
+    return model_name
+
 
 # PROXIMITY_MODEL = config.models / "neural_proximity_model.pt"
 # SIMILARITY_MODEL = config.models / "neural_similarity_model.pt"
@@ -43,18 +49,8 @@ LR = 1e-3
 DEVICE = "cpu"
 
 
-def load_scorer_model(principle_name, device, input_dim=7):
+def load_scorer_model(principle_name, device, remote, input_dim=7):
     model = ContextContourScorer(input_dim=input_dim).to(device)
-    if principle_name == "proximity":
-        model.load_state_dict(torch.load(PROXIMITY_MODEL, map_location=device))
-    elif principle_name == "similarity":
-        model.load_state_dict(torch.load(SIMILARITY_MODEL, map_location=device))
-    elif principle_name == "closure":
-        model.load_state_dict(torch.load(CLOSURE_MODEL, map_location=device))
-    elif principle_name == "continuity":
-        model.load_state_dict(torch.load(CONTINUITY_MODEL, map_location=device))
-    elif principle_name == "symmetry":
-        model.load_state_dict(torch.load(SYMMETRY_MODEL, map_location=device))
-    else:
-        raise ValueError
+    model_name = get_model_file_name_best(remote, principle_name)
+    model.load_state_dict(torch.load(model_name, map_location=device))
     return model
