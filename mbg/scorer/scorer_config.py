@@ -27,11 +27,15 @@ symmetry_path = config.grb_base / "symmetry" / "train"
 
 POS_WEIGHT = 3
 
-PROXIMITY_MODEL = config.models / "neural_proximity_model.pt"
-SIMILARITY_MODEL = config.models / "neural_similarity_model.pt"
-CLOSURE_MODEL = config.models / "neural_closure_model.pt"
-CONTINUITY_MODEL = config.models / "neural_continuity_model.pt"
-SYMMETRY_MODEL = config.models / "neural_symmetry_model.pt"
+def get_model_file_name(remote, principle):
+    model_name = config.get_proj_output_path(remote) / f"neural_{principle}_model.pt"
+    return model_name
+
+# PROXIMITY_MODEL = config.models / "neural_proximity_model.pt"
+# SIMILARITY_MODEL = config.models / "neural_similarity_model.pt"
+# CLOSURE_MODEL = config.models / "neural_closure_model.pt"
+# CONTINUITY_MODEL = config.models / "neural_continuity_model.pt"
+# SYMMETRY_MODEL = config.models / "neural_symmetry_model.pt"
 
 EPOCHS = 10
 BATCH_SIZE = 32

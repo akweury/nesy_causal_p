@@ -16,11 +16,11 @@ from mbg.scorer import scorer_config
 def train_model(args, principle, input_type, sample_size, device, log_wandb=True, n=100, epochs=10, data_num=100000):
     # Resolve paths
     path_map = {
-        "closure": (scorer_config.get_data_path(args.remote, principle), scorer_config.CLOSURE_MODEL),
-        "proximity": (scorer_config.get_data_path(args.remote, principle), scorer_config.PROXIMITY_MODEL),
-        "continuity": (scorer_config.get_data_path(args.remote, principle), scorer_config.CONTINUITY_MODEL),
-        "symmetry": (scorer_config.get_data_path(args.remote, principle), scorer_config.SYMMETRY_MODEL),
-        "similarity": (scorer_config.get_data_path(args.remote, principle), scorer_config.SIMILARITY_MODEL),
+        "closure": (scorer_config.get_data_path(args.remote, principle), scorer_config.get_model_file_name(args.remote, principle)),
+        "proximity": (scorer_config.get_data_path(args.remote, principle), scorer_config.get_model_file_name(args.remote, principle)),
+        "continuity": (scorer_config.get_data_path(args.remote, principle), scorer_config.get_model_file_name(args.remote, principle)),
+        "symmetry": (scorer_config.get_data_path(args.remote, principle), scorer_config.get_model_file_name(args.remote, principle)),
+        "similarity": (scorer_config.get_data_path(args.remote, principle), scorer_config.get_model_file_name(args.remote, principle)),
     }
     if principle not in path_map:
         raise ValueError(f"Unsupported principle: {principle}")
