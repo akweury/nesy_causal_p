@@ -162,7 +162,7 @@ def main():
     args = parser.parse_args()
 
     if args.profile:
-        import os;
+        import os
         os.environ["CONFIG_PROFILE"] = args.profile
     cfg = load_config()
     print(f"[cfg] profile={cfg.profile} device={cfg.device}")
