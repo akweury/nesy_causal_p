@@ -5,7 +5,7 @@ DATA_DIR:=/home/ml-jsha/storage/GRM_Data/coco_2017   # contains val2017/ and ann
 OUT_DIR:=/home/ml-jsha/storage/GRM_output
 
 # Pipeline controls
-STEPS      ?= detect,graph,train,infer,groupnms,eval
+STEPS      ?= detect,graph,train,tune,infer,groupnms,eval
 MAX_IMAGES ?=               # e.g. 200 for quick test
 GPU_ID     ?= 0             # default GPU id
 
@@ -44,12 +44,14 @@ docker-graph:
 	$(MAKE) run-docker STEPS=detect,graph
 docker-grm:
 	$(MAKE) run-docker STEPS=detect,graph,train
+docker-tune:
+	$(MAKE) run-docker STEPS=detect,graph,train,tune
 docker-infer:
-	$(MAKE) run-docker STEPS=detect,graph,train,infer
+	$(MAKE) run-docker STEPS=detect,graph,train,tune,infer
 docker-group-nms:
-	$(MAKE) run-docker STEPS=detect,graph,train,infer,groupnms
+	$(MAKE) run-docker STEPS=detect,graph,train,tune,infer,groupnms
 docker-eval:
-	$(MAKE) run-docker STEPS=detect,graph,train,infer,groupnms,eval
+	$(MAKE) run-docker STEPS=detect,graph,train,tune,infer,groupnms,eval
 
 # ---- Run locally (macOS CPU) ----
 run-local:

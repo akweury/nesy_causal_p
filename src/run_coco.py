@@ -240,19 +240,117 @@ def stage_train_grm(cfg, graph_file: Path) -> Path:
     print(f"[train] saved {out}  best_loss={best_loss:.4f}")
     return out
 
+def stage_tune(cfg, graph_file: Path, model_file: Path) -> float:
+    import json, torch, numpy as np
+    from pathlib import Path
+    from sklearn.metrics import precision_recall_fscore_support as prf
 
-def stage_infer_groups(cfg, model_file: Path, det_file: Path) -> Path:
-    """
-    推理边分数 -> 阈值/聚类成组
-    输出: cfg.paths.outputs_dir / groups.jsonl
-    """
-    out = cfg.paths.outputs_dir / "groups.jsonl"
-    if out.exists():
-        print(f"[infer] reuse {out}");
-        return out
-    # TODO: 载入模型，对每图输出:
-    # {"image_id":123, "groups":[ [idxs...], [idxs...] ], "edges":[[i,j,prob],...]}
-    out.write_text("")
+    out = cfg.paths.outputs_dir / "tune.json"
+    # ---- load graphs & split by image_id ----
+    recs = [json.loads(l) for l in open(graph_file)]
+    recs.sort(key=lambda r: r["image_id"])
+    n = len(recs); split = max(1, int(0.9*n))
+    val = recs[split:]
+
+    # ---- load model ----
+    ckpt = torch.load(model_file, map_location=cfg.device)
+
+    class EdgeMLP(torch.nn.Module):
+        def __init__(self,d):
+            super().__init__()
+            self.net = torch.nn.Sequential(
+                torch.nn.Linear(d,64), torch.nn.ReLU(),
+                torch.nn.Linear(64,32), torch.nn.ReLU(),
+                torch.nn.Linear(32,1))
+        def forward(self,x): return self.net(x).squeeze(-1)
+
+    mdl = EdgeMLP(ckpt["in_dim"]).to(cfg.device)
+    mdl.load_state_dict(ckpt["state_dict"]); mdl.eval()
+
+    # ---- collect probs on val pairs ----
+    y_true, y_prob = [], []
+    with torch.no_grad():
+        for r in val:
+            pairs = r.get("pairs") or []
+            if not pairs: continue
+            X = torch.tensor([p["feat"] for p in pairs], dtype=torch.float32, device=cfg.device)
+            prob = torch.sigmoid(mdl(X)).cpu().numpy()
+            y_true.extend([p["label"] for p in pairs])
+            y_prob.extend(prob)
+
+    y_true = np.array(y_true); y_prob = np.array(y_prob)
+    # ---- sweep thresholds ----
+    best = {"tau": 0.5, "P":0, "R":0, "F1":0}
+    for tau in np.linspace(0.1, 0.9, 17):
+        pred = (y_prob >= tau).astype(int)
+        P,R,F,_ = prf(y_true, pred, average="binary", zero_division=0)
+        if F > best["F1"]:
+            best = {"tau": float(tau), "P":float(P), "R":float(R), "F1":float(F)}
+    # save
+    out.write_text(json.dumps(best, indent=2))
+    print(f"[tune] best tau={best['tau']:.2f}  F1={best['F1']:.3f}")
+    return best["tau"]
+
+
+def stage_infer_groups(cfg, model_file: Path, det_file: Path, tau=0.7) -> Path:
+    import json, torch
+    out = cfg.paths.outputs_dir / f"groups_tau{tau}.jsonl"
+    if out.exists(): return out
+
+    ckpt = torch.load(model_file, map_location=cfg.device)
+    class EdgeMLP(torch.nn.Module):
+        def __init__(self,d): super().__init__();
+        self.net=torch.nn.Sequential(torch.nn.Linear(d,64),torch.nn.ReLU(),
+                                     torch.nn.Linear(64,32),torch.nn.ReLU(),
+                                     torch.nn.Linear(32,1))
+        def forward(self,x): return self.net(x).squeeze(-1)
+    mdl = EdgeMLP(ckpt["in_dim"]).to(cfg.device); mdl.load_state_dict(ckpt["state_dict"]); mdl.eval()
+
+    def feats_for(img_rec):
+        import math
+        def iou(b1,b2):
+            x1=max(b1[0],b2[0]); y1=max(b1[1],b2[1])
+            x2=min(b1[2],b2[2]); y2=min(b1[3],b2[3])
+            inter=max(0,x2-x1)*max(0,y2-y1)
+            a1=(b1[2]-b1[0])*(b1[3]-b1[1]); a2=(b2[2]-b2[0])*(b2[3]-b2[1])
+            u=a1+a2-inter; return inter/u if u>0 else 0.0
+        W,H = img_rec["size"]; boxes=img_rec["boxes"]; labels=img_rec["labels"]; scores=img_rec["scores"]
+        cs=[]; P=[]
+        for i in range(len(boxes)):
+            for j in range(i+1,len(boxes)):
+                b1,b2=boxes[i],boxes[j]
+                cx1,cy1=(0.5*(b1[0]+b1[2]),0.5*(b1[1]+b1[3]))
+                cx2,cy2=(0.5*(b2[0]+b2[2]),0.5*(b2[1]+b2[3]))
+                dist=((cx1-cx2)**2+(cy1-cy2)**2)**0.5/(W*H)**0.5
+                same=1.0 if labels[i]==labels[j] else 0.0
+                mscore=min(scores[i],scores[j])
+                P.append([iou(b1,b2), dist, same, mscore]); cs.append((i,j))
+        return cs, torch.tensor(P, dtype=torch.float32, device=cfg.device)
+
+    def uf_make(n): return list(range(n))
+    def uf_find(p,x):
+        while p[x]!=x: p[x]=p[p[x]]; x=p[x]
+        return x
+    def uf_union(p,a,b):
+        ra,rb=uf_find(p,a),uf_find(p,b)
+        if ra!=rb: p[rb]=ra
+
+    with open(det_file) as f_in, open(out,"w") as f_out, torch.no_grad():
+        for line in f_in:
+            rec=json.loads(line); n=len(rec["boxes"])
+            parents=uf_make(n)
+            cs, X = feats_for(rec)
+            if len(cs):
+                probs=torch.sigmoid(mdl(X)).tolist()
+                for (i,j),p in zip(cs, probs):
+                    if p>=tau: uf_union(parents,i,j)
+            # 收集组
+            groups={}
+            for i in range(n):
+                r=uf_find(parents,i)
+                groups.setdefault(r,[]).append(i)
+            groups_list=[v for v in groups.values() if len(v)>=1]
+            f_out.write(json.dumps({"image_id":rec["image_id"],"groups":groups_list})+"\n")
     print(f"[infer] wrote {out}")
     return out
 
@@ -334,6 +432,12 @@ def main():
     if "train" in steps:
         graph = artifacts.get("graph", cfg.paths.graphs_dir / "graphs.jsonl")
         artifacts["model"] = stage_train_grm(cfg, graph)
+
+    if "tune" in steps:
+        graph = artifacts.get("graph", cfg.paths.graphs_dir / "graphs.jsonl")
+        model = artifacts.get("model", cfg.paths.models_dir / "grm_edge.pt")
+        tau = stage_tune(cfg, graph, model)
+        artifacts["tune"] = cfg.paths.outputs_dir / "tune.json"
 
     if "infer" in steps:
         det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
