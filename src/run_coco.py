@@ -172,7 +172,7 @@ def main():
     artifacts: Dict[str, Path] = {}
 
     n_imgs, n_boxes = build_labelstudio_subset_with_bboxes(
-        coco_json_path=config.get_coco_path(args.remote) / "selected" / "annotations" / "instances_val2017.json",
+        coco_json_path=config.get_coco_path(args.remote) / "original" / "annotations" / "instances_val2017.json",
         subset_dir=config.get_coco_path(args.remote) / "selected" / "val2017",
         out_json_path=config.get_coco_path(args.remote) / "selected" / "annotations" / "labelstudio_import_subset_with_bbox.json",
         image_field_name="img",
