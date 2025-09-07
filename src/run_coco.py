@@ -171,8 +171,8 @@ def main():
     steps = [s.strip() for s in args.steps.split(",") if s.strip()]
     artifacts: Dict[str, Path] = {}
 
-    filter_coco(args)
-
+    if "filter" in steps:
+        artifacts["filtered"] = filter_coco(args)
     if "detect" in steps:
         artifacts["det"] = stage_detect(cfg)
     if "graph" in steps:
