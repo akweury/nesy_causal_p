@@ -34,7 +34,7 @@ run-docker:
 	  -e NUM_WORKERS=8 \
 	  -e MAX_IMAGES="$(MAX_IMAGES)" \
 	  $(IMAGE) \
-	  python -m src.run_coco --steps $(STEPS)
+	  python -m src.run_coco --steps $(STEPS) --remote
 
 # ---- Only detect in Docker (GPU) ----
 docker-detect:
