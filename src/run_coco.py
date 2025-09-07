@@ -487,21 +487,101 @@ def stage_std_nms(cfg, det_file: Path, iou_thr: float = 0.5,
     print(f"[stdnms] wrote {out} (iou={iou_thr})")
     return out
 
+def stage_group_nms(cfg, det_file: Path, groups_file: Path,
+                    t_intra: float = 0.7, t_inter: float = 0.5,
+                    score_thr: float = 0.0, topk_per_class: int = 300) -> Path:
+    """
+    Group-aware NMS（类别内NMS，但抑制阈值随“是否同组”而变）：
+      - 同组：用 t_intra（更宽松，减少错抑制）
+      - 跨组：用 t_inter（更严格，减少误保留）
+    输入:
+      det_file: detections.jsonl  (每行: boxes/scores/labels/size/image_id)
+      groups_file: groups.jsonl   (每行: {"image_id":..., "groups": [[idxs...], ...]})
+    输出:
+      outputs/detections_groupnms.jsonl
+    """
+    import json, torch
+    from torchvision.ops import box_iou
 
-def stage_group_nms(cfg, det_file: Path, groups_file: Path) -> Path:
-    """
-    Group-aware NMS：组内/组间不同阈值
-    输出: cfg.paths.outputs_dir / detections_groupnms.jsonl
-    """
     out = cfg.paths.outputs_dir / "detections_groupnms.jsonl"
     if out.exists():
-        print(f"[gNMS] reuse {out}");
-        return out
-    # TODO: 读取 det_file + groups_file，执行 group-aware NMS，写 JSONL
-    out.write_text("")
-    print(f"[gNMS] wrote {out}")
-    return out
+        print(f"[gNMS] reuse {out}"); return out
 
+    # 读 groups → {image_id: group_id array (len=N, -1 表示未分组)}
+    gid_map = {}
+    with open(groups_file) as fg:
+        for line in fg:
+            r = json.loads(line)
+            # 暂时只存 groups 列表；具体到每张图时再展开成 group_id 向量
+            gid_map[r["image_id"]] = r["groups"]
+
+    with open(det_file) as fin, open(out, "w") as fout:
+        for line in fin:
+            rec = json.loads(line)
+            boxes  = torch.tensor(rec["boxes"],  dtype=torch.float32)
+            scores = torch.tensor(rec["scores"], dtype=torch.float32)
+            labels = torch.tensor(rec["labels"], dtype=torch.int64)
+
+            N = len(boxes)
+            if N == 0:
+                fout.write(line);  # 空候选，原样写回
+                continue
+
+            # 将 groups 映射为每个候选的 group_id（未出现为 -1）
+            group_id = torch.full((N,), -1, dtype=torch.int64)
+            gdef = gid_map.get(rec["image_id"], [])
+            for k, members in enumerate(gdef):
+                idx = torch.tensor([m for m in members if 0 <= m < N], dtype=torch.long)
+                if idx.numel(): group_id[idx] = k
+
+            keep_all = []
+            for c in labels.unique().tolist():
+                m = (labels == c)
+                if not torch.any(m):
+                    continue
+                b = boxes[m]; s = scores[m]
+                idx_orig = torch.where(m)[0]
+                grp = group_id[m]
+
+                # 分数阈值与topk截断
+                if score_thr > 0:
+                    km = (s >= score_thr)
+                    b, s, idx_orig, grp = b[km], s[km], idx_orig[km], grp[km]
+                if b.numel() == 0:
+                    continue
+                if topk_per_class and len(s) > topk_per_class:
+                    k_idx = torch.topk(s, topk_per_class).indices
+                    b, s, idx_orig, grp = b[k_idx], s[k_idx], idx_orig[k_idx], grp[k_idx]
+
+                # group-aware greedy NMS
+                order = s.argsort(descending=True)
+                while order.numel() > 0:
+                    i = order[0].item()
+                    keep_all.append(idx_orig[i])
+                    rest = order[1:]
+                    if rest.numel() == 0:
+                        break
+                    ious = box_iou(b[i].unsqueeze(0), b[rest]).squeeze(0)
+                    same = (grp[rest] == grp[i]) & (grp[i] >= 0)
+                    thr  = torch.where(same,
+                                       torch.full_like(ious, float(t_intra)),
+                                       torch.full_like(ious, float(t_inter)))
+                    mask = ious <= thr
+                    order = rest[mask]
+
+            keep = torch.stack(keep_all).tolist() if len(keep_all) else []
+            rec2 = {
+                **rec,
+                "boxes":  [rec["boxes"][i]  for i in keep],
+                "scores": [rec["scores"][i] for i in keep],
+                "labels": [rec["labels"][i] for i in keep],
+                "params": {"t_intra": t_intra, "t_inter": t_inter,
+                           "score_thr": score_thr, "topk_per_class": topk_per_class}
+            }
+            fout.write(json.dumps(rec2) + "\n")
+
+    print(f"[gNMS] wrote {out} (t_intra={t_intra}, t_inter={t_inter})")
+    return out
 
 def stage_eval_coco(cfg, det_file: Path) -> Dict[str, Any]:
     """

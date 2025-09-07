@@ -150,6 +150,7 @@ make docker-detect GPU_ID=0
 make docker-graph GPU_ID=0
 make docker-grm GPU_ID=0
 make docker-infer GPU_ID=0
+make docker-std-nms GPU_ID=0
 make docker-group-nms GPU_ID=0
 make docker-eval GPU_ID=0
 
