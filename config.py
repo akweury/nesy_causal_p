@@ -221,10 +221,18 @@ def load_config() -> Config:
     profile = os.getenv("CONFIG_PROFILE", "local")
     base = _resolve_base(profile)
     work = base["work_dir"]
+
+    # 环境覆盖（若提供则优先生效）
+    co_img = os.getenv("COCO_IMAGES")
+    co_ann = os.getenv("COCO_ANN")
+
+    coco_images = Path(co_img) if co_img else base["data_root"] / "coco" / "images" / "val2017"
+    coco_annotations = Path(co_ann) if co_ann else base["data_root"] / "coco" / "annotations" / "instances_val2017.json"
+
     paths = Paths(
         data_root=base["data_root"],
-        coco_images=base["coco_images"],
-        coco_annotations=base["coco_annotations"],
+        coco_images=coco_images,
+        coco_annotations=coco_annotations,
         work_dir=work,
         detections_dir=work / "detections",
         graphs_dir=work / "graphs",
