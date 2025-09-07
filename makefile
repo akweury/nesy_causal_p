@@ -22,9 +22,9 @@ build:
 # ---- Run in Docker (GPU) ----
 run-docker:
 	docker run --gpus all --rm -it \
-	  -v "$(CODE_DIR):/workspace" \
+	  -v "$(CODE_DIR):/app" \
 	  -v "$(DATA_DIR):/mnt/data" \
-	  -v "$(OUT_DIR):/workspace/run" \
+	  -v "$(OUT_DIR):/app/run" \
 	  -e CONFIG_PROFILE=remote \
 	  -e DATA_ROOT=/mnt/data \
 	  -e COCO_IMAGES=/mnt/data/val2017 \
