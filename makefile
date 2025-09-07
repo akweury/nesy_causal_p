@@ -26,7 +26,7 @@ run-docker:
 	  -v "$(DATA_DIR):/gen_data/selected" \
 	  -v "$(OUT_DIR):/grm_output" \
 	  -e CONFIG_PROFILE=remote \
-	  -e DATA_ROOT=/gen_data/selected \
+	  -e DATA_ROOT=/gen_data \
 	  -e COCO_IMAGES=/gen_data/selected/val2017 \
 	  -e COCO_ANN=/gen_data/selected/annotations/instances_val2017.json \
 	  -e WORK_DIR=/grm_output/run \

@@ -8,6 +8,8 @@ from typing import Dict, Any, List
 from config import load_config
 import config
 from gen_data.coco_data_processing import build_labelstudio_subset_with_bboxes
+
+
 # ---------- 阶段占位符（逐步实现） ----------
 def stage_detect(cfg) -> Path:
     """
@@ -40,19 +42,22 @@ def stage_detect(cfg) -> Path:
     if max_n: paths = paths[:int(max_n)]
 
     def collate(batch):  # ([PIL...],[meta...])
-        imgs = [b[0] for b in batch]; metas = [b[1] for b in batch]
+        imgs = [b[0] for b in batch];
+        metas = [b[1] for b in batch]
         return imgs, metas
 
     class ImgSet:
         def __init__(self, ps): self.ps = ps
+
         def __len__(self): return len(self.ps)
+
         def __getitem__(self, i):
             p = Path(self.ps[i])
             img = Image.open(p).convert("RGB")
             return img, {"image_id": int(p.stem), "file_name": p.name, "w": img.width, "h": img.height}
 
     loader = DataLoader(ImgSet(paths), batch_size=bs, shuffle=False,
-                        num_workers=0 if cfg.device=="cpu" else cfg.num_workers,
+                        num_workers=0 if cfg.device == "cpu" else cfg.num_workers,
                         collate_fn=collate)
 
     with out.open("w") as f, torch.no_grad():
@@ -60,7 +65,7 @@ def stage_detect(cfg) -> Path:
             tensors = [tfm(im).to(cfg.device) for im in imgs]  # list[Tensor CxHxW]
             preds = model(tensors)
             for pred, meta in zip(preds, metas):
-                boxes  = pred["boxes"].detach().cpu().tolist()
+                boxes = pred["boxes"].detach().cpu().tolist()
                 scores = pred["scores"].detach().cpu().tolist()
                 labels = pred["labels"].detach().cpu().tolist()
                 rec = {
@@ -74,6 +79,7 @@ def stage_detect(cfg) -> Path:
     print(f"[detect] wrote {out}")
     return out
 
+
 def stage_build_graph(cfg, det_file: Path) -> Path:
     """
     构图+特征：由检测与(可选)掩码，产出 edge 特征/伪标签
@@ -81,12 +87,14 @@ def stage_build_graph(cfg, det_file: Path) -> Path:
     """
     out = cfg.paths.graphs_dir / "graphs.jsonl"
     if out.exists():
-        print(f"[graph] reuse {out}"); return out
+        print(f"[graph] reuse {out}");
+        return out
     # TODO: 从 det_file 读取；计算 iou/距离/同类/外观相似度/接触；写 JSONL:
     # {"image_id":123, "nodes":[...], "pairs":[[i,j,feat..., label]]}
     out.write_text("")
     print(f"[graph] wrote {out}")
     return out
+
 
 def stage_train_grm(cfg, graph_file: Path) -> Path:
     """
@@ -95,11 +103,13 @@ def stage_train_grm(cfg, graph_file: Path) -> Path:
     """
     model = cfg.paths.models_dir / "grm_edge.pt"
     if model.exists():
-        print(f"[train] reuse {model}"); return model
+        print(f"[train] reuse {model}");
+        return model
     # TODO: PyTorch 训练（BCE + 一致性等）
     model.write_bytes(b"")  # 占位
     print(f"[train] saved {model}")
     return model
+
 
 def stage_infer_groups(cfg, model_file: Path, det_file: Path) -> Path:
     """
@@ -108,12 +118,14 @@ def stage_infer_groups(cfg, model_file: Path, det_file: Path) -> Path:
     """
     out = cfg.paths.outputs_dir / "groups.jsonl"
     if out.exists():
-        print(f"[infer] reuse {out}"); return out
+        print(f"[infer] reuse {out}");
+        return out
     # TODO: 载入模型，对每图输出:
     # {"image_id":123, "groups":[ [idxs...], [idxs...] ], "edges":[[i,j,prob],...]}
     out.write_text("")
     print(f"[infer] wrote {out}")
     return out
+
 
 def stage_group_nms(cfg, det_file: Path, groups_file: Path) -> Path:
     """
@@ -122,11 +134,13 @@ def stage_group_nms(cfg, det_file: Path, groups_file: Path) -> Path:
     """
     out = cfg.paths.outputs_dir / "detections_groupnms.jsonl"
     if out.exists():
-        print(f"[gNMS] reuse {out}"); return out
+        print(f"[gNMS] reuse {out}");
+        return out
     # TODO: 读取 det_file + groups_file，执行 group-aware NMS，写 JSONL
     out.write_text("")
     print(f"[gNMS] wrote {out}")
     return out
+
 
 def stage_eval_coco(cfg, det_file: Path) -> Dict[str, Any]:
     """
@@ -136,6 +150,7 @@ def stage_eval_coco(cfg, det_file: Path) -> Dict[str, Any]:
     metrics = {"mAP": None}
     print(f"[eval] metrics: {metrics}")
     return metrics
+
 
 # ---------- CLI ----------
 def main():
@@ -147,7 +162,8 @@ def main():
     args = parser.parse_args()
 
     if args.profile:
-        import os; os.environ["CONFIG_PROFILE"] = args.profile
+        import os;
+        os.environ["CONFIG_PROFILE"] = args.profile
     cfg = load_config()
     print(f"[cfg] profile={cfg.profile} device={cfg.device}")
     print(f"[cfg] work_dir={cfg.paths.work_dir}")
@@ -156,7 +172,7 @@ def main():
     artifacts: Dict[str, Path] = {}
 
     n_imgs, n_boxes = build_labelstudio_subset_with_bboxes(
-        coco_json_path=config.get_coco_path(args.remote) / "original" / "annotations" / "instances_val2017.json",
+        coco_json_path=config.get_coco_path(args.remote) / "selected" / "annotations" / "instances_val2017.json",
         subset_dir=config.get_coco_path(args.remote) / "selected" / "val2017",
         out_json_path=config.get_coco_path(args.remote) / "selected" / "annotations" / "labelstudio_import_subset_with_bbox.json",
         image_field_name="img",
@@ -190,6 +206,7 @@ def main():
 
     # 记录产物
     print(json.dumps({k: str(v) for k, v in artifacts.items()}, indent=2))
+
 
 if __name__ == "__main__":
     main()

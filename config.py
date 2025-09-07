@@ -36,7 +36,7 @@ def get_raw_patterns_path(remote=False):
 
 def get_coco_path(remote=False):
     if remote:
-        coco_path = Path('/gen_data') / 'coco_2017'
+        coco_path = os.getenv("DATA_ROOT", "/gen_data")
     else:
         coco_path = root / 'storage' / 'coco'
 
