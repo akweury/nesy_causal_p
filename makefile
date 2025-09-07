@@ -23,13 +23,13 @@ build:
 run-docker:
 	docker run --gpus all --rm -it \
 	  -v "$(CODE_DIR):/app" \
-	  -v "$(DATA_DIR):/mnt/data" \
-	  -v "$(OUT_DIR):/app/run" \
+	  -v "$(DATA_DIR):/gen_data/selected" \
+	  -v "$(OUT_DIR):/grm_output" \
 	  -e CONFIG_PROFILE=remote \
-	  -e DATA_ROOT=/mnt/data \
-	  -e COCO_IMAGES=/mnt/data/val2017 \
-	  -e COCO_ANN=/mnt/data/annotations/instances_val2017.json \
-	  -e WORK_DIR=/workspace/run \
+	  -e DATA_ROOT=/gen_data/selected \
+	  -e COCO_IMAGES=/gen_data/selected/val2017 \
+	  -e COCO_ANN=/gen_data/selected/annotations/instances_val2017.json \
+	  -e WORK_DIR=/grm_output/run \
 	  -e DEVICE=cuda:$(GPU_ID) \
 	  -e NUM_WORKERS=8 \
 	  -e MAX_IMAGES="$(MAX_IMAGES)" \
