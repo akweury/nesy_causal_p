@@ -163,7 +163,7 @@ if __name__ == "__main__":
     # process_vit_json(res_path, "proximity", "vit_base_patch16_224_eval_principle_proximity_20250903_134724_img_num_3_start_0_task_num_full.json")
     # process_vit_json(res_path, "continuity", "vit_base_patch16_224_eval_principle_continuity_20250903_140831_img_num_3_start_0_task_num_full.json")
     # process_vit_json(res_path, "similarity", "vit_base_patch16_224_eval_principle_similarity_20250903_140015_img_num_3_start_0_task_num_full.json")
-    process_vit_json(res_path, "closure", "vit_base_patch16_224_eval_principle_closure_20250903_140516_img_num_3_start_0_task_num_full.json")
+    # process_vit_json(res_path, "closure", "vit_base_patch16_224_eval_principle_closure_20250903_140516_img_num_3_start_0_task_num_full.json")
 
 
 
@@ -172,7 +172,7 @@ if __name__ == "__main__":
     # process_grm_ogc_results(res_path, "similarity", "ablation_summary_similarity_grm_20250721_092307.json")
     # process_grm_ogc_results(res_path, "closure", "ablation_summary_closure_grm_20250718_110518.json")
     # process_grm_ogc_results(res_path, "continuity", "ablation_summary_continuity_grm_20250718_110525.json")
-    # process_grm_ogc_results(res_path, "symmetry", "ablation_summary_symmetry_grm_20250722_095458.json")
+    process_grm_ogc_results(res_path, "symmetry", "ablation_summary_symmetry_20250904_202041.json")
 
 
     # internVL3_78B

@@ -141,7 +141,8 @@ def main_ablation():
         "per_task_results": per_task_results,
         "summary": final_summary
     }
-    with open(config.output / f"ablation_summary_{args.principle}_{timestamp}.json", "w") as f:
+    output_path = config.get_proj_output_path(args.remote)
+    with open(output_path / f"grm_ablation_summary_{args.principle}_{timestamp}.json", "w") as f:
         json.dump(output_json, f, indent=2)
     print("\n=== Final Summary ===")
     for mode, metrics in final_summary.items():
@@ -157,7 +158,7 @@ def main_ablation():
         }
         final_error_stats[mode] = mode_stats
     # Save or print
-    with open(config.output / f"error_summary_{args.principle}_{timestamp}.json", "w") as f:
+    with open(output_path / f"grm_error_summary_{args.principle}_{timestamp}.json", "w") as f:
         json.dump(final_error_stats, f, indent=2)
     print("\n=== Error Summary ===")
     for mode, stats in final_error_stats.items():

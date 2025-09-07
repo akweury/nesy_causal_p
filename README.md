@@ -128,3 +128,23 @@ python -m src.analysis_results --model principle --model GRM --principle continu
 pip install -r requirements.txt
 pip uninstall flash_attn flash_attn_2
 ```
+
+
+---
+## Coco Experiments
+
+### Config
+
+#### Local
+``` 
+export CONFIG_PROFILE=local DEVICE=cpu DATA_ROOT=/Users/jing/PycharmProjects/nesy_causal_p/storage/coco/selected WORK_DIR=$(pwd)/src/.work
+
+python run_coco.py --steps detect
+```
+
+#### Remote
+``` 
+docker run -it --gpus all -v /home/ml-jsha/nesy_causal_p:/app -v /home/ml-jsha/storage/GRM_output/:/grm_output -v /home/ml-jsha/storage/GRM_Data/:/gen_data --rm grm:latest
+
+docker run --gpus all -e CONFIG_PROFILE=remote -e DATA_ROOT=/mnt/data -e WORK_DIR=/workspace/run -e DEVICE=cuda:0 -v /abs/data:/mnt/data:ro -v $PWD:/workspace grm:latest python run_coco.py --steps detect
+```

@@ -4,6 +4,7 @@ import os
 import cv2 as cv
 from pathlib import Path
 import shutil
+from dataclasses import dataclass
 
 
 ########## helper function ################################
@@ -14,11 +15,13 @@ def print_list_summary(lst, max_items=10):
     for i, item in enumerate(lst[:max_items]):
         print(f"[{i}] {item}")
 
+
 def clear_folder(folder_path):
     if os.path.exists(folder_path) and os.path.isdir(folder_path):
         shutil.rmtree(folder_path)  # Removes a folder even if it's not empty
         print(f"Folder '{folder_path}' has been removed.")
     os.makedirs(folder_path, exist_ok=True)
+
 
 def get_raw_patterns_path(remote=False):
     if remote:
@@ -31,8 +34,18 @@ def get_raw_patterns_path(remote=False):
     return raw_patterns_path
 
 
-def get_proj_output_path(remote=False):
+def get_coco_path(remote=False):
+    if remote:
+        coco_path = Path('/gen_data') / 'coco_2017'
+    else:
+        coco_path = root / 'storage' / 'coco'
 
+    if not os.path.exists(coco_path):
+        raise FileNotFoundError(f"Coco annotation file not found at {coco_path}")
+    return coco_path
+
+
+def get_proj_output_path(remote=False):
     if remote:
         output_dir = Path(f"/grm_output/")
 
@@ -42,23 +55,31 @@ def get_proj_output_path(remote=False):
     os.makedirs(output_dir, exist_ok=True)
     return output_dir
 
+
 def get_figure_path(remote=False):
     figure_path = get_proj_output_path(remote) / "figures"
     os.makedirs(figure_path, exist_ok=True)
     return figure_path
 
+
+########
+
+COCO_JSON = "annotations/instances_val2017.json"  # 改成你的路径
+IMG_DIR = "val2017"  # 图像目录
+OUT_LIST = "keep_filenames.txt"  # 满足5–15的文件名清单
+CSV_STATS = "image_object_counts.csv"  # 统计可视化用
+
+MIN_OBJS, MAX_OBJS = 5, 15
+
 ########################################################
 
 root = Path(__file__).parents[0]
-
-
 
 storage = root / 'storage'
 output = storage / 'output'
 lark_file = root / "src" / "alpha" / "exp.lark"
 models = storage / "models"
 model_visual = models / "visual"
-
 
 if not os.path.exists(storage):
     os.mkdir(storage)
@@ -108,7 +129,6 @@ kp_base_dataset = storage / "dataset" / "basic"
 kp_challenge_dataset = storage / "dataset" / "challenge"
 kp_gestalt_dataset = storage / "dataset" / "gestalt"
 
-
 grb_base = storage / "dataset" / "grb"
 
 grb_proximity = grb_base / "proximity"
@@ -117,8 +137,7 @@ grb_closure = grb_base / "closure"
 grb_continuity = grb_base / "continuity"
 grb_symmetry = grb_base / "symmetry"
 
-
-wandb_path = root / 'wandb'/ "export"
+wandb_path = root / 'wandb' / "export"
 
 alpha_mode = {
     'inter_input_group': 0,
@@ -149,15 +168,77 @@ kernel_size = 3
 group_index = 10
 
 categories = {
-    "proximity": ["red_triangle", "grid", "fixed_props","big_small", "circle_features"],
+    "proximity": ["red_triangle", "grid", "fixed_props", "big_small", "circle_features"],
     "similarity": ["fixed_number", "pacman", "palette"],
     "closure": ["big_triangle", "big_square", "big_circle", "feature_triangle", "feature_square", "feature_circle"],
     "symmetry": ["solar_sys", "feature_symmetry_circle"],
     "continuity": ["one_split_n", "two_splines", "a_splines", "u_splines", "feature_continuity_x_splines"]
 }
 
-
 name_map = {
     "solar_sys": "axis_symmetry_bkg",
     "feature_symmetry_circle": "axis_symmetry_bkg_overlap",
 }
+
+
+@dataclass
+class Paths:
+    data_root: Path
+    coco_images: Path
+    coco_annotations: Path
+    work_dir: Path
+    detections_dir: Path
+    graphs_dir: Path
+    models_dir: Path
+    outputs_dir: Path
+
+
+@dataclass
+class Config:
+    profile: str  # "local" | "remote"
+    device: str  # "cuda:0" | "cpu"
+    num_workers: int
+    paths: Paths
+
+
+def _resolve_base(profile: str) -> dict:
+    """按环境切换根目录；也支持 ENV 覆盖。"""
+    if profile == "remote":
+        root = Path(os.getenv("DATA_ROOT", "/mnt/data"))
+        work = Path(os.getenv("WORK_DIR", "/workspace"))
+    else:
+        root = storage
+        work = Path(os.getenv("WORK_DIR", str(Path.cwd() / ".work")))
+    return {
+        "data_root": root,
+        "coco_images": root / "coco" / "selected" / "val2017",
+        "coco_annotations": root / "coco" / "selected" / "annotations" / "instances_val2017.json",
+        "work_dir": work,
+    }
+
+
+def load_config() -> Config:
+    profile = os.getenv("CONFIG_PROFILE", "local")
+    base = _resolve_base(profile)
+    work = base["work_dir"]
+    paths = Paths(
+        data_root=base["data_root"],
+        coco_images=base["coco_images"],
+        coco_annotations=base["coco_annotations"],
+        work_dir=work,
+        detections_dir=work / "detections",
+        graphs_dir=work / "graphs",
+        models_dir=work / "models",
+        outputs_dir=work / "outputs",
+    )
+    import sys
+
+    if sys.platform == "darwin":
+        device = "cpu"
+    else:
+        device = os.getenv("DEVICE", "cuda:0" if os.getenv("CUDA_AVAILABLE", "1") == "1" else "cpu")
+    num_workers = int(os.getenv("NUM_WORKERS", "4"))
+    # 确保目录存在
+    for p in [paths.work_dir, paths.detections_dir, paths.graphs_dir, paths.models_dir, paths.outputs_dir]:
+        p.mkdir(parents=True, exist_ok=True)
+    return Config(profile=profile, device=device, num_workers=num_workers, paths=paths)
