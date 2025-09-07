@@ -48,6 +48,8 @@ docker-tune:
 	$(MAKE) run-docker STEPS=detect,graph,train,tune
 docker-infer:
 	$(MAKE) run-docker STEPS=detect,graph,train,tune,infer
+docker-std-nms:
+	$(MAKE) run-docker STEPS=detect,graph,train,tune,infer,stdnms
 docker-group-nms:
 	$(MAKE) run-docker STEPS=detect,graph,train,tune,infer,groupnms
 docker-eval:
