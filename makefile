@@ -42,7 +42,8 @@ docker-detect:
 
 docker-graph:
 	$(MAKE) run-docker STEPS=detect,graph
-
+docker-grm:
+	$(MAKE) run-docker STEPS=detect,graph,train
 # ---- Run locally (macOS CPU) ----
 run-local:
 	CONFIG_PROFILE=local \
