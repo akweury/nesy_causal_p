@@ -143,10 +143,8 @@ python run_coco.py --steps detect
 ```
 
 #### Remote
-``` 
-docker run -it --gpus all -v /home/ml-jsha/nesy_causal_p:/app -v /home/ml-jsha/storage/GRM_output/:/grm_output -v /home/ml-jsha/storage/GRM_Data/:/gen_data --rm grm:latest
 
-docker run --gpus all -v /home/ml-jsha/nesy_causal_p:/app -v /home/ml-jsha/storage/GRM_output/:/grm_output -v /home/ml-jsha/storage/GRM_Data/:/gen_data 
--e CONFIG_PROFILE=remote -e DATA_ROOT=/gen_data/coco_2017/selected/val2017 -e WORK_DIR=/workspace/run -e DEVICE=cuda:0 
--v /abs/data:/mnt/data:ro -v $PWD:/workspace grm:latest python run_coco.py --steps detect
+##### Run Detect
+``` 
+make docker-detect GPU_ID=0
 ```
