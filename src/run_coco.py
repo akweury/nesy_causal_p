@@ -139,19 +139,106 @@ def stage_build_graph(cfg, det_file: Path) -> Path:
     return out
 
 
+# ---- put into run_coco.py ----
 def stage_train_grm(cfg, graph_file: Path) -> Path:
-    """
-    训练边打分器（GRM）
-    输出: cfg.paths.models_dir / grm_edge.pt
-    """
-    model = cfg.paths.models_dir / "grm_edge.pt"
-    if model.exists():
-        print(f"[train] reuse {model}");
-        return model
-    # TODO: PyTorch 训练（BCE + 一致性等）
-    model.write_bytes(b"")  # 占位
-    print(f"[train] saved {model}")
-    return model
+    import os, json, math, random
+    import torch
+    import torch.nn as nn
+    from torch.utils.data import Dataset, DataLoader
+
+    out = cfg.paths.models_dir / "grm_edge.pt"
+    if out.exists():
+        print(f"[train] reuse {out}");
+        return out
+
+    # ---- hyperparams (env override) ----
+    EPOCHS = int(os.getenv("GRM_EPOCHS", "5"))
+    BS = int(os.getenv("GRM_BATCH", "2048"))
+    LR = float(os.getenv("GRM_LR", "1e-3"))
+    NEG_POS = float(os.getenv("GRM_NEGPOS", "3.0"))  # 每张图 负样本:正样本 采样比
+    SEED = int(os.getenv("SEED", "123"))
+
+    random.seed(SEED);
+    torch.manual_seed(SEED)
+
+    class GraphPairDS(Dataset):
+        def __init__(self, path: Path):
+            self.X, self.y = [], []
+            with open(path) as f:
+                for line in f:
+                    r = json.loads(line)
+                    pairs = r.get("pairs", [])
+                    if not pairs: continue
+                    pos = [p for p in pairs if p["label"] == 1]
+                    neg = [p for p in pairs if p["label"] == 0]
+                    # 负采样，控制类不平衡
+                    k = min(len(neg), int(math.ceil(len(pos) * NEG_POS))) if pos else min(len(neg), 512)
+                    neg = random.sample(neg, k) if k and len(neg) > k else neg
+                    for p in (pos + neg):
+                        self.X.append(p["feat"])
+                        self.y.append(p["label"])
+            self.X = torch.tensor(self.X, dtype=torch.float32)
+            self.y = torch.tensor(self.y, dtype=torch.float32)
+            # 统计用于 pos_weight
+            self.n_pos = int(self.y.sum().item());
+            self.n_tot = len(self.y)
+            self.in_dim = self.X.shape[1]
+            print(f"[train] pairs: {self.n_tot}  pos: {self.n_pos}  in_dim: {self.in_dim}")
+
+        def __len__(self):
+            return self.n_tot
+
+        def __getitem__(self, i):
+            return self.X[i], self.y[i]
+
+    ds = GraphPairDS(graph_file)
+    dl = DataLoader(ds, batch_size=BS, shuffle=True, num_workers=0 if cfg.device == "cpu" else cfg.num_workers)
+
+    class EdgeMLP(nn.Module):
+        def __init__(self, d):
+            super().__init__()
+            self.net = nn.Sequential(
+                nn.Linear(d, 64), nn.ReLU(),
+                nn.Linear(64, 32), nn.ReLU(),
+                nn.Dropout(0.1),
+                nn.Linear(32, 1)  # logits
+            )
+
+        def forward(self, x): return self.net(x).squeeze(-1)
+
+    model = EdgeMLP(ds.in_dim).to(cfg.device)
+    # 不平衡处理：BCEWithLogits + pos_weight
+    n_pos = max(ds.n_pos, 1)
+    n_neg = max(ds.n_tot - ds.n_pos, 1)
+    pos_weight = torch.tensor([n_neg / n_pos], dtype=torch.float32, device=cfg.device)
+    crit = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+    opt = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=1e-4)
+
+    best_loss = float("inf")
+    for ep in range(1, EPOCHS + 1):
+        model.train();
+        total = 0.0;
+        n = 0
+        for xb, yb in dl:
+            xb = xb.to(cfg.device);
+            yb = yb.to(cfg.device)
+            opt.zero_grad()
+            logits = model(xb)
+            loss = crit(logits, yb)
+            loss.backward();
+            opt.step()
+            total += loss.item() * xb.size(0);
+            n += xb.size(0)
+        avg = total / max(n, 1)
+        print(f"[train] epoch {ep}/{EPOCHS}  loss={avg:.4f}  pos_weight={pos_weight.item():.2f}")
+        if avg < best_loss:
+            best_loss = avg
+            torch.save({"state_dict": model.state_dict(),
+                        "in_dim": ds.in_dim,
+                        "pos_weight": pos_weight.item()}, out)
+
+    print(f"[train] saved {out}  best_loss={best_loss:.4f}")
+    return out
 
 
 def stage_infer_groups(cfg, model_file: Path, det_file: Path) -> Path:
