@@ -23,12 +23,12 @@ build:
 run-docker:
 	docker run --gpus all --rm -it \
 	  -v /home/ml-jsha/nesy_causal_p:/app \
-	  -v /home/ml-jsha/storage/GRM_Data/coco_2017:/gen_data \
+	  -v /home/ml-jsha/storage/GRM_Data/coco_2017:/coco_2017 \
 	  -v /home/ml-jsha/storage/GRM_output:/grm_output \
 	  -e CONFIG_PROFILE=remote \
-	  -e DATA_ROOT=/gen_data \
-	  -e COCO_IMAGES=/gen_data/selected/val2017 \
-	  -e COCO_ANN=/gen_data/selected/annotations/instances_val2017.json \
+	  -e DATA_ROOT=/coco_2017 \
+	  -e COCO_IMAGES=/coco_2017/selected/val2017 \
+	  -e COCO_ANN=/coco_2017/selected/annotations/instances_val2017.json \
 	  -e WORK_DIR=/grm_output/run \
 	  -e DEVICE=cuda:$(GPU_ID) \
 	  -e NUM_WORKERS=8 \

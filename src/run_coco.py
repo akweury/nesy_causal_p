@@ -31,7 +31,6 @@ def stage_detect(cfg) -> Path:
 
     img_dir = cfg.paths.coco_images
     paths = sorted(glob(str(img_dir / "*.jpg")))
-    print(f"[subdir] {img_dir} has {len(paths)} images")
     assert paths, f"No images found in {img_dir}"
 
     weights = FasterRCNN_ResNet50_FPN_Weights.DEFAULT
