@@ -108,6 +108,9 @@ def build_labelstudio_subset_with_bboxes(
       </RectangleLabels>
       <Choices name="group" toName="{rect_field_name}" perRegion="true" .../>
     """
+    print (f"Reading COCO from {coco_json_path}")
+    print (f"Subset images from {subset_dir}")
+    print (f"Writing Label Studio tasks to {out_json_path}")
     with open(coco_json_path, "r") as f:
         coco = json.load(f)
 
