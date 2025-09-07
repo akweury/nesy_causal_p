@@ -41,7 +41,7 @@ docker-detect:
 	$(MAKE) run-docker STEPS=detect
 
 docker-graph:
-    $(MAKE) run-docker STEPS=detect,graph.
+	$(MAKE) run-docker STEPS=detect,graph
 
 # ---- Run locally (macOS CPU) ----
 run-local:
