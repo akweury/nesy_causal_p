@@ -8,7 +8,7 @@ from typing import Dict, Any, List
 from config import load_config
 import config
 from gen_data.coco_data_processing import build_labelstudio_subset_with_bboxes
-
+from gen_data.filter_coco_by_objcount import filter_coco
 
 # ---------- 阶段占位符（逐步实现） ----------
 def stage_detect(cfg) -> Path:
@@ -171,18 +171,7 @@ def main():
     steps = [s.strip() for s in args.steps.split(",") if s.strip()]
     artifacts: Dict[str, Path] = {}
 
-    n_imgs, n_boxes = build_labelstudio_subset_with_bboxes(
-        coco_json_path=config.get_coco_path(args.remote) / "original" / "annotations" / "instances_val2017.json",
-        subset_dir=config.get_coco_path(args.remote) / "selected" / "val2017",
-        out_json_path=config.get_coco_path(args.remote) / "selected" / "annotations" / "labelstudio_import_subset_with_bbox.json",
-        image_field_name="img",
-        rect_field_name="obj",
-        rect_label_value="object",
-        max_images=None,  # 或者先生成前 500 张试试
-        skip_crowd=True,
-        id_from_filename=False
-    )
-    print(f"Built {n_imgs} tasks with {n_boxes} boxes.")
+    filter_coco(args)
 
     if "detect" in steps:
         artifacts["det"] = stage_detect(cfg)
