@@ -256,13 +256,16 @@ def stage_tune(cfg, graph_file: Path, model_file: Path) -> float:
     ckpt = torch.load(model_file, map_location=cfg.device)
 
     class EdgeMLP(torch.nn.Module):
-        def __init__(self,d):
+        def __init__(self, d):
             super().__init__()
             self.net = torch.nn.Sequential(
-                torch.nn.Linear(d,64), torch.nn.ReLU(),
-                torch.nn.Linear(64,32), torch.nn.ReLU(),
-                torch.nn.Linear(32,1))
-        def forward(self,x): return self.net(x).squeeze(-1)
+                torch.nn.Linear(d, 64), torch.nn.ReLU(),
+                torch.nn.Linear(64, 32), torch.nn.ReLU(),
+                torch.nn.Dropout(0.1),
+                torch.nn.Linear(32, 1)
+            )
+
+        def forward(self, x): return self.net(x).squeeze(-1)
 
     mdl = EdgeMLP(ckpt["in_dim"]).to(cfg.device)
     mdl.load_state_dict(ckpt["state_dict"]); mdl.eval()
@@ -289,6 +292,7 @@ def stage_tune(cfg, graph_file: Path, model_file: Path) -> float:
     # save
     out.write_text(json.dumps(best, indent=2))
     print(f"[tune] best tau={best['tau']:.2f}  F1={best['F1']:.3f}")
+
     return best["tau"]
 
 
