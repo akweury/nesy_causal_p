@@ -44,6 +44,13 @@ docker-graph:
 	$(MAKE) run-docker STEPS=detect,graph
 docker-grm:
 	$(MAKE) run-docker STEPS=detect,graph,train
+docker-infer:
+	$(MAKE) run-docker STEPS=detect,graph,train,infer
+docker-group-nms:
+	$(MAKE) run-docker STEPS=detect,graph,train,infer,groupnms
+docker-eval:
+	$(MAKE) run-docker STEPS=detect,graph,train,infer,groupnms,eval
+
 # ---- Run locally (macOS CPU) ----
 run-local:
 	CONFIG_PROFILE=local \
