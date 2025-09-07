@@ -34,12 +34,13 @@ run-docker:
 	  -e NUM_WORKERS=8 \
 	  -e MAX_IMAGES="$(MAX_IMAGES)" \
 	  $(IMAGE) \
-	  python -m src.run_coco --steps $(STEPS) --remote
+	  python -m src.run_coco --steps $(STEPS) --remote --t_intra 0.75 --t_inter 0.5
 
 # ---- Only detect in Docker (GPU) ----
 docker-detect:
 	$(MAKE) run-docker STEPS=detect
-
+docker-graph:
+    $(MAKE) run-docker STEPS=detect,graph
 # ---- Run locally (macOS CPU) ----
 run-local:
 	CONFIG_PROFILE=local \
