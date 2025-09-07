@@ -296,68 +296,128 @@ def stage_tune(cfg, graph_file: Path, model_file: Path) -> float:
     return best["tau"]
 
 
-def stage_infer_groups(cfg, model_file: Path, det_file: Path, tau=0.7) -> Path:
-    import json, torch
-    out = cfg.paths.outputs_dir / f"groups_tau{tau}.jsonl"
-    if out.exists(): return out
+def stage_infer_groups(cfg, model_file: Path, det_file: Path, tau: float = None) -> Path:
+    """
+    用训练好的边分类器对每张图的候选框两两打分，p>=tau 则合并为同组（并查集）。
+    输出: outputs/groups.jsonl, 每行:
+      {"image_id":..., "groups":[ [idxs...], [idxs...] ], "tau": 0.73}
+    """
+    import json, math, torch
+    from torchvision.ops import box_iou
 
+    out = cfg.paths.outputs_dir / "groups.jsonl"
+    if out.exists():
+        print(f"[infer] reuse {out}")
+        return out
+
+    # ---- 阈值优先级：显式 tau > tune.json > 默认 0.7
+    if tau is None:
+        tfile = cfg.paths.outputs_dir / "tune.json"
+        if tfile.exists():
+            try:
+                tau = float(json.loads(tfile.read_text())["tau"])
+            except Exception:
+                tau = 0.7
+        else:
+            tau = 0.7
+    print(f"[infer] using tau={tau:.3f}")
+
+    # ---- 加载模型（结构需与训练一致：含 Dropout）
     ckpt = torch.load(model_file, map_location=cfg.device)
-    class EdgeMLP(torch.nn.Module):
-        def __init__(self,d): super().__init__();
-        self.net=torch.nn.Sequential(torch.nn.Linear(d,64),torch.nn.ReLU(),
-                                     torch.nn.Linear(64,32),torch.nn.ReLU(),
-                                     torch.nn.Linear(32,1))
-        def forward(self,x): return self.net(x).squeeze(-1)
-    mdl = EdgeMLP(ckpt["in_dim"]).to(cfg.device); mdl.load_state_dict(ckpt["state_dict"]); mdl.eval()
 
-    def feats_for(img_rec):
-        import math
-        def iou(b1,b2):
-            x1=max(b1[0],b2[0]); y1=max(b1[1],b2[1])
-            x2=min(b1[2],b2[2]); y2=min(b1[3],b2[3])
-            inter=max(0,x2-x1)*max(0,y2-y1)
-            a1=(b1[2]-b1[0])*(b1[3]-b1[1]); a2=(b2[2]-b2[0])*(b2[3]-b2[1])
-            u=a1+a2-inter; return inter/u if u>0 else 0.0
-        W,H = img_rec["size"]; boxes=img_rec["boxes"]; labels=img_rec["labels"]; scores=img_rec["scores"]
-        cs=[]; P=[]
-        for i in range(len(boxes)):
-            for j in range(i+1,len(boxes)):
-                b1,b2=boxes[i],boxes[j]
-                cx1,cy1=(0.5*(b1[0]+b1[2]),0.5*(b1[1]+b1[3]))
-                cx2,cy2=(0.5*(b2[0]+b2[2]),0.5*(b2[1]+b2[3]))
-                dist=((cx1-cx2)**2+(cy1-cy2)**2)**0.5/(W*H)**0.5
-                same=1.0 if labels[i]==labels[j] else 0.0
-                mscore=min(scores[i],scores[j])
-                P.append([iou(b1,b2), dist, same, mscore]); cs.append((i,j))
-        return cs, torch.tensor(P, dtype=torch.float32, device=cfg.device)
+    class EdgeMLP(torch.nn.Module):
+        def __init__(self, d):
+            super().__init__()
+            self.net = torch.nn.Sequential(
+                torch.nn.Linear(d, 64), torch.nn.ReLU(),
+                torch.nn.Linear(64, 32), torch.nn.ReLU(),
+                torch.nn.Dropout(0.1),
+                torch.nn.Linear(32, 1)
+            )
+        def forward(self, x): return self.net(x).squeeze(-1)
+
+    mdl = EdgeMLP(ckpt["in_dim"]).to(cfg.device)
+    mdl.load_state_dict(ckpt["state_dict"])  # 结构一致即可 strict=True
+    mdl.eval()
+
+    def make_pairs(rec):
+        """生成成对特征与索引；可按同类先筛选以降复杂度。"""
+        boxes  = rec["boxes"]
+        labels = rec["labels"]
+        scores = rec["scores"]
+        W, H   = rec["size"]
+        n = len(boxes)
+        feats = []
+        pairs = []
+
+        # 可选：仅同类配对；若想全对，改为 range(i+1,n)
+        same_class_only = True
+
+        # 预先张量化以便 IoU 批量算（也可逐对算）
+        import torch
+        B = torch.tensor(boxes, dtype=torch.float32)
+
+        for c in sorted(set(labels)):
+            idxs = [i for i,l in enumerate(labels) if (l==c or not same_class_only)]
+            m = len(idxs)
+            if m <= 1:
+                if same_class_only:  # 若仅同类且该类只有1个，仍可与全体配对（按需）
+                    continue
+            for a in range(m):
+                i = idxs[a]
+                bi = boxes[i]
+                cx1, cy1 = 0.5*(bi[0]+bi[2]), 0.5*(bi[1]+bi[3])
+                for b in range(a+1, m):
+                    j = idxs[b]
+                    bj = boxes[j]
+                    cx2, cy2 = 0.5*(bj[0]+bj[2]), 0.5*(bj[1]+bj[3])
+                    # IoU
+                    iou = float(box_iou(
+                        B[i].unsqueeze(0), B[j].unsqueeze(0)
+                    ).item())
+                    # 归一化中心距
+                    dist = math.hypot(cx1-cx2, cy1-cy2) / math.sqrt(W*H)
+                    same = 1.0 if labels[i]==labels[j] else 0.0
+                    msc  = float(min(scores[i], scores[j]))
+                    feats.append([iou, dist, same, msc])
+                    pairs.append((i,j))
+        return pairs, torch.tensor(feats, dtype=torch.float32, device=cfg.device)
 
     def uf_make(n): return list(range(n))
     def uf_find(p,x):
-        while p[x]!=x: p[x]=p[p[x]]; x=p[x]
+        while p[x]!=x:
+            p[x]=p[p[x]]
+            x=p[x]
         return x
     def uf_union(p,a,b):
-        ra,rb=uf_find(p,a),uf_find(p,b)
+        ra, rb = uf_find(p,a), uf_find(p,b)
         if ra!=rb: p[rb]=ra
 
-    with open(det_file) as f_in, open(out,"w") as f_out, torch.no_grad():
+    with open(det_file) as f_in, open(out, "w") as f_out, torch.no_grad():
         for line in f_in:
-            rec=json.loads(line); n=len(rec["boxes"])
-            parents=uf_make(n)
-            cs, X = feats_for(rec)
-            if len(cs):
-                probs=torch.sigmoid(mdl(X)).tolist()
-                for (i,j),p in zip(cs, probs):
-                    if p>=tau: uf_union(parents,i,j)
-            # 收集组
-            groups={}
+            rec = json.loads(line)
+            n = len(rec["boxes"])
+            parents = uf_make(n)
+            pairs, X = make_pairs(rec)
+            if len(pairs):
+                probs = torch.sigmoid(mdl(X)).tolist()
+                for (i,j), p in zip(pairs, probs):
+                    if p >= tau:
+                        uf_union(parents, i, j)
+            # 收集连通分量为组
+            comp = {}
             for i in range(n):
-                r=uf_find(parents,i)
-                groups.setdefault(r,[]).append(i)
-            groups_list=[v for v in groups.values() if len(v)>=1]
-            f_out.write(json.dumps({"image_id":rec["image_id"],"groups":groups_list})+"\n")
+                r = uf_find(parents, i)
+                comp.setdefault(r, []).append(i)
+            groups = [v for v in comp.values() if len(v) >= 1]
+            f_out.write(json.dumps({
+                "image_id": rec["image_id"],
+                "groups": groups,
+                "tau": tau
+            }) + "\n")
+
     print(f"[infer] wrote {out}")
     return out
-
 
 def stage_std_nms(cfg, det_file: Path, groups_file: Path) -> Path:
     """
