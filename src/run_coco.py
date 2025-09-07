@@ -240,6 +240,7 @@ def stage_train_grm(cfg, graph_file: Path) -> Path:
     print(f"[train] saved {out}  best_loss={best_loss:.4f}")
     return out
 
+
 def stage_tune(cfg, graph_file: Path, model_file: Path) -> float:
     import json, torch, numpy as np
     from pathlib import Path
@@ -249,7 +250,8 @@ def stage_tune(cfg, graph_file: Path, model_file: Path) -> float:
     # ---- load graphs & split by image_id ----
     recs = [json.loads(l) for l in open(graph_file)]
     recs.sort(key=lambda r: r["image_id"])
-    n = len(recs); split = max(1, int(0.9*n))
+    n = len(recs);
+    split = max(1, int(0.9 * n))
     val = recs[split:]
 
     # ---- load model ----
@@ -268,7 +270,8 @@ def stage_tune(cfg, graph_file: Path, model_file: Path) -> float:
         def forward(self, x): return self.net(x).squeeze(-1)
 
     mdl = EdgeMLP(ckpt["in_dim"]).to(cfg.device)
-    mdl.load_state_dict(ckpt["state_dict"]); mdl.eval()
+    mdl.load_state_dict(ckpt["state_dict"]);
+    mdl.eval()
 
     # ---- collect probs on val pairs ----
     y_true, y_prob = [], []
@@ -281,14 +284,15 @@ def stage_tune(cfg, graph_file: Path, model_file: Path) -> float:
             y_true.extend([p["label"] for p in pairs])
             y_prob.extend(prob)
 
-    y_true = np.array(y_true); y_prob = np.array(y_prob)
+    y_true = np.array(y_true);
+    y_prob = np.array(y_prob)
     # ---- sweep thresholds ----
-    best = {"tau": 0.5, "P":0, "R":0, "F1":0}
+    best = {"tau": 0.5, "P": 0, "R": 0, "F1": 0}
     for tau in np.linspace(0.1, 0.9, 17):
         pred = (y_prob >= tau).astype(int)
-        P,R,F,_ = prf(y_true, pred, average="binary", zero_division=0)
+        P, R, F, _ = prf(y_true, pred, average="binary", zero_division=0)
         if F > best["F1"]:
-            best = {"tau": float(tau), "P":float(P), "R":float(R), "F1":float(F)}
+            best = {"tau": float(tau), "P": float(P), "R": float(R), "F1": float(F)}
     # save
     out.write_text(json.dumps(best, indent=2))
     print(f"[tune] best tau={best['tau']:.2f}  F1={best['F1']:.3f}")
@@ -334,6 +338,7 @@ def stage_infer_groups(cfg, model_file: Path, det_file: Path, tau: float = None)
                 torch.nn.Dropout(0.1),
                 torch.nn.Linear(32, 1)
             )
+
         def forward(self, x): return self.net(x).squeeze(-1)
 
     mdl = EdgeMLP(ckpt["in_dim"]).to(cfg.device)
@@ -342,10 +347,10 @@ def stage_infer_groups(cfg, model_file: Path, det_file: Path, tau: float = None)
 
     def make_pairs(rec):
         """生成成对特征与索引；可按同类先筛选以降复杂度。"""
-        boxes  = rec["boxes"]
+        boxes = rec["boxes"]
         labels = rec["labels"]
         scores = rec["scores"]
-        W, H   = rec["size"]
+        W, H = rec["size"]
         n = len(boxes)
         feats = []
         pairs = []
@@ -358,7 +363,7 @@ def stage_infer_groups(cfg, model_file: Path, det_file: Path, tau: float = None)
         B = torch.tensor(boxes, dtype=torch.float32)
 
         for c in sorted(set(labels)):
-            idxs = [i for i,l in enumerate(labels) if (l==c or not same_class_only)]
+            idxs = [i for i, l in enumerate(labels) if (l == c or not same_class_only)]
             m = len(idxs)
             if m <= 1:
                 if same_class_only:  # 若仅同类且该类只有1个，仍可与全体配对（按需）
@@ -366,32 +371,35 @@ def stage_infer_groups(cfg, model_file: Path, det_file: Path, tau: float = None)
             for a in range(m):
                 i = idxs[a]
                 bi = boxes[i]
-                cx1, cy1 = 0.5*(bi[0]+bi[2]), 0.5*(bi[1]+bi[3])
-                for b in range(a+1, m):
+                cx1, cy1 = 0.5 * (bi[0] + bi[2]), 0.5 * (bi[1] + bi[3])
+                for b in range(a + 1, m):
                     j = idxs[b]
                     bj = boxes[j]
-                    cx2, cy2 = 0.5*(bj[0]+bj[2]), 0.5*(bj[1]+bj[3])
+                    cx2, cy2 = 0.5 * (bj[0] + bj[2]), 0.5 * (bj[1] + bj[3])
                     # IoU
                     iou = float(box_iou(
                         B[i].unsqueeze(0), B[j].unsqueeze(0)
                     ).item())
                     # 归一化中心距
-                    dist = math.hypot(cx1-cx2, cy1-cy2) / math.sqrt(W*H)
-                    same = 1.0 if labels[i]==labels[j] else 0.0
-                    msc  = float(min(scores[i], scores[j]))
+                    dist = math.hypot(cx1 - cx2, cy1 - cy2) / math.sqrt(W * H)
+                    same = 1.0 if labels[i] == labels[j] else 0.0
+                    msc = float(min(scores[i], scores[j]))
                     feats.append([iou, dist, same, msc])
-                    pairs.append((i,j))
+                    pairs.append((i, j))
         return pairs, torch.tensor(feats, dtype=torch.float32, device=cfg.device)
 
-    def uf_make(n): return list(range(n))
-    def uf_find(p,x):
-        while p[x]!=x:
-            p[x]=p[p[x]]
-            x=p[x]
+    def uf_make(n):
+        return list(range(n))
+
+    def uf_find(p, x):
+        while p[x] != x:
+            p[x] = p[p[x]]
+            x = p[x]
         return x
-    def uf_union(p,a,b):
-        ra, rb = uf_find(p,a), uf_find(p,b)
-        if ra!=rb: p[rb]=ra
+
+    def uf_union(p, a, b):
+        ra, rb = uf_find(p, a), uf_find(p, b)
+        if ra != rb: p[rb] = ra
 
     with open(det_file) as f_in, open(out, "w") as f_out, torch.no_grad():
         for line in f_in:
@@ -401,7 +409,7 @@ def stage_infer_groups(cfg, model_file: Path, det_file: Path, tau: float = None)
             pairs, X = make_pairs(rec)
             if len(pairs):
                 probs = torch.sigmoid(mdl(X)).tolist()
-                for (i,j), p in zip(pairs, probs):
+                for (i, j), p in zip(pairs, probs):
                     if p >= tau:
                         uf_union(parents, i, j)
             # 收集连通分量为组
@@ -419,18 +427,64 @@ def stage_infer_groups(cfg, model_file: Path, det_file: Path, tau: float = None)
     print(f"[infer] wrote {out}")
     return out
 
-def stage_std_nms(cfg, det_file: Path, groups_file: Path) -> Path:
+
+def stage_std_nms(cfg, det_file: Path, iou_thr: float = 0.5,
+                  score_thr: float = 0.0, topk_per_class: int = 300) -> Path:
     """
-    Group-aware NMS：组内/组间不同阈值
-    输出: cfg.paths.outputs_dir / detections_groupnms.jsonl
+    标准 NMS（类别内）。输入: detections.jsonl
+    输出: outputs/detections_std_nms.jsonl（与输入同结构）
     """
+    import json, torch
+    from torchvision.ops import nms
+
     out = cfg.paths.outputs_dir / "detections_std_nms.jsonl"
     if out.exists():
-        print(f"[stdNMS] reuse {out}");
+        print(f"[stdnms] reuse {out}")
         return out
-    # TODO: 读取 det_file + groups_file，执行 group-aware NMS，写 JSONL
-    out.write_text("")
-    print(f"[stdNMS] wrote {out}")
+
+    with open(det_file) as fin, open(out, "w") as fout:
+        for line in fin:
+            rec = json.loads(line)
+            boxes = torch.tensor(rec["boxes"], dtype=torch.float32)
+            scores = torch.tensor(rec["scores"], dtype=torch.float32)
+            labels = torch.tensor(rec["labels"], dtype=torch.int64)
+
+            keep_all = []
+            for c in labels.unique().tolist():
+                m = (labels == c)
+                b = boxes[m];
+                s = scores[m]
+                if score_thr > 0:
+                    km = (s >= score_thr)
+                    b, s = b[km], s[km]
+                    idx = torch.where(m)[0][km]
+                else:
+                    idx = torch.where(m)[0]
+
+                if b.numel() == 0:
+                    continue
+                # 可选：先按分数截断 top-k
+                if topk_per_class and len(s) > topk_per_class:
+                    k_idx = torch.topk(s, topk_per_class).indices
+                    b, s, idx = b[k_idx], s[k_idx], idx[k_idx]
+
+                k = nms(b, s, iou_thr)
+                keep_all.append(idx[k])
+
+            if keep_all:
+                keep = torch.cat(keep_all).tolist()
+            else:
+                keep = []
+
+            rec2 = {
+                **rec,
+                "boxes": [rec["boxes"][i] for i in keep],
+                "scores": [rec["scores"][i] for i in keep],
+                "labels": [rec["labels"][i] for i in keep],
+            }
+            fout.write(json.dumps(rec2) + "\n")
+
+    print(f"[stdnms] wrote {out} (iou={iou_thr})")
     return out
 
 
