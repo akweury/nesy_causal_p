@@ -143,6 +143,7 @@ def main():
     parser.add_argument("--steps", type=str, default="detect,graph,train,infer,groupnms,eval",
                         help="逗号分隔：detect,graph,train,infer,groupnms,eval")
     parser.add_argument("--profile", type=str, default=None, help="local|remote (覆盖 CONFIG_PROFILE)")
+    parser.add_argument("--remote", action="store_true")
     args = parser.parse_args()
 
     if args.profile:
