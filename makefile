@@ -1,7 +1,7 @@
 # ===== Config =====
 IMAGE      := grm:latest
 CODE_DIR   := /home/ml-jsha/nesy_causal_p
-DATA_DIR   := /home/ml-jsha/storage/GRM_Data/coco_2017/selected   # contains val2017/ and annotations/
+DATA_DIR   := /home/ml-jsha/storage/GRM_Data/coco_2017   # contains val2017/ and annotations/
 OUT_DIR    := /home/ml-jsha/storage/GRM_output
 
 # Pipeline controls
@@ -23,7 +23,7 @@ build:
 run-docker:
 	docker run --gpus all --rm -it \
 	  -v "$(CODE_DIR):/app" \
-	  -v "$(DATA_DIR):/gen_data/selected" \
+	  -v "$(DATA_DIR):/gen_data" \
 	  -v "$(OUT_DIR):/grm_output" \
 	  -e CONFIG_PROFILE=remote \
 	  -e DATA_ROOT=/gen_data \
