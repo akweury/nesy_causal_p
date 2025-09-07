@@ -147,4 +147,6 @@ python run_coco.py --steps detect
 ##### Run Detect
 ``` 
 make docker-detect GPU_ID=0
+make docker-graph GPU_ID=0
+
 ```

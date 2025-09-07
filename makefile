@@ -39,8 +39,10 @@ run-docker:
 # ---- Only detect in Docker (GPU) ----
 docker-detect:
 	$(MAKE) run-docker STEPS=detect
+
 docker-graph:
     $(MAKE) run-docker STEPS=detect,graph
+
 # ---- Run locally (macOS CPU) ----
 run-local:
 	CONFIG_PROFILE=local \
