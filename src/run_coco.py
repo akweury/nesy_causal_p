@@ -9,6 +9,7 @@ from config import load_config
 import config
 from gen_data.coco_data_processing import build_labelstudio_subset_with_bboxes
 from gen_data.filter_coco_by_objcount import filter_coco
+import numpy as np
 
 
 # ---------- 阶段占位符（逐步实现） ----------
@@ -487,6 +488,7 @@ def stage_std_nms(cfg, det_file: Path, iou_thr: float = 0.5,
     print(f"[stdnms] wrote {out} (iou={iou_thr})")
     return out
 
+
 def stage_group_nms(cfg, det_file: Path, groups_file: Path,
                     t_intra: float = 0.7, t_inter: float = 0.5,
                     score_thr: float = 0.0, topk_per_class: int = 300) -> Path:
@@ -505,7 +507,8 @@ def stage_group_nms(cfg, det_file: Path, groups_file: Path,
 
     out = cfg.paths.outputs_dir / "detections_groupnms.jsonl"
     if out.exists():
-        print(f"[gNMS] reuse {out}"); return out
+        print(f"[gNMS] reuse {out}");
+        return out
 
     # 读 groups → {image_id: group_id array (len=N, -1 表示未分组)}
     gid_map = {}
@@ -518,7 +521,7 @@ def stage_group_nms(cfg, det_file: Path, groups_file: Path,
     with open(det_file) as fin, open(out, "w") as fout:
         for line in fin:
             rec = json.loads(line)
-            boxes  = torch.tensor(rec["boxes"],  dtype=torch.float32)
+            boxes = torch.tensor(rec["boxes"], dtype=torch.float32)
             scores = torch.tensor(rec["scores"], dtype=torch.float32)
             labels = torch.tensor(rec["labels"], dtype=torch.int64)
 
@@ -539,7 +542,8 @@ def stage_group_nms(cfg, det_file: Path, groups_file: Path,
                 m = (labels == c)
                 if not torch.any(m):
                     continue
-                b = boxes[m]; s = scores[m]
+                b = boxes[m];
+                s = scores[m]
                 idx_orig = torch.where(m)[0]
                 grp = group_id[m]
 
@@ -563,16 +567,16 @@ def stage_group_nms(cfg, det_file: Path, groups_file: Path,
                         break
                     ious = box_iou(b[i].unsqueeze(0), b[rest]).squeeze(0)
                     same = (grp[rest] == grp[i]) & (grp[i] >= 0)
-                    thr  = torch.where(same,
-                                       torch.full_like(ious, float(t_intra)),
-                                       torch.full_like(ious, float(t_inter)))
+                    thr = torch.where(same,
+                                      torch.full_like(ious, float(t_intra)),
+                                      torch.full_like(ious, float(t_inter)))
                     mask = ious <= thr
                     order = rest[mask]
 
             keep = torch.stack(keep_all).tolist() if len(keep_all) else []
             rec2 = {
                 **rec,
-                "boxes":  [rec["boxes"][i]  for i in keep],
+                "boxes": [rec["boxes"][i] for i in keep],
                 "scores": [rec["scores"][i] for i in keep],
                 "labels": [rec["labels"][i] for i in keep],
                 "params": {"t_intra": t_intra, "t_inter": t_inter,
@@ -583,11 +587,20 @@ def stage_group_nms(cfg, det_file: Path, groups_file: Path,
     print(f"[gNMS] wrote {out} (t_intra={t_intra}, t_inter={t_inter})")
     return out
 
+
 def stage_eval_coco(cfg, det_file: Path, ann_file: Path = None, iou_type: str = "bbox") -> dict:
     """
     评测 COCO mAP（bbox）。输入: detections_*.jsonl
     返回: 指标字典，同时保存到 outputs/eval_<stem>.json
     """
+    # numpy 1.24+ 兼容 old aliases
+    if not hasattr(np, "float"):
+        np.float = float
+    if not hasattr(np, "int"):
+        np.int = int
+    if not hasattr(np, "bool"):
+        np.bool = bool
+
     import json, math
     from pycocotools.coco import COCO
     from pycocotools.cocoeval import COCOeval
@@ -606,8 +619,8 @@ def stage_eval_coco(cfg, det_file: Path, ann_file: Path = None, iou_type: str = 
                 x1, y1, x2, y2 = map(float, b)
                 results.append({
                     "image_id": img_id,
-                    "category_id": int(c),             # 需与GT类别ID一致
-                    "bbox": [x1, y1, x2 - x1, y2 - y1],# xywh
+                    "category_id": int(c),  # 需与GT类别ID一致
+                    "bbox": [x1, y1, x2 - x1, y2 - y1],  # xywh
                     "score": float(s)
                 })
 
@@ -618,7 +631,9 @@ def stage_eval_coco(cfg, det_file: Path, ann_file: Path = None, iou_type: str = 
     # 只评测出现过的图，避免全量跑慢
     if img_ids:
         E.params.imgIds = sorted(img_ids)
-    E.evaluate(); E.accumulate(); E.summarize()
+    E.evaluate();
+    E.accumulate();
+    E.summarize()
 
     # COCOeval.stats: [AP, AP50, AP75, APs, APm, APl, AR1, AR10, AR100, ARs, ARm, ARl]
     stats = E.stats.tolist() if hasattr(E.stats, "tolist") else list(E.stats)
