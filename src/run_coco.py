@@ -502,62 +502,62 @@ def stage_train_grm(cfg, graph_file: Path = None) -> Path:
 
 def stage_tune(cfg, graph_file: Path, model_file: Path) -> float:
     import json, torch, numpy as np
-    from pathlib import Path
     from sklearn.metrics import precision_recall_fscore_support as prf
 
-    out = cfg.paths.outputs_dir / "tune.json"
-    # ---- load graphs & split by image_id ----
     recs = [json.loads(l) for l in open(graph_file)]
     recs.sort(key=lambda r: r["image_id"])
-    n = len(recs);
-    split = max(1, int(0.9 * n))
+    split = max(1, int(0.9*len(recs)))
     val = recs[split:]
 
-    # ---- load model ----
     ckpt = torch.load(model_file, map_location=cfg.device)
 
     class EdgeMLP(torch.nn.Module):
-        def __init__(self, d):
+        def __init__(self,d):
             super().__init__()
-            self.net = torch.nn.Sequential(
-                torch.nn.Linear(d, 64), torch.nn.ReLU(),
-                torch.nn.Linear(64, 32), torch.nn.ReLU(),
+            self.net=torch.nn.Sequential(
+                torch.nn.Linear(d,64), torch.nn.ReLU(),
+                torch.nn.Linear(64,32), torch.nn.ReLU(),
                 torch.nn.Dropout(0.1),
-                torch.nn.Linear(32, 1)
-            )
+                torch.nn.Linear(32,1))
+        def forward(self,x): return self.net(x).squeeze(-1)
 
-        def forward(self, x): return self.net(x).squeeze(-1)
+    mdl = EdgeMLP(ckpt["in_dim"]).to(cfg.device); mdl.load_state_dict(ckpt["state_dict"]); mdl.eval()
 
-    mdl = EdgeMLP(ckpt["in_dim"]).to(cfg.device)
-    mdl.load_state_dict(ckpt["state_dict"]);
-    mdl.eval()
-
-    # ---- collect probs on val pairs ----
-    y_true, y_prob = [], []
+    y_true, logits = [], []
     with torch.no_grad():
         for r in val:
-            pairs = r.get("pairs") or []
-            if not pairs: continue
-            X = torch.tensor([p["feat"] for p in pairs], dtype=torch.float32, device=cfg.device)
-            prob = torch.sigmoid(mdl(X)).cpu().numpy()
-            y_true.extend([p["label"] for p in pairs])
-            y_prob.extend(prob)
+            ps = r.get("pairs") or []
+            if not ps: continue
+            X = torch.tensor([p["feat"] for p in ps], dtype=torch.float32, device=cfg.device)
+            lg = mdl(X).cpu().numpy()
+            logits.extend(lg)
+            y_true.extend([p["label"] for p in ps])
 
-    y_true = np.array(y_true);
-    y_prob = np.array(y_prob)
-    # ---- sweep thresholds ----
-    best = {"tau": 0.5, "P": 0, "R": 0, "F1": 0}
-    for tau in np.linspace(0.1, 0.9, 17):
-        pred = (y_prob >= tau).astype(int)
-        P, R, F, _ = prf(y_true, pred, average="binary", zero_division=0)
+    import numpy as np
+    y_true = np.array(y_true)
+    logits = np.array(logits)
+    probs  = 1/(1+np.exp(-logits))
+
+    # 打印分位数，确认量级
+    qs = np.quantile(probs, [0.5, 0.9, 0.95, 0.99])
+    print(f"[tune] prob quantiles p50={qs[0]:.3f} p90={qs[1]:.3f} p95={qs[2]:.3f} p99={qs[3]:.3f}")
+
+    # 方案A：从预测值里取候选阈值（更稳）
+    cands = np.unique(np.round(probs, 5))
+    # 也可追加一个细扫低区间
+    cands = np.unique(np.concatenate([cands, np.linspace(0.005, 0.15, 60)]))
+
+    best = {"tau":0.5, "P":0, "R":0, "F1":0}
+    for tau in cands:
+        yp = (probs >= tau).astype(int)
+        P,R,F,_ = prf(y_true, yp, average="binary", zero_division=0)
         if F > best["F1"]:
-            best = {"tau": float(tau), "P": float(P), "R": float(R), "F1": float(F)}
-    # save
+            best = {"tau": float(tau), "P":float(P), "R":float(R), "F1":float(F)}
+
+    out = cfg.paths.outputs_dir / "tune.json"
     out.write_text(json.dumps(best, indent=2))
-    print(f"[tune] best tau={best['tau']:.2f}  F1={best['F1']:.3f}")
-
+    print(f"[tune] best tau={best['tau']:.3f}  F1={best['F1']:.3f}  P={best['P']:.3f}  R={best['R']:.3f}")
     return best["tau"]
-
 
 def stage_infer_groups(cfg, model_file: Path, det_file: Path, tau: float = None) -> Path:
     """
