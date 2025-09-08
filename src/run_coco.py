@@ -561,132 +561,185 @@ def stage_tune(cfg, graph_file: Path, model_file: Path) -> float:
 
 def stage_infer_groups(cfg, model_file: Path, det_file: Path, tau: float = None) -> Path:
     """
-    用训练好的边分类器对每张图的候选框两两打分，p>=tau 则合并为同组（并查集）。
-    输出: outputs/groups.jsonl, 每行:
-      {"image_id":..., "groups":[ [idxs...], [idxs...] ], "tau": 0.73}
+    读 detections.jsonl & 训练好的边分类器 → 并查集合并成组
+    写 outputs/groups.jsonl（含 kept 原始索引）+ groups_stats.json
+    环境变量：
+      SAME_CLASS_ONLY=1|0   MIN_SCORE=0.0..1.0   TOPK_PER_CLASS=300
+      K_NEI=50              BATCH=65536
     """
-    import json, math, torch
+    import os, json, math, torch, numpy as np
     from torchvision.ops import box_iou
 
-    out = cfg.paths.outputs_dir / f"groups.jsonl"
+    SAME_CLASS_ONLY = os.getenv("SAME_CLASS_ONLY","1")=="1"
+    MIN_SCORE       = float(os.getenv("MIN_SCORE","0.0"))
+    TOPK_PER_CLASS  = int(os.getenv("TOPK_PER_CLASS","300"))
+    K_NEI           = int(os.getenv("K_NEI","50"))
+    BATCH           = int(os.getenv("BATCH","65536"))
+
+    out = cfg.paths.outputs_dir / "groups.jsonl"
+    stats_out = cfg.paths.outputs_dir / "groups_stats.json"
     if out.exists():
         print(f"[infer] reuse {out}")
         return out
 
-    # ---- 阈值优先级：显式 tau > tune.json > 默认 0.7
+    # --- model ---
+    ckpt = torch.load(model_file, map_location=cfg.device)
+    class EdgeMLP(torch.nn.Module):
+        def __init__(self,d):
+            super().__init__()
+            self.net=torch.nn.Sequential(
+                torch.nn.Linear(d,64), torch.nn.ReLU(),
+                torch.nn.Linear(64,32), torch.nn.ReLU(),
+                torch.nn.Dropout(0.1),
+                torch.nn.Linear(32,1))
+        def forward(self,x): return self.net(x).squeeze(-1)
+    mdl = EdgeMLP(ckpt["in_dim"]).to(cfg.device); mdl.load_state_dict(ckpt["state_dict"]); mdl.eval()
+
+    # --- tau / T ---
+    calT=None
     if tau is None:
         tfile = cfg.paths.outputs_dir / "tune.json"
         if tfile.exists():
-            try:
-                tau = float(json.loads(tfile.read_text())["tau"])
-            except Exception:
-                tau = 0.7
-        else:
-            tau = 0.7
-    print(f"[infer] using tau={tau:.3f}")
+            tj=json.loads(tfile.read_text()); tau=float(tj.get("tau",0.7)); calT=tj.get("T",None)
+        else: tau=0.7
+    print(f"[infer] tau={tau:.3f} T={calT if calT is not None else 'None'} "
+          f"same_only={int(SAME_CLASS_ONLY)} min_score={MIN_SCORE} k_nei={K_NEI}")
 
-    # ---- 加载模型（结构需与训练一致：含 Dropout）
-    ckpt = torch.load(model_file, map_location=cfg.device)
-
-    class EdgeMLP(torch.nn.Module):
-        def __init__(self, d):
-            super().__init__()
-            self.net = torch.nn.Sequential(
-                torch.nn.Linear(d, 64), torch.nn.ReLU(),
-                torch.nn.Linear(64, 32), torch.nn.ReLU(),
-                torch.nn.Dropout(0.1),
-                torch.nn.Linear(32, 1)
-            )
-
-        def forward(self, x): return self.net(x).squeeze(-1)
-
-    mdl = EdgeMLP(ckpt["in_dim"]).to(cfg.device)
-    mdl.load_state_dict(ckpt["state_dict"])  # 结构一致即可 strict=True
-    mdl.eval()
-
-    def make_pairs(rec):
-        """生成成对特征与索引；可按同类先筛选以降复杂度。"""
-        boxes = rec["boxes"]
-        labels = rec["labels"]
-        scores = rec["scores"]
-        W, H = rec["size"]
-        n = len(boxes)
-        feats = []
-        pairs = []
-
-        # 可选：仅同类配对；若想全对，改为 range(i+1,n)
-        same_class_only = True
-
-        # 预先张量化以便 IoU 批量算（也可逐对算）
-        import torch
-        B = torch.tensor(boxes, dtype=torch.float32)
-
-        for c in sorted(set(labels)):
-            idxs = [i for i, l in enumerate(labels) if (l == c or not same_class_only)]
-            m = len(idxs)
-            if m <= 1:
-                if same_class_only:  # 若仅同类且该类只有1个，仍可与全体配对（按需）
-                    continue
-            for a in range(m):
-                i = idxs[a]
-                bi = boxes[i]
-                cx1, cy1 = 0.5 * (bi[0] + bi[2]), 0.5 * (bi[1] + bi[3])
-                for b in range(a + 1, m):
-                    j = idxs[b]
-                    bj = boxes[j]
-                    cx2, cy2 = 0.5 * (bj[0] + bj[2]), 0.5 * (bj[1] + bj[3])
-                    # IoU
-                    iou = float(box_iou(
-                        B[i].unsqueeze(0), B[j].unsqueeze(0)
-                    ).item())
-                    # 归一化中心距
-                    dist = math.hypot(cx1 - cx2, cy1 - cy2) / math.sqrt(W * H)
-                    same = 1.0 if labels[i] == labels[j] else 0.0
-                    msc = float(min(scores[i], scores[j]))
-                    feats.append([iou, dist, same, msc])
-                    pairs.append((i, j))
-        return pairs, torch.tensor(feats, dtype=torch.float32, device=cfg.device)
-
-    def uf_make(n):
-        return list(range(n))
-
-    def uf_find(p, x):
-        while p[x] != x:
-            p[x] = p[p[x]]
-            x = p[x]
+    # --- utils ---
+    def uf_make(n): return list(range(n))
+    def uf_find(p,x):
+        while p[x]!=x: p[x]=p[p[x]]; x=p[x]
         return x
+    def uf_union(p,a,b):
+        ra,rb=uf_find(p,a),uf_find(p,b)
+        if ra!=rb: p[rb]=ra
 
-    def uf_union(p, a, b):
-        ra, rb = uf_find(p, a), uf_find(p, b)
-        if ra != rb: p[rb] = ra
+    def centers(boxes):
+        b=np.asarray(boxes,np.float32)
+        return (0.5*(b[:,0]+b[:,2]), 0.5*(b[:,1]+b[:,3]))
 
-    with open(det_file) as f_in, open(out, "w") as f_out, torch.no_grad():
+    n_img=0; total_pairs=0; total_groups=0; multi_groups=0
+    with open(det_file) as f_in, open(out,"w") as f_out, torch.no_grad():
         for line in f_in:
-            rec = json.loads(line)
-            n = len(rec["boxes"])
+            rec=json.loads(line)
+            boxes0, scores0, labels0 = rec["boxes"], rec["scores"], rec["labels"]
+            W,H = rec["size"]; n0=len(boxes0)
+            if n0==0:
+                f_out.write(json.dumps({"image_id":rec["image_id"],"groups":[],"kept":[],"tau":tau})+"\n"); continue
+
+            # 过滤低分（记录原始索引）
+            keep_idx = [i for i,s in enumerate(scores0) if s>=MIN_SCORE]
+            if not keep_idx:
+                f_out.write(json.dumps({"image_id":rec["image_id"],"groups":[],"kept":[],"tau":tau})+"\n"); continue
+            boxes  = [boxes0[i]  for i in keep_idx]
+            scores = [scores0[i] for i in keep_idx]
+            labels = [labels0[i] for i in keep_idx]
+            kept   = keep_idx[:]   # 原始 det 索引
+
+            # 每类 top-k（继续保持原始索引映射）
+            if TOPK_PER_CLASS>0:
+                byc={}
+                for i,c in enumerate(labels): byc.setdefault(c, []).append((scores[i], i))
+                sel=[]
+                for c,lst in byc.items():
+                    lst.sort(reverse=True); sel.extend([i for _,i in lst[:TOPK_PER_CLASS]])
+                sel=sorted(set(sel))
+                boxes  = [boxes[i]  for i in sel]
+                scores = [scores[i] for i in sel]
+                labels = [labels[i] for i in sel]
+                kept   = [kept[i]   for i in sel]
+            n=len(boxes)
+            if n==0:
+                f_out.write(json.dumps({"image_id":rec["image_id"],"groups":[],"kept":[],"tau":tau})+"\n"); continue
+
             parents = uf_make(n)
-            pairs, X = make_pairs(rec)
-            if len(pairs):
-                probs = torch.sigmoid(mdl(X)).tolist()
-                for (i, j), p in zip(pairs, probs):
-                    if p >= tau:
-                        uf_union(parents, i, j)
-            # 收集连通分量为组
-            comp = {}
+            B = torch.tensor(boxes, dtype=torch.float32, device=cfg.device)
+            cx,cy = centers(boxes)
+
+            # 生成候选对
+            if SAME_CLASS_ONLY:
+                buckets={}
+                for i,c in enumerate(labels): buckets.setdefault(c, []).append(i)
+                families=buckets.values()
+            else:
+                families=[list(range(n))]
+
+            pair_idx=[]
+            for idxs in families:
+                m=len(idxs)
+                if m<=1: continue
+                if K_NEI>0:
+                    pts=np.stack([np.array(cx)[idxs], np.array(cy)[idxs]],1)
+                    for a in range(m):
+                        i=idxs[a]
+                        d2=np.sum((pts - pts[a])**2, axis=1)
+                        nn=np.argsort(d2)
+                        for nb in nn[1:1+min(K_NEI,m-1)]:
+                            j=idxs[int(nb)]
+                            if i<j: pair_idx.append((i,j))
+                else:
+                    for a in range(m):
+                        i=idxs[a]
+                        for b in range(a+1,m):
+                            j=idxs[b]; pair_idx.append((i,j))
+            if not pair_idx:
+                f_out.write(json.dumps({"image_id":rec["image_id"],"groups":[list(range(n))],"kept":kept,"tau":tau})+"\n")
+                continue
+            total_pairs+=len(pair_idx)
+
+            # 批前向
+            def make_feats(chunk):
+                i_idx=torch.tensor([p[0] for p in chunk], device=cfg.device)
+                j_idx=torch.tensor([p[1] for p in chunk], device=cfg.device)
+                iou = box_iou(B[i_idx], B[j_idx]).diagonal()
+                cx_i=torch.tensor([cx[p[0]] for p in chunk], device=cfg.device)
+                cy_i=torch.tensor([cy[p[0]] for p in chunk], device=cfg.device)
+                cx_j=torch.tensor([cx[p[1]] for p in chunk], device=cfg.device)
+                cy_j=torch.tensor([cy[p[1]] for p in chunk], device=cfg.device)
+                dist = torch.hypot(cx_i-cx_j, cy_i-cy_j) / math.sqrt(W*H)
+                same = torch.tensor([1.0 if labels[p[0]]==labels[p[1]] else 0.0 for p in chunk],
+                                    device=cfg.device)
+                msc  = torch.tensor([min(scores[p[0]], scores[p[1]]) for p in chunk], device=cfg.device)
+                return torch.stack([iou, dist, same, msc], 1)
+
+            ofs=0
+            while ofs<len(pair_idx):
+                chunk=pair_idx[ofs:ofs+BATCH]
+                X=make_feats(chunk)
+                logits=mdl(X)
+                probs=torch.sigmoid(logits/float(calT)) if calT else torch.sigmoid(logits)
+                sel=(probs>=tau).nonzero(as_tuple=False).squeeze(1).tolist()
+                for s in sel:
+                    i,j=chunk[s]; uf_union(parents,i,j)
+                ofs+=len(chunk)
+
+            # 收集组
+            roots={}
             for i in range(n):
-                r = uf_find(parents, i)
-                comp.setdefault(r, []).append(i)
-            groups = [v for v in comp.values() if len(v) >= 1]
+                r=uf_find(parents,i); roots.setdefault(r, []).append(i)
+            groups=list(roots.values())
+
+            # 写出（含 kept 原始索引）
             f_out.write(json.dumps({
                 "image_id": rec["image_id"],
-                "groups": groups,
+                "groups": groups,     # 组内成员是“当前局部索引”
+                "kept": kept,         # 映回原始 detections.jsonl 的索引
                 "tau": tau
-            }) + "\n")
+            })+"\n")
 
+            n_img+=1; total_groups+=len(groups); multi_groups+=sum(1 for g in groups if len(g)>=2)
+
+    stats={
+        "images": n_img,
+        "total_pairs": int(total_pairs),
+        "avg_groups_per_image": total_groups/max(n_img,1),
+        "multi_member_groups": int(multi_groups),
+        "multi_group_ratio": multi_groups/max(total_groups,1) if total_groups else 0.0
+    }
+    stats_out.write_text(json.dumps(stats, indent=2))
     print(f"[infer] wrote {out}")
+    print(f"[infer] stats -> {stats_out}  {stats}")
     return out
-
-
 def stage_std_nms(cfg, det_file: Path, iou_thr: float = 0.5,
                   score_thr: float = 0.0, topk_per_class: int = 300) -> Path:
     """
@@ -747,101 +800,172 @@ def stage_std_nms(cfg, det_file: Path, iou_thr: float = 0.5,
     return out
 
 
-def stage_group_nms(cfg, det_file: Path, groups_file: Path,
-                    t_intra: float = 0.7, t_inter: float = 0.5,
-                    score_thr: float = 0.0, topk_per_class: int = 300) -> Path:
+def stage_group_nms(cfg,
+                    det_file: Path,
+                    groups_file: Path,
+                    t_intra: float = 0.9,
+                    t_inter: float = 0.5) -> Path:
     """
-    Group-aware NMS（类别内NMS，但抑制阈值随“是否同组”而变）：
-      - 同组：用 t_intra（更宽松，减少错抑制）
-      - 跨组：用 t_inter（更严格，减少误保留）
-    输入:
-      det_file: detections.jsonl  (每行: boxes/scores/labels/size/image_id)
-      groups_file: groups.jsonl   (每行: {"image_id":..., "groups": [[idxs...], ...]})
-    输出:
-      outputs/detections_groupnms.jsonl
+    基于 groups.jsonl 的组感知 NMS：
+      - 同组采用高阈值 t_intra（更宽松，减少错抑制）
+      - 跨组采用低阈值 t_inter（更严格，抑冗余）
+    要求 groups.jsonl 每条记录含:
+      { "image_id": ..., "groups": [[局部idx...], ...], "kept": [原始det索引...], "tau": ... }
+
+    环境变量（可选）：
+      WBF=0|1              # 是否对同组且 IoU>t_intra 的被抑制框做组内融合 (Weighted Boxes Fusion-简化)
+      DEBUG_GNMS=0|1       # 打印调试信息
+      NMS_CLASSWISE=1|0    # 是否按类别分开做NMS（默认1，保持与COCO评测一致）
     """
-    import json, torch
+    import os, json, torch
+    from pathlib import Path
     from torchvision.ops import box_iou
+
     out = cfg.paths.outputs_dir / "detections_groupnms.jsonl"
-    if out.exists():
-        print(f"[gNMS] reuse {out}");
-        return out
+    out.parent.mkdir(parents=True, exist_ok=True)
 
-    # 读 groups → {image_id: group_id array (len=N, -1 表示未分组)}
+    WBF = os.getenv("WBF", "1") == "1"
+    DEBUG = os.getenv("DEBUG_GNMS", "0") == "1"
+    CLASSWISE = os.getenv("NMS_CLASSWISE", "1") == "1"
+
+    # 读取 groups 映射：image_id -> {"groups":..., "kept":...}
     gid_map = {}
-    with open(groups_file) as fg:
-        for line in fg:
-            r = json.loads(line)
-            # 暂时只存 groups 列表；具体到每张图时再展开成 group_id 向量
-            gid_map[r["image_id"]] = r["groups"]
+    with open(groups_file) as f:
+        for L in f:
+            r = json.loads(L)
+            gid_map[r["image_id"]] = r
 
-    with open(det_file) as fin, open(out, "w") as fout:
-        for line in fin:
-            rec = json.loads(line)
-            boxes = torch.tensor(rec["boxes"], dtype=torch.float32)
-            scores = torch.tensor(rec["scores"], dtype=torch.float32)
-            labels = torch.tensor(rec["labels"], dtype=torch.int64)
+    def _build_group_vector(n_det, rG):
+        """返回长度为 n_det 的 group_id 向量（默认-1），把组成员从局部idx映射回原始det索引。"""
+        grp = torch.full((n_det,), -1, dtype=torch.long)
+        if not rG:
+            return grp
+        kept = rG.get("kept", list(range(n_det)))
+        for g_id, members in enumerate(rG.get("groups", [])):
+            for m in members:
+                if 0 <= m < len(kept):
+                    orig = kept[m]
+                    if 0 <= orig < n_det:
+                        grp[orig] = g_id
+        return grp
 
-            N = len(boxes)
-            if N == 0:
-                fout.write(line);  # 空候选，原样写回
+    def _wbf_merge(boxes, scores, keep_idx):
+        """简单 WBF：将 keep_idx 的第一项视作赢家，其余按分数加权融合到赢家。"""
+        if len(keep_idx) <= 1:
+            return
+        idxs = torch.tensor(keep_idx, device=boxes.device, dtype=torch.long)
+        w = scores[idxs]
+        w = w / (w.sum() + 1e-8)
+        boxes[idxs[0]] = (boxes[idxs] * w[:, None]).sum(dim=0)
+        scores[idxs[0]] = scores[idxs].max()
+
+    def _gnms_single_image(rec, rG):
+        boxes = torch.tensor(rec["boxes"], dtype=torch.float32)
+        scores = torch.tensor(rec["scores"], dtype=torch.float32)
+        labels = torch.tensor(rec["labels"], dtype=torch.long)
+        n = boxes.size(0)
+
+        grp = _build_group_vector(n, rG)
+
+        kept_all = []   # 所有保留的全局索引
+        # 类别分桶
+        if CLASSWISE:
+            classes = torch.unique(labels)
+            class_iters = [(int(c.item()), torch.nonzero(labels == c, as_tuple=False).squeeze(1)) for c in classes]
+        else:
+            class_iters = [(-1, torch.arange(n, dtype=torch.long))]
+
+        for c, idxs in class_iters:
+            if idxs.numel() == 0:
                 continue
+            b = boxes[idxs].clone()
+            s = scores[idxs].clone()
+            g = grp[idxs].clone()
 
-            # 将 groups 映射为每个候选的 group_id（未出现为 -1）
-            group_id = torch.full((N,), -1, dtype=torch.int64)
-            gdef = gid_map.get(rec["image_id"], [])
-            for k, members in enumerate(gdef):
-                idx = torch.tensor([m for m in members if 0 <= m < N], dtype=torch.long)
-                if idx.numel(): group_id[idx] = k
+            # 按分数降序
+            order = torch.argsort(s, descending=True)
+            b, s, g, idxs = b[order], s[order], g[order], idxs[order]
 
-            keep_all = []
-            for c in labels.unique().tolist():
-                m = (labels == c)
-                if not torch.any(m):
-                    continue
-                b = boxes[m];
-                s = scores[m]
-                idx_orig = torch.where(m)[0]
-                grp = group_id[m]
+            keep_local = []
+            while idxs.numel() > 0:
+                i = 0
+                keep_local.append(int(idxs[i].item()))  # 记录全局索引
 
-                # 分数阈值与topk截断
-                if score_thr > 0:
-                    km = (s >= score_thr)
-                    b, s, idx_orig, grp = b[km], s[km], idx_orig[km], grp[km]
-                if b.numel() == 0:
-                    continue
-                if topk_per_class and len(s) > topk_per_class:
-                    k_idx = torch.topk(s, topk_per_class).indices
-                    b, s, idx_orig, grp = b[k_idx], s[k_idx], idx_orig[k_idx], grp[k_idx]
+                if idxs.numel() == 1:
+                    break
 
-                # group-aware greedy NMS
-                order = s.argsort(descending=True)
-                while order.numel() > 0:
-                    i = order[0].item()
-                    keep_all.append(idx_orig[i])
-                    rest = order[1:]
-                    if rest.numel() == 0:
-                        break
-                    ious = box_iou(b[i].unsqueeze(0), b[rest]).squeeze(0)
-                    same = (grp[rest] == grp[i]) & (grp[i] >= 0)
-                    thr = torch.where(same,
-                                      torch.full_like(ious, float(t_intra)),
-                                      torch.full_like(ious, float(t_inter)))
-                    mask = ious <= thr
-                    order = rest[mask]
+                rest = torch.arange(1, idxs.numel(), dtype=torch.long)
+                ious = box_iou(b[i].unsqueeze(0), b[rest]).squeeze(0)  # [rest]
 
-            keep = torch.stack(keep_all).tolist() if len(keep_all) else []
-            rec2 = {
-                **rec,
-                "boxes": [rec["boxes"][i] for i in keep],
-                "scores": [rec["scores"][i] for i in keep],
-                "labels": [rec["labels"][i] for i in keep],
-                "params": {"t_intra": t_intra, "t_inter": t_inter,
-                           "score_thr": score_thr, "topk_per_class": topk_per_class}
-            }
-            fout.write(json.dumps(rec2) + "\n")
+                # 是否同组（-1 表示未知组，按“异组”处理）
+                same = (g[rest] == g[i]) & (g[i] >= 0)
 
-    print(f"[gNMS] wrote {out} (t_intra={t_intra}, t_inter={t_inter})")
+                # 选择阈值：同组用 t_intra，异组用 t_inter
+                thr = torch.where(same,
+                                  torch.full_like(ious, t_intra),
+                                  torch.full_like(ious, t_inter))
+                suppress = ious > thr   # 被抑制者
+
+                # 可选：对“同组且IoU>t_intra”的被抑制框，做一次 WBF 融合到赢家
+                if WBF:
+                    merge_mask = same & suppress
+                    if merge_mask.any():
+                        merge_rest_idx = rest[merge_mask].tolist()
+                        merge_global_idx = [int(idxs[i].item())] + [int(idxs[j].item()) for j in merge_rest_idx]
+                        _wbf_merge(boxes, scores, merge_global_idx)  # 融合到全局赢家
+                        # 同时更新本地副本的赢家框（便于后续 IoU 更稳定）
+                        local_merge = torch.cat([torch.tensor([0], dtype=torch.long), merge_rest_idx])
+                        w = s[local_merge] / (s[local_merge].sum() + 1e-8)
+                        b[0] = (b[local_merge] * w[:, None]).sum(dim=0)
+                        s[0] = s[local_merge].max()
+
+                # 过滤保留：剩余中，非 suppress 的留下
+                keep_mask = ~suppress
+                # 拼回本轮赢家
+                b = torch.cat([b[0:1], b[rest][keep_mask]], dim=0)
+                s = torch.cat([s[0:1], s[rest][keep_mask]], dim=0)
+                g = torch.cat([g[0:1], g[rest][keep_mask]], dim=0)
+                idxs = torch.cat([idxs[0:1], idxs[rest][keep_mask]], dim=0)
+
+                # 丢弃赢家本身，进入下一轮
+                if idxs.numel() <= 1:
+                    break
+                b = b[1:]; s = s[1:]; g = g[1:]; idxs = idxs[1:]
+
+            kept_all.extend(keep_local)
+
+            if DEBUG:
+                same_cnt = int((grp[kept_all] >= 0).sum().item())
+                print(f"[gNMS.debug] img={rec['image_id']} cls={c} kept={len(keep_local)} samegrp_in_kept={same_cnt}")
+
+        # 写出该图的结果（按 kept_all 采样）
+        kept_all = torch.tensor(sorted(set(kept_all)), dtype=torch.long)
+        out_rec = {
+            "image_id": rec["image_id"],
+            "file_name": rec.get("file_name"),
+            "size": rec["size"],
+            "boxes": boxes[kept_all].tolist(),
+            "scores": scores[kept_all].tolist(),
+            "labels": labels[kept_all].tolist(),
+        }
+        return out_rec, len(kept_all)
+
+    # 主循环
+    n_img = 0
+    with open(det_file) as f_in, open(out, "w") as f_out:
+        for L in f_in:
+            rec = json.loads(L)
+            rG = gid_map.get(rec["image_id"])
+            # 防御：断言 groups 与 detections 对齐
+            if rG is not None and "kept" in rG:
+                n_det = len(rec["boxes"])
+                if any((k >= n_det or k < 0) for k in rG["kept"]):
+                    raise ValueError(f"[gNMS] groups.kept 越界：img={rec['image_id']} n_det={n_det} kept_max={max(rG['kept'])}")
+            out_rec, k = _gnms_single_image(rec, rG)
+            f_out.write(json.dumps(out_rec) + "\n")
+            n_img += 1
+
+    print(f"[gNMS] wrote {out} (t_intra={t_intra}, t_inter={t_inter}, WBF={'on' if WBF else 'off'})")
     return out
 
 
