@@ -54,7 +54,8 @@ docker-group-nms:
 	$(MAKE) run-docker STEPS=detect,graph,train,tune,infer,groupnms
 docker-eval:
 	$(MAKE) run-docker STEPS=detect,graph,train,tune,infer,groupnms,eval
-
+docker-eval-std:
+	$(MAKE) run-docker STEPS=detect,graph,train,tune,infer,stdnm,eval
 # ---- Run locally (macOS CPU) ----
 run-local:
 	CONFIG_PROFILE=local \
