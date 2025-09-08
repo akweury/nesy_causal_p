@@ -962,6 +962,14 @@ def main():
     if "train" in steps:
         graph = artifacts.get("graph", cfg.paths.graphs_dir / "graphs.jsonl")
         artifacts["model"] = stage_train_grm(cfg, graph)
+        DIAG = os.getenv("DIAG", "1") == "1"  # 默认开；想关就 DIAG=0
+
+        if DIAG:
+            mode = os.getenv("SUPERVISION", "distill")
+            model_file = cfg.paths.models_dir / f"grm_edge_{mode}.pt"
+            if model_file.exists():
+                eval_pairs_auc(cfg, artifacts["graph"], model_file)
+                dump_top_pairs(artifacts["graph"], model_file, cfg)
 
     if "tune" in steps:
         graph = artifacts.get("graph", cfg.paths.graphs_dir / "graphs.jsonl")

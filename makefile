@@ -27,6 +27,7 @@ run-docker:
 	  -v /home/ml-jsha/storage/GRM_output:/grm_output \
 	  -e CONFIG_PROFILE=remote \
 	  -e DATA_ROOT=/coco_2017 \
+	  -e SUPERVISION=distill \
 	  -e COCO_IMAGES=/coco_2017/selected/val2017 \
 	  -e COCO_ANN=/coco_2017/selected/annotations/instances_val2017.json \
 	  -e WORK_DIR=/grm_output/run \
