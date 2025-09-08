@@ -929,6 +929,7 @@ def main():
 
     steps = [s.strip() for s in args.steps.split(",") if s.strip()]
     artifacts: Dict[str, Path] = {}
+    mode = os.getenv("SUPERVISION", "distill")
 
     # optional
     if "filter" in steps and "filter_coco" in globals():
@@ -947,7 +948,7 @@ def main():
         DIAG = os.getenv("DIAG", "1") == "1"  # 默认开；想关就 DIAG=0
         if DIAG:
             # 选择对应的模型文件（与 SUPERVISION 匹配）
-            mode = os.getenv("SUPERVISION", "distill")
+            # mode = os.getenv("SUPERVISION", "distill")
             model_file = cfg.paths.models_dir / f"grm_edge_{mode}.pt"
             print("[diag] quick_check_graph …")
             quick_check_graph(graph_path)
@@ -960,26 +961,26 @@ def main():
                 print(f"[diag] skip pair AUC: model not found {model_file}")
 
     if "train" in steps:
-        graph = artifacts.get("graph", cfg.paths.graphs_dir / "graphs.jsonl")
+        graph = artifacts.get("graph", cfg.paths.graphs_dir /f"graphs_{mode}.jsonl")
         artifacts["model"] = stage_train_grm(cfg, graph)
         DIAG = os.getenv("DIAG", "1") == "1"  # 默认开；想关就 DIAG=0
 
         if DIAG:
-            mode = os.getenv("SUPERVISION", "distill")
+            # mode = os.getenv("SUPERVISION", "distill")
             model_file = cfg.paths.models_dir / f"grm_edge_{mode}.pt"
             if model_file.exists():
                 eval_pairs_auc(cfg, artifacts["graph"], model_file)
                 dump_top_pairs(artifacts["graph"], model_file, cfg)
 
     if "tune" in steps:
-        graph = artifacts.get("graph", cfg.paths.graphs_dir / "graphs.jsonl")
-        model = artifacts.get("model", cfg.paths.models_dir / "grm_edge.pt")
+        graph = artifacts.get("graph", cfg.paths.graphs_dir / f"graphs_{mode}.jsonl")
+        model = artifacts.get("model", cfg.paths.models_dir / f"grm_edge_{mode}.pt")
         tau = stage_tune(cfg, graph, model)
         artifacts["tune"] = cfg.paths.outputs_dir / "tune.json"
 
     if "infer" in steps:
         det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
-        model = artifacts.get("model", cfg.paths.models_dir / "grm_edge.pt")
+        model = artifacts.get("model", cfg.paths.models_dir / f"grm_edge_{mode}.pt")
         artifacts["groups"] = stage_infer_groups(cfg, model, det)
 
     # baseline NMS
