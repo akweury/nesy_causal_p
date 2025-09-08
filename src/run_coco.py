@@ -583,13 +583,54 @@ def stage_group_nms(cfg, det_file: Path, groups_file: Path,
     print(f"[gNMS] wrote {out} (t_intra={t_intra}, t_inter={t_inter})")
     return out
 
-def stage_eval_coco(cfg, det_file: Path) -> Dict[str, Any]:
+def stage_eval_coco(cfg, det_file: Path, ann_file: Path = None, iou_type: str = "bbox") -> dict:
     """
-    COCO mAP 评测（使用 pycocotools）
+    评测 COCO mAP（bbox）。输入: detections_*.jsonl
+    返回: 指标字典，同时保存到 outputs/eval_<stem>.json
     """
-    # TODO: 将 JSONL 转为 COCO result 格式，eval -> 返回 dict
-    metrics = {"mAP": None}
-    print(f"[eval] metrics: {metrics}")
+    import json, math
+    from pycocotools.coco import COCO
+    from pycocotools.cocoeval import COCOeval
+
+    ann_file = ann_file or cfg.paths.coco_annotations
+    out_json = cfg.paths.outputs_dir / f"eval_{det_file.stem}.json"
+
+    # JSONL -> COCO results list
+    results, img_ids = [], set()
+    with open(det_file) as f:
+        for line in f:
+            r = json.loads(line)
+            img_id = int(r["image_id"])
+            img_ids.add(img_id)
+            for b, s, c in zip(r["boxes"], r["scores"], r["labels"]):
+                x1, y1, x2, y2 = map(float, b)
+                results.append({
+                    "image_id": img_id,
+                    "category_id": int(c),             # 需与GT类别ID一致
+                    "bbox": [x1, y1, x2 - x1, y2 - y1],# xywh
+                    "score": float(s)
+                })
+
+    cocoGT = COCO(str(ann_file))
+    cocoDT = cocoGT.loadRes(results) if results else cocoGT.loadRes([])
+
+    E = COCOeval(cocoGT, cocoDT, iouType=iou_type)
+    # 只评测出现过的图，避免全量跑慢
+    if img_ids:
+        E.params.imgIds = sorted(img_ids)
+    E.evaluate(); E.accumulate(); E.summarize()
+
+    # COCOeval.stats: [AP, AP50, AP75, APs, APm, APl, AR1, AR10, AR100, ARs, ARm, ARl]
+    stats = E.stats.tolist() if hasattr(E.stats, "tolist") else list(E.stats)
+    metrics = {
+        "AP": stats[0], "AP50": stats[1], "AP75": stats[2],
+        "APs": stats[3], "APm": stats[4], "APl": stats[5],
+        "AR1": stats[6], "AR10": stats[7], "AR100": stats[8],
+        "ARs": stats[9], "ARm": stats[10], "ARl": stats[11],
+        "evaluated_images": len(img_ids)
+    }
+    out_json.write_text(json.dumps(metrics, indent=2))
+    print(f"[eval] wrote {out_json}")
     return metrics
 
 
