@@ -568,7 +568,7 @@ def stage_infer_groups(cfg, model_file: Path, det_file: Path, tau: float = None)
     import json, math, torch
     from torchvision.ops import box_iou
 
-    out = cfg.paths.outputs_dir / "groups.jsonl"
+    out = cfg.paths.outputs_dir / f"groups.jsonl"
     if out.exists():
         print(f"[infer] reuse {out}")
         return out
@@ -762,7 +762,6 @@ def stage_group_nms(cfg, det_file: Path, groups_file: Path,
     """
     import json, torch
     from torchvision.ops import box_iou
-
     out = cfg.paths.outputs_dir / "detections_groupnms.jsonl"
     if out.exists():
         print(f"[gNMS] reuse {out}");
@@ -910,96 +909,87 @@ def stage_eval_coco(cfg, det_file: Path, ann_file: Path = None, iou_type: str = 
 # ---------- CLI ----------
 def main():
     parser = argparse.ArgumentParser("GRM-COCO pipeline")
-    parser.add_argument("--steps", type=str, default="detect,graph,train,infer,groupnms,eval",
-                        help="逗号分隔：detect,graph,train,infer,groupnms,eval")
-    parser.add_argument("--profile", type=str, default=None, help="local|remote (覆盖 CONFIG_PROFILE)")
+    parser.add_argument("--steps", type=str, default="detect,graph,train,infer,groupnms,eval")
+    parser.add_argument("--profile", type=str, default=None)
     parser.add_argument("--remote", action="store_true")
     parser.add_argument("--t_intra", type=float, default=0.7)
     parser.add_argument("--t_inter", type=float, default=0.5)
     parser.add_argument("--nms_iou", type=float, default=0.5)
-    parser.add_argument("--supervision", type=str, default="heur", choices=["heur", "gt", "distill"], help="边标签来源：启发式/纯GT/GT→OD蒸馏")
+    parser.add_argument("--supervision", type=str, default="distill",  # ← 改默认为 distill，和实际一致
+                        choices=["heur","gt","distill"])
+    parser.add_argument("--tau", type=float, default=None, help="override tune.json for infer")  # 可选：手动设阈值
     args = parser.parse_args()
 
     import os
     if args.profile: os.environ["CONFIG_PROFILE"] = args.profile
     if args.remote:  os.environ["CONFIG_PROFILE"] = "remote"
+    # —— 统一：把 supervision 写进 ENV，并用一个变量贯穿全程 ——
+    os.environ["SUPERVISION"] = args.supervision
+    mode = args.supervision
+
+
     cfg = load_config()
     print(f"[cfg] profile={cfg.profile} device={cfg.device}")
     print(f"[cfg] work_dir={cfg.paths.work_dir}")
+    print(f"[cfg] supervision={mode}")  # 直观看到模式
 
     steps = [s.strip() for s in args.steps.split(",") if s.strip()]
     artifacts: Dict[str, Path] = {}
-    mode = os.getenv("SUPERVISION", "distill")
 
-    # optional
-    if "filter" in steps and "filter_coco" in globals():
-        artifacts["filtered"] = filter_coco(args)
-
+    # 1) detect
     if "detect" in steps:
         artifacts["det"] = stage_detect(cfg)
 
+    # 2) graph
     if "graph" in steps:
-        import os
         det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
-        graph_path = stage_build_graph(cfg, det)
+        graph_path = stage_build_graph(cfg, det)  # 内部用 ENV=SUPERVISION 写 graphs_{mode}.jsonl
         artifacts["graph"] = graph_path
 
-        # === 立即做 graph/train 诊断 ===
-        DIAG = os.getenv("DIAG", "1") == "1"  # 默认开；想关就 DIAG=0
-        if DIAG:
-            # 选择对应的模型文件（与 SUPERVISION 匹配）
-            # mode = os.getenv("SUPERVISION", "distill")
-            model_file = cfg.paths.models_dir / f"grm_edge_{mode}.pt"
+        # 只做 graph 质量诊断（不依赖模型）
+        if os.getenv("DIAG","1") == "1":
             print("[diag] quick_check_graph …")
             quick_check_graph(graph_path)
-            if model_file.exists():
-                print("[diag] eval_pairs_auc …")
-                eval_pairs_auc(cfg, graph_path, model_file)
-                print("[diag] dump_top_pairs …")
-                dump_top_pairs(graph_path, model_file, cfg, K=5, samples=3)
-            else:
-                print(f"[diag] skip pair AUC: model not found {model_file}")
 
+    # 3) train
     if "train" in steps:
-        graph = artifacts.get("graph", cfg.paths.graphs_dir /f"graphs_{mode}.jsonl")
+        graph = artifacts.get("graph", cfg.paths.graphs_dir / f"graphs_{mode}.jsonl")
         artifacts["model"] = stage_train_grm(cfg, graph)
-        DIAG = os.getenv("DIAG", "1") == "1"  # 默认开；想关就 DIAG=0
 
-        if DIAG:
-            # mode = os.getenv("SUPERVISION", "distill")
+        if os.getenv("DIAG","1") == "1":
             model_file = cfg.paths.models_dir / f"grm_edge_{mode}.pt"
-            if model_file.exists():
-                eval_pairs_auc(cfg, artifacts["graph"], model_file)
-                dump_top_pairs(artifacts["graph"], model_file, cfg)
+            eval_pairs_auc(cfg, graph, model_file)
+            dump_top_pairs(graph, model_file, cfg)
 
+    # 4) tune
     if "tune" in steps:
         graph = artifacts.get("graph", cfg.paths.graphs_dir / f"graphs_{mode}.jsonl")
         model = artifacts.get("model", cfg.paths.models_dir / f"grm_edge_{mode}.pt")
         tau = stage_tune(cfg, graph, model)
         artifacts["tune"] = cfg.paths.outputs_dir / "tune.json"
 
+    # 5) infer groups（保持与 *原始* detections 对齐）
     if "infer" in steps:
         det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
         model = artifacts.get("model", cfg.paths.models_dir / f"grm_edge_{mode}.pt")
-        artifacts["groups"] = stage_infer_groups(cfg, model, det)
+        # 支持命令行覆盖 tau（否则从 tune.json 里读）
+        artifacts["groups"] = stage_infer_groups(cfg, model, det, tau=args.tau)
 
-    # baseline NMS
+    # 6) baselines
     if "stdnms" in steps:
         det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
         artifacts["std"] = stage_std_nms(cfg, det, iou_thr=args.nms_iou)
 
-    # ours: group-aware NMS（支持阈值）
+    # 7) group-aware NMS
     if "groupnms" in steps:
         det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
         groups = artifacts.get("groups", cfg.paths.outputs_dir / "groups.jsonl")
         artifacts["gnms"] = stage_group_nms(cfg, det, groups, t_intra=args.t_intra, t_inter=args.t_inter)
 
-    # eval baseline
+    # 8) eval
     if "evalstd" in steps:
         std = artifacts.get("std", cfg.paths.outputs_dir / "detections_std_nms.jsonl")
         print("[evalstd]", stage_eval_coco(cfg, std))
-
-    # eval ours
     if "eval" in steps:
         g = artifacts.get("gnms", cfg.paths.outputs_dir / "detections_groupnms.jsonl")
         print("[eval]", stage_eval_coco(cfg, g))
