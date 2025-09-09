@@ -31,6 +31,7 @@ def _match_od_to_gt(boxes_od, img_id, coco, iou_thr=0.5):
     val, idx = iou.max(dim=1)
     return [gt_ids[j] if float(val[i]) >= iou_thr else -1 for i, j in enumerate(idx)]
 
+
 def _EdgeMLP_for_eval(in_dim, device):
     import torch, torch.nn as nn
     class EdgeMLP(nn.Module):
@@ -42,39 +43,51 @@ def _EdgeMLP_for_eval(in_dim, device):
                 nn.Dropout(0.1),
                 nn.Linear(32, 1)
             )
+
         def forward(self, x): return self.net(x).squeeze(-1)
+
     m = EdgeMLP(in_dim).to(device)
     return m
+
 
 def quick_check_graph(graph_path):
     import json, numpy as np
     bins_iou = [0, .1, .3, .5, .7, 1.01]
-    bins_d   = [0, .03, .06, .10, .20, 10]
-    pos_iou = [0]*5; cnt_iou = [0]*5
-    pos_d   = [0]*5; cnt_d   = [0]*5
+    bins_d = [0, .03, .06, .10, .20, 10]
+    pos_iou = [0] * 5;
+    cnt_iou = [0] * 5
+    pos_d = [0] * 5;
+    cnt_d = [0] * 5
     n_pairs = n_pos = 0
     with open(graph_path) as f:
         for L in f:
-            r = json.loads(L); ps = r.get("pairs", [])
-            n_pairs += len(ps); n_pos += sum(p["label"] for p in ps)
+            r = json.loads(L);
+            ps = r.get("pairs", [])
+            n_pairs += len(ps);
+            n_pos += sum(p["label"] for p in ps)
             for p in ps:
                 iou, dist = p["feat"][0], p["feat"][1]
-                ki = max(i for i,b in enumerate(bins_iou[:-1]) if iou >= b)
-                kd = max(i for i,b in enumerate(bins_d[:-1])   if dist >= b)
-                pos_iou[ki] += p["label"]; cnt_iou[ki] += 1
-                pos_d[kd]   += p["label"]; cnt_d[kd]   += 1
+                ki = max(i for i, b in enumerate(bins_iou[:-1]) if iou >= b)
+                kd = max(i for i, b in enumerate(bins_d[:-1]) if dist >= b)
+                pos_iou[ki] += p["label"];
+                cnt_iou[ki] += 1
+                pos_d[kd] += p["label"];
+                cnt_d[kd] += 1
     pr = n_pos / max(n_pairs, 1)
-    mono_iou = [pos_iou[i]/cnt_iou[i] if cnt_iou[i] else 0 for i in range(5)]
-    mono_d   = [pos_d[i]/cnt_d[i]     if cnt_d[i]   else 0 for i in range(5)]
+    mono_iou = [pos_iou[i] / cnt_iou[i] if cnt_iou[i] else 0 for i in range(5)]
+    mono_d = [pos_d[i] / cnt_d[i] if cnt_d[i] else 0 for i in range(5)]
     print(f"[diag.graph] pairs={n_pairs:,} pos_rate={pr:.3f}")
     print(f"[diag.graph] pos_rate_by_IoU={mono_iou}")
     print(f"[diag.graph] pos_rate_by_Dist={mono_d}")
+
 
 def eval_pairs_auc(cfg, graph_path, model_path, heur_iou=0.05, heur_dist=0.05):
     import json, numpy as np, torch
     from sklearn.metrics import roc_auc_score, average_precision_score, f1_score
     ckpt = torch.load(model_path, map_location=cfg.device)
-    mdl  = _EdgeMLP_for_eval(ckpt["in_dim"], cfg.device); mdl.load_state_dict(ckpt["state_dict"]); mdl.eval()
+    mdl = _EdgeMLP_for_eval(ckpt["in_dim"], cfg.device);
+    mdl.load_state_dict(ckpt["state_dict"]);
+    mdl.eval()
 
     recs = [json.loads(l) for l in open(graph_path)]
     recs.sort(key=lambda r: r["image_id"])
@@ -93,30 +106,40 @@ def eval_pairs_auc(cfg, graph_path, model_path, heur_iou=0.05, heur_dist=0.05):
             heur.extend([1 if (p["feat"][0] > heur_iou or p["feat"][1] < heur_dist) else 0 for p in ps])
 
     if not y:
-        print("[diag.pairs] no val pairs"); return
-    y = np.array(y); prob = np.array(prob); heur = np.array(heur)
-    auc = roc_auc_score(y, prob) if y.sum() and (1-y).sum() else float('nan')
-    ap  = average_precision_score(y, prob) if y.sum() else float('nan')
-    f1  = f1_score(y, prob >= 0.5)
+        print("[diag.pairs] no val pairs");
+        return
+    y = np.array(y);
+    prob = np.array(prob);
+    heur = np.array(heur)
+    auc = roc_auc_score(y, prob) if y.sum() and (1 - y).sum() else float('nan')
+    ap = average_precision_score(y, prob) if y.sum() else float('nan')
+    f1 = f1_score(y, prob >= 0.5)
     f1h = f1_score(y, heur)
     print(f"[diag.pairs] AUC={auc:.3f} AP={ap:.3f} F1@0.5={f1:.3f} Heur-F1={f1h:.3f}")
+
 
 def dump_top_pairs(graph_path, model_path, cfg, K=5, samples=3):
     import json, heapq, torch, random
     ckpt = torch.load(model_path, map_location=cfg.device)
-    mdl  = _EdgeMLP_for_eval(ckpt["in_dim"], cfg.device); mdl.load_state_dict(ckpt["state_dict"]); mdl.eval()
+    mdl = _EdgeMLP_for_eval(ckpt["in_dim"], cfg.device);
+    mdl.load_state_dict(ckpt["state_dict"]);
+    mdl.eval()
     lines = open(graph_path).read().splitlines()
     for L in random.sample(lines, min(samples, len(lines))):
-        r = json.loads(L); ps = r.get("pairs") or []
+        r = json.loads(L);
+        ps = r.get("pairs") or []
         if not ps: continue
         X = torch.tensor([p["feat"] for p in ps], dtype=torch.float32, device=cfg.device)
-        with torch.no_grad(): pr = torch.sigmoid(mdl(X)).cpu().tolist()
+        with torch.no_grad():
+            pr = torch.sigmoid(mdl(X)).cpu().tolist()
         top = heapq.nlargest(K, enumerate(ps), key=lambda x: pr[x[0]])
         bot = heapq.nsmallest(K, enumerate(ps), key=lambda x: pr[x[0]])
         print(f"[diag.top] image {r['image_id']} TOP:")
         for idx, pair in top: print("  p=%.3f feat=%s y=%d" % (pr[idx], pair["feat"], pair["label"]))
         print(f"[diag.bot] image {r['image_id']} BOT:")
         for idx, pair in bot: print("  p=%.3f feat=%s y=%d" % (pr[idx], pair["feat"], pair["label"]))
+
+
 # ---------- 阶段占位符（逐步实现） ----------
 def stage_detect(cfg) -> Path:
     """
@@ -185,6 +208,171 @@ def stage_detect(cfg) -> Path:
 
     print(f"[detect] wrote {out}")
     return out
+
+
+def stage_viz_frcnn_vs_gt(cfg, det_file: Path,
+                          iou_thr: float = 0.5,
+                          score_thr: float = 0.05,
+                          limit: int = 200) -> Path:
+    """
+    可视化 FasterRCNN vs GT：
+      绿: TP（预测与某 GT IoU>=iou_thr）
+      黄: FP（预测>=score_thr 但未与任何 GT 匹配）
+      红: FN（剩余未被匹配的 GT）
+    结果：/outputs/viz_frcnn_vs_gt/{image_id}.jpg 及 summary.csv/json
+    """
+    import json, os, math, csv
+    from pathlib import Path
+    import numpy as np
+    import cv2
+    from pycocotools.coco import COCO
+
+    out_dir = cfg.paths.outputs_dir / "viz_frcnn_vs_gt"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    summ_json = out_dir / "summary.json"
+    summ_csv = out_dir / "summary.csv"
+
+    def iou_xyxy(a, b):
+        xx1, yy1 = max(a[0], b[0]), max(a[1], b[1])
+        xx2, yy2 = min(a[2], b[2]), min(a[3], b[3])
+        w, h = max(0, xx2 - xx1), max(0, yy2 - yy1)
+        inter = w * h
+        area_a = max(0, a[2] - a[0]) * max(0, a[3] - a[1])
+        area_b = max(0, b[2] - b[0]) * max(0, b[3] - b[1])
+        union = area_a + area_b - inter
+        return inter / union if union > 0 else 0.0
+
+    # COCO
+    coco = COCO(str(cfg.paths.coco_annotations))
+    id2fname = {img["id"]: img["file_name"] for img in coco.dataset["images"]}
+    images_root = Path(cfg.paths.coco_images)
+
+    # 读检测
+    recs = [json.loads(l) for l in open(det_file)]
+    if limit: recs = recs[:limit]
+
+    summary = []
+    font = cv2.FONT_HERSHEY_SIMPLEX
+
+    GREEN = (80, 200, 60)  # TP
+    YELLOW = (40, 220, 220)  # FP
+    RED = (30, 30, 230)  # FN
+    WHITE = (240, 240, 240)
+
+    for rec in recs:
+        img_id = rec["image_id"]
+        fn = id2fname.get(img_id)
+        if not fn: continue
+        img_path = images_root / fn
+        if not img_path.exists(): continue
+
+        im = cv2.imread(str(img_path))
+        if im is None: continue
+        H, W = im.shape[:2]
+
+        # 读取 GT
+        ann_ids = coco.getAnnIds(imgIds=[img_id], iscrowd=None)
+        anns = coco.loadAnns(ann_ids)
+        gts = []
+        gt_cats = []
+        for a in anns:
+            x1, y1, w, h = a["bbox"]
+            gts.append([x1, y1, x1 + w, y1 + h])
+            gt_cats.append(a["category_id"])
+        gts = np.array(gts, dtype=np.float32) if gts else np.zeros((0, 4), np.float32)
+        gt_used = np.zeros(len(gts), dtype=bool)
+
+        # 读取预测（按类别独立匹配）
+        boxes = np.array(rec["boxes"], dtype=np.float32) if rec["boxes"] else np.zeros((0, 4), np.float32)
+        scores = np.array(rec["scores"], dtype=np.float32) if rec["scores"] else np.zeros((0,), np.float32)
+        labels = np.array(rec["labels"], dtype=np.int32) if rec["labels"] else np.zeros((0,), np.int32)
+
+        keep = scores >= score_thr
+        boxes, scores, labels = boxes[keep], scores[keep], labels[keep]
+
+        tp_idx, fp_idx = [], []
+        matched_gt = set()
+
+        # 按类匹配（与 COCO 评测一致）
+        for c in np.unique(labels):
+            m = labels == c
+            if not np.any(m): continue
+            det_b = boxes[m];
+            det_s = scores[m];
+            det_i = np.where(m)[0]
+            order = np.argsort(-det_s)
+            det_b, det_i = det_b[order], det_i[order]
+
+            # 找同类 GT
+            gt_idx = [i for i, k in enumerate(gt_cats) if k == c]
+            if len(gt_idx) == 0:
+                # 该类全是 FP
+                fp_idx += det_i.tolist()
+                continue
+
+            # 贪心匹配
+            used_local = set()
+            for k, b in enumerate(det_b):
+                best_iou, best_j = 0.0, -1
+                for j_local, j in enumerate(gt_idx):
+                    if j_local in used_local: continue
+                    iou = iou_xyxy(b, gts[j])
+                    if iou > best_iou:
+                        best_iou, best_j = iou, j_local
+                if best_iou >= iou_thr:
+                    used_local.add(best_j)
+                    tp_idx.append(int(det_i[k]))
+                    matched_gt.add(gt_idx[best_j])
+                else:
+                    fp_idx.append(int(det_i[k]))
+
+        # 未匹配 GT = FN
+        fn_idx = [i for i in range(len(gts)) if i not in matched_gt]
+
+        # 绘制：TP 绿, FP 黄, FN 红
+        # 先画预测（框+score）
+        for i in tp_idx:
+            x1, y1, x2, y2 = boxes[i].astype(int).tolist()
+            cv2.rectangle(im, (x1, y1), (x2, y2), GREEN, 2)
+            cv2.putText(im, f"TP {scores[i]:.2f}", (x1, max(10, y1 - 5)), font, 0.5, GREEN, 1, cv2.LINE_AA)
+        for i in fp_idx:
+            x1, y1, x2, y2 = boxes[i].astype(int).tolist()
+            cv2.rectangle(im, (x1, y1), (x2, y2), YELLOW, 2)
+            cv2.putText(im, f"FP {scores[i]:.2f}", (x1, max(10, y1 - 5)), font, 0.5, YELLOW, 1, cv2.LINE_AA)
+        # 再画 FN（红）
+        for j in fn_idx:
+            x1, y1, x2, y2 = gts[j].astype(int).tolist()
+            cv2.rectangle(im, (x1, y1), (x2, y2), RED, 2)
+            cv2.putText(im, "FN", (x1, max(10, y1 - 5)), font, 0.6, RED, 2, cv2.LINE_AA)
+
+        # 角标 legend+统计
+        tp, fp, fn = len(tp_idx), len(fp_idx), len(fn_idx)
+        txt = f"TP:{tp}  FP:{fp}  FN:{fn}  IoU@{iou_thr}  thr@{score_thr}"
+        cv2.rectangle(im, (0, 0), (int(10 + 7.3 * len(txt)), 24), (0, 0, 0), -1)
+        cv2.putText(im, txt, (6, 17), font, 0.5, WHITE, 1, cv2.LINE_AA)
+
+        # 保存
+        out_path = out_dir / f"{img_id}.jpg"
+        cv2.imwrite(str(out_path), im)
+
+        summary.append({
+            "image_id": int(img_id),
+            "file_name": fn,
+            "TP": tp, "FP": fp, "FN": fn,
+            "det": int(len(boxes)), "gt": int(len(gts))
+        })
+
+    # 保存汇总
+    with open(summ_json, "w") as f:
+        json.dump(summary, f, indent=2)
+    with open(summ_csv, "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=["image_id", "file_name", "TP", "FP", "FN", "det", "gt"])
+        w.writeheader();
+        w.writerows(summary)
+
+    print(f"[viz] wrote {out_dir}  ({len(summary)} images)  "
+          f"json={summ_json.name} csv={summ_csv.name}")
+    return out_dir
 
 
 def stage_build_graph(cfg, det_file: Path) -> Path:
@@ -506,22 +694,25 @@ def stage_tune(cfg, graph_file: Path, model_file: Path) -> float:
 
     recs = [json.loads(l) for l in open(graph_file)]
     recs.sort(key=lambda r: r["image_id"])
-    split = max(1, int(0.9*len(recs)))
+    split = max(1, int(0.9 * len(recs)))
     val = recs[split:]
 
     ckpt = torch.load(model_file, map_location=cfg.device)
 
     class EdgeMLP(torch.nn.Module):
-        def __init__(self,d):
+        def __init__(self, d):
             super().__init__()
-            self.net=torch.nn.Sequential(
-                torch.nn.Linear(d,64), torch.nn.ReLU(),
-                torch.nn.Linear(64,32), torch.nn.ReLU(),
+            self.net = torch.nn.Sequential(
+                torch.nn.Linear(d, 64), torch.nn.ReLU(),
+                torch.nn.Linear(64, 32), torch.nn.ReLU(),
                 torch.nn.Dropout(0.1),
-                torch.nn.Linear(32,1))
-        def forward(self,x): return self.net(x).squeeze(-1)
+                torch.nn.Linear(32, 1))
 
-    mdl = EdgeMLP(ckpt["in_dim"]).to(cfg.device); mdl.load_state_dict(ckpt["state_dict"]); mdl.eval()
+        def forward(self, x): return self.net(x).squeeze(-1)
+
+    mdl = EdgeMLP(ckpt["in_dim"]).to(cfg.device);
+    mdl.load_state_dict(ckpt["state_dict"]);
+    mdl.eval()
 
     y_true, logits = [], []
     with torch.no_grad():
@@ -536,7 +727,7 @@ def stage_tune(cfg, graph_file: Path, model_file: Path) -> float:
     import numpy as np
     y_true = np.array(y_true)
     logits = np.array(logits)
-    probs  = 1/(1+np.exp(-logits))
+    probs = 1 / (1 + np.exp(-logits))
 
     # 打印分位数，确认量级
     qs = np.quantile(probs, [0.5, 0.9, 0.95, 0.99])
@@ -547,17 +738,18 @@ def stage_tune(cfg, graph_file: Path, model_file: Path) -> float:
     # 也可追加一个细扫低区间
     cands = np.unique(np.concatenate([cands, np.linspace(0.005, 0.15, 60)]))
 
-    best = {"tau":0.5, "P":0, "R":0, "F1":0}
+    best = {"tau": 0.5, "P": 0, "R": 0, "F1": 0}
     for tau in cands:
         yp = (probs >= tau).astype(int)
-        P,R,F,_ = prf(y_true, yp, average="binary", zero_division=0)
+        P, R, F, _ = prf(y_true, yp, average="binary", zero_division=0)
         if F > best["F1"]:
-            best = {"tau": float(tau), "P":float(P), "R":float(R), "F1":float(F)}
+            best = {"tau": float(tau), "P": float(P), "R": float(R), "F1": float(F)}
 
     out = cfg.paths.outputs_dir / "tune.json"
     out.write_text(json.dumps(best, indent=2))
     print(f"[tune] best tau={best['tau']:.3f}  F1={best['F1']:.3f}  P={best['P']:.3f}  R={best['R']:.3f}")
     return best["tau"]
+
 
 def stage_infer_groups(cfg, model_file: Path, det_file: Path, tau: float = None) -> Path:
     """
@@ -570,11 +762,11 @@ def stage_infer_groups(cfg, model_file: Path, det_file: Path, tau: float = None)
     import os, json, math, torch, numpy as np
     from torchvision.ops import box_iou
 
-    SAME_CLASS_ONLY = os.getenv("SAME_CLASS_ONLY","1")=="1"
-    MIN_SCORE       = float(os.getenv("MIN_SCORE","0.0"))
-    TOPK_PER_CLASS  = int(os.getenv("TOPK_PER_CLASS","300"))
-    K_NEI           = int(os.getenv("K_NEI","50"))
-    BATCH           = int(os.getenv("BATCH","65536"))
+    SAME_CLASS_ONLY = os.getenv("SAME_CLASS_ONLY", "1") == "1"
+    MIN_SCORE = float(os.getenv("MIN_SCORE", "0.0"))
+    TOPK_PER_CLASS = int(os.getenv("TOPK_PER_CLASS", "300"))
+    K_NEI = int(os.getenv("K_NEI", "50"))
+    BATCH = int(os.getenv("BATCH", "65536"))
 
     out = cfg.paths.outputs_dir / "groups.jsonl"
     stats_out = cfg.paths.outputs_dir / "groups_stats.json"
@@ -584,162 +776,188 @@ def stage_infer_groups(cfg, model_file: Path, det_file: Path, tau: float = None)
 
     # --- model ---
     ckpt = torch.load(model_file, map_location=cfg.device)
+
     class EdgeMLP(torch.nn.Module):
-        def __init__(self,d):
+        def __init__(self, d):
             super().__init__()
-            self.net=torch.nn.Sequential(
-                torch.nn.Linear(d,64), torch.nn.ReLU(),
-                torch.nn.Linear(64,32), torch.nn.ReLU(),
+            self.net = torch.nn.Sequential(
+                torch.nn.Linear(d, 64), torch.nn.ReLU(),
+                torch.nn.Linear(64, 32), torch.nn.ReLU(),
                 torch.nn.Dropout(0.1),
-                torch.nn.Linear(32,1))
-        def forward(self,x): return self.net(x).squeeze(-1)
-    mdl = EdgeMLP(ckpt["in_dim"]).to(cfg.device); mdl.load_state_dict(ckpt["state_dict"]); mdl.eval()
+                torch.nn.Linear(32, 1))
+
+        def forward(self, x): return self.net(x).squeeze(-1)
+
+    mdl = EdgeMLP(ckpt["in_dim"]).to(cfg.device);
+    mdl.load_state_dict(ckpt["state_dict"]);
+    mdl.eval()
 
     # --- tau / T ---
-    calT=None
+    calT = None
     if tau is None:
         tfile = cfg.paths.outputs_dir / "tune.json"
         if tfile.exists():
-            tj=json.loads(tfile.read_text()); tau=float(tj.get("tau",0.7)); calT=tj.get("T",None)
-        else: tau=0.7
+            tj = json.loads(tfile.read_text());
+            tau = float(tj.get("tau", 0.7));
+            calT = tj.get("T", None)
+        else:
+            tau = 0.7
     print(f"[infer] tau={tau:.3f} T={calT if calT is not None else 'None'} "
           f"same_only={int(SAME_CLASS_ONLY)} min_score={MIN_SCORE} k_nei={K_NEI}")
 
     # --- utils ---
-    def uf_make(n): return list(range(n))
-    def uf_find(p,x):
-        while p[x]!=x: p[x]=p[p[x]]; x=p[x]
+    def uf_make(n):
+        return list(range(n))
+
+    def uf_find(p, x):
+        while p[x] != x: p[x] = p[p[x]]; x = p[x]
         return x
-    def uf_union(p,a,b):
-        ra,rb=uf_find(p,a),uf_find(p,b)
-        if ra!=rb: p[rb]=ra
+
+    def uf_union(p, a, b):
+        ra, rb = uf_find(p, a), uf_find(p, b)
+        if ra != rb: p[rb] = ra
 
     def centers(boxes):
-        b=np.asarray(boxes,np.float32)
-        return (0.5*(b[:,0]+b[:,2]), 0.5*(b[:,1]+b[:,3]))
+        b = np.asarray(boxes, np.float32)
+        return (0.5 * (b[:, 0] + b[:, 2]), 0.5 * (b[:, 1] + b[:, 3]))
 
-    n_img=0; total_pairs=0; total_groups=0; multi_groups=0
-    with open(det_file) as f_in, open(out,"w") as f_out, torch.no_grad():
+    n_img = 0;
+    total_pairs = 0;
+    total_groups = 0;
+    multi_groups = 0
+    with open(det_file) as f_in, open(out, "w") as f_out, torch.no_grad():
         for line in f_in:
-            rec=json.loads(line)
+            rec = json.loads(line)
             boxes0, scores0, labels0 = rec["boxes"], rec["scores"], rec["labels"]
-            W,H = rec["size"]; n0=len(boxes0)
-            if n0==0:
-                f_out.write(json.dumps({"image_id":rec["image_id"],"groups":[],"kept":[],"tau":tau})+"\n"); continue
+            W, H = rec["size"];
+            n0 = len(boxes0)
+            if n0 == 0:
+                f_out.write(json.dumps({"image_id": rec["image_id"], "groups": [], "kept": [], "tau": tau}) + "\n");
+                continue
 
             # 过滤低分（记录原始索引）
-            keep_idx = [i for i,s in enumerate(scores0) if s>=MIN_SCORE]
+            keep_idx = [i for i, s in enumerate(scores0) if s >= MIN_SCORE]
             if not keep_idx:
-                f_out.write(json.dumps({"image_id":rec["image_id"],"groups":[],"kept":[],"tau":tau})+"\n"); continue
-            boxes  = [boxes0[i]  for i in keep_idx]
+                f_out.write(json.dumps({"image_id": rec["image_id"], "groups": [], "kept": [], "tau": tau}) + "\n");
+                continue
+            boxes = [boxes0[i] for i in keep_idx]
             scores = [scores0[i] for i in keep_idx]
             labels = [labels0[i] for i in keep_idx]
-            kept   = keep_idx[:]   # 原始 det 索引
+            kept = keep_idx[:]  # 原始 det 索引
 
             # 每类 top-k（继续保持原始索引映射）
-            if TOPK_PER_CLASS>0:
-                byc={}
-                for i,c in enumerate(labels): byc.setdefault(c, []).append((scores[i], i))
-                sel=[]
-                for c,lst in byc.items():
-                    lst.sort(reverse=True); sel.extend([i for _,i in lst[:TOPK_PER_CLASS]])
-                sel=sorted(set(sel))
-                boxes  = [boxes[i]  for i in sel]
+            if TOPK_PER_CLASS > 0:
+                byc = {}
+                for i, c in enumerate(labels): byc.setdefault(c, []).append((scores[i], i))
+                sel = []
+                for c, lst in byc.items():
+                    lst.sort(reverse=True);
+                    sel.extend([i for _, i in lst[:TOPK_PER_CLASS]])
+                sel = sorted(set(sel))
+                boxes = [boxes[i] for i in sel]
                 scores = [scores[i] for i in sel]
                 labels = [labels[i] for i in sel]
-                kept   = [kept[i]   for i in sel]
-            n=len(boxes)
-            if n==0:
-                f_out.write(json.dumps({"image_id":rec["image_id"],"groups":[],"kept":[],"tau":tau})+"\n"); continue
+                kept = [kept[i] for i in sel]
+            n = len(boxes)
+            if n == 0:
+                f_out.write(json.dumps({"image_id": rec["image_id"], "groups": [], "kept": [], "tau": tau}) + "\n");
+                continue
 
             parents = uf_make(n)
             B = torch.tensor(boxes, dtype=torch.float32, device=cfg.device)
-            cx,cy = centers(boxes)
+            cx, cy = centers(boxes)
 
             # 生成候选对
             if SAME_CLASS_ONLY:
-                buckets={}
-                for i,c in enumerate(labels): buckets.setdefault(c, []).append(i)
-                families=buckets.values()
+                buckets = {}
+                for i, c in enumerate(labels): buckets.setdefault(c, []).append(i)
+                families = buckets.values()
             else:
-                families=[list(range(n))]
+                families = [list(range(n))]
 
-            pair_idx=[]
+            pair_idx = []
             for idxs in families:
-                m=len(idxs)
-                if m<=1: continue
-                if K_NEI>0:
-                    pts=np.stack([np.array(cx)[idxs], np.array(cy)[idxs]],1)
+                m = len(idxs)
+                if m <= 1: continue
+                if K_NEI > 0:
+                    pts = np.stack([np.array(cx)[idxs], np.array(cy)[idxs]], 1)
                     for a in range(m):
-                        i=idxs[a]
-                        d2=np.sum((pts - pts[a])**2, axis=1)
-                        nn=np.argsort(d2)
-                        for nb in nn[1:1+min(K_NEI,m-1)]:
-                            j=idxs[int(nb)]
-                            if i<j: pair_idx.append((i,j))
+                        i = idxs[a]
+                        d2 = np.sum((pts - pts[a]) ** 2, axis=1)
+                        nn = np.argsort(d2)
+                        for nb in nn[1:1 + min(K_NEI, m - 1)]:
+                            j = idxs[int(nb)]
+                            if i < j: pair_idx.append((i, j))
                 else:
                     for a in range(m):
-                        i=idxs[a]
-                        for b in range(a+1,m):
-                            j=idxs[b]; pair_idx.append((i,j))
+                        i = idxs[a]
+                        for b in range(a + 1, m):
+                            j = idxs[b];
+                            pair_idx.append((i, j))
             if not pair_idx:
-                f_out.write(json.dumps({"image_id":rec["image_id"],"groups":[list(range(n))],"kept":kept,"tau":tau})+"\n")
+                f_out.write(json.dumps({"image_id": rec["image_id"], "groups": [list(range(n))], "kept": kept, "tau": tau}) + "\n")
                 continue
-            total_pairs+=len(pair_idx)
+            total_pairs += len(pair_idx)
 
             # 批前向
             def make_feats(chunk):
-                i_idx=torch.tensor([p[0] for p in chunk], device=cfg.device)
-                j_idx=torch.tensor([p[1] for p in chunk], device=cfg.device)
+                i_idx = torch.tensor([p[0] for p in chunk], device=cfg.device)
+                j_idx = torch.tensor([p[1] for p in chunk], device=cfg.device)
                 iou = box_iou(B[i_idx], B[j_idx]).diagonal()
-                cx_i=torch.tensor([cx[p[0]] for p in chunk], device=cfg.device)
-                cy_i=torch.tensor([cy[p[0]] for p in chunk], device=cfg.device)
-                cx_j=torch.tensor([cx[p[1]] for p in chunk], device=cfg.device)
-                cy_j=torch.tensor([cy[p[1]] for p in chunk], device=cfg.device)
-                dist = torch.hypot(cx_i-cx_j, cy_i-cy_j) / math.sqrt(W*H)
-                same = torch.tensor([1.0 if labels[p[0]]==labels[p[1]] else 0.0 for p in chunk],
+                cx_i = torch.tensor([cx[p[0]] for p in chunk], device=cfg.device)
+                cy_i = torch.tensor([cy[p[0]] for p in chunk], device=cfg.device)
+                cx_j = torch.tensor([cx[p[1]] for p in chunk], device=cfg.device)
+                cy_j = torch.tensor([cy[p[1]] for p in chunk], device=cfg.device)
+                dist = torch.hypot(cx_i - cx_j, cy_i - cy_j) / math.sqrt(W * H)
+                same = torch.tensor([1.0 if labels[p[0]] == labels[p[1]] else 0.0 for p in chunk],
                                     device=cfg.device)
-                msc  = torch.tensor([min(scores[p[0]], scores[p[1]]) for p in chunk], device=cfg.device)
+                msc = torch.tensor([min(scores[p[0]], scores[p[1]]) for p in chunk], device=cfg.device)
                 return torch.stack([iou, dist, same, msc], 1)
 
-            ofs=0
-            while ofs<len(pair_idx):
-                chunk=pair_idx[ofs:ofs+BATCH]
-                X=make_feats(chunk)
-                logits=mdl(X)
-                probs=torch.sigmoid(logits/float(calT)) if calT else torch.sigmoid(logits)
-                sel=(probs>=tau).nonzero(as_tuple=False).squeeze(1).tolist()
+            ofs = 0
+            while ofs < len(pair_idx):
+                chunk = pair_idx[ofs:ofs + BATCH]
+                X = make_feats(chunk)
+                logits = mdl(X)
+                probs = torch.sigmoid(logits / float(calT)) if calT else torch.sigmoid(logits)
+                sel = (probs >= tau).nonzero(as_tuple=False).squeeze(1).tolist()
                 for s in sel:
-                    i,j=chunk[s]; uf_union(parents,i,j)
-                ofs+=len(chunk)
+                    i, j = chunk[s];
+                    uf_union(parents, i, j)
+                ofs += len(chunk)
 
             # 收集组
-            roots={}
+            roots = {}
             for i in range(n):
-                r=uf_find(parents,i); roots.setdefault(r, []).append(i)
-            groups=list(roots.values())
+                r = uf_find(parents, i);
+                roots.setdefault(r, []).append(i)
+            groups = list(roots.values())
 
             # 写出（含 kept 原始索引）
             f_out.write(json.dumps({
                 "image_id": rec["image_id"],
-                "groups": groups,     # 组内成员是“当前局部索引”
-                "kept": kept,         # 映回原始 detections.jsonl 的索引
+                "groups": groups,  # 组内成员是“当前局部索引”
+                "kept": kept,  # 映回原始 detections.jsonl 的索引
                 "tau": tau
-            })+"\n")
+            }) + "\n")
 
-            n_img+=1; total_groups+=len(groups); multi_groups+=sum(1 for g in groups if len(g)>=2)
+            n_img += 1;
+            total_groups += len(groups);
+            multi_groups += sum(1 for g in groups if len(g) >= 2)
 
-    stats={
+    stats = {
         "images": n_img,
         "total_pairs": int(total_pairs),
-        "avg_groups_per_image": total_groups/max(n_img,1),
+        "avg_groups_per_image": total_groups / max(n_img, 1),
         "multi_member_groups": int(multi_groups),
-        "multi_group_ratio": multi_groups/max(total_groups,1) if total_groups else 0.0
+        "multi_group_ratio": multi_groups / max(total_groups, 1) if total_groups else 0.0
     }
     stats_out.write_text(json.dumps(stats, indent=2))
     print(f"[infer] wrote {out}")
     print(f"[infer] stats -> {stats_out}  {stats}")
     return out
+
+
 def stage_std_nms(cfg, det_file: Path, iou_thr: float = 0.5,
                   score_thr: float = 0.0, topk_per_class: int = 300) -> Path:
     """
@@ -867,7 +1085,7 @@ def stage_group_nms(cfg,
 
         grp = _build_group_vector(n, rG)
 
-        kept_all = []   # 所有保留的全局索引
+        kept_all = []  # 所有保留的全局索引
         # 类别分桶
         if CLASSWISE:
             classes = torch.unique(labels)
@@ -904,7 +1122,7 @@ def stage_group_nms(cfg,
                 thr = torch.where(same,
                                   torch.full_like(ious, t_intra),
                                   torch.full_like(ious, t_inter))
-                suppress = ious > thr   # 被抑制者
+                suppress = ious > thr  # 被抑制者
 
                 # 可选：对“同组且IoU>t_intra”的被抑制框，做一次 WBF 融合到赢家
                 if WBF:
@@ -930,7 +1148,10 @@ def stage_group_nms(cfg,
                 # 丢弃赢家本身，进入下一轮
                 if idxs.numel() <= 1:
                     break
-                b = b[1:]; s = s[1:]; g = g[1:]; idxs = idxs[1:]
+                b = b[1:];
+                s = s[1:];
+                g = g[1:];
+                idxs = idxs[1:]
 
             kept_all.extend(keep_local)
 
@@ -1040,7 +1261,7 @@ def main():
     parser.add_argument("--t_inter", type=float, default=0.5)
     parser.add_argument("--nms_iou", type=float, default=0.5)
     parser.add_argument("--supervision", type=str, default="distill",  # ← 改默认为 distill，和实际一致
-                        choices=["heur","gt","distill"])
+                        choices=["heur", "gt", "distill"])
     parser.add_argument("--tau", type=float, default=None, help="override tune.json for infer")  # 可选：手动设阈值
     args = parser.parse_args()
 
@@ -1050,7 +1271,6 @@ def main():
     # —— 统一：把 supervision 写进 ENV，并用一个变量贯穿全程 ——
     os.environ["SUPERVISION"] = args.supervision
     mode = args.supervision
-
 
     cfg = load_config()
     print(f"[cfg] profile={cfg.profile} device={cfg.device}")
@@ -1064,6 +1284,13 @@ def main():
     if "detect" in steps:
         artifacts["det"] = stage_detect(cfg)
 
+    if "viz" in steps:
+        det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
+        artifacts["viz"] = stage_viz_frcnn_vs_gt(cfg, det,
+                                                 iou_thr=0.5,  # 可改
+                                                 score_thr=0.05,  # 可改
+                                                 limit=200)  # 可改
+
     # 2) graph
     if "graph" in steps:
         det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
@@ -1071,7 +1298,7 @@ def main():
         artifacts["graph"] = graph_path
 
         # 只做 graph 质量诊断（不依赖模型）
-        if os.getenv("DIAG","1") == "1":
+        if os.getenv("DIAG", "1") == "1":
             print("[diag] quick_check_graph …")
             quick_check_graph(graph_path)
 
@@ -1080,7 +1307,7 @@ def main():
         graph = artifacts.get("graph", cfg.paths.graphs_dir / f"graphs_{mode}.jsonl")
         artifacts["model"] = stage_train_grm(cfg, graph)
 
-        if os.getenv("DIAG","1") == "1":
+        if os.getenv("DIAG", "1") == "1":
             model_file = cfg.paths.models_dir / f"grm_edge_{mode}.pt"
             eval_pairs_auc(cfg, graph, model_file)
             dump_top_pairs(graph, model_file, cfg)
