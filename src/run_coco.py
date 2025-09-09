@@ -231,12 +231,12 @@ def stage_viz_frcnn_vs_gt(cfg, det_file: Path,
     def iou_xyxy(a, b):
         xx1, yy1 = max(a[0], b[0]), max(a[1], b[1])
         xx2, yy2 = min(a[2], b[2]), min(a[3], b[3])
-        w, h = max(0, xx2-xx1), max(0, yy2-yy1)
-        inter = w*h
-        area_a = max(0, a[2]-a[0])*max(0, a[3]-a[1])
-        area_b = max(0, b[2]-b[0])*max(0, b[3]-b[1])
+        w, h = max(0, xx2 - xx1), max(0, yy2 - yy1)
+        inter = w * h
+        area_a = max(0, a[2] - a[0]) * max(0, a[3] - a[1])
+        area_b = max(0, b[2] - b[0]) * max(0, b[3] - b[1])
         u = area_a + area_b - inter
-        return inter/u if u>0 else 0.0
+        return inter / u if u > 0 else 0.0
 
     coco = COCO(str(cfg.paths.coco_annotations))
     id2fname = {img["id"]: img["file_name"] for img in coco.dataset["images"]}
@@ -248,22 +248,22 @@ def stage_viz_frcnn_vs_gt(cfg, det_file: Path,
 
     # 画带文字的小工具
     def draw_and_save_crop(im, box, text_lines, color, save_path, pad=4):
-        x1,y1,x2,y2 = [int(v) for v in box]
-        h,w = im.shape[:2]
-        x1, y1 = max(0,x1-pad), max(0,y1-pad)
-        x2, y2 = min(w-1,x2+pad), min(h-1,y2+pad)
-        crop = im[y1:y2+1, x1:x2+1].copy()
+        x1, y1, x2, y2 = [int(v) for v in box]
+        h, w = im.shape[:2]
+        x1, y1 = max(0, x1 - pad), max(0, y1 - pad)
+        x2, y2 = min(w - 1, x2 + pad), min(h - 1, y2 + pad)
+        crop = im[y1:y2 + 1, x1:x2 + 1].copy()
         if crop.size == 0: return
         # 顶部黑条+文字
-        bar_h = 22 + 14*(len(text_lines)-1)
+        bar_h = 22 + 14 * (len(text_lines) - 1)
         bar = np.zeros((bar_h, crop.shape[1], 3), dtype=np.uint8)
-        cv2.rectangle(bar, (0,0), (bar.shape[1]-1, bar.shape[0]-1), (0,0,0), -1)
+        cv2.rectangle(bar, (0, 0), (bar.shape[1] - 1, bar.shape[0] - 1), (0, 0, 0), -1)
         font = cv2.FONT_HERSHEY_SIMPLEX
         for i, t in enumerate(text_lines):
-            cv2.putText(bar, t, (6, 16+14*i), font, 0.45, (240,240,240), 1, cv2.LINE_AA)
+            cv2.putText(bar, t, (6, 16 + 14 * i), font, 0.45, (240, 240, 240), 1, cv2.LINE_AA)
         vis = np.vstack([bar, crop])
         # 外框
-        cv2.rectangle(vis, (0, bar_h), (vis.shape[1]-1, vis.shape[0]-1), color, 2)
+        cv2.rectangle(vis, (0, bar_h), (vis.shape[1] - 1, vis.shape[0] - 1), color, 2)
         cv2.imwrite(str(save_path), vis)
 
     for rec in recs:
@@ -280,29 +280,30 @@ def stage_viz_frcnn_vs_gt(cfg, det_file: Path,
         gtb = []
         gtl = []
         for a in anns:
-            x,y,w,h = a["bbox"]
-            gtb.append([x,y,x+w,y+h]); gtl.append(a["category_id"])
-        gtb = np.array(gtb, np.float32) if gtb else np.zeros((0,4), np.float32)
-        gtl = np.array(gtl, np.int32)   if gtl else np.zeros((0,), np.int32)
+            x, y, w, h = a["bbox"]
+            gtb.append([x, y, x + w, y + h]);
+            gtl.append(a["category_id"])
+        gtb = np.array(gtb, np.float32) if gtb else np.zeros((0, 4), np.float32)
+        gtl = np.array(gtl, np.int32) if gtl else np.zeros((0,), np.int32)
         gt_used = np.zeros(len(gtb), dtype=bool)
 
         # 预测（阈值过滤）
-        pb = np.array(rec["boxes"],  np.float32) if rec["boxes"]  else np.zeros((0,4),np.float32)
+        pb = np.array(rec["boxes"], np.float32) if rec["boxes"] else np.zeros((0, 4), np.float32)
         ps = np.array(rec["scores"], np.float32) if rec["scores"] else np.zeros((0,), np.float32)
-        pl = np.array(rec["labels"], np.int32)   if rec["labels"] else np.zeros((0,), np.int32)
+        pl = np.array(rec["labels"], np.int32) if rec["labels"] else np.zeros((0,), np.int32)
         keep = ps >= score_thr
         pb, ps, pl = pb[keep], ps[keep], pl[keep]
 
         # 按类贪心匹配
         matched_gt = {}  # det_idx -> gt_idx
         for c in np.unique(pl):
-            m = pl==c
+            m = pl == c
             if not np.any(m): continue
             di = np.where(m)[0]
             order = np.argsort(-ps[m])
             di = di[order]
             # 同类 GT 列表
-            gt_idx = [i for i,k in enumerate(gtl) if k==c]
+            gt_idx = [i for i, k in enumerate(gtl) if k == c]
             used_local = set()
             for d in di:
                 best, bj = 0.0, -1
@@ -325,17 +326,17 @@ def stage_viz_frcnn_vs_gt(cfg, det_file: Path,
                 gt_name = cid2name.get(int(gtl[j]), str(int(gtl[j])))
                 save_p = out_dir / "TP" / f"{img_id}_det{i}_Pred-{pred_name}_{ps[i]:.2f}_GT-{gt_name}.jpg"
                 draw_and_save_crop(im, box,
-                    [f"TP  IoU@{iou_thr}",
-                     f"Pred: {pred_name}  s={ps[i]:.2f}",
-                     f"GT:   {gt_name}"],
-                    color=(80,200,60), save_path=save_p)
+                                   [f"TP  IoU@{iou_thr}",
+                                    f"Pred: {pred_name}  s={ps[i]:.2f}",
+                                    f"GT:   {gt_name}"],
+                                   color=(80, 200, 60), save_path=save_p)
             else:
                 save_p = out_dir / "FP" / f"{img_id}_det{i}_Pred-{pred_name}_{ps[i]:.2f}_GT-None.jpg"
                 draw_and_save_crop(im, box,
-                    [f"FP  IoU@{iou_thr}",
-                     f"Pred: {pred_name}  s={ps[i]:.2f}",
-                     "GT:   None"],
-                    color=(40,220,220), save_path=save_p)
+                                   [f"FP  IoU@{iou_thr}",
+                                    f"Pred: {pred_name}  s={ps[i]:.2f}",
+                                    "GT:   None"],
+                                   color=(40, 220, 220), save_path=save_p)
 
         # 导出未匹配 GT（FN）
         for j in range(len(gtb)):
@@ -343,10 +344,10 @@ def stage_viz_frcnn_vs_gt(cfg, det_file: Path,
             gt_name = cid2name.get(int(gtl[j]), str(int(gtl[j])))
             save_p = out_dir / "FN" / f"{img_id}_gt{j}_GT-{gt_name}.jpg"
             draw_and_save_crop(im, gtb[j].tolist(),
-                [f"FN  IoU@{iou_thr}",
-                 f"GT: {gt_name}",
-                 "Pred: None"],
-                color=(30,30,230), save_path=save_p)
+                               [f"FN  IoU@{iou_thr}",
+                                f"GT: {gt_name}",
+                                "Pred: None"],
+                               color=(30, 30, 230), save_path=save_p)
 
     print(f"[viz] wrote per-instance crops to {out_dir}")
     return out_dir
@@ -530,56 +531,64 @@ def stage_viz_graph_groups(cfg,
             det_map[r["image_id"]] = r
 
     # 工具
-    def uf_make(n): return list(range(n))
-    def uf_find(p,x):
-        while p[x]!=x:
-            p[x]=p[p[x]]
-            x=p[x]
+    def uf_make(n):
+        return list(range(n))
+
+    def uf_find(p, x):
+        while p[x] != x:
+            p[x] = p[p[x]]
+            x = p[x]
         return x
-    def uf_union(p,a,b):
-        ra,rb=uf_find(p,a),uf_find(p,b)
-        if ra!=rb: p[rb]=ra
+
+    def uf_union(p, a, b):
+        ra, rb = uf_find(p, a), uf_find(p, b)
+        if ra != rb: p[rb] = ra
 
     def draw_group_full(im, boxes, labels, group_idx, members, gts, title, save_p):
         vis = im.copy()
         # 暗化整图
         vis = (vis * 0.25).astype(np.uint8)
         # 高亮成员
-        COLORS = [(52,194,73),(52,148,240),(239,188,28),(226,86,86),(178,102,255)]
-        for t,i in enumerate(members):
-            x1,y1,x2,y2 = [int(v) for v in boxes[i]]
+        COLORS = [(52, 194, 73), (52, 148, 240), (239, 188, 28), (226, 86, 86), (178, 102, 255)]
+        for t, i in enumerate(members):
+            x1, y1, x2, y2 = [int(v) for v in boxes[i]]
             clr = COLORS[t % len(COLORS)]
-            cv2.rectangle(vis, (x1,y1), (x2,y2), clr, 2)
+            cv2.rectangle(vis, (x1, y1), (x2, y2), clr, 2)
             name = cid2name.get(int(labels[i]), str(int(labels[i])))
-            cv2.putText(vis, f"G{group_idx}:{name}", (x1, max(12,y1-4)),
+            cv2.putText(vis, f"G{group_idx}:{name}", (x1, max(12, y1 - 4)),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, clr, 1, cv2.LINE_AA)
         # 叠加 GT（红）
-        for (bx,by,bx2,by2, cname) in gts:
-            cv2.rectangle(vis, (int(bx),int(by)), (int(bx2),int(by2)), (36,36,240), 2)
-            cv2.putText(vis, f"GT:{cname}", (int(bx), max(18,int(by)-6)),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (36,36,240), 1, cv2.LINE_AA)
+        for (bx, by, bx2, by2, cname) in gts:
+            cv2.rectangle(vis, (int(bx), int(by)), (int(bx2), int(by2)), (36, 36, 240), 2)
+            cv2.putText(vis, f"GT:{cname}", (int(bx), max(18, int(by) - 6)),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (36, 36, 240), 1, cv2.LINE_AA)
         # 顶部标题
         pad = 26
         bar = np.zeros((pad, vis.shape[1], 3), dtype=np.uint8)
-        cv2.putText(bar, title, (6,18),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (240,240,240), 1, cv2.LINE_AA)
+        cv2.putText(bar, title, (6, 18),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (240, 240, 240), 1, cv2.LINE_AA)
         out = np.vstack([bar, vis])
         cv2.imwrite(str(save_p), out)
 
     def draw_group_crop(im, boxes, members, gts, save_p):
-        xs1 = [boxes[i][0] for i in members]; ys1 = [boxes[i][1] for i in members]
-        xs2 = [boxes[i][2] for i in members]; ys2 = [boxes[i][3] for i in members]
-        x1,y1,x2,y2 = int(max(0,min(xs1))), int(max(0,min(ys1))), int(max(xs2)), int(max(ys2))
-        x1 = max(0,x1-4); y1=max(0,y1-4); x2=min(im.shape[1]-1,x2+4); y2=min(im.shape[0]-1,y2+4)
-        crop = im[y1:y2+1, x1:x2+1].copy()
-        if crop.size==0: return
+        xs1 = [boxes[i][0] for i in members];
+        ys1 = [boxes[i][1] for i in members]
+        xs2 = [boxes[i][2] for i in members];
+        ys2 = [boxes[i][3] for i in members]
+        x1, y1, x2, y2 = int(max(0, min(xs1))), int(max(0, min(ys1))), int(max(xs2)), int(max(ys2))
+        x1 = max(0, x1 - 4);
+        y1 = max(0, y1 - 4);
+        x2 = min(im.shape[1] - 1, x2 + 4);
+        y2 = min(im.shape[0] - 1, y2 + 4)
+        crop = im[y1:y2 + 1, x1:x2 + 1].copy()
+        if crop.size == 0: return
         # 绘制成员（绿）
         for i in members:
-            bx1,by1,bx2,by2 = [int(v) for v in boxes[i]]
-            cv2.rectangle(crop, (bx1-x1,by1-y1), (bx2-x1,by2-y1), (60,200,60), 2)
+            bx1, by1, bx2, by2 = [int(v) for v in boxes[i]]
+            cv2.rectangle(crop, (bx1 - x1, by1 - y1), (bx2 - x1, by2 - y1), (60, 200, 60), 2)
         # 绘制 GT（红）
-        for (gx1,gy1,gx2,gy2, _) in gts:
-            cv2.rectangle(crop, (int(gx1)-x1,int(gy1)-y1), (int(gx2)-x1,int(gy2)-y1), (36,36,240), 2)
+        for (gx1, gy1, gx2, gy2, _) in gts:
+            cv2.rectangle(crop, (int(gx1) - x1, int(gy1) - y1), (int(gx2) - x1, int(gy2) - y1), (36, 36, 240), 2)
         cv2.imwrite(str(save_p), crop)
 
     # 主循环：读 graph，按正边并查集成组并可视化
@@ -596,7 +605,9 @@ def stage_viz_graph_groups(cfg,
             if im is None: continue
 
             det = det_map[img_id]
-            boxes = det["boxes"]; labels = det["labels"]; scores = det["scores"]
+            boxes = det["boxes"];
+            labels = det["labels"];
+            scores = det["scores"]
             n = len(boxes)
             if n == 0: continue
 
@@ -622,31 +633,50 @@ def stage_viz_graph_groups(cfg,
             anns = coco.loadAnns(ann_ids)
             gts = []
             for a in anns:
-                x,y,w,h = a["bbox"]
-                gts.append([x, y, x+w, y+h, cid2name.get(a["category_id"], str(a["category_id"]))])
+                x, y, w, h = a["bbox"]
+                gts.append([x, y, x + w, y + h, cid2name.get(a["category_id"], str(a["category_id"]))])
 
-            # 逐组可视化
+            # —— 逐组可视化（只画“同类且匹配该组”的 GT）——
             for gi, members in enumerate(groups, start=1):
-                # 该组是否对齐某个 GT?（任一成员与某 GT IoU>=阈值）
-                matched_names = set()
-                for m in members:
-                    for gx1,gy1,gx2,gy2,gname in gts:
-                        # IoU
-                        xx1, yy1 = max(boxes[m][0], gx1), max(boxes[m][1], gy1)
-                        xx2, yy2 = min(boxes[m][2], gx2), min(boxes[m][3], gy2)
-                        inter = max(0, xx2-xx1)*max(0, yy2-yy1)
-                        area_m = max(0, boxes[m][2]-boxes[m][0]) * max(0, boxes[m][3]-boxes[m][1])
-                        area_g = max(0, gx2-gx1) * max(0, gy2-gy1)
+                # 该组涉及的预测类别集合
+                member_cls = {int(labels[m]) for m in members}
+
+                # 预筛 GT：类别在组内类别集合里
+                cand_gts = [(gx1, gy1, gx2, gy2, gname, gcid)
+                            for (gx1, gy1, gx2, gy2, gname, gcid) in
+                            [(a["bbox"][0], a["bbox"][1],
+                              a["bbox"][0] + a["bbox"][2], a["bbox"][1] + a["bbox"][3],
+                              cid2name.get(a["category_id"], str(a["category_id"])),
+                              a["category_id"]) for a in anns]
+                            if int(gcid) in member_cls]
+
+                # 与组内任一成员 IoU≥阈值 的“同类GT”
+                matched_gts = []
+                for (gx1, gy1, gx2, gy2, gname, gcid) in cand_gts:
+                    hit = False
+                    for m in members:
+                        bx1, by1, bx2, by2 = boxes[m]
+                        xx1, yy1 = max(bx1, gx1), max(by1, gy1)
+                        xx2, yy2 = min(bx2, gx2), min(by2, gy2)
+                        inter = max(0, xx2 - xx1) * max(0, yy2 - yy1)
+                        area_m = max(0, bx2 - bx1) * max(0, by2 - by1)
+                        area_g = max(0, gx2 - gx1) * max(0, gy2 - gy1)
                         iou = inter / (area_m + area_g - inter + 1e-8)
                         if iou >= iou_thr:
-                            matched_names.add(gname)
-                title = f"img {img_id}  G{gi}  members={len(members)}  matchGT={','.join(sorted(matched_names)) or 'None'}"
-                # 全图
+                            hit = True
+                            break
+                    if hit:
+                        matched_gts.append((gx1, gy1, gx2, gy2, gname))
+
+                title = f"img {img_id}  G{gi}  members={len(members)}  matchGT={','.join(sorted({g for *_, g in matched_gts})) or 'None'}"
+
+                # 全图（组成员高亮 + 仅匹配GT）
                 save_full = out_dir / "full" / f"{img_id}_G{gi}.jpg"
-                draw_group_full(im, boxes, labels, gi, members, gts, title, save_full)
-                # 裁剪
+                draw_group_full(im, boxes, labels, gi, members, matched_gts, title, save_full)
+
+                # 裁剪（仅匹配GT）
                 save_crop = out_dir / "crops" / f"{img_id}_G{gi}.jpg"
-                draw_group_crop(im, boxes, members, gts, save_crop)
+                draw_group_crop(im, boxes, members, matched_gts, save_crop)
 
             cnt_img += 1
             if limit and cnt_img >= limit: break
@@ -1445,7 +1475,6 @@ def main():
                                        det_file=artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl"),
                                        iou_thr=0.5,
                                        limit=200)
-
 
     # 3) train
     if "train" in steps:
