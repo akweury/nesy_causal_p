@@ -2581,107 +2581,106 @@ def main():
         npz = artifacts.get("labset", cfg.paths.outputs_dir / "labelability_train.npz")
         artifacts["lab_mdl"] = stage_train_labelability(cfg, npz)
 
-
-    if "trainsets" in steps:
-        det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
-        mat = artifacts.get("match", cfg.paths.outputs_dir / "matches.jsonl")
-        e_npz, n_npz = stage_build_trainsets(cfg, det, mat)
-        artifacts["edge_npz"], artifacts["node_npz"] = e_npz, n_npz
-
-    if "train_edge" in steps:
-        npz = artifacts.get("edge_npz", cfg.paths.outputs_dir / "edge_train.npz")
-        artifacts["edge_mdl"] = stage_train_edge(cfg, npz)
-
-    if "train_label" in steps:
-        npz = artifacts.get("node_npz", cfg.paths.outputs_dir / "node_train.npz")
-        artifacts["node_mdl"] = stage_train_labelability(cfg, npz)
-
-    if "infer_post" in steps:
-        det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
-        edge_m = artifacts.get("edge_mdl", cfg.paths.models_dir / "grm_edge_pair.pt")
-        node_m = artifacts.get("node_mdl", cfg.paths.models_dir / "grm_node_labelability.pt")
-        artifacts["det_post"] = stage_infer_post(cfg, det, edge_m, node_m)
-
-    if "eval_post" in steps:
-        post = artifacts.get("det_post", cfg.paths.outputs_dir / "detections_grm_post.jsonl")
-        print("[eval_post]", stage_eval_coco(cfg, post))
-
-    # sim+prox 分组（你上一条已更新的 stage）
-    if "simprox_group" in steps:
-        det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
-        artifacts["simprox_groups"] = stage_group_by_similarity(cfg, det)
-
-    # 可视化
-    if "viz_simprox" in steps:
-        groups = artifacts.get("simprox_groups", cfg.paths.outputs_dir / "groups_simprox.jsonl")
-        det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
-        artifacts["viz_simprox"] = stage_viz_simprox_groups(cfg, groups, det, pad=8, limit=200)
-
-    # 2) graph
-    if "graph" in steps:
-        det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
-        graph_path = stage_build_graph(cfg, det)  # 内部用 ENV=SUPERVISION 写 graphs_{mode}.jsonl
-        artifacts["graph"] = graph_path
-
-        # 只做 graph 质量诊断（不依赖模型）
-        if os.getenv("DIAG", "1") == "1":
-            print("[diag] quick_check_graph …")
-            quick_check_graph(graph_path)
-
-        # 写完 graphs_{mode}.jsonl 之后：
-        if os.getenv("VIZ_GRAPH", "1") == "1":
-            _ = stage_viz_graph_groups(cfg,
-                                       graph_file=artifacts["graph"],  # 或 graph_path 变量
-                                       det_file=artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl"),
-                                       iou_thr=0.5,
-                                       limit=200)
-    if "viz_groups" in steps:
-        groups = artifacts.get("groups", cfg.paths.outputs_dir / "groups.jsonl")
-        det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
-        artifacts["viz_groups"] = stage_viz_pred_groups(cfg, groups, det, pad=8, limit=200)  # limit=0 全量
-
-    # 3) train
-    if "train" in steps:
-        graph = artifacts.get("graph", cfg.paths.graphs_dir / f"graphs_{mode}.jsonl")
-        artifacts["model"] = stage_train_grm(cfg, graph)
-
-        if os.getenv("DIAG", "1") == "1":
-            model_file = cfg.paths.models_dir / f"grm_edge_{mode}.pt"
-            eval_pairs_auc(cfg, graph, model_file)
-            dump_top_pairs(graph, model_file, cfg)
-
-    # 4) tune
-    if "tune" in steps:
-        graph = artifacts.get("graph", cfg.paths.graphs_dir / f"graphs_{mode}.jsonl")
-        model = artifacts.get("model", cfg.paths.models_dir / f"grm_edge_{mode}.pt")
-        tau = stage_tune(cfg, graph, model)
-        artifacts["tune"] = cfg.paths.outputs_dir / "tune.json"
-
-    # 5) infer groups（保持与 *原始* detections 对齐）
-    if "infer" in steps:
-        det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
-        model = artifacts.get("model", cfg.paths.models_dir / f"grm_edge_{mode}.pt")
-        # 支持命令行覆盖 tau（否则从 tune.json 里读）
-        artifacts["groups"] = stage_infer_groups(cfg, model, det, tau=args.tau)
-
-    # 6) baselines
-    if "stdnms" in steps:
-        det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
-        artifacts["std"] = stage_std_nms(cfg, det, iou_thr=args.nms_iou)
-
-    # 7) group-aware NMS
-    if "groupnms" in steps:
-        det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
-        groups = artifacts.get("groups", cfg.paths.outputs_dir / "groups.jsonl")
-        artifacts["gnms"] = stage_group_nms(cfg, det, groups, t_intra=args.t_intra, t_inter=args.t_inter)
-
-    # 8) eval
-    if "evalstd" in steps:
-        std = artifacts.get("std", cfg.paths.outputs_dir / "detections_std_nms.jsonl")
-        print("[evalstd]", stage_eval_coco(cfg, std))
-    if "eval" in steps:
-        g = artifacts.get("gnms", cfg.paths.outputs_dir / "detections_groupnms.jsonl")
-        print("[eval]", stage_eval_coco(cfg, g))
+    #
+    # if "trainsets" in steps:
+    #     det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
+    #     mat = artifacts.get("match", cfg.paths.outputs_dir / "matches.jsonl")
+    #     e_npz, n_npz = stage_build_trainsets(cfg, det, mat)
+    #     artifacts["edge_npz"], artifacts["node_npz"] = e_npz, n_npz
+    #
+    # if "train_edge" in steps:
+    #     npz = artifacts.get("edge_npz", cfg.paths.outputs_dir / "edge_train.npz")
+    #     artifacts["edge_mdl"] = stage_train_edge(cfg, npz)
+    #
+    #
+    #
+    # if "infer_post" in steps:
+    #     det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
+    #     edge_m = artifacts.get("edge_mdl", cfg.paths.models_dir / "grm_edge_pair.pt")
+    #     node_m = artifacts.get("node_mdl", cfg.paths.models_dir / "grm_node_labelability.pt")
+    #     artifacts["det_post"] = stage_infer_post(cfg, det, edge_m, node_m)
+    #
+    # if "eval_post" in steps:
+    #     post = artifacts.get("det_post", cfg.paths.outputs_dir / "detections_grm_post.jsonl")
+    #     print("[eval_post]", stage_eval_coco(cfg, post))
+    #
+    # # sim+prox 分组（你上一条已更新的 stage）
+    # if "simprox_group" in steps:
+    #     det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
+    #     artifacts["simprox_groups"] = stage_group_by_similarity(cfg, det)
+    #
+    # # 可视化
+    # if "viz_simprox" in steps:
+    #     groups = artifacts.get("simprox_groups", cfg.paths.outputs_dir / "groups_simprox.jsonl")
+    #     det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
+    #     artifacts["viz_simprox"] = stage_viz_simprox_groups(cfg, groups, det, pad=8, limit=200)
+    #
+    # # 2) graph
+    # if "graph" in steps:
+    #     det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
+    #     graph_path = stage_build_graph(cfg, det)  # 内部用 ENV=SUPERVISION 写 graphs_{mode}.jsonl
+    #     artifacts["graph"] = graph_path
+    #
+    #     # 只做 graph 质量诊断（不依赖模型）
+    #     if os.getenv("DIAG", "1") == "1":
+    #         print("[diag] quick_check_graph …")
+    #         quick_check_graph(graph_path)
+    #
+    #     # 写完 graphs_{mode}.jsonl 之后：
+    #     if os.getenv("VIZ_GRAPH", "1") == "1":
+    #         _ = stage_viz_graph_groups(cfg,
+    #                                    graph_file=artifacts["graph"],  # 或 graph_path 变量
+    #                                    det_file=artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl"),
+    #                                    iou_thr=0.5,
+    #                                    limit=200)
+    # if "viz_groups" in steps:
+    #     groups = artifacts.get("groups", cfg.paths.outputs_dir / "groups.jsonl")
+    #     det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
+    #     artifacts["viz_groups"] = stage_viz_pred_groups(cfg, groups, det, pad=8, limit=200)  # limit=0 全量
+    #
+    #
+    # # 3) train
+    # if "train" in steps:
+    #     graph = artifacts.get("graph", cfg.paths.graphs_dir / f"graphs_{mode}.jsonl")
+    #     artifacts["model"] = stage_train_grm(cfg, graph)
+    #
+    #     if os.getenv("DIAG", "1") == "1":
+    #         model_file = cfg.paths.models_dir / f"grm_edge_{mode}.pt"
+    #         eval_pairs_auc(cfg, graph, model_file)
+    #         dump_top_pairs(graph, model_file, cfg)
+    #
+    # # 4) tune
+    # if "tune" in steps:
+    #     graph = artifacts.get("graph", cfg.paths.graphs_dir / f"graphs_{mode}.jsonl")
+    #     model = artifacts.get("model", cfg.paths.models_dir / f"grm_edge_{mode}.pt")
+    #     tau = stage_tune(cfg, graph, model)
+    #     artifacts["tune"] = cfg.paths.outputs_dir / "tune.json"
+    #
+    # # 5) infer groups（保持与 *原始* detections 对齐）
+    # if "infer" in steps:
+    #     det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
+    #     model = artifacts.get("model", cfg.paths.models_dir / f"grm_edge_{mode}.pt")
+    #     # 支持命令行覆盖 tau（否则从 tune.json 里读）
+    #     artifacts["groups"] = stage_infer_groups(cfg, model, det, tau=args.tau)
+    #
+    # # 6) baselines
+    # if "stdnms" in steps:
+    #     det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
+    #     artifacts["std"] = stage_std_nms(cfg, det, iou_thr=args.nms_iou)
+    #
+    # # 7) group-aware NMS
+    # if "groupnms" in steps:
+    #     det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
+    #     groups = artifacts.get("groups", cfg.paths.outputs_dir / "groups.jsonl")
+    #     artifacts["gnms"] = stage_group_nms(cfg, det, groups, t_intra=args.t_intra, t_inter=args.t_inter)
+    #
+    # # 8) eval
+    # if "evalstd" in steps:
+    #     std = artifacts.get("std", cfg.paths.outputs_dir / "detections_std_nms.jsonl")
+    #     print("[evalstd]", stage_eval_coco(cfg, std))
+    # if "eval" in steps:
+    #     g = artifacts.get("gnms", cfg.paths.outputs_dir / "detections_groupnms.jsonl")
+    #     print("[eval]", stage_eval_coco(cfg, g))
 
     print(json.dumps({k: str(v) for k, v in artifacts.items()}, indent=2))
 
