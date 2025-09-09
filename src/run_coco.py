@@ -1637,7 +1637,7 @@ def main():
     if "viz_groups" in steps:
         groups = artifacts.get("groups", cfg.paths.outputs_dir / "groups.jsonl")
         det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
-        artifacts["viz_groups"] = stage_viz_pred_groups(cfg, groups, det, pad=8, limit=0)  # limit=0 全量
+        artifacts["viz_groups"] = stage_viz_pred_groups(cfg, groups, det, pad=8, limit=200)  # limit=0 全量
 
     # 3) train
     if "train" in steps:
