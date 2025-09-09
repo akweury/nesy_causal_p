@@ -215,163 +215,140 @@ def stage_viz_frcnn_vs_gt(cfg, det_file: Path,
                           score_thr: float = 0.05,
                           limit: int = 200) -> Path:
     """
-    可视化 FasterRCNN vs GT：
-      绿: TP（预测与某 GT IoU>=iou_thr）
-      黄: FP（预测>=score_thr 但未与任何 GT 匹配）
-      红: FN（剩余未被匹配的 GT）
-    结果：/outputs/viz_frcnn_vs_gt/{image_id}.jpg 及 summary.csv/json
+    为每个预测实例导出单图：显示 Pred(label/score) 与 匹配到的 GT(label)，
+    并把未匹配 GT（FN）也各自导出单图。
+    目录结构：outputs/viz_instances/{TP,FP,FN}/imageid_*_*.jpg
     """
-    import json, os, math, csv
+    import json, os, cv2, math, numpy as np
     from pathlib import Path
-    import numpy as np
-    import cv2
     from pycocotools.coco import COCO
 
-    out_dir = cfg.paths.outputs_dir / "viz_frcnn_vs_gt"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    summ_json = out_dir / "summary.json"
-    summ_csv = out_dir / "summary.csv"
+    out_dir = cfg.paths.outputs_dir / "viz_instances"
+    (out_dir / "TP").mkdir(parents=True, exist_ok=True)
+    (out_dir / "FP").mkdir(parents=True, exist_ok=True)
+    (out_dir / "FN").mkdir(parents=True, exist_ok=True)
 
     def iou_xyxy(a, b):
         xx1, yy1 = max(a[0], b[0]), max(a[1], b[1])
         xx2, yy2 = min(a[2], b[2]), min(a[3], b[3])
-        w, h = max(0, xx2 - xx1), max(0, yy2 - yy1)
-        inter = w * h
-        area_a = max(0, a[2] - a[0]) * max(0, a[3] - a[1])
-        area_b = max(0, b[2] - b[0]) * max(0, b[3] - b[1])
-        union = area_a + area_b - inter
-        return inter / union if union > 0 else 0.0
+        w, h = max(0, xx2-xx1), max(0, yy2-yy1)
+        inter = w*h
+        area_a = max(0, a[2]-a[0])*max(0, a[3]-a[1])
+        area_b = max(0, b[2]-b[0])*max(0, b[3]-b[1])
+        u = area_a + area_b - inter
+        return inter/u if u>0 else 0.0
 
-    # COCO
     coco = COCO(str(cfg.paths.coco_annotations))
     id2fname = {img["id"]: img["file_name"] for img in coco.dataset["images"]}
+    cid2name = {c: coco.cats[c]["name"] for c in coco.cats}
     images_root = Path(cfg.paths.coco_images)
 
-    # 读检测
     recs = [json.loads(l) for l in open(det_file)]
     if limit: recs = recs[:limit]
 
-    summary = []
-    font = cv2.FONT_HERSHEY_SIMPLEX
-
-    GREEN = (80, 200, 60)  # TP
-    YELLOW = (40, 220, 220)  # FP
-    RED = (30, 30, 230)  # FN
-    WHITE = (240, 240, 240)
+    # 画带文字的小工具
+    def draw_and_save_crop(im, box, text_lines, color, save_path, pad=4):
+        x1,y1,x2,y2 = [int(v) for v in box]
+        h,w = im.shape[:2]
+        x1, y1 = max(0,x1-pad), max(0,y1-pad)
+        x2, y2 = min(w-1,x2+pad), min(h-1,y2+pad)
+        crop = im[y1:y2+1, x1:x2+1].copy()
+        if crop.size == 0: return
+        # 顶部黑条+文字
+        bar_h = 22 + 14*(len(text_lines)-1)
+        bar = np.zeros((bar_h, crop.shape[1], 3), dtype=np.uint8)
+        cv2.rectangle(bar, (0,0), (bar.shape[1]-1, bar.shape[0]-1), (0,0,0), -1)
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        for i, t in enumerate(text_lines):
+            cv2.putText(bar, t, (6, 16+14*i), font, 0.45, (240,240,240), 1, cv2.LINE_AA)
+        vis = np.vstack([bar, crop])
+        # 外框
+        cv2.rectangle(vis, (0, bar_h), (vis.shape[1]-1, vis.shape[0]-1), color, 2)
+        cv2.imwrite(str(save_path), vis)
 
     for rec in recs:
         img_id = rec["image_id"]
         fn = id2fname.get(img_id)
         if not fn: continue
         img_path = images_root / fn
-        if not img_path.exists(): continue
-
         im = cv2.imread(str(img_path))
         if im is None: continue
-        H, W = im.shape[:2]
 
-        # 读取 GT
+        # GT
         ann_ids = coco.getAnnIds(imgIds=[img_id], iscrowd=None)
         anns = coco.loadAnns(ann_ids)
-        gts = []
-        gt_cats = []
+        gtb = []
+        gtl = []
         for a in anns:
-            x1, y1, w, h = a["bbox"]
-            gts.append([x1, y1, x1 + w, y1 + h])
-            gt_cats.append(a["category_id"])
-        gts = np.array(gts, dtype=np.float32) if gts else np.zeros((0, 4), np.float32)
-        gt_used = np.zeros(len(gts), dtype=bool)
+            x,y,w,h = a["bbox"]
+            gtb.append([x,y,x+w,y+h]); gtl.append(a["category_id"])
+        gtb = np.array(gtb, np.float32) if gtb else np.zeros((0,4), np.float32)
+        gtl = np.array(gtl, np.int32)   if gtl else np.zeros((0,), np.int32)
+        gt_used = np.zeros(len(gtb), dtype=bool)
 
-        # 读取预测（按类别独立匹配）
-        boxes = np.array(rec["boxes"], dtype=np.float32) if rec["boxes"] else np.zeros((0, 4), np.float32)
-        scores = np.array(rec["scores"], dtype=np.float32) if rec["scores"] else np.zeros((0,), np.float32)
-        labels = np.array(rec["labels"], dtype=np.int32) if rec["labels"] else np.zeros((0,), np.int32)
+        # 预测（阈值过滤）
+        pb = np.array(rec["boxes"],  np.float32) if rec["boxes"]  else np.zeros((0,4),np.float32)
+        ps = np.array(rec["scores"], np.float32) if rec["scores"] else np.zeros((0,), np.float32)
+        pl = np.array(rec["labels"], np.int32)   if rec["labels"] else np.zeros((0,), np.int32)
+        keep = ps >= score_thr
+        pb, ps, pl = pb[keep], ps[keep], pl[keep]
 
-        keep = scores >= score_thr
-        boxes, scores, labels = boxes[keep], scores[keep], labels[keep]
-
-        tp_idx, fp_idx = [], []
-        matched_gt = set()
-
-        # 按类匹配（与 COCO 评测一致）
-        for c in np.unique(labels):
-            m = labels == c
+        # 按类贪心匹配
+        matched_gt = {}  # det_idx -> gt_idx
+        for c in np.unique(pl):
+            m = pl==c
             if not np.any(m): continue
-            det_b = boxes[m];
-            det_s = scores[m];
-            det_i = np.where(m)[0]
-            order = np.argsort(-det_s)
-            det_b, det_i = det_b[order], det_i[order]
-
-            # 找同类 GT
-            gt_idx = [i for i, k in enumerate(gt_cats) if k == c]
-            if len(gt_idx) == 0:
-                # 该类全是 FP
-                fp_idx += det_i.tolist()
-                continue
-
-            # 贪心匹配
+            di = np.where(m)[0]
+            order = np.argsort(-ps[m])
+            di = di[order]
+            # 同类 GT 列表
+            gt_idx = [i for i,k in enumerate(gtl) if k==c]
             used_local = set()
-            for k, b in enumerate(det_b):
-                best_iou, best_j = 0.0, -1
+            for d in di:
+                best, bj = 0.0, -1
                 for j_local, j in enumerate(gt_idx):
                     if j_local in used_local: continue
-                    iou = iou_xyxy(b, gts[j])
-                    if iou > best_iou:
-                        best_iou, best_j = iou, j_local
-                if best_iou >= iou_thr:
-                    used_local.add(best_j)
-                    tp_idx.append(int(det_i[k]))
-                    matched_gt.add(gt_idx[best_j])
-                else:
-                    fp_idx.append(int(det_i[k]))
+                    iou = iou_xyxy(pb[d], gtb[j])
+                    if iou > best: best, bj = iou, j_local
+                if best >= iou_thr:
+                    used_local.add(bj)
+                    matched_gt[d] = gt_idx[bj]
+                    gt_used[gt_idx[bj]] = True
 
-        # 未匹配 GT = FN
-        fn_idx = [i for i in range(len(gts)) if i not in matched_gt]
+        # 导出 TP/FP 预测实例
+        for i in range(len(pb)):
+            pred_cls = int(pl[i])
+            pred_name = cid2name.get(pred_cls, str(pred_cls))
+            box = pb[i].tolist()
+            if i in matched_gt:
+                j = matched_gt[i]
+                gt_name = cid2name.get(int(gtl[j]), str(int(gtl[j])))
+                save_p = out_dir / "TP" / f"{img_id}_det{i}_Pred-{pred_name}_{ps[i]:.2f}_GT-{gt_name}.jpg"
+                draw_and_save_crop(im, box,
+                    [f"TP  IoU@{iou_thr}",
+                     f"Pred: {pred_name}  s={ps[i]:.2f}",
+                     f"GT:   {gt_name}"],
+                    color=(80,200,60), save_path=save_p)
+            else:
+                save_p = out_dir / "FP" / f"{img_id}_det{i}_Pred-{pred_name}_{ps[i]:.2f}_GT-None.jpg"
+                draw_and_save_crop(im, box,
+                    [f"FP  IoU@{iou_thr}",
+                     f"Pred: {pred_name}  s={ps[i]:.2f}",
+                     "GT:   None"],
+                    color=(40,220,220), save_path=save_p)
 
-        # 绘制：TP 绿, FP 黄, FN 红
-        # 先画预测（框+score）
-        for i in tp_idx:
-            x1, y1, x2, y2 = boxes[i].astype(int).tolist()
-            cv2.rectangle(im, (x1, y1), (x2, y2), GREEN, 2)
-            cv2.putText(im, f"TP {scores[i]:.2f}", (x1, max(10, y1 - 5)), font, 0.5, GREEN, 1, cv2.LINE_AA)
-        for i in fp_idx:
-            x1, y1, x2, y2 = boxes[i].astype(int).tolist()
-            cv2.rectangle(im, (x1, y1), (x2, y2), YELLOW, 2)
-            cv2.putText(im, f"FP {scores[i]:.2f}", (x1, max(10, y1 - 5)), font, 0.5, YELLOW, 1, cv2.LINE_AA)
-        # 再画 FN（红）
-        for j in fn_idx:
-            x1, y1, x2, y2 = gts[j].astype(int).tolist()
-            cv2.rectangle(im, (x1, y1), (x2, y2), RED, 2)
-            cv2.putText(im, "FN", (x1, max(10, y1 - 5)), font, 0.6, RED, 2, cv2.LINE_AA)
+        # 导出未匹配 GT（FN）
+        for j in range(len(gtb)):
+            if gt_used[j]: continue
+            gt_name = cid2name.get(int(gtl[j]), str(int(gtl[j])))
+            save_p = out_dir / "FN" / f"{img_id}_gt{j}_GT-{gt_name}.jpg"
+            draw_and_save_crop(im, gtb[j].tolist(),
+                [f"FN  IoU@{iou_thr}",
+                 f"GT: {gt_name}",
+                 "Pred: None"],
+                color=(30,30,230), save_path=save_p)
 
-        # 角标 legend+统计
-        tp, fp, fn = len(tp_idx), len(fp_idx), len(fn_idx)
-        txt = f"TP:{tp}  FP:{fp}  FN:{fn}  IoU@{iou_thr}  thr@{score_thr}"
-        cv2.rectangle(im, (0, 0), (int(10 + 7.3 * len(txt)), 24), (0, 0, 0), -1)
-        cv2.putText(im, txt, (6, 17), font, 0.5, WHITE, 1, cv2.LINE_AA)
-
-        # 保存
-        out_path = out_dir / f"{img_id}.jpg"
-        cv2.imwrite(str(out_path), im)
-
-        summary.append({
-            "image_id": int(img_id),
-            "file_name": fn,
-            "TP": tp, "FP": fp, "FN": fn,
-            "det": int(len(boxes)), "gt": int(len(gts))
-        })
-
-    # 保存汇总
-    with open(summ_json, "w") as f:
-        json.dump(summary, f, indent=2)
-    with open(summ_csv, "w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=["image_id", "file_name", "TP", "FP", "FN", "det", "gt"])
-        w.writeheader();
-        w.writerows(summary)
-
-    print(f"[viz] wrote {out_dir}  ({len(summary)} images)  "
-          f"json={summ_json.name} csv={summ_csv.name}")
+    print(f"[viz] wrote per-instance crops to {out_dir}")
     return out_dir
 
 
