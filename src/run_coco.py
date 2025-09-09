@@ -1410,106 +1410,194 @@ def stage_tune(cfg, graph_file: Path, model_file: Path) -> float:
     out.write_text(json.dumps(best, indent=2))
     print(f"[tune] best tau={best['tau']:.3f}  F1={best['F1']:.3f}  P={best['P']:.3f}  R={best['R']:.3f}")
     return best["tau"]
-
-
 from scipy.optimize import linear_sum_assignment
+import numpy as np
 
+def _xywh_to_xyxy(b): x,y,w,h=b; return [x,y,x+w,y+h]
+def _iou(a,b):
+    x1,y1=max(a[0],b[0]),max(a[1],b[1]); x2,y2=min(a[2],b[2]),min(a[3],b[3])
+    inter=max(0,x2-x1)*max(0,y2-y1); A=lambda t:max(0,t[2]-t[0])*max(0,t[3]-t[1])
+    return inter/max(1e-8, A(a)+A(b)-inter)
+def _iom(a,b):
+    x1,y1=max(a[0],b[0]),max(a[1],b[1]); x2,y2=min(a[2],b[2]),min(a[3],b[3])
+    inter=max(0,x2-x1)*max(0,y2-y1); A=lambda t:max(0,t[2]-t[0])*max(0,t[3]-t[1])
+    return inter/max(1e-8, min(A(a),A(b)))
+def _cdist(a,b):
+    ax,ay=(a[0]+a[2])/2,(a[1]+a[3])/2; bx,by=(b[0]+b[2])/2,(b[1]+b[3])/2
+    d=((ax-bx)**2+(ay-by)**2)**0.5; s=max((a[2]-a[0])*(a[3]-a[1]), (b[2]-b[0])*(b[3]-b[1]))
+    return d/(s**0.5 + 1e-8)
 
-def _xywh_to_xyxy(b): x, y, w, h = b; return [x, y, x + w, y + h]
-
-
-def _iou(a, b):
-    x1, y1 = max(a[0], b[0]), max(a[1], b[1]);
-    x2, y2 = min(a[2], b[2]), min(a[3], b[3])
-    inter = max(0, x2 - x1) * max(0, y2 - y1);
-    A = lambda t: max(0, t[2] - t[0]) * max(0, t[3] - t[1])
-    return inter / max(1e-8, A(a) + A(b) - inter)
-
-
-def _iom(a, b):
-    x1, y1 = max(a[0], b[0]), max(a[1], b[1]);
-    x2, y2 = min(a[2], b[2]), min(a[3], b[3])
-    inter = max(0, x2 - x1) * max(0, y2 - y1);
-    A = lambda t: max(0, t[2] - t[0]) * max(0, t[3] - t[1])
-    return inter / max(1e-8, min(A(a), A(b)))
-
-
-def _cdist(a, b):
-    ax, ay = (a[0] + a[2]) / 2, (a[1] + a[3]) / 2;
-    bx, by = (b[0] + b[2]) / 2, (b[1] + b[3]) / 2
-    d = ((ax - bx) ** 2 + (ay - by) ** 2) ** 0.5;
-    s = max((a[2] - a[0]) * (a[3] - a[1]), (b[2] - b[0]) * (b[3] - b[1]))
-    return d / (s ** 0.5 + 1e-8)
-
-
-def stage_match_to_gt_class(cfg, det_file: Path, alpha=1.0, beta=0.5, gamma=0.3, iou_min=0.1) -> Path:
+def stage_match_to_gt_class(cfg, det_file, alpha=1.0, beta=0.5, gamma=0.3, iou_min=0.1):
     """
-    逐图逐类：同类预测 P_c 与 GT G_c 做 Hungarian 匹配，生成监督
-    输出 matches.jsonl：每图含 {matches:[(pi,gj,cls)], unmatch_pred:[i], miss_gt:[j]}
+    输出 /outputs/matches.jsonl
+    每行：{"image_id", "matches":[(pi,gj,cls)], "unmatch_pred":[(cls,pi)], "miss_gt":[(cls,gj)]}
+    cost = α(1−IoU)+β(1−IoM)+γ*center_dist_norm，IoU<iou_min 置为大成本。
     """
     import json
+    from pathlib import Path
     from pycocotools.coco import COCO
+
     out = cfg.paths.outputs_dir / "matches.jsonl"
     if out.exists(): print(f"[match] reuse {out}"); return out
 
     coco = COCO(str(cfg.paths.coco_annotations))
-    id2fn = {im["id"]: im["file_name"] for im in coco.dataset["images"]}
-
     with open(det_file) as fdet, open(out, "w") as fout:
         for L in fdet:
-            r = json.loads(L)
-            img_id = r["image_id"]
-            boxes, labels, scores = r["boxes"], r["labels"], r["scores"]
+            rec = json.loads(L)
+            img_id = rec["image_id"]
+            boxes, labels = rec["boxes"], rec["labels"]
+
             ann_ids = coco.getAnnIds(imgIds=[img_id], iscrowd=None)
             anns = coco.loadAnns(ann_ids)
             gt_by_cls = {}
             for a in anns:
                 gt_by_cls.setdefault(int(a["category_id"]), []).append(_xywh_to_xyxy(a["bbox"]))
 
-            result = {"image_id": img_id, "matches": [], "unmatch_pred": [], "miss_gt": []}
+            res = {"image_id": img_id, "matches": [], "unmatch_pred": [], "miss_gt": []}
 
-            for cls in sorted(set(labels) | set(gt_by_cls.keys())):
-                p_idx = [i for i, l in enumerate(labels) if int(l) == cls]
-                g_boxes = gt_by_cls.get(cls, [])
-                if not p_idx and not g_boxes: continue
-                if not p_idx:
-                    result["miss_gt"] += [(cls, j) for j in range(len(g_boxes))]
+            classes = sorted(set(labels) | set(gt_by_cls.keys()))
+            for cls in classes:
+                p_idx = [i for i,l in enumerate(labels) if int(l)==cls]
+                g_box = gt_by_cls.get(cls, [])
+
+                if not p_idx and not g_box:
                     continue
-                if not g_boxes:
-                    result["unmatch_pred"] += [(cls, i) for i in p_idx]
+                if not p_idx:
+                    res["miss_gt"] += [(cls, j) for j in range(len(g_box))]
+                    continue
+                if not g_box:
+                    res["unmatch_pred"] += [(cls, i) for i in p_idx]
                     continue
 
                 P = [boxes[i] for i in p_idx]
-                # cost 矩阵（越小越好）；加入 IoU 下限过滤
-                C = []
-                for pb in P:
-                    row = []
-                    for gb in g_boxes:
-                        iou = _iou(pb, gb);
-                        iom = _iom(pb, gb);
-                        cd = _cdist(pb, gb)
-                        cost = alpha * (1.0 - iou) + beta * (1.0 - iom) + gamma * cd
-                        row.append(cost if iou >= iou_min else 1e3)  # 不可匹配置大成本
-                    C.append(row)
-                C = np.array(C, dtype=np.float32)
-                rr, cc = linear_sum_assignment(C)
-                # 收集匹配（过滤掉巨大成本）
-                used_g = set()
-                matched_p = set()
-                for ri, ci in zip(rr, cc):
-                    if C[ri, ci] >= 999: continue
-                    result["matches"].append((int(p_idx[ri]), int(ci), int(cls)))
-                    used_g.add(ci);
-                    matched_p.add(p_idx[ri])
-                # 未匹配
-                result["unmatch_pred"] += [(cls, i) for i in p_idx if i not in matched_p]
-                result["miss_gt"] += [(cls, j) for j in range(len(g_boxes)) if j not in used_g]
+                C = np.empty((len(P), len(g_box)), dtype=np.float32)
+                C.fill(1e3)
+                for i,pb in enumerate(P):
+                    for j,gb in enumerate(g_box):
+                        iou=_iou(pb,gb)
+                        if iou < iou_min:
+                            continue
+                        iom=_iom(pb,gb); cd=_cdist(pb,gb)
+                        C[i,j] = alpha*(1.0-iou) + beta*(1.0-iom) + gamma*cd
 
-            fout.write(json.dumps(result) + "\n")
+                rr, cc = linear_sum_assignment(C)
+                used_g=set(); used_p=set()
+                for r,c in zip(rr,cc):
+                    if C[r,c] >= 999: continue
+                    res["matches"].append((int(p_idx[r]), int(c), int(cls)))
+                    used_g.add(c); used_p.add(p_idx[r])
+
+                res["unmatch_pred"] += [(cls, i) for i in p_idx if i not in used_p]
+                res["miss_gt"]     += [(cls, j) for j in range(len(g_box)) if j not in used_g]
+
+            fout.write(json.dumps(res) + "\n")
 
     print(f"[match] wrote {out}")
     return out
 
+def stage_viz_match(cfg, det_file, match_file, pad=6, limit=0):
+    """
+    输出 /outputs/viz_match/*.jpg
+    文件名：{image_id}_{className}.jpg
+    """
+    import json, cv2, numpy as np
+    from pathlib import Path
+    from pycocotools.coco import COCO
+
+    out_dir = cfg.paths.outputs_dir / "viz_match"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    GREEN=(80,200,60); RED=(30,30,230); YEL=(40,200,230); PUR=(200,60,200); WHITE=(240,240,240)
+    font = cv2.FONT_HERSHEY_SIMPLEX
+
+    coco = COCO(str(cfg.paths.coco_annotations))
+    id2fn = {im["id"]: im["file_name"] for im in coco.dataset["images"]}
+    cid2name = {c: coco.cats[c]["name"] for c in coco.cats}
+    img_root = Path(cfg.paths.coco_images)
+
+    det_map={}
+    with open(det_file) as f:
+        for L in f:
+            r=json.loads(L); det_map[str(r["image_id"])]=r
+
+    wrote=0
+    with open(match_file) as f:
+        for L in f:
+            m = json.loads(L)
+            img_id = m["image_id"]; det = det_map.get(str(img_id))
+            if det is None: continue
+
+            im = cv2.imread(str(img_root / id2fn[img_id]))
+            if im is None: continue
+            H,W = im.shape[:2]
+
+            boxes, labels, scores = det["boxes"], det["labels"], det["scores"]
+            # 反查：每类有哪些 GT
+            ann_ids = coco.getAnnIds(imgIds=[img_id], iscrowd=None)
+            anns = coco.loadAnns(ann_ids)
+            gt_by_cls = {}
+            for a in anns:
+                gt_by_cls.setdefault(int(a["category_id"]), []).append(_xywh_to_xyxy(a["bbox"]))
+
+            # 汇总这个图里出现的类（以匹配文件为准）
+            cls_set = set([c for *_,c in m["matches"]]) \
+                      | set([c for c,_ in m["unmatch_pred"]]) \
+                      | set([c for c,_ in m["miss_gt"]])
+
+            for cls in sorted(cls_set):
+                vis = im.copy()
+
+                # 画 GT（红）
+                gts = gt_by_cls.get(cls, [])
+                for gb in gts:
+                    X1,Y1,X2,Y2 = map(int, gb)
+                    cv2.rectangle(vis, (X1,Y1), (X2,Y2), RED, 2)
+
+                # 画预测（绿）
+                p_idx = [i for i,l in enumerate(labels) if int(l)==cls]
+                for i in p_idx:
+                    b = list(map(int, boxes[i]))
+                    cv2.rectangle(vis, (b[0],b[1]), (b[2],b[3]), GREEN, 2)
+                    cv2.putText(vis, f"s={scores[i]:.2f}", (b[0], max(12,b[1]-4)), font, 0.45, GREEN, 1, cv2.LINE_AA)
+
+                # 匹配对连线（中心）
+                def ctr(bb): return (int((bb[0]+bb[2])/2), int((bb[1]+bb[3])/2))
+                # 建 p->g 映射
+                for (pi, gj, c) in m["matches"]:
+                    if c!=cls: continue
+                    pb = boxes[pi]; gb = gts[gj] if gj < len(gts) else None
+                    if gb is None: continue
+                    cv2.line(vis, ctr(pb), ctr(gb), (255,255,255), 2)  # 白线
+
+                # 未匹配预测（黄）
+                for (c,i) in m["unmatch_pred"]:
+                    if c!=cls: continue
+                    b = list(map(int, boxes[i]))
+                    cv2.rectangle(vis, (b[0],b[1]), (b[2],b[3]), YEL, 2)
+
+                # 未覆盖GT（紫）
+                for (c,j) in m["miss_gt"]:
+                    if c!=cls: continue
+                    if j < len(gts):
+                        gb = list(map(int, gts[j]))
+                        cv2.rectangle(vis, (gb[0],gb[1]), (gb[2],gb[3]), PUR, 2)
+
+                # 顶栏
+                bar = np.zeros((26, vis.shape[1], 3), np.uint8)
+                txt = f"img {img_id}  cls={cid2name.get(cls,str(cls))}  match={sum(1 for x in m['matches'] if x[2]==cls)}  " \
+                      f"unmatch_pred={sum(1 for x in m['unmatch_pred'] if x[0]==cls)}  miss_gt={sum(1 for x in m['miss_gt'] if x[0]==cls)}"
+                cv2.putText(bar, txt, (6,18), font, 0.55, WHITE, 1, cv2.LINE_AA)
+
+                out = np.vstack([bar, vis])
+                out_p = out_dir / f"{img_id}_{cid2name.get(cls,str(cls))}.jpg"
+                cv2.imwrite(str(out_p), out)
+                wrote += 1
+                if limit and wrote >= limit:
+                    print(f"[viz-match] wrote {out_dir} (limited {limit})")
+                    return out_dir
+
+    print(f"[viz-match] wrote {out_dir}")
+    return out_dir
 
 class EdgeMLP(torch.nn.Module):
     def __init__(self, in_dim=4, hid=64):
@@ -2309,6 +2397,11 @@ def main():
     if "match" in steps:
         det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
         artifacts["match"] = stage_match_to_gt_class(cfg, det)
+
+    if "viz_match" in steps:
+        det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
+        mat = artifacts.get("match", cfg.paths.outputs_dir / "matches.jsonl")
+        artifacts["viz_match"] = stage_viz_match(cfg, det, mat, limit=0)
 
     if "trainsets" in steps:
         det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
