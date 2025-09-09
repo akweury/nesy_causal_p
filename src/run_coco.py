@@ -353,6 +353,330 @@ def stage_viz_frcnn_vs_gt(cfg, det_file: Path,
     return out_dir
 
 
+def stage_group_by_similarity(cfg, det_file: Path,
+                              sim_thr: float = 0.90,
+                              iou_thr: float = 0.30,
+                              iom_thr: float = 0.70,
+                              dist_thr: float = 0.15,
+                              sub_nms_iou: float = 0.7,
+                              hist_bins: int = 16,
+                              pad: int = 2) -> Path:
+    """
+    类相似 + Proximity 分组：
+    - 条件：外观相似>=sim_thr 且 (IoU>=iou_thr or IoM>=iom_thr or center_dist<=dist_thr)
+    - 分组：并查集合并；组内再跑一次小NMS（sub_nms_iou）保留多个代表
+    - 输出 groups_simprox.jsonl
+    """
+    import json, cv2, numpy as np
+    from pathlib import Path
+
+    out = cfg.paths.outputs_dir / "groups_simprox.jsonl"
+    if out.exists():
+        print(f"[simprox] reuse {out}")
+        return out
+
+    # === helpers ===
+    def crop_hsv_hist(im, box):
+        x1, y1, x2, y2 = map(int, box)
+        h, w = im.shape[:2]
+        x1 = max(0, x1 - pad);
+        y1 = max(0, y1 - pad);
+        x2 = min(w - 1, x2 + pad);
+        y2 = min(h - 1, y2 + pad)
+        if x2 <= x1 or y2 <= y1: return None
+        crop = im[y1:y2, x1:x2]
+        hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+        h1 = cv2.calcHist([hsv], [0], None, [hist_bins], [0, 180])
+        h2 = cv2.calcHist([hsv], [1], None, [hist_bins], [0, 256])
+        h3 = cv2.calcHist([hsv], [2], None, [hist_bins], [0, 256])
+        v = np.concatenate([h1.ravel(), h2.ravel(), h3.ravel()]).astype(np.float32)
+        v /= (np.linalg.norm(v) + 1e-8)
+        return v
+
+    def cos_sim(a, b):
+        return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-8))
+
+    def iou_xyxy(a, b):
+        x1, y1 = max(a[0], b[0]), max(a[1], b[1])
+        x2, y2 = min(a[2], b[2]), min(a[3], b[3])
+        inter = max(0, x2 - x1) * max(0, y2 - y1)
+        area = lambda t: max(0, t[2] - t[0]) * max(0, t[3] - t[1])
+        ua = area(a) + area(b) - inter
+        return inter / (ua + 1e-8)
+
+    def iom_xyxy(a, b):
+        x1, y1 = max(a[0], b[0]), max(a[1], b[1])
+        x2, y2 = min(a[2], b[2]), min(a[3], b[3])
+        inter = max(0, x2 - x1) * max(0, y2 - y1)
+        area = lambda t: max(0, t[2] - t[0]) * max(0, t[3] - t[1])
+        return inter / (min(area(a), area(b)) + 1e-8)
+
+    def center_dist_norm(a, b):
+        ax, ay = (a[0] + a[2]) / 2, (a[1] + a[3]) / 2
+        bx, by = (b[0] + b[2]) / 2, (b[1] + b[3]) / 2
+        d = ((ax - bx) ** 2 + (ay - by) ** 2) ** 0.5
+        area_max = max((a[2] - a[0]) * (a[3] - a[1]), (b[2] - b[0]) * (b[3] - b[1]))
+        return d / (area_max ** 0.5 + 1e-8)
+
+    def uf_make(n):
+        return list(range(n))
+
+    def uf_find(p, x):
+        while p[x] != x:
+            p[x] = p[p[x]]
+            x = p[x]
+        return x
+
+    def uf_union(p, a, b):
+        ra, rb = uf_find(p, a), uf_find(p, b)
+        if ra != rb: p[rb] = ra
+
+    def nms(boxes, scores, thr):
+        keep = []
+        idxs = np.argsort(scores)[::-1]
+        while len(idxs) > 0:
+            i = idxs[0];
+            keep.append(i)
+            if len(idxs) == 1: break
+            ious = np.array([iou_xyxy(boxes[i], boxes[j]) for j in idxs[1:]])
+            idxs = idxs[1:][ious < thr]
+        return keep
+
+    # === COCO索引 ===
+    from pycocotools.coco import COCO
+    coco = COCO(str(cfg.paths.coco_annotations))
+    id2fname = {img["id"]: img["file_name"] for img in coco.dataset["images"]}
+    images_root = Path(cfg.paths.coco_images)
+
+    with open(det_file) as f_in, open(out, "w") as f_out:
+        for L in f_in:
+            rec = json.loads(L)
+            img_id = rec["image_id"];
+            fn = id2fname.get(img_id)
+            if not fn: continue
+            im = cv2.imread(str(images_root / fn))
+            if im is None: continue
+
+            boxes = rec.get("boxes", [])
+            labels = rec.get("labels", [])
+            scores = rec.get("scores", [])
+            n = len(boxes)
+            if n == 0:
+                f_out.write(json.dumps({"image_id": img_id, "groups": [], "kept": []}) + "\n")
+                continue
+
+            groups_all = [];
+            kept_all = []
+            for c in sorted(set(labels)):
+                idx = [i for i, l in enumerate(labels) if l == c]
+                if len(idx) <= 1:
+                    kept_all.extend(idx)
+                    if len(idx) == 1:
+                        groups_all.append([0])  # 单个自成组
+                    continue
+
+                feats = [];
+                valid = []
+                for i in idx:
+                    v = crop_hsv_hist(im, boxes[i])
+                    if v is None: continue
+                    feats.append(v);
+                    valid.append(i)
+                if len(valid) == 0: continue
+                feats = np.stack(feats, 0)
+                m = len(valid)
+                uf = uf_make(m)
+
+                for a in range(m):
+                    for b in range(a + 1, m):
+                        sim = cos_sim(feats[a], feats[b])
+                        if sim < sim_thr: continue
+                        iou = iou_xyxy(boxes[valid[a]], boxes[valid[b]])
+                        iom = iom_xyxy(boxes[valid[a]], boxes[valid[b]])
+                        dist = center_dist_norm(boxes[valid[a]], boxes[valid[b]])
+                        if (iou >= iou_thr) or (iom >= iom_thr) or (dist <= dist_thr):
+                            uf_union(uf, a, b)
+
+                roots = {}
+                for i_loc in range(m):
+                    r = uf_find(uf, i_loc)
+                    roots.setdefault(r, []).append(i_loc)
+
+                kept_all.extend(valid)
+                for vs in roots.values():
+                    cand = [valid[i_loc] for i_loc in vs]
+                    if not cand: continue
+                    # 子簇NMS避免全并成1
+                    sub_boxes = [boxes[i] for i in cand]
+                    sub_scores = [scores[i] for i in cand]
+                    keep_idx = nms(sub_boxes, sub_scores, sub_nms_iou)
+                    # 保存成局部索引
+                    grp = [cand.index(cand[j]) for j in keep_idx]
+                    groups_all.append(grp)
+
+            f_out.write(json.dumps({"image_id": img_id, "groups": groups_all, "kept": kept_all}) + "\n")
+
+    print(f"[simprox] wrote {out}")
+    return out
+
+def stage_viz_simprox_groups(cfg,
+                             groups_file: Path,
+                             det_file: Path,
+                             pad: int = 8,
+                             limit: int = 0) -> Path:
+    """
+    可视化 sim+proximity 分组：
+      - 每组一张：组内预测(绿) + 同类所有GT(红)
+      - 裁剪范围 = 组并集 ∪ 同类GT并集 + pad
+    产物：outputs/viz_simprox_groups/*.jpg + index.json/csv
+    """
+    import json, csv, cv2, numpy as np
+    from pathlib import Path
+    from pycocotools.coco import COCO
+
+    out_dir = cfg.paths.outputs_dir / "viz_simprox_groups"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    idx_json = out_dir / "index.json"
+    idx_csv  = out_dir / "index.csv"
+
+    coco = COCO(str(cfg.paths.coco_annotations))
+    id2fname = {im["id"]: im["file_name"] for im in coco.dataset["images"]}
+    cid2name = {c: coco.cats[c]["name"] for c in coco.cats}
+    images_root = Path(cfg.paths.coco_images)
+
+    # det 映射
+    det_map = {}
+    with open(det_file) as f:
+        for L in f:
+            r = json.loads(L)
+            det_map[str(r["image_id"])] = r
+
+    GREEN=(80,200,60); RED=(30,30,230); WHITE=(240,240,240)
+    font = cv2.FONT_HERSHEY_SIMPLEX
+
+    index = []
+    wrote = 0
+
+    with open(groups_file) as f:
+        for L in f:
+            g = json.loads(L)
+            img_id = g["image_id"]
+            fn = id2fname.get(img_id)
+            if not fn: continue
+            det = det_map.get(str(img_id))
+            if not det: continue
+
+            im = cv2.imread(str(images_root / fn))
+            if im is None: continue
+            H,W = im.shape[:2]
+
+            # GT
+            ann_ids = coco.getAnnIds(imgIds=[img_id], iscrowd=None)
+            anns = coco.loadAnns(ann_ids)
+
+            boxes = det["boxes"]; labels = det["labels"]; scores = det["scores"]
+            kept  = g.get("kept", list(range(len(boxes))))
+
+            for k, members_local in enumerate(g.get("groups", []), start=1):
+                if not members_local: continue
+                # 局部→全局 det 索引
+                mem_idx = [kept[j] for j in members_local if 0 <= j < len(kept)]
+                if not mem_idx: continue
+
+                gb = [boxes[i] for i in mem_idx]
+                gl = [int(labels[i]) for i in mem_idx]
+                gs = [float(scores[i]) for i in mem_idx]
+                cls_set = set(gl)
+
+                # 同类全部 GT（不看 IoU）
+                same_cls_gts = []
+                for a in anns:
+                    cid = int(a["category_id"])
+                    if cid in cls_set:
+                        x,y,w_,h_ = a["bbox"]
+                        same_cls_gts.append(([x, y, x+w_, y+h_],
+                                             cid,
+                                             cid2name.get(cid, str(cid))))
+
+                # 裁剪：组并集 ∪ 同类GT并集
+                xs1 = [b[0] for b in gb] + [g_[0][0] for g_ in same_cls_gts] or [0]
+                ys1 = [b[1] for b in gb] + [g_[0][1] for g_ in same_cls_gts] or [0]
+                xs2 = [b[2] for b in gb] + [g_[0][2] for g_ in same_cls_gts] or [W-1]
+                ys2 = [b[3] for b in gb] + [g_[0][3] for g_ in same_cls_gts] or [H-1]
+                x1 = max(0, int(min(xs1) - pad)); y1 = max(0, int(min(ys1) - pad))
+                x2 = min(W-1, int(max(xs2) + pad)); y2 = min(H-1, int(max(ys2) + pad))
+                crop = im[y1:y2+1, x1:x2+1].copy()
+                if crop.size == 0: continue
+
+                # 画 GT（红）
+                for (gxyxy, cid, name) in same_cls_gts:
+                    X1,Y1,X2,Y2 = map(int, gxyxy)
+                    cv2.rectangle(crop, (X1-x1,Y1-y1), (X2-x1,Y2-y1), RED, 2)
+                    cv2.putText(crop, f"GT:{name}", (X1-x1, max(14,Y1-y1-4)),
+                                font, 0.5, RED, 1, cv2.LINE_AA)
+
+                # 画组成员（绿）
+                for b,c,s in zip(gb, gl, gs):
+                    B1,B2,B3,B4 = map(int, b)
+                    name = cid2name.get(c, str(c))
+                    cv2.rectangle(crop, (B1-x1,B2-y1), (B3-x1,B4-y1), GREEN, 2)
+                    cv2.putText(crop, f"{name} s={s:.2f}", (B1-x1, max(14,B2-y1-4)),
+                                font, 0.5, GREEN, 1, cv2.LINE_AA)
+
+                # 顶栏
+                gt_names = ",".join(sorted({n for *_ , n in same_cls_gts})) or "None"
+                bar = np.zeros((26, crop.shape[1], 3), np.uint8)
+                cv2.putText(bar, f"img {img_id}  G{k}  members={len(mem_idx)}  GT(same-class): {gt_names}",
+                            (6,18), font, 0.55, WHITE, 1, cv2.LINE_AA)
+                vis = np.vstack([bar, crop])
+
+                out_p = out_dir / f"{img_id}_G{k}.jpg"
+                cv2.imwrite(str(out_p), vis)
+
+                # 索引
+                index.append({
+                    "image_id": int(img_id),
+                    "file_name": fn,
+                    "group_id": int(k),
+                    "member_count": len(mem_idx),
+                    "members": [
+                        { "det_idx": int(i),
+                          "label_id": int(c),
+                          "label": cid2name.get(int(c), str(int(c))),
+                          "score": float(s),
+                          "box_xyxy": [float(x) for x in boxes[i]] }
+                        for i,c,s in zip(mem_idx, gl, gs)
+                    ],
+                    "gt_same_class": [
+                        { "category_id": int(cid),
+                          "category": name,
+                          "box_xyxy": [float(x) for x in gxyxy] }
+                        for (gxyxy, cid, name) in same_cls_gts
+                    ],
+                    "viz_path": str(out_p)
+                })
+
+                wrote += 1
+                if limit and wrote >= limit:
+                    idx_json.write_text(json.dumps(index, indent=2))
+                    with open(idx_csv, "w", newline="") as fcsv:
+                        w = csv.DictWriter(fcsv, fieldnames=["image_id","file_name","group_id","member_count","viz_path"])
+                        w.writeheader()
+                        for r in index:
+                            w.writerow({k:r[k] for k in w.fieldnames})
+                    print(f"[viz-simprox] wrote {out_dir} (limited {limit})")
+                    return out_dir
+
+    # 写索引
+    idx_json.write_text(json.dumps(index, indent=2))
+    with open(idx_csv, "w", newline="") as fcsv:
+        w = csv.DictWriter(fcsv, fieldnames=["image_id","file_name","group_id","member_count","viz_path"])
+        w.writeheader()
+        for r in index:
+            w.writerow({k:r[k] for k in w.fieldnames})
+
+    print(f"[viz-simprox] wrote {out_dir}\n- index: {idx_json.name}, {idx_csv.name}")
+    return out_dir
 def stage_build_graph(cfg, det_file: Path) -> Path:
     """
     读取 detections.jsonl → 生成 graphs_<mode>.jsonl
@@ -1615,6 +1939,16 @@ def main():
                                                  iou_thr=0.5,  # 可改
                                                  score_thr=0.05,  # 可改
                                                  limit=200)  # 可改
+    # sim+prox 分组（你上一条已更新的 stage）
+    if "simprox_group" in steps:
+        det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
+        artifacts["simprox_groups"] = stage_group_by_similarity(cfg, det)
+
+    # 可视化
+    if "viz_simprox" in steps:
+        groups = artifacts.get("simprox_groups", cfg.paths.outputs_dir / "groups_simprox.jsonl")
+        det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
+        artifacts["viz_simprox"] = stage_viz_simprox_groups(cfg, groups, det, pad=8, limit=200)
 
     # 2) graph
     if "graph" in steps:
