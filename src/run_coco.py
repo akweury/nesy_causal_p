@@ -4,12 +4,13 @@
 # pipeline.py
 import argparse, json
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Tuple
 from config import load_config
 import config
 from gen_data.coco_data_processing import build_labelstudio_subset_with_bboxes
 from gen_data.filter_coco_by_objcount import filter_coco
 import numpy as np
+import torch
 
 
 def _load_coco(ann_path):
@@ -471,9 +472,11 @@ def stage_group_by_similarity(cfg, det_file: Path,
                 idx = [i for i, l in enumerate(labels) if l == c]
                 if len(idx) <= 1:
                     kept_all.extend(idx)
+                    # 删除：if len(idx)==1: groups_all.append([0])
+                    # 改为：单候选不建组
                     if len(idx) == 1:
-                        groups_all.append([0])  # 单个自成组
-                    continue
+                        kept_all.extend(idx)
+                        continue
 
                 feats = [];
                 valid = []
@@ -519,6 +522,7 @@ def stage_group_by_similarity(cfg, det_file: Path,
     print(f"[simprox] wrote {out}")
     return out
 
+
 def stage_viz_simprox_groups(cfg,
                              groups_file: Path,
                              det_file: Path,
@@ -537,7 +541,7 @@ def stage_viz_simprox_groups(cfg,
     out_dir = cfg.paths.outputs_dir / "viz_simprox_groups"
     out_dir.mkdir(parents=True, exist_ok=True)
     idx_json = out_dir / "index.json"
-    idx_csv  = out_dir / "index.csv"
+    idx_csv = out_dir / "index.csv"
 
     coco = COCO(str(cfg.paths.coco_annotations))
     id2fname = {im["id"]: im["file_name"] for im in coco.dataset["images"]}
@@ -551,7 +555,9 @@ def stage_viz_simprox_groups(cfg,
             r = json.loads(L)
             det_map[str(r["image_id"])] = r
 
-    GREEN=(80,200,60); RED=(30,30,230); WHITE=(240,240,240)
+    GREEN = (80, 200, 60);
+    RED = (30, 30, 230);
+    WHITE = (240, 240, 240)
     font = cv2.FONT_HERSHEY_SIMPLEX
 
     index = []
@@ -568,14 +574,16 @@ def stage_viz_simprox_groups(cfg,
 
             im = cv2.imread(str(images_root / fn))
             if im is None: continue
-            H,W = im.shape[:2]
+            H, W = im.shape[:2]
 
             # GT
             ann_ids = coco.getAnnIds(imgIds=[img_id], iscrowd=None)
             anns = coco.loadAnns(ann_ids)
 
-            boxes = det["boxes"]; labels = det["labels"]; scores = det["scores"]
-            kept  = g.get("kept", list(range(len(boxes))))
+            boxes = det["boxes"];
+            labels = det["labels"];
+            scores = det["scores"]
+            kept = g.get("kept", list(range(len(boxes))))
 
             for k, members_local in enumerate(g.get("groups", []), start=1):
                 if not members_local: continue
@@ -593,41 +601,43 @@ def stage_viz_simprox_groups(cfg,
                 for a in anns:
                     cid = int(a["category_id"])
                     if cid in cls_set:
-                        x,y,w_,h_ = a["bbox"]
-                        same_cls_gts.append(([x, y, x+w_, y+h_],
+                        x, y, w_, h_ = a["bbox"]
+                        same_cls_gts.append(([x, y, x + w_, y + h_],
                                              cid,
                                              cid2name.get(cid, str(cid))))
 
                 # 裁剪：组并集 ∪ 同类GT并集
                 xs1 = [b[0] for b in gb] + [g_[0][0] for g_ in same_cls_gts] or [0]
                 ys1 = [b[1] for b in gb] + [g_[0][1] for g_ in same_cls_gts] or [0]
-                xs2 = [b[2] for b in gb] + [g_[0][2] for g_ in same_cls_gts] or [W-1]
-                ys2 = [b[3] for b in gb] + [g_[0][3] for g_ in same_cls_gts] or [H-1]
-                x1 = max(0, int(min(xs1) - pad)); y1 = max(0, int(min(ys1) - pad))
-                x2 = min(W-1, int(max(xs2) + pad)); y2 = min(H-1, int(max(ys2) + pad))
-                crop = im[y1:y2+1, x1:x2+1].copy()
+                xs2 = [b[2] for b in gb] + [g_[0][2] for g_ in same_cls_gts] or [W - 1]
+                ys2 = [b[3] for b in gb] + [g_[0][3] for g_ in same_cls_gts] or [H - 1]
+                x1 = max(0, int(min(xs1) - pad));
+                y1 = max(0, int(min(ys1) - pad))
+                x2 = min(W - 1, int(max(xs2) + pad));
+                y2 = min(H - 1, int(max(ys2) + pad))
+                crop = im[y1:y2 + 1, x1:x2 + 1].copy()
                 if crop.size == 0: continue
 
                 # 画 GT（红）
                 for (gxyxy, cid, name) in same_cls_gts:
-                    X1,Y1,X2,Y2 = map(int, gxyxy)
-                    cv2.rectangle(crop, (X1-x1,Y1-y1), (X2-x1,Y2-y1), RED, 2)
-                    cv2.putText(crop, f"GT:{name}", (X1-x1, max(14,Y1-y1-4)),
+                    X1, Y1, X2, Y2 = map(int, gxyxy)
+                    cv2.rectangle(crop, (X1 - x1, Y1 - y1), (X2 - x1, Y2 - y1), RED, 2)
+                    cv2.putText(crop, f"GT:{name}", (X1 - x1, max(14, Y1 - y1 - 4)),
                                 font, 0.5, RED, 1, cv2.LINE_AA)
 
                 # 画组成员（绿）
-                for b,c,s in zip(gb, gl, gs):
-                    B1,B2,B3,B4 = map(int, b)
+                for b, c, s in zip(gb, gl, gs):
+                    B1, B2, B3, B4 = map(int, b)
                     name = cid2name.get(c, str(c))
-                    cv2.rectangle(crop, (B1-x1,B2-y1), (B3-x1,B4-y1), GREEN, 2)
-                    cv2.putText(crop, f"{name} s={s:.2f}", (B1-x1, max(14,B2-y1-4)),
+                    cv2.rectangle(crop, (B1 - x1, B2 - y1), (B3 - x1, B4 - y1), GREEN, 2)
+                    cv2.putText(crop, f"{name} s={s:.2f}", (B1 - x1, max(14, B2 - y1 - 4)),
                                 font, 0.5, GREEN, 1, cv2.LINE_AA)
 
                 # 顶栏
-                gt_names = ",".join(sorted({n for *_ , n in same_cls_gts})) or "None"
+                gt_names = ",".join(sorted({n for *_, n in same_cls_gts})) or "None"
                 bar = np.zeros((26, crop.shape[1], 3), np.uint8)
                 cv2.putText(bar, f"img {img_id}  G{k}  members={len(mem_idx)}  GT(same-class): {gt_names}",
-                            (6,18), font, 0.55, WHITE, 1, cv2.LINE_AA)
+                            (6, 18), font, 0.55, WHITE, 1, cv2.LINE_AA)
                 vis = np.vstack([bar, crop])
 
                 out_p = out_dir / f"{img_id}_G{k}.jpg"
@@ -640,17 +650,17 @@ def stage_viz_simprox_groups(cfg,
                     "group_id": int(k),
                     "member_count": len(mem_idx),
                     "members": [
-                        { "det_idx": int(i),
-                          "label_id": int(c),
-                          "label": cid2name.get(int(c), str(int(c))),
-                          "score": float(s),
-                          "box_xyxy": [float(x) for x in boxes[i]] }
-                        for i,c,s in zip(mem_idx, gl, gs)
+                        {"det_idx": int(i),
+                         "label_id": int(c),
+                         "label": cid2name.get(int(c), str(int(c))),
+                         "score": float(s),
+                         "box_xyxy": [float(x) for x in boxes[i]]}
+                        for i, c, s in zip(mem_idx, gl, gs)
                     ],
                     "gt_same_class": [
-                        { "category_id": int(cid),
-                          "category": name,
-                          "box_xyxy": [float(x) for x in gxyxy] }
+                        {"category_id": int(cid),
+                         "category": name,
+                         "box_xyxy": [float(x) for x in gxyxy]}
                         for (gxyxy, cid, name) in same_cls_gts
                     ],
                     "viz_path": str(out_p)
@@ -660,23 +670,25 @@ def stage_viz_simprox_groups(cfg,
                 if limit and wrote >= limit:
                     idx_json.write_text(json.dumps(index, indent=2))
                     with open(idx_csv, "w", newline="") as fcsv:
-                        w = csv.DictWriter(fcsv, fieldnames=["image_id","file_name","group_id","member_count","viz_path"])
+                        w = csv.DictWriter(fcsv, fieldnames=["image_id", "file_name", "group_id", "member_count", "viz_path"])
                         w.writeheader()
                         for r in index:
-                            w.writerow({k:r[k] for k in w.fieldnames})
+                            w.writerow({k: r[k] for k in w.fieldnames})
                     print(f"[viz-simprox] wrote {out_dir} (limited {limit})")
                     return out_dir
 
     # 写索引
     idx_json.write_text(json.dumps(index, indent=2))
     with open(idx_csv, "w", newline="") as fcsv:
-        w = csv.DictWriter(fcsv, fieldnames=["image_id","file_name","group_id","member_count","viz_path"])
+        w = csv.DictWriter(fcsv, fieldnames=["image_id", "file_name", "group_id", "member_count", "viz_path"])
         w.writeheader()
         for r in index:
-            w.writerow({k:r[k] for k in w.fieldnames})
+            w.writerow({k: r[k] for k in w.fieldnames})
 
     print(f"[viz-simprox] wrote {out_dir}\n- index: {idx_json.name}, {idx_csv.name}")
     return out_dir
+
+
 def stage_build_graph(cfg, det_file: Path) -> Path:
     """
     读取 detections.jsonl → 生成 graphs_<mode>.jsonl
@@ -1400,6 +1412,361 @@ def stage_tune(cfg, graph_file: Path, model_file: Path) -> float:
     return best["tau"]
 
 
+from scipy.optimize import linear_sum_assignment
+
+
+def _xywh_to_xyxy(b): x, y, w, h = b; return [x, y, x + w, y + h]
+
+
+def _iou(a, b):
+    x1, y1 = max(a[0], b[0]), max(a[1], b[1]);
+    x2, y2 = min(a[2], b[2]), min(a[3], b[3])
+    inter = max(0, x2 - x1) * max(0, y2 - y1);
+    A = lambda t: max(0, t[2] - t[0]) * max(0, t[3] - t[1])
+    return inter / max(1e-8, A(a) + A(b) - inter)
+
+
+def _iom(a, b):
+    x1, y1 = max(a[0], b[0]), max(a[1], b[1]);
+    x2, y2 = min(a[2], b[2]), min(a[3], b[3])
+    inter = max(0, x2 - x1) * max(0, y2 - y1);
+    A = lambda t: max(0, t[2] - t[0]) * max(0, t[3] - t[1])
+    return inter / max(1e-8, min(A(a), A(b)))
+
+
+def _cdist(a, b):
+    ax, ay = (a[0] + a[2]) / 2, (a[1] + a[3]) / 2;
+    bx, by = (b[0] + b[2]) / 2, (b[1] + b[3]) / 2
+    d = ((ax - bx) ** 2 + (ay - by) ** 2) ** 0.5;
+    s = max((a[2] - a[0]) * (a[3] - a[1]), (b[2] - b[0]) * (b[3] - b[1]))
+    return d / (s ** 0.5 + 1e-8)
+
+
+def stage_match_to_gt_class(cfg, det_file: Path, alpha=1.0, beta=0.5, gamma=0.3, iou_min=0.1) -> Path:
+    """
+    逐图逐类：同类预测 P_c 与 GT G_c 做 Hungarian 匹配，生成监督
+    输出 matches.jsonl：每图含 {matches:[(pi,gj,cls)], unmatch_pred:[i], miss_gt:[j]}
+    """
+    import json
+    from pycocotools.coco import COCO
+    out = cfg.paths.outputs_dir / "matches.jsonl"
+    if out.exists(): print(f"[match] reuse {out}"); return out
+
+    coco = COCO(str(cfg.paths.coco_annotations))
+    id2fn = {im["id"]: im["file_name"] for im in coco.dataset["images"]}
+
+    with open(det_file) as fdet, open(out, "w") as fout:
+        for L in fdet:
+            r = json.loads(L)
+            img_id = r["image_id"]
+            boxes, labels, scores = r["boxes"], r["labels"], r["scores"]
+            ann_ids = coco.getAnnIds(imgIds=[img_id], iscrowd=None)
+            anns = coco.loadAnns(ann_ids)
+            gt_by_cls = {}
+            for a in anns:
+                gt_by_cls.setdefault(int(a["category_id"]), []).append(_xywh_to_xyxy(a["bbox"]))
+
+            result = {"image_id": img_id, "matches": [], "unmatch_pred": [], "miss_gt": []}
+
+            for cls in sorted(set(labels) | set(gt_by_cls.keys())):
+                p_idx = [i for i, l in enumerate(labels) if int(l) == cls]
+                g_boxes = gt_by_cls.get(cls, [])
+                if not p_idx and not g_boxes: continue
+                if not p_idx:
+                    result["miss_gt"] += [(cls, j) for j in range(len(g_boxes))]
+                    continue
+                if not g_boxes:
+                    result["unmatch_pred"] += [(cls, i) for i in p_idx]
+                    continue
+
+                P = [boxes[i] for i in p_idx]
+                # cost 矩阵（越小越好）；加入 IoU 下限过滤
+                C = []
+                for pb in P:
+                    row = []
+                    for gb in g_boxes:
+                        iou = _iou(pb, gb);
+                        iom = _iom(pb, gb);
+                        cd = _cdist(pb, gb)
+                        cost = alpha * (1.0 - iou) + beta * (1.0 - iom) + gamma * cd
+                        row.append(cost if iou >= iou_min else 1e3)  # 不可匹配置大成本
+                    C.append(row)
+                C = np.array(C, dtype=np.float32)
+                rr, cc = linear_sum_assignment(C)
+                # 收集匹配（过滤掉巨大成本）
+                used_g = set()
+                matched_p = set()
+                for ri, ci in zip(rr, cc):
+                    if C[ri, ci] >= 999: continue
+                    result["matches"].append((int(p_idx[ri]), int(ci), int(cls)))
+                    used_g.add(ci);
+                    matched_p.add(p_idx[ri])
+                # 未匹配
+                result["unmatch_pred"] += [(cls, i) for i in p_idx if i not in matched_p]
+                result["miss_gt"] += [(cls, j) for j in range(len(g_boxes)) if j not in used_g]
+
+            fout.write(json.dumps(result) + "\n")
+
+    print(f"[match] wrote {out}")
+    return out
+
+
+class EdgeMLP(torch.nn.Module):
+    def __init__(self, in_dim=4, hid=64):
+        super().__init__()
+        self.net = torch.nn.Sequential(
+            torch.nn.Linear(in_dim, hid), torch.nn.ReLU(),
+            torch.nn.Linear(hid, hid), torch.nn.ReLU(),
+            torch.nn.Linear(hid, 1)
+        )
+
+    def forward(self, x): return torch.sigmoid(self.net(x)).squeeze(-1)
+
+
+class LabelabilityMLP(torch.nn.Module):
+    def __init__(self, in_dim=5, hid=64):
+        super().__init__()
+        self.net = torch.nn.Sequential(
+            torch.nn.Linear(in_dim, hid), torch.nn.ReLU(),
+            torch.nn.Linear(hid, hid), torch.nn.ReLU(),
+            torch.nn.Linear(hid, 1)
+        )
+
+    def forward(self, x): return torch.sigmoid(self.net(x)).squeeze(-1)
+
+
+def _pair_feats(bi, bj):
+    iou = _iou(bi, bj);
+    iom = _iom(bi, bj);
+    cd = _cdist(bi, bj)
+    # 面积比/长宽比差（可选）
+    si = (bi[2] - bi[0]) * (bi[3] - bi[1]);
+    sj = (bj[2] - bj[0]) * (bj[3] - bj[1])
+    ar_i = (bi[2] - bi[0]) / (bi[3] - bi[1] + 1e-8);
+    ar_j = (bj[2] - bj[0]) / (bj[3] - bj[1] + 1e-8)
+    return [iou, iom, cd, np.log((si + 1e-6) / (sj + 1e-6)), abs(ar_i - ar_j)]
+
+
+def stage_build_trainsets(cfg, det_file: Path, match_file: Path) -> Tuple[Path, Path]:
+    """
+    基于匹配生成：pair-level 样本(edge_train.npz) & node-level 样本(node_train.npz)
+    边标签：同一GT→1，其他→0； 点标签：被匹配→1，未匹配→0
+    """
+    import json
+    edge_X, edge_y = [], []
+    node_X, node_y = [], []
+
+    # 读取 detections 映射
+    det_map = {}
+    with open(det_file) as f:
+        for L in f:
+            r = json.loads(L);
+            det_map[str(r["image_id"])] = r
+
+    with open(match_file) as f:
+        for L in f:
+            m = json.loads(L)
+            det = det_map.get(str(m["image_id"]));
+            if det is None: continue
+            boxes, labels, scores = det["boxes"], det["labels"], det["scores"]
+
+            # 构造同一GT的预测索引集合：cls -> gt_j -> [pi...]
+            same_gt = {}
+            for (pi, gj, cls) in m["matches"]:
+                same_gt.setdefault((cls, gj), []).append(pi)
+
+            # 边：正样本（同一GT内的两两组合）
+            for key, pis in same_gt.items():
+                for a in range(len(pis)):
+                    for b in range(a + 1, len(pis)):
+                        edge_X.append(_pair_feats(boxes[pis[a]], boxes[pis[b]]))
+                        edge_y.append(1.0)
+
+            # 边：负样本（同类但不同GT/或未匹配）
+            by_cls = {}
+            for i, l in enumerate(labels): by_cls.setdefault(int(l), []).append(i)
+            for cls, idxs in by_cls.items():
+                # 简单负采样
+                for a in range(len(idxs)):
+                    for b in range(a + 1, len(idxs)):
+                        ia, ib = idxs[a], idxs[b]
+                        # 如果两者出现在同一GT正集中，则跳过（正已收）
+                        is_pos = False
+                        for key, pis in same_gt.items():
+                            if key[0] == cls and (ia in pis and ib in pis): is_pos = True; break
+                        if is_pos: continue
+                        edge_X.append(_pair_feats(boxes[ia], boxes[ib]))
+                        edge_y.append(0.0)
+
+            # 点：可标注性（被匹配=1，否则0），加简单特征
+            # 最近 GT 的 iou/iom/cdist 作为特征（没有GT时置0）
+            # 这里用匹配文件里的 GT 覆盖信息近似
+            matched_pis = set(pi for (pi, _, _) in m["matches"])
+            for i, b in enumerate(boxes):
+                lab = 1.0 if i in matched_pis else 0.0
+                # 近邻密度（同类）
+                same = [j for j, l in enumerate(labels) if l == labels[i] and j != i]
+                dens = float(np.mean([_iou(b, boxes[j]) for j in same])) if same else 0.0
+                node_X.append([dens, scores[i], b[2] - b[0], b[3] - b[1], (b[2] - b[0]) * (b[3] - b[1]) ** 0.5])
+                node_y.append(lab)
+
+    edge_p = cfg.paths.outputs_dir / "edge_train.npz"
+    node_p = cfg.paths.outputs_dir / "node_train.npz"
+    np.savez_compressed(edge_p, X=np.array(edge_X, np.float32), y=np.array(edge_y, np.float32))
+    np.savez_compressed(node_p, X=np.array(node_X, np.float32), y=np.array(node_y, np.float32))
+    print(f"[trainset] edge={len(edge_y)} node={len(node_y)}")
+    return edge_p, node_p
+
+
+def stage_train_edge(cfg, edge_npz: Path, epochs=5, bs=8192) -> Path:
+    dat = np.load(edge_npz);
+    X = torch.from_numpy(dat["X"]);
+    y = torch.from_numpy(dat["y"])
+    mdl = EdgeMLP(in_dim=X.shape[1]).to(cfg.device);
+    opt = torch.optim.Adam(mdl.parameters(), 1e-3)
+    crit = torch.nn.BCELoss()
+    for ep in range(1, epochs + 1):
+        idx = torch.randperm(len(y));
+        loss = 0.0
+        for st in range(0, len(y), bs):
+            sel = idx[st:st + bs];
+            xb = X[sel].to(cfg.device);
+            yb = y[sel].to(cfg.device)
+            p = mdl(xb);
+            l = crit(p, yb);
+            opt.zero_grad();
+            l.backward();
+            opt.step();
+            loss += l.item() * len(sel)
+        print(f"[edge] ep{ep} loss={loss / len(y):.4f}")
+    path = cfg.paths.models_dir / "grm_edge_pair.pt";
+    path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save({"state_dict": mdl.state_dict(), "in_dim": X.shape[1]}, path)
+    return path
+
+
+def stage_train_labelability(cfg, node_npz: Path, epochs=5, bs=8192) -> Path:
+    dat = np.load(node_npz);
+    X = torch.from_numpy(dat["X"]);
+    y = torch.from_numpy(dat["y"])
+    mdl = LabelabilityMLP(in_dim=X.shape[1]).to(cfg.device);
+    opt = torch.optim.Adam(mdl.parameters(), 1e-3)
+    crit = torch.nn.BCELoss()
+    for ep in range(1, epochs + 1):
+        idx = torch.randperm(len(y));
+        loss = 0.0
+        for st in range(0, len(y), bs):
+            sel = idx[st:st + bs];
+            xb = X[sel].to(cfg.device);
+            yb = y[sel].to(cfg.device)
+            p = mdl(xb);
+            l = crit(p, yb);
+            opt.zero_grad();
+            l.backward();
+            opt.step();
+            loss += l.item() * len(sel)
+        print(f"[lab] ep{ep} loss={loss / len(y):.4f}")
+    path = cfg.paths.models_dir / "grm_node_labelability.pt";
+    path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save({"state_dict": mdl.state_dict(), "in_dim": X.shape[1]}, path)
+    return path
+
+
+def _edge_score(mdl, a, b):
+    x = np.array([_pair_feats(a, b)], np.float32)
+    with torch.no_grad():
+        return float(mdl(torch.from_numpy(x).to(next(mdl.parameters()).device))[0].cpu())
+
+
+def _nms_xyxy(boxes, scores, thr=0.7):
+    keep = [];
+    idx = np.argsort(scores)[::-1]
+    while len(idx):
+        i = idx[0];
+        keep.append(i)
+        if len(idx) == 1: break
+        ious = np.array([_iou(boxes[i], boxes[j]) for j in idx[1:]])
+        idx = idx[1:][ious < thr]
+    return keep
+
+
+def stage_infer_post(cfg, det_file: Path, edge_mdl_p: Path, node_mdl_p: Path,
+                     sim_thr=0.5, sub_iou=0.7) -> Path:
+    """
+    推理后处理：用学到的 Edge 判别器做同类分组→子簇NMS(去重)；
+              用 Labelability 重评分 s' = s * q(b)
+    """
+    import json
+    edge = EdgeMLP(in_dim=torch.load(edge_mdl_p)["in_dim"]);
+    edge.load_state_dict(torch.load(edge_mdl_p)["state_dict"]);
+    edge = edge.to(cfg.device).eval()
+    lab = LabelabilityMLP(in_dim=torch.load(node_mdl_p)["in_dim"]);
+    lab.load_state_dict(torch.load(node_mdl_p)["state_dict"]);
+    lab = lab.to(cfg.device).eval()
+
+    out = cfg.paths.outputs_dir / "detections_grm_post.jsonl"
+    with open(det_file) as fin, open(out, "w") as fout:
+        for L in fin:
+            r = json.loads(L)
+            boxes, labels, scores = r["boxes"], r["labels"], r["scores"]
+            if not boxes:
+                fout.write(L);
+                continue
+            # 按类分组（edge_mdl 为“同一实例”概率）
+            new_boxes = [];
+            new_labels = [];
+            new_scores = []
+            for cls in sorted(set(labels)):
+                idx = [i for i, l in enumerate(labels) if int(l) == cls]
+                if not idx: continue
+                B = [boxes[i] for i in idx];
+                S = [scores[i] for i in idx]
+                # 建图：p(i,j)>=sim_thr → 联通
+                n = len(idx);
+                parent = list(range(n))
+
+                def find(x):
+                    while parent[x] != x:
+                        parent[x] = parent[parent[x]];
+                        x = parent[x]
+                    return x
+
+                def union(a, b):
+                    ra, rb = find(a), find(b)
+                    if ra != rb: parent[rb] = ra
+
+                for a in range(n):
+                    for b in range(a + 1, n):
+                        if _edge_score(edge, B[a], B[b]) >= sim_thr:
+                            union(a, b)
+                comp = {}
+                for i_loc in range(n):
+                    comp.setdefault(find(i_loc), []).append(i_loc)
+
+                # 每个连通分量做子簇NMS（去重），并重评分
+                for vs in comp.values():
+                    subB = [B[i] for i in vs];
+                    subS = [S[i] for i in vs]
+                    keep = _nms_xyxy(subB, subS, thr=sub_iou)
+                    for k in keep:
+                        i_global = idx[vs[k]]
+                        b = boxes[i_global];
+                        s = scores[i_global]
+                        # labelability q(b)
+                        dens = float(np.mean([_iou(b, boxes[j]) for j in idx if j != i_global])) if len(idx) > 1 else 0.0
+                        x = np.array([[dens, s, b[2] - b[0], b[3] - b[1], ((b[2] - b[0]) * (b[3] - b[1])) ** 0.5]], np.float32)
+                        with torch.no_grad():
+                            q = float(lab(torch.from_numpy(x).to(cfg.device))[0].cpu())
+                        new_boxes.append(b);
+                        new_labels.append(labels[i_global]);
+                        new_scores.append(float(s * q))
+
+            fout.write(json.dumps({"image_id": r["image_id"], "boxes": new_boxes, "labels": new_labels, "scores": new_scores}) + "\n")
+
+    print(f"[post] wrote {out}")
+    return out
+
+
 def stage_infer_groups(cfg, model_file: Path, det_file: Path, tau: float = None) -> Path:
     """
     读 detections.jsonl & 训练好的边分类器 → 并查集合并成组
@@ -1939,6 +2306,34 @@ def main():
                                                  iou_thr=0.5,  # 可改
                                                  score_thr=0.05,  # 可改
                                                  limit=200)  # 可改
+    if "match" in steps:
+        det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
+        artifacts["match"] = stage_match_to_gt_class(cfg, det)
+
+    if "trainsets" in steps:
+        det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
+        mat = artifacts.get("match", cfg.paths.outputs_dir / "matches.jsonl")
+        e_npz, n_npz = stage_build_trainsets(cfg, det, mat)
+        artifacts["edge_npz"], artifacts["node_npz"] = e_npz, n_npz
+
+    if "train_edge" in steps:
+        npz = artifacts.get("edge_npz", cfg.paths.outputs_dir / "edge_train.npz")
+        artifacts["edge_mdl"] = stage_train_edge(cfg, npz)
+
+    if "train_label" in steps:
+        npz = artifacts.get("node_npz", cfg.paths.outputs_dir / "node_train.npz")
+        artifacts["node_mdl"] = stage_train_labelability(cfg, npz)
+
+    if "infer_post" in steps:
+        det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
+        edge_m = artifacts.get("edge_mdl", cfg.paths.models_dir / "grm_edge_pair.pt")
+        node_m = artifacts.get("node_mdl", cfg.paths.models_dir / "grm_node_labelability.pt")
+        artifacts["det_post"] = stage_infer_post(cfg, det, edge_m, node_m)
+
+    if "eval_post" in steps:
+        post = artifacts.get("det_post", cfg.paths.outputs_dir / "detections_grm_post.jsonl")
+        print("[eval_post]", stage_eval_coco(cfg, post))
+
     # sim+prox 分组（你上一条已更新的 stage）
     if "simprox_group" in steps:
         det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
