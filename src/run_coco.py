@@ -685,6 +685,112 @@ def stage_viz_graph_groups(cfg,
     return out_dir
 
 
+def stage_viz_pred_groups(cfg, groups_file, det_file, iou_thr=0.5, pad=8, limit=200):
+    import json, cv2, numpy as np
+    from pathlib import Path
+    from pycocotools.coco import COCO
+
+    out_dir = cfg.paths.outputs_dir / "viz_pred_groups"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    coco = COCO(str(cfg.paths.coco_annotations))
+    id2fname = {im["id"]: im["file_name"] for im in coco.dataset["images"]}
+    cid2name = {c: coco.cats[c]["name"] for c in coco.cats}
+    images_root = Path(cfg.paths.coco_images)
+
+    # detections map
+    det_map = {}
+    with open(det_file) as f:
+        for L in f:
+            r = json.loads(L)
+            det_map[str(r["image_id"])] = r
+
+    GREEN=(80,200,60); RED=(30,30,230); WHITE=(240,240,240)
+    font = cv2.FONT_HERSHEY_SIMPLEX
+
+    wrote = 0
+    with open(groups_file) as f:
+        for L in f:
+            g = json.loads(L)
+            img_id = g["image_id"]
+            det = det_map.get(str(img_id))
+            if not det: continue
+
+            fn = id2fname.get(img_id)
+            if not fn: continue
+            im = cv2.imread(str(images_root / fn))
+            if im is None: continue
+            H,W = im.shape[:2]
+
+            # 全部 GT（保留原始 anns）
+            ann_ids = coco.getAnnIds(imgIds=[img_id], iscrowd=None)
+            anns = coco.loadAnns(ann_ids)
+
+            boxes = det["boxes"]; labels = det["labels"]; scores = det["scores"]
+            kept = g.get("kept", list(range(len(boxes))))
+
+            for k, members_local in enumerate(g.get("groups", []), start=1):
+                if not members_local: continue
+                # 局部→原始索引
+                mem_idx = [kept[m] for m in members_local if 0 <= m < len(kept)]
+                if not mem_idx: continue
+
+                # 组成员
+                gb = [boxes[i] for i in mem_idx]
+                gl = [int(labels[i]) for i in mem_idx]
+                gs = [scores[i] for i in mem_idx]
+                cls_set = set(gl)  # 该组涉及的类别集合（可能混类）
+
+                # === 同类 GT：不看 IoU，只要类别在组内类别集合就画 ===
+                same_class_gts = []
+                for a in anns:
+                    cid = int(a["category_id"])
+                    if cid in cls_set:
+                        x,y,w,h = a["bbox"]
+                        same_class_gts.append(([x, y, x+w, y+h], cid2name.get(cid, str(cid))))
+
+                # === 裁剪范围 = 组并集 ∪ 同类GT并集 + pad ===
+                xs1 = [b[0] for b in gb] + [g[0][0] for g in same_class_gts]
+                ys1 = [b[1] for b in gb] + [g[0][1] for g in same_class_gts]
+                xs2 = [b[2] for b in gb] + [g[0][2] for g in same_class_gts]
+                ys2 = [b[3] for b in gb] + [g[0][3] for g in same_class_gts]
+                x1 = max(0, int(min(xs1) - pad)); y1 = max(0, int(min(ys1) - pad))
+                x2 = min(W-1, int(max(xs2) + pad)); y2 = min(H-1, int(max(ys2) + pad))
+                crop = im[y1:y2+1, x1:x2+1].copy()
+                if crop.size == 0: continue
+
+                # 画同类 GT（红）
+                for (gxyxy, gname) in same_class_gts:
+                    X1,Y1,X2,Y2 = map(int, gxyxy)
+                    cv2.rectangle(crop, (X1-x1,Y1-y1), (X2-x1,Y2-y1), RED, 2)
+                    cv2.putText(crop, f"GT:{gname}", (X1-x1, max(14,Y1-y1-4)),
+                                font, 0.5, RED, 1, cv2.LINE_AA)
+
+                # 只画该组成员预测（绿）
+                for b,c,s in zip(gb, gl, gs):
+                    B1,B2,B3,B4 = map(int, b)
+                    name = cid2name.get(int(c), str(int(c)))
+                    cv2.rectangle(crop, (B1-x1,B2-y1), (B3-x1,B4-y1), GREEN, 2)
+                    cv2.putText(crop, f"{name} s={s:.2f}", (B1-x1, max(14,B2-y1-4)),
+                                font, 0.5, GREEN, 1, cv2.LINE_AA)
+
+                # 标题
+                gt_names = ",".join(sorted({n for _,n in same_class_gts})) or "None"
+                bar = np.zeros((26, crop.shape[1], 3), np.uint8)
+                cv2.putText(bar, f"img {img_id}  G{k}  members={len(mem_idx)}  GT(same-class): {gt_names}",
+                            (6,18), font, 0.55, WHITE, 1, cv2.LINE_AA)
+                vis = np.vstack([bar, crop])
+
+                out_p = out_dir / f"{img_id}_G{k}.jpg"
+                cv2.imwrite(str(out_p), vis)
+
+                wrote += 1
+                if limit and wrote >= limit:
+                    print(f"[viz-pred-groups] wrote {out_dir} (limited {limit})")
+                    return out_dir
+
+    print(f"[viz-pred-groups] wrote {out_dir}")
+    return out_dir
 # ---- put into run_coco.py ----
 def stage_train_grm(cfg, graph_file: Path = None) -> Path:
     import os, json, math, random, torch
@@ -1475,6 +1581,13 @@ def main():
                                        det_file=artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl"),
                                        iou_thr=0.5,
                                        limit=200)
+    if "viz_groups" in steps:
+        groups = artifacts.get("groups", cfg.paths.outputs_dir / "groups.jsonl")
+        det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
+        artifacts["viz_groups"] = stage_viz_pred_groups(
+            cfg, groups, det, iou_thr=0.5, pad=8, limit=200
+        )
+
 
     # 3) train
     if "train" in steps:
