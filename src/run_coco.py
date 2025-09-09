@@ -496,6 +496,165 @@ def stage_build_graph(cfg, det_file: Path) -> Path:
     return out
 
 
+def stage_viz_graph_groups(cfg,
+                           graph_file: Path,
+                           det_file: Path,
+                           iou_thr: float = 0.5,
+                           limit: int = 200) -> Path:
+    """
+    可视化：对每张图，把 graph 中 label=1 的边做并查集 → 形成“组”。
+    为每个组导出两张图：
+      - full：整张图，组内检测框高亮、其他变暗；同时叠加 GT 框
+      - crop：以组的并集框裁剪，叠加成员与 GT
+    输出目录：/outputs/viz_graph_groups/{full,crops}/imageid_groupK.jpg
+    """
+    import os, json, cv2, numpy as np
+    from pathlib import Path
+    from pycocotools.coco import COCO
+
+    out_dir = cfg.paths.outputs_dir / "viz_graph_groups"
+    (out_dir / "full").mkdir(parents=True, exist_ok=True)
+    (out_dir / "crops").mkdir(parents=True, exist_ok=True)
+
+    # 载入 COCO
+    coco = COCO(str(cfg.paths.coco_annotations))
+    id2fname = {img["id"]: img["file_name"] for img in coco.dataset["images"]}
+    cid2name = {c: coco.cats[c]["name"] for c in coco.cats}
+    images_root = Path(cfg.paths.coco_images)
+
+    # 读取 detections：image_id -> rec
+    det_map = {}
+    with open(det_file) as f:
+        for L in f:
+            r = json.loads(L)
+            det_map[r["image_id"]] = r
+
+    # 工具
+    def uf_make(n): return list(range(n))
+    def uf_find(p,x):
+        while p[x]!=x:
+            p[x]=p[p[x]]
+            x=p[x]
+        return x
+    def uf_union(p,a,b):
+        ra,rb=uf_find(p,a),uf_find(p,b)
+        if ra!=rb: p[rb]=ra
+
+    def draw_group_full(im, boxes, labels, group_idx, members, gts, title, save_p):
+        vis = im.copy()
+        # 暗化整图
+        vis = (vis * 0.25).astype(np.uint8)
+        # 高亮成员
+        COLORS = [(52,194,73),(52,148,240),(239,188,28),(226,86,86),(178,102,255)]
+        for t,i in enumerate(members):
+            x1,y1,x2,y2 = [int(v) for v in boxes[i]]
+            clr = COLORS[t % len(COLORS)]
+            cv2.rectangle(vis, (x1,y1), (x2,y2), clr, 2)
+            name = cid2name.get(int(labels[i]), str(int(labels[i])))
+            cv2.putText(vis, f"G{group_idx}:{name}", (x1, max(12,y1-4)),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, clr, 1, cv2.LINE_AA)
+        # 叠加 GT（红）
+        for (bx,by,bx2,by2, cname) in gts:
+            cv2.rectangle(vis, (int(bx),int(by)), (int(bx2),int(by2)), (36,36,240), 2)
+            cv2.putText(vis, f"GT:{cname}", (int(bx), max(18,int(by)-6)),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (36,36,240), 1, cv2.LINE_AA)
+        # 顶部标题
+        pad = 26
+        bar = np.zeros((pad, vis.shape[1], 3), dtype=np.uint8)
+        cv2.putText(bar, title, (6,18),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (240,240,240), 1, cv2.LINE_AA)
+        out = np.vstack([bar, vis])
+        cv2.imwrite(str(save_p), out)
+
+    def draw_group_crop(im, boxes, members, gts, save_p):
+        xs1 = [boxes[i][0] for i in members]; ys1 = [boxes[i][1] for i in members]
+        xs2 = [boxes[i][2] for i in members]; ys2 = [boxes[i][3] for i in members]
+        x1,y1,x2,y2 = int(max(0,min(xs1))), int(max(0,min(ys1))), int(max(xs2)), int(max(ys2))
+        x1 = max(0,x1-4); y1=max(0,y1-4); x2=min(im.shape[1]-1,x2+4); y2=min(im.shape[0]-1,y2+4)
+        crop = im[y1:y2+1, x1:x2+1].copy()
+        if crop.size==0: return
+        # 绘制成员（绿）
+        for i in members:
+            bx1,by1,bx2,by2 = [int(v) for v in boxes[i]]
+            cv2.rectangle(crop, (bx1-x1,by1-y1), (bx2-x1,by2-y1), (60,200,60), 2)
+        # 绘制 GT（红）
+        for (gx1,gy1,gx2,gy2, _) in gts:
+            cv2.rectangle(crop, (int(gx1)-x1,int(gy1)-y1), (int(gx2)-x1,int(gy2)-y1), (36,36,240), 2)
+        cv2.imwrite(str(save_p), crop)
+
+    # 主循环：读 graph，按正边并查集成组并可视化
+    cnt_img = 0
+    with open(graph_file) as f:
+        for k, L in enumerate(f):
+            r = json.loads(L)
+            img_id = r["image_id"]
+            if img_id not in det_map: continue
+            fn = id2fname.get(img_id)
+            if not fn: continue
+            img_path = images_root / fn
+            im = cv2.imread(str(img_path))
+            if im is None: continue
+
+            det = det_map[img_id]
+            boxes = det["boxes"]; labels = det["labels"]; scores = det["scores"]
+            n = len(boxes)
+            if n == 0: continue
+
+            # 并查集：只用 label==1 的边
+            parents = uf_make(n)
+            for p in (r.get("pairs") or []):
+                if p.get("label", 0) == 1:
+                    i, j = p["i"], p["j"]
+                    if 0 <= i < n and 0 <= j < n:
+                        uf_union(parents, i, j)
+            # 收集组
+            roots = {}
+            for i in range(n):
+                roots.setdefault(uf_find(parents, i), []).append(i)
+            groups = [g for g in roots.values() if len(g) >= 2]  # 只看 size>=2 的组更有意义
+            if not groups:
+                cnt_img += 1
+                if limit and cnt_img >= limit: break
+                continue
+
+            # 读取 GT
+            ann_ids = coco.getAnnIds(imgIds=[img_id], iscrowd=None)
+            anns = coco.loadAnns(ann_ids)
+            gts = []
+            for a in anns:
+                x,y,w,h = a["bbox"]
+                gts.append([x, y, x+w, y+h, cid2name.get(a["category_id"], str(a["category_id"]))])
+
+            # 逐组可视化
+            for gi, members in enumerate(groups, start=1):
+                # 该组是否对齐某个 GT?（任一成员与某 GT IoU>=阈值）
+                matched_names = set()
+                for m in members:
+                    for gx1,gy1,gx2,gy2,gname in gts:
+                        # IoU
+                        xx1, yy1 = max(boxes[m][0], gx1), max(boxes[m][1], gy1)
+                        xx2, yy2 = min(boxes[m][2], gx2), min(boxes[m][3], gy2)
+                        inter = max(0, xx2-xx1)*max(0, yy2-yy1)
+                        area_m = max(0, boxes[m][2]-boxes[m][0]) * max(0, boxes[m][3]-boxes[m][1])
+                        area_g = max(0, gx2-gx1) * max(0, gy2-gy1)
+                        iou = inter / (area_m + area_g - inter + 1e-8)
+                        if iou >= iou_thr:
+                            matched_names.add(gname)
+                title = f"img {img_id}  G{gi}  members={len(members)}  matchGT={','.join(sorted(matched_names)) or 'None'}"
+                # 全图
+                save_full = out_dir / "full" / f"{img_id}_G{gi}.jpg"
+                draw_group_full(im, boxes, labels, gi, members, gts, title, save_full)
+                # 裁剪
+                save_crop = out_dir / "crops" / f"{img_id}_G{gi}.jpg"
+                draw_group_crop(im, boxes, members, gts, save_crop)
+
+            cnt_img += 1
+            if limit and cnt_img >= limit: break
+
+    print(f"[viz-graph] wrote {out_dir} (full & crops)")
+    return out_dir
+
+
 # ---- put into run_coco.py ----
 def stage_train_grm(cfg, graph_file: Path = None) -> Path:
     import os, json, math, random, torch
@@ -1278,6 +1437,15 @@ def main():
         if os.getenv("DIAG", "1") == "1":
             print("[diag] quick_check_graph …")
             quick_check_graph(graph_path)
+
+        # 写完 graphs_{mode}.jsonl 之后：
+        if os.getenv("VIZ_GRAPH", "1") == "1":
+            _ = stage_viz_graph_groups(cfg,
+                                       graph_file=artifacts["graph"],  # 或 graph_path 变量
+                                       det_file=artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl"),
+                                       iou_thr=0.5,
+                                       limit=200)
+
 
     # 3) train
     if "train" in steps:
