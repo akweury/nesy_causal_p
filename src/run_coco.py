@@ -2401,7 +2401,7 @@ def main():
     if "viz_match" in steps:
         det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
         mat = artifacts.get("match", cfg.paths.outputs_dir / "matches.jsonl")
-        artifacts["viz_match"] = stage_viz_match(cfg, det, mat, limit=0)
+        artifacts["viz_match"] = stage_viz_match(cfg, det, mat, limit=200)
 
     if "trainsets" in steps:
         det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
