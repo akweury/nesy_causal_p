@@ -685,13 +685,15 @@ def stage_viz_graph_groups(cfg,
     return out_dir
 
 
-def stage_viz_pred_groups(cfg, groups_file, det_file, iou_thr=0.5, pad=8, limit=200):
-    import json, cv2, numpy as np
+def stage_viz_pred_groups(cfg, groups_file, det_file, pad=8, limit=200):
+    import json, cv2, numpy as np, csv
     from pathlib import Path
     from pycocotools.coco import COCO
 
     out_dir = cfg.paths.outputs_dir / "viz_pred_groups"
     out_dir.mkdir(parents=True, exist_ok=True)
+    index_json = out_dir / "index.json"
+    index_csv = out_dir / "index.csv"
 
     coco = COCO(str(cfg.paths.coco_annotations))
     id2fname = {im["id"]: im["file_name"] for im in coco.dataset["images"]}
@@ -710,7 +712,9 @@ def stage_viz_pred_groups(cfg, groups_file, det_file, iou_thr=0.5, pad=8, limit=
     WHITE = (240, 240, 240)
     font = cv2.FONT_HERSHEY_SIMPLEX
 
+    index = []  # 收集行：每组一行
     wrote = 0
+
     with open(groups_file) as f:
         for L in f:
             g = json.loads(L)
@@ -724,7 +728,6 @@ def stage_viz_pred_groups(cfg, groups_file, det_file, iou_thr=0.5, pad=8, limit=
             if im is None: continue
             H, W = im.shape[:2]
 
-            # 全部 GT（保留原始 anns）
             ann_ids = coco.getAnnIds(imgIds=[img_id], iscrowd=None)
             anns = coco.loadAnns(ann_ids)
 
@@ -734,68 +737,110 @@ def stage_viz_pred_groups(cfg, groups_file, det_file, iou_thr=0.5, pad=8, limit=
             kept = g.get("kept", list(range(len(boxes))))
 
             for k, members_local in enumerate(g.get("groups", []), start=1):
-                if not members_local:
-                    continue
-
-                # 组内所有成员 → gb, gl, gs
+                if not members_local: continue
+                # 局部→原始 det 索引
                 mem_idx = [kept[m] for m in members_local if 0 <= m < len(kept)]
-                if not mem_idx:
-                    continue
+                if not mem_idx: continue
 
+                # 组成员
                 gb = [boxes[i] for i in mem_idx]
                 gl = [int(labels[i]) for i in mem_idx]
-                gs = [scores[i] for i in mem_idx]
+                gs = [float(scores[i]) for i in mem_idx]
                 cls_set = set(gl)
 
-                # 找同类 GT（不看 IoU）
+                # 同类 GT（不看 IoU，全包含）
                 same_class_gts = []
                 for a in anns:
                     cid = int(a["category_id"])
                     if cid in cls_set:
                         x, y, w, h = a["bbox"]
-                        same_class_gts.append(([x, y, x + w, y + h], cid2name.get(cid, str(cid))))
+                        same_class_gts.append(([x, y, x + w, y + h],
+                                               cid,
+                                               cid2name.get(cid, str(cid))))
 
-                # 裁剪范围 = 组并集 ∪ 同类GT并集
-                xs1 = [b[0] for b in gb] + [g[0][0] for g in same_class_gts]
-                ys1 = [b[1] for b in gb] + [g[0][1] for g in same_class_gts]
-                xs2 = [b[2] for b in gb] + [g[0][2] for g in same_class_gts]
-                ys2 = [b[3] for b in gb] + [g[0][3] for g in same_class_gts]
+                # 裁剪范围 = 组并集 ∪ 同类GT并集 + pad
+                xs1 = [b[0] for b in gb] + [g_[0][0] for g_ in same_class_gts]
+                ys1 = [b[1] for b in gb] + [g_[0][1] for g_ in same_class_gts]
+                xs2 = [b[2] for b in gb] + [g_[0][2] for g_ in same_class_gts]
+                ys2 = [b[3] for b in gb] + [g_[0][3] for g_ in same_class_gts]
                 x1 = max(0, int(min(xs1) - pad));
                 y1 = max(0, int(min(ys1) - pad))
                 x2 = min(W - 1, int(max(xs2) + pad));
                 y2 = min(H - 1, int(max(ys2) + pad))
                 crop = im[y1:y2 + 1, x1:x2 + 1].copy()
+                if crop.size == 0: continue
 
-                # === 画GT（红色） ===
-                for (gxyxy, gname) in same_class_gts:
+                # 画 GT（红）
+                for (gxyxy, cid, gname) in same_class_gts:
                     X1, Y1, X2, Y2 = map(int, gxyxy)
                     cv2.rectangle(crop, (X1 - x1, Y1 - y1), (X2 - x1, Y2 - y1), RED, 2)
-                    cv2.putText(crop, f"GT:{gname}", (X1 - x1, max(14, Y1 - y1 - 4)), font, 0.5, RED, 1)
+                    cv2.putText(crop, f"GT:{gname}", (X1 - x1, max(14, Y1 - y1 - 4)),
+                                font, 0.5, RED, 1, cv2.LINE_AA)
 
-                # === 画该组的预测框（绿色） ===
+                # 画组成员预测（绿）
                 for b, c, s in zip(gb, gl, gs):
                     B1, B2, B3, B4 = map(int, b)
-                    name = cid2name.get(int(c), str(int(c)))
+                    name = cid2name.get(c, str(c))
                     cv2.rectangle(crop, (B1 - x1, B2 - y1), (B3 - x1, B4 - y1), GREEN, 2)
                     cv2.putText(crop, f"{name} s={s:.2f}", (B1 - x1, max(14, B2 - y1 - 4)),
-                                font, 0.5, GREEN, 1)
+                                font, 0.5, GREEN, 1, cv2.LINE_AA)
 
-                # === 保存整组图像（只保存一次） ===
+                # 标题 & 保存
+                gt_names = ",".join(sorted({n for *_, n in same_class_gts})) or "None"
                 bar = np.zeros((26, crop.shape[1], 3), np.uint8)
-                gt_names = ",".join(sorted({n for _, n in same_class_gts})) or "None"
-                cv2.putText(bar, f"img {img_id}  G{k}  members={len(mem_idx)}  GT:{gt_names}",
-                            (6, 18), font, 0.55, WHITE, 1)
+                cv2.putText(bar, f"img {img_id}  G{k}  members={len(mem_idx)}  GT(same-class): {gt_names}",
+                            (6, 18), font, 0.55, WHITE, 1, cv2.LINE_AA)
                 vis = np.vstack([bar, crop])
-
                 out_p = out_dir / f"{img_id}_G{k}.jpg"
                 cv2.imwrite(str(out_p), vis)
+
+                # —— 索引行（写到 index.json / index.csv）——
+                idx_row = {
+                    "image_id": int(img_id),
+                    "file_name": fn,
+                    "group_id": int(k),
+                    "member_count": len(mem_idx),
+                    "members": [
+                        {"det_idx": int(i),
+                         "label_id": int(c),
+                         "label": cid2name.get(int(c), str(int(c))),
+                         "score": float(s),
+                         "box_xyxy": [float(x) for x in boxes[i]]}
+                        for i, c, s in zip(mem_idx, gl, gs)
+                    ],
+                    "gt_same_class": [
+                        {"category_id": int(cid),
+                         "category": name,
+                         "box_xyxy": [float(x) for x in gxyxy]}
+                        for (gxyxy, cid, name) in same_class_gts
+                    ],
+                    "viz_path": str(out_p)
+                }
+                index.append(idx_row)
 
                 wrote += 1
                 if limit and wrote >= limit:
                     print(f"[viz-pred-groups] wrote {out_dir} (limited {limit})")
+                    # 同时落盘索引
+                    index_json.write_text(json.dumps(index, indent=2))
+                    with open(index_csv, "w", newline="") as fcsv:
+                        w = csv.DictWriter(fcsv,
+                                           fieldnames=["image_id", "file_name", "group_id", "member_count", "viz_path"])
+                        w.writeheader()
+                        for r in index:
+                            w.writerow({k: r[k] for k in w.fieldnames})
                     return out_dir
 
-    print(f"[viz-pred-groups] wrote {out_dir}")
+    # 全量落盘
+    index_json.write_text(json.dumps(index, indent=2))
+    with open(index_csv, "w", newline="") as fcsv:
+        w = csv.DictWriter(fcsv,
+                           fieldnames=["image_id", "file_name", "group_id", "member_count", "viz_path"])
+        w.writeheader()
+        for r in index:
+            w.writerow({k: r[k] for k in w.fieldnames})
+
+    print(f"[viz-pred-groups] wrote {out_dir}\n- index: {index_json.name}, {index_csv.name}")
     return out_dir
 
 
@@ -1592,9 +1637,7 @@ def main():
     if "viz_groups" in steps:
         groups = artifacts.get("groups", cfg.paths.outputs_dir / "groups.jsonl")
         det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
-        artifacts["viz_groups"] = stage_viz_pred_groups(
-            cfg, groups, det, iou_thr=0.5, pad=8, limit=200
-        )
+        artifacts["viz_groups"] = stage_viz_pred_groups(cfg, groups, det, pad=8, limit=0)  # limit=0 全量
 
     # 3) train
     if "train" in steps:
