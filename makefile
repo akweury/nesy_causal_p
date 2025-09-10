@@ -52,7 +52,10 @@ run-filter:
 	  -e NUM_WORKERS=8 \
 	  -e MAX_IMAGES="$(MAX_IMAGES)" \
 	  $(IMAGE) \
-	  python -m src.gen_data.filter_coco_by_objcount --remote --data_split train
+	  python -m gen_data.filter_coco_by_objcount --remote --data_split train
+
+
+
 # ---- Only detect in Docker (GPU) ----
 docker-detect:
 	$(MAKE) run-docker STEPS=detect
