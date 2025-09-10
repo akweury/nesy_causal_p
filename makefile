@@ -37,7 +37,7 @@ run-docker:
 	  $(IMAGE) \
 	  python -m src.run_coco --steps $(STEPS) --remote --t_intra 0.75 --t_inter 0.5
 
-run-filter
+run-filter:
 	docker run --gpus all --rm -it \
 	  -v /home/ml-jsha/nesy_causal_p:/app \
 	  -v /home/ml-jsha/storage/GRM_Data/coco_2017:/coco_2017 \
