@@ -1844,8 +1844,8 @@ def stage_build_labelability_trainset(cfg, det_file: Path, match_file: Path) -> 
             r = json.loads(L);
             det_map[str(r["image_id"])] = r
 
-    X = [];
-    y = [];
+    X = []
+    y = []
     img_ids = []
     with open(match_file) as f:
         for L in f:
@@ -1862,8 +1862,8 @@ def stage_build_labelability_trainset(cfg, det_file: Path, match_file: Path) -> 
             gt_by_cls = {}
             for a in anns:
                 cid = int(a["category_id"])
-                x, y, w, h = a["bbox"];
-                gt_by_cls.setdefault(cid, []).append([x, y, x + w, y + h])
+                x0, y0, w, h = a["bbox"];
+                gt_by_cls.setdefault(cid, []).append([x0, y0, x0 + w, y0 + h])
 
             matched = set(pi for (pi, _, _) in m["matches"])
             for i in range(len(boxes)):
@@ -1981,29 +1981,33 @@ def stage_infer_post(cfg, det_file: Path, node_mdl_p: Path, sub_iou=0.7) -> Path
     out = cfg.paths.outputs_dir / "detections_grm_post.jsonl"
     with open(det_file) as fin, open(out, "w") as fout:
         for L in fin:
-            r=json.loads(L)
+            r = json.loads(L)
             boxes, labels, scores = r["boxes"], r["labels"], r["scores"]
             if not boxes:
-                fout.write(L); continue
+                fout.write(L);
+                continue
 
-            new_boxes=[]; new_labels=[]; new_scores=[]
+            new_boxes = [];
+            new_labels = [];
+            new_scores = []
             for cls in sorted(set(labels)):
-                idx=[i for i,l in enumerate(labels) if int(l)==cls]
+                idx = [i for i, l in enumerate(labels) if int(l) == cls]
                 if not idx: continue
                 # 简单组内NMS（保持你原来的或复用已有函数）
-                B=[boxes[i] for i in idx]; S=[scores[i] for i in idx]
+                B = [boxes[i] for i in idx];
+                S = [scores[i] for i in idx]
                 keep = np.argsort(S)[::-1]  # 先保留全部（或跑你的小NMS）
                 for k in keep:
                     i_global = idx[k]
-                    feat = np.array([_feat_one(i_global, boxes, labels, scores, gts=None)], np.float32) # gts=None
-                    feat = (feat - mu)/sd
+                    feat = np.array([_feat_one(i_global, boxes, labels, scores, gts=None)], np.float32)  # gts=None
+                    feat = (feat - mu) / sd
                     with torch.no_grad():
                         q = float(mdl(torch.from_numpy(feat).to(cfg.device))[0].cpu())
                     new_boxes.append(boxes[i_global])
                     new_labels.append(labels[i_global])
                     new_scores.append(float(scores[i_global] * q))
 
-            fout.write(json.dumps({"image_id": r["image_id"], "boxes": new_boxes, "labels": new_labels, "scores": new_scores})+"\n")
+            fout.write(json.dumps({"image_id": r["image_id"], "boxes": new_boxes, "labels": new_labels, "scores": new_scores}) + "\n")
 
     print(f"[post] wrote {out}")
     return out
