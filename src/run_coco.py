@@ -1829,59 +1829,102 @@ def _feat_one(idx, boxes, labels, scores, gts=None):
     ]
 
 
-def stage_build_labelability_trainset(cfg, det_file: Path, match_file: Path) -> Path:
-    out = cfg.paths.outputs_dir / "labelability_train.npz"
-    if out.exists(): print(f"[labset] reuse {out}"); return out
-
-    import json
+def stage_build_labelability_trainset(cfg,
+                                      det_file: Path,
+                                      iou_thr: float = 0.5,
+                                      neg_ratio: int = 3,
+                                      save_name: str = "labelability_train.npz") -> Path:
+    """
+    从 detections.jsonl + COCO GT 现场构造 labelability 训练集：
+      - 正样本：与同类 GT IoU>=iou_thr 的预测框
+      - 负样本：同图同类未匹配框（下采样，正:负≈1:neg_ratio）
+      - 特征仅用 bbox/上下文/NMS 结构（_feat_one(..., gts=None)），与推理一致
+    输出: /outputs/labelability_train.npz (X[N,D], y[N], img_ids[N])
+    """
+    import json, numpy as np
+    from collections import defaultdict
     from pycocotools.coco import COCO
+
+    out = cfg.paths.outputs_dir / save_name
+    if out.exists():
+        print(f"[labset] reuse {out}")
+        return out
+
+    def _area(b): return max(0, b[2]-b[0]) * max(0, b[3]-b[1])
+    def _iou(a,b):
+        x1=max(a[0],b[0]); y1=max(a[1],b[1]); x2=min(a[2],b[2]); y2=min(a[3],b[3])
+        inter=max(0,x2-x1)*max(0,y2-y1)
+        return inter / max(1e-8, _area(a)+_area(b)-inter)
+
     coco = COCO(str(cfg.paths.coco_annotations))
 
-    # detections 映射
-    det_map = {}
-    with open(det_file) as f:
-        for L in f:
-            r = json.loads(L);
-            det_map[str(r["image_id"])] = r
+    X, y, img_ids = [], [], []
+    imgs_total = 0
+    pos_total = 0
+    no_gt_overlap = 0
 
-    X = []
-    y = []
-    img_ids = []
-    with open(match_file) as f:
-        for L in f:
-            m = json.loads(L)
-            img_id = m["image_id"]
-            det = det_map.get(str(img_id));
-            if not det: continue
-            boxes, labels, scores = det["boxes"], det["labels"], det["scores"]
-            if not boxes: continue
+    with open(det_file, "r") as fin:
+        for L in fin:
+            r = json.loads(L)
+            img_id = int(r["image_id"])
+            boxes  = r.get("boxes", [])
+            labels = [int(c) for c in r.get("labels", [])]
+            scores = r.get("scores", [])
+            if not boxes:
+                continue
+            imgs_total += 1
 
-            # 同图同类 GT 集合
+            # 按同图构建同类 GT 框
             ann_ids = coco.getAnnIds(imgIds=[img_id], iscrowd=None)
-            anns = coco.loadAnns(ann_ids)
-            gt_by_cls = {}
+            anns    = coco.loadAnns(ann_ids)
+            gt_by_cls = defaultdict(list)
             for a in anns:
                 cid = int(a["category_id"])
-                x0, y0, w, h = a["bbox"];
-                gt_by_cls.setdefault(cid, []).append([x0, y0, x0 + w, y0 + h])
+                x0, y0, w, h = a["bbox"]
+                gt_by_cls[cid].append([x0, y0, x0+w, y0+h])
 
-            matched = set(pi for (pi, _, _) in m["matches"])
-            for i in range(len(boxes)):
-                cls = int(labels[i])
+            # 计算正样本集合
+            matched = set()
+            for i, b in enumerate(boxes):
+                cls = labels[i]
                 gts = gt_by_cls.get(cls, [])
-                feat = _feat_one(i, boxes, labels, scores, gts=gts)  # 传入GT集合
-                X.append(feat)
-                y.append(1.0 if i in matched else 0.0)
-                img_ids.append(int(img_id))
+                if any(_iou(b, g) >= iou_thr for g in gts):
+                    matched.add(i)
 
-    X = np.asarray(X, np.float32);
-    y = np.asarray(y, np.float32);
+            pos_idx = sorted(list(matched))
+            neg_idx = [i for i in range(len(boxes)) if i not in matched]
+
+            pos_total += len(pos_idx)
+            if len(pos_idx) == 0:
+                no_gt_overlap += 1
+
+            # 负样本下采样：同图控制比例（避免全负）
+            if len(pos_idx) > 0 and len(neg_idx) > len(pos_idx) * neg_ratio:
+                rng = np.random.default_rng(123 + img_id)
+                neg_idx = rng.choice(neg_idx, size=len(pos_idx) * neg_ratio, replace=False).tolist()
+
+            # 写入特征（训练/推理一致：gts=None）
+            for i in pos_idx:
+                feat = _feat_one(i, boxes, labels, scores, gts=None)
+                X.append(feat); y.append(1.0); img_ids.append(img_id)
+            for i in neg_idx:
+                feat = _feat_one(i, boxes, labels, scores, gts=None)
+                X.append(feat); y.append(0.0); img_ids.append(img_id)
+
+    X = np.asarray(X, np.float32)
+    y = np.asarray(y, np.float32)
     img_ids = np.asarray(img_ids, np.int64)
+
+    # 清洗
+    X = np.nan_to_num(X, posinf=1e6, neginf=-1e6)
+
+    out.parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(out, X=X, y=y, img_ids=img_ids)
-    print(f"[labset] X={X.shape} pos_rate={float(y.mean()):.3f}")
+
+    pos_rate = float(y.mean()) if len(y) else 0.0
+    print(f"[labset] X={X.shape} pos_rate={pos_rate:.3f} imgs={imgs_total} "
+          f"pos_boxes={pos_total} imgs_no_pos={no_gt_overlap}")
     return out
-
-
 class LabelabilityMLP(torch.nn.Module):
     def __init__(self, in_dim, hid=64):
         super().__init__()
