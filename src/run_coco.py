@@ -2638,22 +2638,30 @@ def stage_eval_post(cfg, det_post_file: Path = None, iouType: str = "bbox") -> D
     print(f"[eval_post] wrote {out_sum}")
     print(f"[eval_post] {summary}")
 
-    # 4) 按类 AP（可选）
+    # 4) 按类 AP（健壮版）
     per_class = {}
     cat_ids = sorted(list(cocoGt.cats.keys()))
     for cid in cat_ids:
         E_c = COCOeval(cocoGt, cocoDt, iouType)
         E_c.params.imgIds = E.params.imgIds
         E_c.params.catIds = [cid]
+        # 仅当该类有 det 或 GT 时再评
+        has_gt = len(cocoGt.getAnnIds(catIds=[cid], imgIds=E.params.imgIds)) > 0
+        has_dt = any(r["category_id"] == cid for r in results)
+        if not (has_gt and has_dt):
+            per_class[str(cid)] = {"name": cocoGt.cats[cid]["name"], "AP": 0.0, "AP50": 0.0, "AP75": 0.0}
+            continue
         E_c.evaluate();
         E_c.accumulate()
-        ap = float(E_c.stats[0]) if not np.isnan(E_c.stats[0]) else 0.0
-        per_class[str(cid)] = {
-            "name": cocoGt.cats[cid]["name"],
-            "AP": ap,
-            "AP50": float(E_c.stats[1]) if not np.isnan(E_c.stats[1]) else 0.0,
-            "AP75": float(E_c.stats[2]) if not np.isnan(E_c.stats[2]) else 0.0,
-        }
+        # 某些情况下仍可能没有 stats（比如 evalImgs 为空），加保护
+        if not hasattr(E_c, "stats") or E_c.stats is None or len(E_c.stats) < 3:
+            per_class[str(cid)] = {"name": cocoGt.cats[cid]["name"], "AP": 0.0, "AP50": 0.0, "AP75": 0.0}
+        else:
+            ap = 0.0 if np.isnan(E_c.stats[0]) else float(E_c.stats[0])
+            ap50 = 0.0 if np.isnan(E_c.stats[1]) else float(E_c.stats[1])
+            ap75 = 0.0 if np.isnan(E_c.stats[2]) else float(E_c.stats[2])
+            per_class[str(cid)] = {"name": cocoGt.cats[cid]["name"], "AP": ap, "AP50": ap50, "AP75": ap75}
+
     out_pc = cfg.paths.outputs_dir / "eval_detections_grm_post_per_class.json"
     with open(out_pc, "w") as f:
         json.dump(per_class, f, indent=2)
@@ -2717,14 +2725,17 @@ def main():
     if "train_label" in steps:
         npz = artifacts.get("labset", cfg.paths.outputs_dir / "labelability_train.npz")
         artifacts["lab_mdl"] = stage_train_labelability(cfg, npz)
+
     if "infer_post" in steps:
         det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
         node_m = artifacts.get("lab_mdl", cfg.paths.models_dir / "grm_node_labelability.pt")
         # 可用命令行或环境变量传 sub_iou / temp；这里给默认
         artifacts["det_post"] = stage_infer_post(cfg, det, node_m, sub_iou=0.7, temp=1.0)
+
     if "eval_post" in steps:
         post = artifacts.get("det_post", cfg.paths.outputs_dir / "detections_grm_post.jsonl")
         print("[eval_post]", stage_eval_post(cfg, post))
+
     print(json.dumps({k: str(v) for k, v in artifacts.items()}, indent=2))
 
 
