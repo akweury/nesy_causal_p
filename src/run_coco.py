@@ -1637,17 +1637,17 @@ class EdgeMLP(torch.nn.Module):
     def forward(self, x): return torch.sigmoid(self.net(x)).squeeze(-1)
 
 
-class LabelabilityMLP(torch.nn.Module):
-    def __init__(self, in_dim=5, hid=64):
-        super().__init__()
-        self.net = torch.nn.Sequential(
-            torch.nn.Linear(in_dim, hid), torch.nn.ReLU(),
-            torch.nn.Linear(hid, hid), torch.nn.ReLU(),
-            torch.nn.Linear(hid, 1)
-        )
-
-    def forward(self, x): return torch.sigmoid(self.net(x)).squeeze(-1)
-
+# class LabelabilityMLP(torch.nn.Module):
+#     def __init__(self, in_dim=5, hid=64):
+#         super().__init__()
+#         self.net = torch.nn.Sequential(
+#             torch.nn.Linear(in_dim, hid), torch.nn.ReLU(),
+#             torch.nn.Linear(hid, hid), torch.nn.ReLU(),
+#             torch.nn.Linear(hid, 1)
+#         )
+#
+#     def forward(self, x): return torch.sigmoid(self.net(x)).squeeze(-1)
+#
 
 def _pair_feats(bi, bj):
     iou = _iou(bi, bj);
@@ -1959,26 +1959,69 @@ def _edge_score(mdl, a, b):
 
 
 def _nms_xyxy(boxes, scores, thr=0.7):
-    keep = [];
-    idx = np.argsort(scores)[::-1]
-    while len(idx):
-        i = idx[0];
-        keep.append(i)
-        if len(idx) == 1: break
-        ious = np.array([_iou(boxes[i], boxes[j]) for j in idx[1:]])
-        idx = idx[1:][ious < thr]
+    if not boxes: return []
+    import numpy as np
+    boxes = np.asarray(boxes, dtype=np.float32)
+    scores = np.asarray(scores, dtype=np.float32)
+    x1, y1, x2, y2 = boxes[:, 0], boxes[:, 1], boxes[:, 2], boxes[:, 3]
+    areas = (np.maximum(0, x2 - x1) * np.maximum(0, y2 - y1))
+    order = scores.argsort()[::-1]
+    keep = []
+    while order.size > 0:
+        i = order[0];
+        keep.append(int(i))
+        xx1 = np.maximum(x1[i], x1[order[1:]])
+        yy1 = np.maximum(y1[i], y1[order[1:]])
+        xx2 = np.minimum(x2[i], x2[order[1:]])
+        yy2 = np.minimum(y2[i], y2[order[1:]])
+        inter = np.maximum(0, xx2 - xx1) * np.maximum(0, yy2 - yy1)
+        iou = inter / (areas[i] + areas[order[1:]] - inter + 1e-8)
+        order = order[1:][iou < thr]
     return keep
 
 
-def stage_infer_post(cfg, det_file: Path, node_mdl_p: Path, sub_iou=0.7) -> Path:
-    import json, torch, numpy as np
-    # 加载模型 + 标准化
+def _logit_clip(p, eps=1e-6):
+    p = float(max(min(p, 1.0 - eps), eps))
+    return math.log(p / (1.0 - p))
+
+
+def stage_infer_post(cfg,
+                     det_file: Path,
+                     node_mdl_p: Path = None,
+                     sub_iou: float = 0.7,
+                     temp: float = 1.0) -> Path:
+    """
+    无GT推理风格化：
+      - 载入 labelability 模型（含 mu/sd）
+      - 特征：与训练一致的 _feat_one(..., gts=None)
+      - 温度缩放(可选)：q' = sigmoid(logit(q)/T)
+      - 重评分 s' = s * q'
+      - 类内 NMS(sub_iou)
+    """
+    import json, torch, numpy as np, math
+
+    if node_mdl_p is None:
+        node_mdl_p = cfg.paths.models_dir / "grm_node_labelability.pt"
     ckpt = torch.load(node_mdl_p, map_location=cfg.device)
-    mdl = LabelabilityMLP(in_dim=ckpt["in_dim"]).to(cfg.device).eval()
+    in_dim = int(ckpt["in_dim"])
+    mu, sd = ckpt["mu"], ckpt["sd"]  # [1,F]
+    mdl = LabelabilityMLP(in_dim=in_dim).to(cfg.device).eval()
     mdl.load_state_dict(ckpt["state_dict"])
-    mu, sd = ckpt["mu"], ckpt["sd"]
+
+    def predict_q(feat_np):
+        # feat_np: [N,F] np.float32
+        x = (feat_np - mu) / sd
+        with torch.no_grad():
+            q = mdl(torch.from_numpy(x).to(cfg.device)).cpu().numpy().reshape(-1)
+        if temp and abs(temp - 1.0) > 1e-6:
+            # 温度缩放在 logit 空间
+            q = np.array([1.0 / (1.0 + math.exp(_logit_clip(qq) / float(temp) * -1.0)) for qq in q], dtype=np.float32)
+        return q.astype(np.float32)
 
     out = cfg.paths.outputs_dir / "detections_grm_post.jsonl"
+    out.parent.mkdir(parents=True, exist_ok=True)
+
+    num_imgs = 0
     with open(det_file) as fin, open(out, "w") as fout:
         for L in fin:
             r = json.loads(L)
@@ -1987,29 +2030,36 @@ def stage_infer_post(cfg, det_file: Path, node_mdl_p: Path, sub_iou=0.7) -> Path
                 fout.write(L);
                 continue
 
+            # 逐类：重评分 + NMS
             new_boxes = [];
             new_labels = [];
             new_scores = []
-            for cls in sorted(set(labels)):
+            classes = sorted(set(int(c) for c in labels))
+            for cls in classes:
                 idx = [i for i, l in enumerate(labels) if int(l) == cls]
                 if not idx: continue
-                # 简单组内NMS（保持你原来的或复用已有函数）
-                B = [boxes[i] for i in idx];
-                S = [scores[i] for i in idx]
-                keep = np.argsort(S)[::-1]  # 先保留全部（或跑你的小NMS）
+                # 计算 q(b)
+                feats = np.stack([np.array(_feat_one(i, boxes, labels, scores, gts=None), np.float32) for i in idx], axis=0)
+                q = predict_q(feats)
+                s_prime = (np.array([scores[i] for i in idx], np.float32) * q).tolist()
+
+                # NMS（对 s' 排序）
+                B = [boxes[i] for i in idx]
+                keep = _nms_xyxy(B, s_prime, thr=sub_iou)
                 for k in keep:
-                    i_global = idx[k]
-                    feat = np.array([_feat_one(i_global, boxes, labels, scores, gts=None)], np.float32)  # gts=None
-                    feat = (feat - mu) / sd
-                    with torch.no_grad():
-                        q = float(mdl(torch.from_numpy(feat).to(cfg.device))[0].cpu())
-                    new_boxes.append(boxes[i_global])
-                    new_labels.append(labels[i_global])
-                    new_scores.append(float(scores[i_global] * q))
+                    new_boxes.append(B[k])
+                    new_labels.append(cls)
+                    new_scores.append(float(s_prime[k]))
 
-            fout.write(json.dumps({"image_id": r["image_id"], "boxes": new_boxes, "labels": new_labels, "scores": new_scores}) + "\n")
+            fout.write(json.dumps({
+                "image_id": r["image_id"],
+                "boxes": new_boxes,
+                "labels": new_labels,
+                "scores": new_scores
+            }) + "\n")
+            num_imgs += 1
 
-    print(f"[post] wrote {out}")
+    print(f"[post] wrote {out}  imgs={num_imgs}  sub_iou={sub_iou}  temp={temp}")
     return out
 
 
@@ -2568,6 +2618,11 @@ def main():
     if "train_label" in steps:
         npz = artifacts.get("labset", cfg.paths.outputs_dir / "labelability_train.npz")
         artifacts["lab_mdl"] = stage_train_labelability(cfg, npz)
+    if "infer_post" in steps:
+        det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
+        node_m = artifacts.get("lab_mdl", cfg.paths.models_dir / "grm_node_labelability.pt")
+        # 可用命令行或环境变量传 sub_iou / temp；这里给默认
+        artifacts["det_post"] = stage_infer_post(cfg, det, node_m, sub_iou=0.7, temp=1.0)
 
     print(json.dumps({k: str(v) for k, v in artifacts.items()}, indent=2))
 
