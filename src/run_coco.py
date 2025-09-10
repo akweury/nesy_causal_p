@@ -1850,11 +1850,16 @@ def stage_build_labelability_trainset(cfg,
         print(f"[labset] reuse {out}")
         return out
 
-    def _area(b): return max(0, b[2]-b[0]) * max(0, b[3]-b[1])
-    def _iou(a,b):
-        x1=max(a[0],b[0]); y1=max(a[1],b[1]); x2=min(a[2],b[2]); y2=min(a[3],b[3])
-        inter=max(0,x2-x1)*max(0,y2-y1)
-        return inter / max(1e-8, _area(a)+_area(b)-inter)
+    def _area(b):
+        return max(0, b[2] - b[0]) * max(0, b[3] - b[1])
+
+    def _iou(a, b):
+        x1 = max(a[0], b[0]);
+        y1 = max(a[1], b[1]);
+        x2 = min(a[2], b[2]);
+        y2 = min(a[3], b[3])
+        inter = max(0, x2 - x1) * max(0, y2 - y1)
+        return inter / max(1e-8, _area(a) + _area(b) - inter)
 
     coco = COCO(str(cfg.paths.coco_annotations))
 
@@ -1867,7 +1872,7 @@ def stage_build_labelability_trainset(cfg,
         for L in fin:
             r = json.loads(L)
             img_id = int(r["image_id"])
-            boxes  = r.get("boxes", [])
+            boxes = r.get("boxes", [])
             labels = [int(c) for c in r.get("labels", [])]
             scores = r.get("scores", [])
             if not boxes:
@@ -1876,12 +1881,12 @@ def stage_build_labelability_trainset(cfg,
 
             # 按同图构建同类 GT 框
             ann_ids = coco.getAnnIds(imgIds=[img_id], iscrowd=None)
-            anns    = coco.loadAnns(ann_ids)
+            anns = coco.loadAnns(ann_ids)
             gt_by_cls = defaultdict(list)
             for a in anns:
                 cid = int(a["category_id"])
                 x0, y0, w, h = a["bbox"]
-                gt_by_cls[cid].append([x0, y0, x0+w, y0+h])
+                gt_by_cls[cid].append([x0, y0, x0 + w, y0 + h])
 
             # 计算正样本集合
             matched = set()
@@ -1906,10 +1911,14 @@ def stage_build_labelability_trainset(cfg,
             # 写入特征（训练/推理一致：gts=None）
             for i in pos_idx:
                 feat = _feat_one(i, boxes, labels, scores, gts=None)
-                X.append(feat); y.append(1.0); img_ids.append(img_id)
+                X.append(feat);
+                y.append(1.0);
+                img_ids.append(img_id)
             for i in neg_idx:
                 feat = _feat_one(i, boxes, labels, scores, gts=None)
-                X.append(feat); y.append(0.0); img_ids.append(img_id)
+                X.append(feat);
+                y.append(0.0);
+                img_ids.append(img_id)
 
     X = np.asarray(X, np.float32)
     y = np.asarray(y, np.float32)
@@ -1925,6 +1934,8 @@ def stage_build_labelability_trainset(cfg,
     print(f"[labset] X={X.shape} pos_rate={pos_rate:.3f} imgs={imgs_total} "
           f"pos_boxes={pos_total} imgs_no_pos={no_gt_overlap}")
     return out
+
+
 class LabelabilityMLP(torch.nn.Module):
     def __init__(self, in_dim, hid=64):
         super().__init__()
@@ -1966,7 +1977,8 @@ def stage_train_labelability(cfg, npz_path, epochs=5, lr=1e-3, hidden=64):
     def split_with_both_classes(uniq_ids, val_ratio=0.2, max_tries=20):
         for _ in range(max_tries):
             cut = int(len(uniq_ids) * (1 - val_ratio))
-            tr_ids = set(uniq_ids[:cut]); va_ids = set(uniq_ids[cut:])
+            tr_ids = set(uniq_ids[:cut]);
+            va_ids = set(uniq_ids[cut:])
             tr_mask = np.array([i in tr_ids for i in img_ids])
             va_mask = np.array([i in va_ids for i in img_ids])
             if len(np.unique(y[va_mask])) == 2 and len(np.unique(y[tr_mask])) == 2:
@@ -2003,20 +2015,23 @@ def stage_train_labelability(cfg, npz_path, epochs=5, lr=1e-3, hidden=64):
                 nn.Linear(in_dim, hidden), nn.ReLU(),
                 nn.Linear(hidden, 1)
             )
+
         def forward(self, x): return torch.sigmoid(self.net(x))
 
     mdl = MLP(in_dim, hidden).to(cfg.device)
     opt = torch.optim.Adam(mdl.parameters(), lr=lr)
 
     # ---------------- 训练循环 ----------------
-    for ep in range(1, epochs+1):
+    for ep in range(1, epochs + 1):
         mdl.train()
         losses = []
         for xb, yb in tr_loader:
             xb, yb = xb.to(cfg.device), yb.to(cfg.device)
             p = mdl(xb)
             loss = F.binary_cross_entropy(p, yb)
-            opt.zero_grad(); loss.backward(); opt.step()
+            opt.zero_grad();
+            loss.backward();
+            opt.step()
             losses.append(loss.item())
 
         # 验证 AUC
@@ -2043,6 +2058,8 @@ def stage_train_labelability(cfg, npz_path, epochs=5, lr=1e-3, hidden=64):
     torch.save(ckpt, out)
     print(f"[lab] saved {out}")
     return out
+
+
 def _edge_score(mdl, a, b):
     x = np.array([_pair_feats(a, b)], np.float32)
     with torch.no_grad():
@@ -2076,9 +2093,9 @@ def _logit_clip(p, eps=1e-6):
     return math.log(p / (1.0 - p))
 
 
-def stage_infer_post(cfg, det_file: Path, node_mdl_p: Path=None,
-                     sub_iou: float=0.7, temp: float=1.0,
-                     alpha: float=0.3, q_floor: float=0.5) -> Path:
+def stage_infer_post(cfg, det_file: Path, node_mdl_p: Path = None,
+                     sub_iou: float = 0.7, temp: float = 1.0,
+                     alpha: float = 0.3, q_floor: float = 0.5) -> Path:
     # ...载入 ckpt/mu/sd/mdl，predict_q(...) 同前...
     # 计算 q，做温度缩放
     # q = predict_q(feats); 若 temp!=1 做 logit 温度；然后：
@@ -2770,9 +2787,9 @@ def stage_eval_post(cfg, det_post_file: Path = None, iouType: str = "bbox") -> D
 def stage_grid_search(cfg,
                       det_file: Path,
                       node_mdl_p: Path,
-                      sub_ious=(0.60,0.65,0.70),
-                      temps=(1.5,2.0,2.5),
-                      alphas=(0.2,0.3,0.5),
+                      sub_ious=(0.60, 0.65, 0.70),
+                      temps=(1.5, 2.0, 2.5),
+                      alphas=(0.2, 0.3, 0.5),
                       q_floor=0.5):
     """
     小网格搜索 s' = s^(1-α) * (q_T)^α, 并在 val 上评测。
@@ -2781,7 +2798,7 @@ def stage_grid_search(cfg,
     """
     import json, csv, time
     out_json = cfg.paths.outputs_dir / "grid_results.json"
-    out_csv  = cfg.paths.outputs_dir / "grid_results.csv"
+    out_csv = cfg.paths.outputs_dir / "grid_results.csv"
     results = []
     for si in sub_ious:
         for T in temps:
@@ -2794,12 +2811,232 @@ def stage_grid_search(cfg,
                 results.append(rec)
 
     # 保存
-    with open(out_json, "w") as f: json.dump(results, f, indent=2)
+    with open(out_json, "w") as f:
+        json.dump(results, f, indent=2)
     with open(out_csv, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=list(results[0].keys()))
-        writer.writeheader(); writer.writerows(results)
+        writer.writeheader();
+        writer.writerows(results)
     print(f"[grid] wrote {out_json}\n[grid] wrote {out_csv}")
     return out_csv
+
+
+def stage_check_detections(cfg, det_file: Path = None, sample_k: int = 24, iou_thr: float = 0.5) -> Path:
+    """
+    检查 detections.jsonl 的正确性：
+      - 自动判断坐标是否归一化并转换到像素
+      - 检查 labels 是否为 0..79，需要映射到 COCO 稀疏 id(1..90)
+      - 统计任意类/同类 IoU 对齐情况
+      - 随机可视化若干张（红=预测，绿=GT）
+    输出：
+      - /outputs/check_detections_report.json
+      - /outputs/viz_check/*.jpg
+    """
+    import json, random, numpy as np, math, os
+    from PIL import Image, ImageDraw
+    from collections import Counter, defaultdict
+    from pycocotools.coco import COCO
+
+    if det_file is None:
+        det_file = cfg.paths.detections_dir / "detections.jsonl"
+
+    out_dir = cfg.paths.outputs_dir / "viz_check"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    report_p = cfg.paths.outputs_dir / "check_detections_report.json"
+
+    # ---- utils ----
+    def _area(b):
+        return max(0, b[2] - b[0]) * max(0, b[3] - b[1])
+
+    def _iou(a, b):
+        x1 = max(a[0], b[0]);
+        y1 = max(a[1], b[1]);
+        x2 = min(a[2], b[2]);
+        y2 = min(a[3], b[3])
+        inter = max(0, x2 - x1) * max(0, y2 - y1)
+        return inter / max(1e-8, _area(a) + _area(b) - inter)
+
+    # torchvision 0..79 → COCO 稀疏 id
+    COCO80_TO_91 = [
+        1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+        22, 23, 24, 25, 27, 28, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42,
+        43, 44, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61,
+        62, 63, 64, 65, 67, 70, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 84,
+        85, 86, 87, 88, 89, 90
+    ]
+
+    def map80to91(lbls):
+        out = []
+        for x in lbls:
+            ix = int(x)
+            if 0 <= ix < len(COCO80_TO_91):
+                out.append(COCO80_TO_91[ix])
+            else:
+                out.append(-1)
+        return out
+
+    coco = COCO(str(cfg.paths.coco_annotations))
+
+    # ---- 首批采样行用于推断坐标/标签空间 ----
+    first_lines = []
+    with open(det_file, "r") as f:
+        for _ in range(128):
+            try:
+                first_lines.append(json.loads(next(f)))
+            except StopIteration:
+                break
+    if not first_lines:
+        raise RuntimeError(f"[checkdet] empty file: {det_file}")
+
+    # 坐标是否归一化
+    mx_coord = 0.0
+    for r in first_lines:
+        for b in r.get("boxes", [])[:10]:
+            mx_coord = max(mx_coord, *b)
+    norm_boxes = (mx_coord <= 2.0)
+
+    # label 空间检测
+    label_counter = Counter()
+    for r in first_lines:
+        label_counter.update([int(c) for c in r.get("labels", [])])
+    lbl_min = min(label_counter) if label_counter else 0
+    lbl_max = max(label_counter) if label_counter else 0
+    looks_like_80 = (0 <= lbl_min and lbl_max <= 79)
+
+    # ---- 全量遍历统计 ----
+    n_images = 0;
+    n_images_in_ann = 0
+    any_iou_hit = 0;
+    same_iou_hit = 0
+    pred_total = 0;
+    gt_total = 0
+    pos_pred_any = 0;
+    pos_pred_same = 0
+
+    # 为可视化随机挑 sample_k 张
+    random.seed(123)
+    sampled_ids = set()
+    # 先收集所有 image_id
+    all_img_ids = []
+    with open(det_file, "r") as f:
+        for L in f:
+            r = json.loads(L)
+            all_img_ids.append(int(r["image_id"]))
+    if len(all_img_ids) <= sample_k:
+        sampled_ids = set(all_img_ids)
+    else:
+        sampled_ids = set(random.sample(all_img_ids, sample_k))
+
+    # 再遍历并统计 + 可视化
+    with open(det_file, "r") as f:
+        for L in f:
+            r = json.loads(L)
+            img_id = int(r["image_id"])
+            boxes = r.get("boxes", [])
+            labels = [int(c) for c in r.get("labels", [])]
+            scores = r.get("scores", [])
+            if not boxes:
+                continue
+            n_images += 1
+
+            # 图像是否在 ann
+            imgs = coco.loadImgs([img_id])
+            if not imgs:
+                continue
+            n_images_in_ann += 1
+            W, H = int(imgs[0]["width"]), int(imgs[0]["height"])
+
+            # 归一化→像素坐标
+            if norm_boxes:
+                boxes = [[b[0] * W, b[1] * H, b[2] * W, b[3] * H] for b in boxes]
+
+            # label 映射
+            labels_sparse = map80to91(labels) if looks_like_80 else labels
+
+            # GT 装载
+            ann_ids = coco.getAnnIds(imgIds=[img_id], iscrowd=None)
+            anns = coco.loadAnns(ann_ids)
+            gt_total += len(anns)
+            gts_all = [[a["bbox"][0], a["bbox"][1], a["bbox"][0] + a["bbox"][2], a["bbox"][1] + a["bbox"][3]] for a in anns]
+            gt_by_cls = defaultdict(list)
+            for a in anns:
+                cid = int(a["category_id"])
+                x0, y0, w, h = a["bbox"]
+                gt_by_cls[cid].append([x0, y0, x0 + w, y0 + h])
+
+            # IoU 统计
+            pred_total += len(boxes)
+            # 任意类 IoU≥thr 的图片计数
+            hit_any = any(any(_iou(b, g) >= iou_thr for g in gts_all) for b in boxes[:200])
+            if hit_any: any_iou_hit += 1
+
+            # 同类 IoU≥thr 的图片计数 + 正样本计数
+            hit_same = False
+            pos_any_cnt = 0;
+            pos_same_cnt = 0
+            for i, b in enumerate(boxes):
+                # any-class
+                if any(_iou(b, g) >= iou_thr for g in gts_all): pos_any_cnt += 1
+                # same-class（需要有效类 id）
+                gts = gt_by_cls.get(labels_sparse[i], [])
+                if gts and any(_iou(b, g) >= iou_thr for g in gts):
+                    pos_same_cnt += 1;
+                    hit_same = True
+            if hit_same: same_iou_hit += 1
+            pos_pred_any += pos_any_cnt
+            pos_pred_same += pos_same_cnt
+
+            # 可视化
+            if img_id in sampled_ids:
+                # load image
+                img_path = os.path.join(cfg.paths.coco_images, imgs[0]["file_name"])
+                try:
+                    im = Image.open(img_path).convert("RGB")
+                except Exception:
+                    # 兜底：若路径不对，跳过该图
+                    sampled_ids.remove(img_id)
+                    continue
+                draw = ImageDraw.Draw(im, "RGBA")
+                # GT 绿
+                for g in gts_all:
+                    draw.rectangle([g[0], g[1], g[2], g[3]], outline=(0, 255, 0, 255), width=3)
+                # 预测 红
+                for i, b in enumerate(boxes):
+                    col = (255, 0, 0, 255)
+                    draw.rectangle([b[0], b[1], b[2], b[3]], outline=col, width=2)
+                im.save(out_dir / f"check_{img_id}.jpg")
+
+    # ---- 汇总报告 ----
+    report = {
+        "detections_file": str(det_file),
+        "annotations_file": str(cfg.paths.coco_annotations),
+        "images_scanned": n_images,
+        "images_in_annotations": n_images_in_ann,
+        "coord_normalized_input": bool(norm_boxes),
+        "label_space_contiguous80": bool(looks_like_80),
+        "iou_threshold": iou_thr,
+        "images_with_any_IoU>=thr": any_iou_hit,
+        "images_with_sameClass_IoU>=thr": same_iou_hit,
+        "ratio_any": (any_iou_hit / max(1, n_images_in_ann)),
+        "ratio_same": (same_iou_hit / max(1, n_images_in_ann)),
+        "pred_total": pred_total,
+        "gt_total": gt_total,
+        "pred_matched_any": pos_pred_any,
+        "pred_matched_same": pos_pred_same,
+        "pos_rate_pred_any": (pos_pred_any / max(1, pred_total)),
+        "pos_rate_pred_same": (pos_pred_same / max(1, pred_total)),
+        "visualizations": str(out_dir),
+        "label_mapping_used": "COCO80→91" if looks_like_80 else "as-is",
+        "note": "绿色=GT, 红色=预测；若 ratio_same≈0，通常是类ID未映射。若 ratio_any≈0，通常是坐标未转像素或split不一致。"
+    }
+    with open(report_p, "w") as f:
+        json.dump(report, f, indent=2)
+    print(f"[checkdet] wrote {report_p}")
+    print(f"[checkdet] any/same IoU ratios: {report['ratio_any']:.3f}/{report['ratio_same']:.3f} "
+          f"  pos_rate_pred_any/same: {report['pos_rate_pred_any']:.3f}/{report['pos_rate_pred_same']:.3f}")
+    return report_p
+
+
 # ---------- CLI ----------
 def main():
     parser = argparse.ArgumentParser("GRM-COCO pipeline")
@@ -2831,7 +3068,9 @@ def main():
     # 1) detect
     if "detect" in steps:
         artifacts["det"] = stage_detect(cfg)
-
+    if "checkdet" in steps:
+        det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
+        artifacts["checkdet"] = stage_check_detections(cfg, det)
     if "viz" in steps:
         det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
         artifacts["viz"] = stage_viz_frcnn_vs_gt(cfg, det,
