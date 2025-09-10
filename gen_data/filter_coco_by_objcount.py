@@ -6,7 +6,7 @@ import config
 
 def filter_coco(args, min_objs=5, max_objs=15, data_split=f"val2017"):
     coco_json_path = config.get_coco_path(args.remote) / "original" / "annotations" / f"instances_{data_split}2017.json"
-    orig_img_dir = config.get_coco_path(args.remote) / "original" / f"{data_split}"
+    orig_img_dir = config.get_coco_path(args.remote) / "original" / f"{data_split}2017"
     out_list = config.get_coco_path(args.remote) / "original" / "annotations" / "keep_filenames.txt"
     csv_stats = config.get_coco_path(args.remote) / "original" / "annotations" / "image_object_counts.csv"
     selected_dir = config.get_coco_path(args.remote) / "selected" / f"{data_split}2017"
