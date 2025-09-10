@@ -2002,7 +2002,7 @@ def stage_infer_post(cfg,
 
     if node_mdl_p is None:
         node_mdl_p = cfg.paths.models_dir / "grm_node_labelability.pt"
-    ckpt = torch.load(node_mdl_p, map_location=cfg.device)
+    ckpt = torch.load(node_mdl_p, map_location=cfg.device, weights_only=False)
     in_dim = int(ckpt["in_dim"])
     mu, sd = ckpt["mu"], ckpt["sd"]  # [1,F]
     mdl = LabelabilityMLP(in_dim=in_dim).to(cfg.device).eval()
