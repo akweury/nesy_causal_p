@@ -1985,11 +1985,13 @@ def _logit_clip(p, eps=1e-6):
     return math.log(p / (1.0 - p))
 
 
-def stage_infer_post(cfg,
-                     det_file: Path,
-                     node_mdl_p: Path = None,
-                     sub_iou: float = 0.7,
-                     temp: float = 1.0) -> Path:
+def stage_infer_post(cfg, det_file: Path, node_mdl_p: Path=None,
+                     sub_iou: float=0.7, temp: float=1.0,
+                     alpha: float=0.3, q_floor: float=0.5) -> Path:
+    # ...载入 ckpt/mu/sd/mdl，predict_q(...) 同前...
+    # 计算 q，做温度缩放
+    # q = predict_q(feats); 若 temp!=1 做 logit 温度；然后：
+
     """
     无GT推理风格化：
       - 载入 labelability 模型（含 mu/sd）
@@ -2041,7 +2043,11 @@ def stage_infer_post(cfg,
                 # 计算 q(b)
                 feats = np.stack([np.array(_feat_one(i, boxes, labels, scores, gts=None), np.float32) for i in idx], axis=0)
                 q = predict_q(feats)
-                s_prime = (np.array([scores[i] for i in idx], np.float32) * q).tolist()
+                q = np.maximum(q, q_floor)
+                s = np.array([scores[i] for i in idx], np.float32)
+                s_prime = (np.power(s, 1.0 - alpha) * np.power(q, alpha)).tolist()
+                # 接着按 s_prime 做 NMS，写出 detections_grm_post.jsonl（可在文件名加参数后缀以免覆盖）
+                # s_prime = (np.array([scores[i] for i in idx], np.float32) * q).tolist()
 
                 # NMS（对 s' 排序）
                 B = [boxes[i] for i in idx]
@@ -2670,6 +2676,39 @@ def stage_eval_post(cfg, det_post_file: Path = None, iouType: str = "bbox") -> D
     return summary
 
 
+def stage_grid_search(cfg,
+                      det_file: Path,
+                      node_mdl_p: Path,
+                      sub_ious=(0.60,0.65,0.70),
+                      temps=(1.5,2.0,2.5),
+                      alphas=(0.2,0.3,0.5),
+                      q_floor=0.5):
+    """
+    小网格搜索 s' = s^(1-α) * (q_T)^α, 并在 val 上评测。
+    需要：stage_infer_post 支持 alpha/temp/q_floor/sub_iou 参数。
+    产物：/outputs/grid_results.json, /outputs/grid_results.csv
+    """
+    import json, csv, time
+    out_json = cfg.paths.outputs_dir / "grid_results.json"
+    out_csv  = cfg.paths.outputs_dir / "grid_results.csv"
+    results = []
+    for si in sub_ious:
+        for T in temps:
+            for a in alphas:
+                print(f"[grid] sub_iou={si}  temp={T}  alpha={a}  q_floor={q_floor}")
+                det_post = stage_infer_post(cfg, det_file, node_mdl_p,
+                                            sub_iou=si, temp=T, alpha=a, q_floor=q_floor)
+                metrics = stage_eval_post(cfg, det_post)
+                rec = {"sub_iou": si, "temp": T, "alpha": a, "q_floor": q_floor, **metrics}
+                results.append(rec)
+
+    # 保存
+    with open(out_json, "w") as f: json.dump(results, f, indent=2)
+    with open(out_csv, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=list(results[0].keys()))
+        writer.writeheader(); writer.writerows(results)
+    print(f"[grid] wrote {out_json}\n[grid] wrote {out_csv}")
+    return out_csv
 # ---------- CLI ----------
 def main():
     parser = argparse.ArgumentParser("GRM-COCO pipeline")
@@ -2726,6 +2765,11 @@ def main():
     if "train_label" in steps:
         npz = artifacts.get("labset", cfg.paths.outputs_dir / "labelability_train.npz")
         artifacts["lab_mdl"] = stage_train_labelability(cfg, npz)
+
+    if "grid" in steps:
+        det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
+        node_m = artifacts.get("lab_mdl", cfg.paths.models_dir / "grm_node_labelability.pt")
+        artifacts["grid"] = stage_grid_search(cfg, det, node_m)
 
     if "infer_post" in steps:
         det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")

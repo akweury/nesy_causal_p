@@ -156,6 +156,8 @@ make docker-group-nms GPU_ID=0
 make docker-eval GPU_ID=0
 make docker-eval-std GPU_ID=0
 
+make run-docker STEPS=detect,match,labset,train_label,infer_post,eval_post GPU_ID=1
+
 ```
 
 [eval] {'AP': 0.37223965773530393, 'AP50': 0.5913912012133198, 'AP75': 0.4031427082781459, 'APs': 0.23680234357769733, 'APm': 0.412434674157375, 'APl': 0.4509344580779611, 'AR1': 0.2956453433745217, 'AR10': 0.49282037954737246, 'AR100': 0.5148857481577228, 'ARs': 0.35325781862843436, 'ARm': 0.5494578642833556, 'ARl': 0.596609059075887, 'evaluated_images': 1826}
