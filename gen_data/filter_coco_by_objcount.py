@@ -24,13 +24,14 @@ def filter_coco(args, min_objs=5, max_objs=15, data_split=f"val2017"):
             continue
         counts[ann["image_id"]] += 1
     kept, rows, kept_img_ids = [], [], []
+    print(orig_img_dir)
     for img_id, fname in img_id2name.items():
         n = counts.get(img_id, 0)
         rows.append((img_id, fname, n))
         if min_objs <= n <= max_objs and os.path.exists(os.path.join(orig_img_dir, fname)):
             src = os.path.join(orig_img_dir, fname)
             dst = os.path.join(selected_dir, fname)
-            print(f"{src} -> {dst} with {n} objects")
+
             if os.path.exists(src):
                 shutil.copy2(src, dst)
                 kept.append(fname)
