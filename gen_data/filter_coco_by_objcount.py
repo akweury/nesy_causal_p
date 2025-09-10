@@ -6,7 +6,7 @@ import config
 
 def filter_coco(args, min_objs=5, max_objs=15, data_split=f"val2017"):
     coco_json_path = config.get_coco_path(args.remote) / "original" / "annotations" / f"instances_{data_split}2017.json"
-    orig_img_dir = config.get_coco_path(args.remote) / "original" / data_split
+    orig_img_dir = config.get_coco_path(args.remote) / "original" / f"{data_split}"
     out_list = config.get_coco_path(args.remote) / "original" / "annotations" / "keep_filenames.txt"
     csv_stats = config.get_coco_path(args.remote) / "original" / "annotations" / "image_object_counts.csv"
     selected_dir = config.get_coco_path(args.remote) / "selected" / f"{data_split}2017"
@@ -24,7 +24,7 @@ def filter_coco(args, min_objs=5, max_objs=15, data_split=f"val2017"):
             continue
         counts[ann["image_id"]] += 1
     kept, rows, kept_img_ids = [], [], []
-    print(orig_img_dir)
+    # print(orig_img_dir)
     for img_id, fname in img_id2name.items():
         n = counts.get(img_id, 0)
         rows.append((img_id, fname, n))
