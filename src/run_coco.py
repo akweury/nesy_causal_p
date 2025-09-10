@@ -2563,6 +2563,100 @@ def stage_eval_coco(cfg, det_file: Path, ann_file: Path = None, iou_type: str = 
     return metrics
 
 
+def _xyxy_to_xywh(b):
+    x1, y1, x2, y2 = b
+    return [float(x1), float(y1), float(max(0, x2 - x1)), float(max(0, y2 - y1))]
+
+
+def stage_eval_post(cfg, det_post_file: Path = None, iouType: str = "bbox") -> Dict[str, float]:
+    """
+    评测风格化后的检测结果（s' = s*q(b) 之后）:
+      - 输入: detections_grm_post.jsonl（xyxy, class id, score）
+      - 输出: /outputs/eval_detections_grm_post.json (AP 指标)
+              /outputs/eval_detections_grm_post_per_class.json (每类AP)
+    """
+    import json, numpy as np
+    from pycocotools.coco import COCO
+    from pycocotools.cocoeval import COCOeval
+
+    if det_post_file is None:
+        det_post_file = cfg.paths.outputs_dir / "detections_grm_post.jsonl"
+
+    # 1) jsonl -> COCO result list
+    results = []
+    with open(det_post_file, "r") as f:
+        for L in f:
+            r = json.loads(L)
+            img_id = int(r["image_id"])
+            boxes = r.get("boxes", [])
+            labels = r.get("labels", [])
+            scores = r.get("scores", [])
+            for b, c, s in zip(boxes, labels, scores):
+                results.append({
+                    "image_id": img_id,
+                    "category_id": int(c),
+                    "bbox": _xyxy_to_xywh(b),
+                    "score": float(s),
+                })
+
+    # 2) run COCO eval
+    cocoGt = COCO(str(cfg.paths.coco_annotations))
+    if len(results) == 0:
+        raise RuntimeError(f"[eval_post] no detections in {det_post_file}")
+
+    cocoDt = cocoGt.loadRes(results)
+    E = COCOeval(cocoGt, cocoDt, iouType)
+    E.params.imgIds = sorted({r["image_id"] for r in results})
+    E.evaluate();
+    E.accumulate();
+    E.summarize()
+
+    # 3) 汇总主指标
+    summary = {
+        "AP": float(E.stats[0]),
+        "AP50": float(E.stats[1]),
+        "AP75": float(E.stats[2]),
+        "APs": float(E.stats[3]),
+        "APm": float(E.stats[4]),
+        "APl": float(E.stats[5]),
+        "AR1": float(E.stats[6]),
+        "AR10": float(E.stats[7]),
+        "AR100": float(E.stats[8]),
+        "ARs": float(E.stats[9]),
+        "ARm": float(E.stats[10]),
+        "ARl": float(E.stats[11]),
+        "evaluated_images": len(E.params.imgIds),
+    }
+    out_sum = cfg.paths.outputs_dir / "eval_detections_grm_post.json"
+    with open(out_sum, "w") as f:
+        json.dump(summary, f, indent=2)
+    print(f"[eval_post] wrote {out_sum}")
+    print(f"[eval_post] {summary}")
+
+    # 4) 按类 AP（可选）
+    per_class = {}
+    cat_ids = sorted(list(cocoGt.cats.keys()))
+    for cid in cat_ids:
+        E_c = COCOeval(cocoGt, cocoDt, iouType)
+        E_c.params.imgIds = E.params.imgIds
+        E_c.params.catIds = [cid]
+        E_c.evaluate();
+        E_c.accumulate()
+        ap = float(E_c.stats[0]) if not np.isnan(E_c.stats[0]) else 0.0
+        per_class[str(cid)] = {
+            "name": cocoGt.cats[cid]["name"],
+            "AP": ap,
+            "AP50": float(E_c.stats[1]) if not np.isnan(E_c.stats[1]) else 0.0,
+            "AP75": float(E_c.stats[2]) if not np.isnan(E_c.stats[2]) else 0.0,
+        }
+    out_pc = cfg.paths.outputs_dir / "eval_detections_grm_post_per_class.json"
+    with open(out_pc, "w") as f:
+        json.dump(per_class, f, indent=2)
+    print(f"[eval_post] wrote {out_pc}")
+
+    return summary
+
+
 # ---------- CLI ----------
 def main():
     parser = argparse.ArgumentParser("GRM-COCO pipeline")
@@ -2623,7 +2717,9 @@ def main():
         node_m = artifacts.get("lab_mdl", cfg.paths.models_dir / "grm_node_labelability.pt")
         # 可用命令行或环境变量传 sub_iou / temp；这里给默认
         artifacts["det_post"] = stage_infer_post(cfg, det, node_m, sub_iou=0.7, temp=1.0)
-
+    if "eval_post" in steps:
+        post = artifacts.get("det_post", cfg.paths.outputs_dir / "detections_grm_post.jsonl")
+        print("[eval_post]", stage_eval_post(cfg, post))
     print(json.dumps({k: str(v) for k, v in artifacts.items()}, indent=2))
 
 
