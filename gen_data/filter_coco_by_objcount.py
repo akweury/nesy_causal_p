@@ -9,9 +9,9 @@ def filter_coco(args, min_objs=5, max_objs=15, data_split=f"val2017"):
     orig_img_dir = config.get_coco_path(args.remote) / "original" / data_split
     out_list = config.get_coco_path(args.remote) / "original" / "annotations" / "keep_filenames.txt"
     csv_stats = config.get_coco_path(args.remote) / "original" / "annotations" / "image_object_counts.csv"
-    selected_dir = config.get_coco_path(args.remote) / "selected" / data_split
+    selected_dir = config.get_coco_path(args.remote) / "selected" / f"{data_split}2017"
     selected_ann_dir = config.get_coco_path(args.remote) / "selected" / "annotations"
-    selected_json_path = selected_ann_dir / f"instances_{data_split}.json"
+    selected_json_path = selected_ann_dir / f"instances_{data_split}2017.json"
     os.makedirs(selected_dir, exist_ok=True)
     os.makedirs(selected_ann_dir, exist_ok=True)
     with open(coco_json_path) as f:
