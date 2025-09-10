@@ -37,10 +37,25 @@ run-docker:
 	  $(IMAGE) \
 	  python -m src.run_coco --steps $(STEPS) --remote --t_intra 0.75 --t_inter 0.5
 
+run-filter
+	docker run --gpus all --rm -it \
+	  -v /home/ml-jsha/nesy_causal_p:/app \
+	  -v /home/ml-jsha/storage/GRM_Data/coco_2017:/coco_2017 \
+	  -v /home/ml-jsha/storage/GRM_output:/grm_output \
+	  -e CONFIG_PROFILE=remote \
+	  -e DATA_ROOT=/coco_2017 \
+	  -e SUPERVISION=distill \
+	  -e COCO_IMAGES=/coco_2017/selected/train2017 \
+	  -e COCO_ANN=/coco_2017/selected/annotations/instances_val2017.json \
+	  -e WORK_DIR=/grm_output/run \
+	  -e DEVICE=cuda:$(GPU_ID) \
+	  -e NUM_WORKERS=8 \
+	  -e MAX_IMAGES="$(MAX_IMAGES)" \
+	  $(IMAGE) \
+	  python -m src.gen_data.filter_coco_by_objcount --remote --data_split train
 # ---- Only detect in Docker (GPU) ----
 docker-detect:
 	$(MAKE) run-docker STEPS=detect
-
 docker-graph:
 	$(MAKE) run-docker STEPS=detect,graph
 docker-grm:
