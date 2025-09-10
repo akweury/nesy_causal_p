@@ -2575,7 +2575,12 @@ def stage_eval_post(cfg, det_post_file: Path = None, iouType: str = "bbox") -> D
       - 输出: /outputs/eval_detections_grm_post.json (AP 指标)
               /outputs/eval_detections_grm_post_per_class.json (每类AP)
     """
-    import json, numpy as np
+    import json
+    import numpy as np
+    # shim for old pycocotools expecting np.float/np.int/np.bool
+    if not hasattr(np, "float"): np.float = float
+    if not hasattr(np, "int"):   np.int = int
+    if not hasattr(np, "bool"):  np.bool = bool
     from pycocotools.coco import COCO
     from pycocotools.cocoeval import COCOeval
 
