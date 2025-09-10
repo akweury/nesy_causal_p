@@ -30,6 +30,7 @@ def filter_coco(args, min_objs=5, max_objs=15, data_split=f"val2017"):
         if min_objs <= n <= max_objs and os.path.exists(os.path.join(orig_img_dir, fname)):
             src = os.path.join(orig_img_dir, fname)
             dst = os.path.join(selected_dir, fname)
+            print(f"{src} -> {dst} with {n} objects")
             if os.path.exists(src):
                 shutil.copy2(src, dst)
                 kept.append(fname)
