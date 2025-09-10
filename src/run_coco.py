@@ -1893,87 +1893,113 @@ class LabelabilityMLP(torch.nn.Module):
     def forward(self, x): return torch.sigmoid(self.net(x)).squeeze(-1)
 
 
-def stage_train_labelability(cfg, npz_path: Path, epochs=5, lr=1e-3, bs=8192) -> Path:
-    dat = np.load(npz_path)
-    X, y, img_ids = dat["X"], dat["y"], dat["img_ids"]
-    X = np.asarray(X, np.float32)
-    y = np.asarray(y, np.float32)
-    img_ids = np.asarray(img_ids, np.int64)
+def stage_train_labelability(cfg, npz_path, epochs=5, lr=1e-3, hidden=64):
+    """
+    训练 labelability 模型：判断预测框是否符合“会被人工标注”的风格
+    输入: npz (由 stage_build_labelability_trainset 构建)
+    输出: 保存模型 ckpt
+    """
+    import numpy as np, torch, torch.nn as nn, torch.nn.functional as F
+    from torch.utils.data import TensorDataset, DataLoader
+    from sklearn.metrics import roc_auc_score
+    from pathlib import Path
+
+    # ---------------- 加载与清洗 ----------------
+    dat = np.load(npz_path, allow_pickle=True)
+    X = np.asarray(dat["X"], np.float32)
+    y = np.asarray(dat["y"], np.float32)
+    img_ids = np.asarray(dat.get("img_ids", np.arange(len(y))), np.int64)
+
+    # 清洗坏值
     X = np.nan_to_num(X, posinf=1e6, neginf=-1e6)
 
+    print(f"[labset] X={X.shape} pos_rate={y.mean():.3f}")
 
-    # 按图划分 train/val
-    uniq = np.unique(img_ids)
+    # ---------------- 分层切分 ----------------
     rng = np.random.default_rng(123)
     uniq = np.unique(img_ids)
     rng.shuffle(uniq)
 
-    def split_with_both_classes(uniq_ids, max_tries=10, val_ratio=0.2):
+    def split_with_both_classes(uniq_ids, val_ratio=0.2, max_tries=20):
         for _ in range(max_tries):
             cut = int(len(uniq_ids) * (1 - val_ratio))
-            tr_ids = set(uniq_ids[:cut]);
-            va_ids = set(uniq_ids[cutslice]) if (cutslice := slice(cut, None)) else set()
+            tr_ids = set(uniq_ids[:cut]); va_ids = set(uniq_ids[cut:])
             tr_mask = np.array([i in tr_ids for i in img_ids])
             va_mask = np.array([i in va_ids for i in img_ids])
             if len(np.unique(y[va_mask])) == 2 and len(np.unique(y[tr_mask])) == 2:
                 return tr_mask, va_mask
             rng.shuffle(uniq_ids)
-        return tr_mask, va_mask  # 退化返回（尽力了）
+        return tr_mask, va_mask
 
     tr_mask, va_mask = split_with_both_classes(uniq)
-
     Xtr, ytr = X[tr_mask], y[tr_mask]
     Xva, yva = X[va_mask], y[va_mask]
 
-    # ---- z-score（稳健版）----
+    # ---------------- 标准化 ----------------
     mu = Xtr.mean(0, keepdims=True)
     sd = Xtr.std(0, keepdims=True)
     sd = np.where(sd < 1e-6, 1.0, sd).astype(np.float32)
     Xtr = (Xtr - mu) / sd
     Xva = (Xva - mu) / sd
 
-    mdl = LabelabilityMLP(in_dim=X.shape[1]).to(cfg.device)
-    opt = torch.optim.Adam(mdl.parameters(), lr)
-    bce = torch.nn.BCELoss()
+    # ---------------- DataLoader ----------------
+    Xtr_t = torch.from_numpy(Xtr)
+    ytr_t = torch.from_numpy(ytr).float().unsqueeze(1)
+    Xva_t = torch.from_numpy(Xva)
+    yva_t = torch.from_numpy(yva).float().unsqueeze(1)
 
-    Xtr_t = torch.from_numpy(Xtr).to(cfg.device)
-    ytr_t = torch.from_numpy(ytr).to(cfg.device)
-    Xva_t = torch.from_numpy(Xva).to(cfg.device)
-    yva_t = torch.from_numpy(yva).to(cfg.device)
+    tr_loader = DataLoader(TensorDataset(Xtr_t, ytr_t), batch_size=512, shuffle=True)
 
-    for ep in range(1, epochs + 1):
+    # ---------------- 模型 ----------------
+    in_dim = X.shape[1]
+
+    class MLP(nn.Module):
+        def __init__(self, in_dim, hidden):
+            super().__init__()
+            self.net = nn.Sequential(
+                nn.Linear(in_dim, hidden), nn.ReLU(),
+                nn.Linear(hidden, 1)
+            )
+        def forward(self, x): return torch.sigmoid(self.net(x))
+
+    mdl = MLP(in_dim, hidden).to(cfg.device)
+    opt = torch.optim.Adam(mdl.parameters(), lr=lr)
+
+    # ---------------- 训练循环 ----------------
+    for ep in range(1, epochs+1):
         mdl.train()
-        idx = torch.randperm(len(ytr_t))
-        total = 0.0
-        for st in range(0, len(idx), bs):
-            sel = idx[st:st + bs]
-            p = mdl(Xtr_t[sel])
-            l = bce(p, ytr_t[sel])
-            opt.zero_grad();
-            l.backward();
-            opt.step()
-            total += l.item() * len(sel)
+        losses = []
+        for xb, yb in tr_loader:
+            xb, yb = xb.to(cfg.device), yb.to(cfg.device)
+            p = mdl(xb)
+            loss = F.binary_cross_entropy(p, yb)
+            opt.zero_grad(); loss.backward(); opt.step()
+            losses.append(loss.item())
 
+        # 验证 AUC
         mdl.eval()
-        # ---- 训练循环里计算 AUC（带防御）----
-        from sklearn.metrics import roc_auc_score
         with torch.no_grad():
-            pva = mdl(Xva_t).cpu().numpy()
+            pva = mdl(Xva_t.to(cfg.device)).cpu().numpy().ravel()
         if len(np.unique(yva)) < 2:
             auc = 0.5
-            print("[lab][warn] val y has single class; set AUC=0.5 (stratify split harder or enlarge data)")
+            print(f"[lab][warn] val y has single class; force AUC=0.5")
         else:
             auc = roc_auc_score(yva, pva)
-        print(f"[lab] ep{ep} loss_tr={...:.4f}  AUC_va={auc:.3f}")
 
-    # 保存模型与标准化参数
+        print(f"[lab] ep{ep} loss_tr={np.mean(losses):.4f}  AUC_va={auc:.3f}")
+
+    # ---------------- 保存 ----------------
     out = cfg.paths.models_dir / "grm_node_labelability.pt"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    torch.save({"state_dict": mdl.state_dict(), "in_dim": X.shape[1], "mu": mu.astype(np.float32), "sd": sd.astype(np.float32)}, out)
+    ckpt = {
+        "state_dict": mdl.state_dict(),
+        "mu": mu.astype(np.float32),
+        "sd": sd.astype(np.float32),
+        "in_dim": in_dim
+    }
+    Path(out).parent.mkdir(parents=True, exist_ok=True)
+    torch.save(ckpt, out)
     print(f"[lab] saved {out}")
     return out
-
-
 def _edge_score(mdl, a, b):
     x = np.array([_pair_feats(a, b)], np.float32)
     with torch.no_grad():
