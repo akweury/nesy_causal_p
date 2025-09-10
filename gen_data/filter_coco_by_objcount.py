@@ -17,6 +17,7 @@ def filter_coco(args, min_objs=5, max_objs=15, data_split=f"val2017"):
     with open(coco_json_path) as f:
         coco = json.load(f)
     img_id2name = {im["id"]: im["file_name"] for im in coco["images"]}
+    print(f"Total images in {data_split}: {len(img_id2name)}")
     counts = defaultdict(int)
     for ann in coco["annotations"]:
         if ann.get("iscrowd", 0) == 1:
