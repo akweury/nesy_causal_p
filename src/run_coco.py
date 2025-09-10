@@ -1896,23 +1896,39 @@ class LabelabilityMLP(torch.nn.Module):
 def stage_train_labelability(cfg, npz_path: Path, epochs=5, lr=1e-3, bs=8192) -> Path:
     dat = np.load(npz_path)
     X, y, img_ids = dat["X"], dat["y"], dat["img_ids"]
+    X = np.asarray(X, np.float32)
+    y = np.asarray(y, np.float32)
+    img_ids = np.asarray(img_ids, np.int64)
+    X = np.nan_to_num(X, posinf=1e6, neginf=-1e6)
+
 
     # 按图划分 train/val
     uniq = np.unique(img_ids)
     rng = np.random.default_rng(123)
+    uniq = np.unique(img_ids)
     rng.shuffle(uniq)
-    cut = int(0.8 * len(uniq))
-    train_ids = set(uniq[:cut]);
-    val_ids = set(uniq[cut:])
-    tr_mask = np.array([i in train_ids for i in img_ids])
-    va_mask = np.array([i in val_ids for i in img_ids])
+
+    def split_with_both_classes(uniq_ids, max_tries=10, val_ratio=0.2):
+        for _ in range(max_tries):
+            cut = int(len(uniq_ids) * (1 - val_ratio))
+            tr_ids = set(uniq_ids[:cut]);
+            va_ids = set(uniq_ids[cutslice]) if (cutslice := slice(cut, None)) else set()
+            tr_mask = np.array([i in tr_ids for i in img_ids])
+            va_mask = np.array([i in va_ids for i in img_ids])
+            if len(np.unique(y[va_mask])) == 2 and len(np.unique(y[tr_mask])) == 2:
+                return tr_mask, va_mask
+            rng.shuffle(uniq_ids)
+        return tr_mask, va_mask  # 退化返回（尽力了）
+
+    tr_mask, va_mask = split_with_both_classes(uniq)
 
     Xtr, ytr = X[tr_mask], y[tr_mask]
     Xva, yva = X[va_mask], y[va_mask]
 
-    # z-score
+    # ---- z-score（稳健版）----
     mu = Xtr.mean(0, keepdims=True)
-    sd = Xtr.std(0, keepdims=True) + 1e-6
+    sd = Xtr.std(0, keepdims=True)
+    sd = np.where(sd < 1e-6, 1.0, sd).astype(np.float32)
     Xtr = (Xtr - mu) / sd
     Xva = (Xva - mu) / sd
 
@@ -1939,10 +1955,16 @@ def stage_train_labelability(cfg, npz_path: Path, epochs=5, lr=1e-3, bs=8192) ->
             total += l.item() * len(sel)
 
         mdl.eval()
+        # ---- 训练循环里计算 AUC（带防御）----
+        from sklearn.metrics import roc_auc_score
         with torch.no_grad():
-            pva = mdl(Xva_t).detach().cpu().numpy()
-            auc = roc_auc_score(yva, pva) if len(np.unique(yva)) > 1 else float("nan")
-        print(f"[lab] ep{ep} loss_tr={total / len(ytr_t):.4f}  AUC_va={auc:.3f}")
+            pva = mdl(Xva_t).cpu().numpy()
+        if len(np.unique(yva)) < 2:
+            auc = 0.5
+            print("[lab][warn] val y has single class; set AUC=0.5 (stratify split harder or enlarge data)")
+        else:
+            auc = roc_auc_score(yva, pva)
+        print(f"[lab] ep{ep} loss_tr={...:.4f}  AUC_va={auc:.3f}")
 
     # 保存模型与标准化参数
     out = cfg.paths.models_dir / "grm_node_labelability.pt"
