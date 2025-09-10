@@ -2876,6 +2876,17 @@ def stage_check_detections(cfg, det_file: Path = None, sample_k: int = 24, iou_t
         return out
 
     coco = COCO(str(cfg.paths.coco_annotations))
+    COCO_IDS = sorted(coco.getImgIds())
+
+    def _resolve_img_id(raw_id: int):
+        # 1) 真实 COCO id
+        if raw_id in coco.imgs:
+            return raw_id, "direct"
+        # 2) 作为顺序索引的回退映射（0..len-1）
+        if 0 <= raw_id < len(COCO_IDS):
+            return COCO_IDS[raw_id], "indexed"
+        # 3) 失败
+        return None, "missing"
 
     # ---- 首批采样行用于推断坐标/标签空间 ----
     first_lines = []
@@ -3037,6 +3048,199 @@ def stage_check_detections(cfg, det_file: Path = None, sample_k: int = 24, iou_t
     return report_p
 
 
+def stage_quick_sanity(cfg, det_file: Path) -> Path:
+    import json, numpy as np
+    from collections import defaultdict, Counter
+    from pycocotools.coco import COCO
+
+    rep = {
+        "images_total": 0, "images_nonempty": 0,
+        "ratio_any": 0.0, "ratio_same": 0.0,
+        "pred_total": 0, "gt_total": 0,
+        "pos_pred_any": 0, "pos_pred_same": 0,
+        "coord_normalized_input": None,
+        "label_space_contiguous80": None,
+        "score_spearman_vs_iou": None
+    }
+
+    # 映射 0..79 → 稀疏 id（若需要）
+    COCO80_TO_91 = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 27, 28, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 46, 47,
+                    48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 67, 70, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 84, 85, 86, 87, 88, 89, 90]
+
+    def map80to91(lbls):
+        out = [];
+        ok = True
+        for x in lbls:
+            ix = int(x)
+            if 0 <= ix < len(COCO80_TO_91):
+                out.append(COCO80_TO_91[ix])
+            else:
+                out.append(-1);
+                ok = False
+        return out, ok
+
+    def _area(b):
+        return max(0, b[2] - b[0]) * max(0, b[3] - b[1])
+
+    def _iou(a, b):
+        x1 = max(a[0], b[0]);
+        y1 = max(a[1], b[1]);
+        x2 = min(a[2], b[2]);
+        y2 = min(a[3], b[3])
+        inter = max(0, x2 - x1) * max(0, y2 - y1)
+        return inter / max(1e-8, _area(a) + _area(b) - inter)
+
+    coco = COCO(str(cfg.paths.coco_annotations))
+    COCO_IDS = sorted(coco.getImgIds())
+
+    def resolve_id(raw):
+        if raw in coco.imgs: return raw
+        if 0 <= raw < len(COCO_IDS): return COCO_IDS[raw]
+        return None
+
+    # 预判坐标/类别空间
+    import itertools
+    with open(det_file) as f:
+        lines = list(itertools.islice(f, 128))
+    import json as _json
+    mx = 0.0;
+    lbl_ctr = Counter()
+    for L in lines:
+        r = _json.loads(L)
+        for b in r.get("boxes", [])[:10]: mx = max(mx, *b)
+        lbl_ctr.update([int(x) for x in r.get("labels", [])])
+    norm = (mx <= 2.0)
+    rep["coord_normalized_input"] = norm
+    looks80 = (lbl_ctr and min(lbl_ctr) >= 0 and max(lbl_ctr) <= 79)
+    rep["label_space_contiguous80"] = looks80
+
+    # 主循环统计
+    from scipy.stats import spearmanr
+    iou_list = [];
+    score_list = []
+    with open(det_file) as f:
+        for L in f:
+            r = _json.loads(L)
+            raw = int(r["image_id"]);
+            img_id = resolve_id(raw)
+            if img_id is None: continue
+            rep["images_total"] += 1
+            boxes = r.get("boxes", []);
+            labels = r.get("labels", []);
+            scores = r.get("scores", [])
+            if boxes: rep["images_nonempty"] += 1
+            if not boxes: continue
+
+            img = coco.loadImgs([img_id])[0]
+            W, H = int(img["width"]), int(img["height"])
+            if norm:
+                boxes = [[b[0] * W, b[1] * H, b[2] * W, b[3] * H] for b in boxes]
+            labels = map80to91(labels)[0] if looks80 else [int(c) for c in labels]
+
+            ann_ids = coco.getAnnIds(imgIds=[img_id], iscrowd=None)
+            anns = coco.loadAnns(ann_ids)
+            gts_all = [[a["bbox"][0], a["bbox"][1], a["bbox"][0] + a["bbox"][2], a["bbox"][1] + a["bbox"][3]] for a in anns]
+            gt_by_cls = defaultdict(list)
+            for a in anns:
+                cid = int(a["category_id"]);
+                x0, y0, w, h = a["bbox"]
+                gt_by_cls[cid].append([x0, y0, x0 + w, y0 + h])
+
+            rep["pred_total"] += len(boxes);
+            rep["gt_total"] += len(anns)
+
+            any_hit = False;
+            same_hit = False
+            for i, b in enumerate(boxes):
+                iou_any = max([_iou(b, g) for g in gts_all], default=0.0)
+                iou_list.append(iou_any);
+                score_list.append(float(scores[i]))
+                if iou_any >= 0.5:
+                    rep["pos_pred_any"] += 1;
+                    any_hit = True
+                gts = gt_by_cls.get(labels[i], [])
+                if any(_iou(b, g) >= 0.5 for g in gts):
+                    rep["pos_pred_same"] += 1;
+                    same_hit = True
+            if any_hit:  rep["ratio_any"] += 1
+            if same_hit: rep["ratio_same"] += 1
+
+    rep["ratio_any"] = rep["ratio_any"] / max(1, rep["images_total"])
+    rep["ratio_same"] = rep["ratio_same"] / max(1, rep["images_total"])
+    rep["images_nonempty_ratio"] = rep["images_nonempty"] / max(1, rep["images_total"])
+    if len(iou_list) > 100 and len(set(score_list)) > 1:
+        rep["score_spearman_vs_iou"] = float(spearmanr(iou_list, score_list).correlation)
+
+    out = cfg.paths.outputs_dir / "quick_sanity_report.json"
+    import json as _j;
+    with open(out, "w") as f:
+        _j.dump(rep, f, indent=2)
+    print("[sanity]", rep)
+    return out
+
+
+def stage_quick_eval(cfg, det_file: Path, iouType="bbox"):
+    import json, numpy as np
+    from pycocotools.coco import COCO
+    from pycocotools.cocoeval import COCOeval
+
+    def xyxy_to_xywh(b):
+        return [float(b[0]), float(b[1]), float(max(0, b[2] - b[0])), float(max(0, b[3] - b[1]))]
+
+    # numpy shim for old cocoeval
+    if not hasattr(np, "float"): np.float = float
+
+    # 读 detections
+    with open(det_file) as f:
+        lines = [json.loads(L) for L in f]
+    # 坐标/label 判定（复用 sanity 的逻辑）
+    mx = max([max(b) for r in lines for b in r.get("boxes", [])] + [0])
+    norm = (mx <= 2.0)
+    COCO80_TO_91 = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 27, 28, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 46, 47,
+                    48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 67, 70, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 84, 85, 86, 87, 88, 89, 90]
+    looks80 = True
+    for r in lines[:64]:
+        if r.get("labels"):
+            looks80 = looks80 and (0 <= min(r["labels"]) and max(r["labels"]) <= 79)
+
+    coco = COCO(str(cfg.paths.coco_annotations))
+    COCO_IDS = sorted(coco.getImgIds())
+
+    def resolve_id(raw):
+        if raw in coco.imgs: return raw
+        if 0 <= raw < len(COCO_IDS): return COCO_IDS[raw]
+        return None
+
+    # 转 COCO result
+    results = []
+    for r in lines:
+        img_id = resolve_id(int(r["image_id"]))
+        if img_id is None: continue
+        W, H = int(coco.imgs[img_id]["width"]), int(coco.imgs[img_id]["height"])
+        boxes = r.get("boxes", []);
+        labels = r.get("labels", []);
+        scores = r.get("scores", [])
+        if norm:
+            boxes = [[b[0] * W, b[1] * H, b[2] * W, b[3] * H] for b in boxes]
+        labels = ([COCO80_TO_91[int(c)] for c in labels] if looks80 else [int(c) for c in labels])
+        for b, c, s in zip(boxes, labels, scores):
+            results.append({"image_id": img_id, "category_id": c, "bbox": xyxy_to_xywh(b), "score": float(s)})
+
+    cocoDt = coco.loadRes(results)
+    E = COCOeval(coco, cocoDt, iouType)
+    E.params.imgIds = sorted({r["image_id"] for r in results})
+    E.evaluate();
+    E.accumulate();
+    E.summarize()
+
+    summary = {"AP": float(E.stats[0]), "AP50": float(E.stats[1]), "AP75": float(E.stats[2])}
+    out = cfg.paths.outputs_dir / "quick_eval_summary.json"
+    with open(out, "w") as f:
+        json.dump(summary, f, indent=2)
+    print("[quick_eval]", summary)
+    return out
+
+
 # ---------- CLI ----------
 def main():
     parser = argparse.ArgumentParser("GRM-COCO pipeline")
@@ -3070,7 +3274,11 @@ def main():
         artifacts["det"] = stage_detect(cfg)
     if "checkdet" in steps:
         det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
-        artifacts["checkdet"] = stage_check_detections(cfg, det)
+        artifacts["sanity"] = stage_quick_sanity(cfg, det)
+    if "evaldet" in steps:
+        det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
+        artifacts["quick_eval"] = stage_quick_eval(cfg, det)
+
     if "viz" in steps:
         det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
         artifacts["viz"] = stage_viz_frcnn_vs_gt(cfg, det,
