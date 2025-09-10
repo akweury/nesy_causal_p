@@ -169,7 +169,7 @@ def stage_detect(cfg) -> Path:
     if max_n: paths = paths[:int(max_n)]
 
     def collate(batch):  # ([PIL...],[meta...])
-        imgs = [b[0] for b in batch];
+        imgs = [b[0] for b in batch]
         metas = [b[1] for b in batch]
         return imgs, metas
 
@@ -2722,7 +2722,6 @@ def main():
                         choices=["heur", "gt", "distill"])
     parser.add_argument("--tau", type=float, default=None, help="override tune.json for infer")  # 可选：手动设阈值
     args = parser.parse_args()
-
     import os
     if args.profile: os.environ["CONFIG_PROFILE"] = args.profile
     if args.remote:  os.environ["CONFIG_PROFILE"] = "remote"

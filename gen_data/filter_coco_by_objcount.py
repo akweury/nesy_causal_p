@@ -5,16 +5,15 @@ from collections import defaultdict
 import config
 
 
-def filter_coco(args, min_objs=5, max_objs=15):
-    coco_json_path = config.get_coco_path(args.remote) / "original" / "annotations" / "instances_val2017.json"
-    orig_img_dir = config.get_coco_path(args.remote) / "original" / "val2017"
+def filter_coco(args, min_objs=5, max_objs=15, data_split="val2017"):
+    coco_json_path = config.get_coco_path(args.remote) / "original" / "annotations" / f"instances_{data_split}.json"
+    orig_img_dir = config.get_coco_path(args.remote) / "original" / data_split
     out_list = config.get_coco_path(args.remote) / "original" / "annotations" / "keep_filenames.txt"
     csv_stats = config.get_coco_path(args.remote) / "original" / "annotations" / "image_object_counts.csv"
-    selected_dir = config.get_coco_path(args.remote) / "selected" / "val2017"
+    selected_dir = config.get_coco_path(args.remote) / "selected" / data_split
     selected_ann_dir = config.get_coco_path(args.remote) / "selected" / "annotations"
-    selected_json_path = selected_ann_dir / "instances_val2017.json"
+    selected_json_path = selected_ann_dir / f"instances_{data_split}.json"
 
-    # os.makedirs(selected_dir, exist_ok=True)
 
     os.makedirs(selected_dir, exist_ok=True)
     os.makedirs(selected_ann_dir, exist_ok=True)

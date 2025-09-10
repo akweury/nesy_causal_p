@@ -226,8 +226,8 @@ def load_config() -> Config:
     co_img = os.getenv("COCO_IMAGES")
     co_ann = os.getenv("COCO_ANN")
 
-    coco_images = Path(co_img) if co_img else base["data_root"] / "coco" / "images" / "val2017"
-    coco_annotations = Path(co_ann) if co_ann else base["data_root"] / "coco" / "annotations" / "instances_val2017.json"
+    coco_images = Path(co_img) if co_img else base["data_root"] / "coco" / "images" / "train2017"
+    coco_annotations = Path(co_ann) if co_ann else base["data_root"] / "coco" / "annotations" / "instances_train2017.json"
 
     paths = Paths(
         data_root=base["data_root"],

@@ -28,7 +28,7 @@ run-docker:
 	  -e CONFIG_PROFILE=remote \
 	  -e DATA_ROOT=/coco_2017 \
 	  -e SUPERVISION=distill \
-	  -e COCO_IMAGES=/coco_2017/selected/val2017 \
+	  -e COCO_IMAGES=/coco_2017/selected/train2017 \
 	  -e COCO_ANN=/coco_2017/selected/annotations/instances_val2017.json \
 	  -e WORK_DIR=/grm_output/run \
 	  -e DEVICE=cuda:$(GPU_ID) \
@@ -63,7 +63,7 @@ run-local:
 	DEVICE=cpu \
 	DATA_ROOT=$(DATA_DIR) \
 	COCO_IMAGES=$(DATA_DIR)/val2017 \
-	COCO_ANN=$(DATA_DIR)/annotations/instances_val2017.json \
+	COCO_ANN=$(DATA_DIR)/annotations/instances_train2017.json \
 	WORK_DIR=$(PWD)/.work \
 	NUM_WORKERS=0 \
 	MAX_IMAGES="$(MAX_IMAGES)" \
