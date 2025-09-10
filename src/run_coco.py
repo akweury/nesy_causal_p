@@ -2717,6 +2717,7 @@ def main():
         det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
         mat = artifacts.get("match", cfg.paths.outputs_dir / "matches.jsonl")
         artifacts["viz_match"] = stage_viz_match(cfg, det, mat, limit=200)
+
     if "labset" in steps:
         det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
         mat = artifacts.get("match", cfg.paths.outputs_dir / "matches.jsonl")
@@ -2730,7 +2731,7 @@ def main():
         det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
         node_m = artifacts.get("lab_mdl", cfg.paths.models_dir / "grm_node_labelability.pt")
         # 可用命令行或环境变量传 sub_iou / temp；这里给默认
-        artifacts["det_post"] = stage_infer_post(cfg, det, node_m, sub_iou=0.7, temp=1.0)
+        artifacts["det_post"] = stage_infer_post(cfg, det, node_m, sub_iou=0.65, temp=2.0)
 
     if "eval_post" in steps:
         post = artifacts.get("det_post", cfg.paths.outputs_dir / "detections_grm_post.jsonl")
