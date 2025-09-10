@@ -138,74 +138,171 @@ def dump_top_pairs(graph_path, model_path, cfg, K=5, samples=3):
 
 
 # ---------- 阶段占位符（逐步实现） ----------
-def stage_detect(cfg) -> Path:
+def stage_detect(cfg,
+                 batch_size: int = 2,
+                 score_thr: float = 0.001,
+                 print_every: int = 50) -> Path:
     """
-    目标检测 → 输出 JSONL（每行一张图）：
-    {"image_id":123, "file_name":"000000123.jpg",
-     "boxes":[[x1,y1,x2,y2],...], "scores":[...], "labels":[...]}
+    运行 FasterRCNN 并实时输出滚动准确率:
+      - 输出: /detections/detections.jsonl  (xyxy 像素坐标, labels=COCO 稀疏 category_id, scores)
+      - 实时: 每 print_every 张图打印一次 P / R / F1 / AP50(approx)
     """
-    out = cfg.paths.detections_dir / "detections.jsonl"
-    if out.exists():
-        print(f"[detect] reuse {out}")
-        return out
-
-    import os, json, torch
+    import json, time, math
     from pathlib import Path
-    from PIL import Image
+    import numpy as np
+    import torch
+    import torch.nn.functional as F
     from torch.utils.data import DataLoader
-    from glob import glob
+    from torchvision import transforms as T
     from torchvision.models.detection import fasterrcnn_resnet50_fpn, FasterRCNN_ResNet50_FPN_Weights
+    from torchvision.datasets import CocoDetection
+    from pycocotools.coco import COCO
 
-    img_dir = cfg.paths.coco_images
-    paths = sorted(glob(str(img_dir / "*.jpg")))
-    assert paths, f"No images found in {img_dir}"
+    out_dir = cfg.paths.detections_dir
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_file = out_dir / "detections.jsonl"
+    if out_file.exists():
+        print(f"[detect] reuse {out_file}")
+        return out_file
 
+    # --- dataset (image root & ann from cfg)
+    img_root = str(cfg.paths.coco_images)     # e.g. .../val2017
+    ann_file = str(cfg.paths.coco_annotations)  # e.g. .../annotations/instances_val2017.json
+    coco = COCO(ann_file)
+
+    tfm = T.Compose([T.ToTensor()])  # 模型内部会做尺寸处理
+    ds = CocoDetection(img_root, ann_file, transform=tfm)
+
+    def collate(batch):  # detection 默认的 collate
+        imgs, targets = list(zip(*batch))
+        return imgs, targets
+
+    dl = DataLoader(ds, batch_size=batch_size, shuffle=False,
+                    num_workers=cfg.num_workers, collate_fn=collate, pin_memory=True)
+
+    # --- model
     weights = FasterRCNN_ResNet50_FPN_Weights.DEFAULT
     model = fasterrcnn_resnet50_fpn(weights=weights).to(cfg.device).eval()
-    tfm = weights.transforms()
 
-    bs = int(os.getenv("BATCH_SIZE", "2" if cfg.device == "cpu" else "8"))
-    max_n = os.getenv("MAX_IMAGES")  # 可选：调试用
-    if max_n: paths = paths[:int(max_n)]
+    # --- helpers for online metrics
+    def _area(b):
+        return max(0., b[2]-b[0]) * max(0., b[3]-b[1])
+    def _iou(a,b):
+        x1=max(a[0],b[0]); y1=max(a[1],b[1])
+        x2=min(a[2],b[2]); y2=min(a[3],b[3])
+        inter=max(0., x2-x1)*max(0., y2-y1)
+        return inter / max(1e-8, _area(a)+_area(b)-inter)
 
-    def collate(batch):  # ([PIL...],[meta...])
-        imgs = [b[0] for b in batch]
-        metas = [b[1] for b in batch]
-        return imgs, metas
+    # 同类、按分数贪心匹配，返回 tp_mask, fp_mask
+    def match_greedy(pred_boxes, pred_labels, pred_scores, gt_boxes, gt_labels, iou_thr=0.5):
+        if len(pred_boxes)==0:
+            return np.zeros(0, bool), np.zeros(0, bool), 0
+        order = np.argsort(-np.asarray(pred_scores))
+        used = set()
+        tp = np.zeros(len(pred_boxes), dtype=bool)
+        fp = np.zeros(len(pred_boxes), dtype=bool)
+        gt_idx_by_class = {}
+        for i,(gb,gl) in enumerate(zip(gt_boxes, gt_labels)):
+            gt_idx_by_class.setdefault(int(gl), []).append(i)
+        for rank, pidx in enumerate(order):
+            c = int(pred_labels[pidx])
+            candid = gt_idx_by_class.get(c, [])
+            best = -1; best_iou = 0.0
+            for gi in candid:
+                if gi in used: continue
+                iou = _iou(pred_boxes[pidx], gt_boxes[gi])
+                if iou > best_iou:
+                    best_iou = iou; best = gi
+            if best >= 0 and best_iou >= 0.5:
+                tp[pidx] = True; used.add(best)
+            else:
+                fp[pidx] = True
+        fn = (len(gt_boxes) - len(used))
+        return tp, fp, fn
 
-    class ImgSet:
-        def __init__(self, ps): self.ps = ps
+    # 在线 AP50 估计（全局）
+    all_scores = []   # 预测分数
+    all_is_tp  = []   # 是否 TP（同类、IoU>=0.5）
+    total_fn   = 0    # 未匹配 GT 数（累积）
 
-        def __len__(self): return len(self.ps)
+    def approx_ap50():
+        if len(all_scores)==0:
+            return 0.0
+        s = np.asarray(all_scores, np.float32)
+        y = np.asarray(all_is_tp, np.bool_)
+        # 排序
+        order = np.argsort(-s)
+        y = y[order]
+        tp_cum = np.cumsum(y)
+        fp_cum = np.cumsum(~y)
+        eps = 1e-9
+        prec = tp_cum / np.maximum(1, tp_cum + fp_cum)
+        rec  = tp_cum / max(1, (tp_cum[-1] + total_fn))
+        # 11-point interpolation (0:0.1:1.0)
+        ap = 0.0
+        for t in np.linspace(0,1,11):
+            p = np.max(prec[rec >= t]) if np.any(rec >= t) else 0.0
+            ap += p
+        return ap / 11.0
 
-        def __getitem__(self, i):
-            p = Path(self.ps[i])
-            img = Image.open(p).convert("RGB")
-            return img, {"image_id": int(p.stem), "file_name": p.name, "w": img.width, "h": img.height}
+    # --- run
+    t0 = time.time()
+    written = 0
+    with open(out_file, "w") as fout, torch.no_grad():
+        for it, (imgs, targets) in enumerate(dl, 1):
+            imgs = [im.to(cfg.device) for im in imgs]
+            outputs = model(imgs)
 
-    loader = DataLoader(ImgSet(paths), batch_size=bs, shuffle=False,
-                        num_workers=0 if cfg.device == "cpu" else cfg.num_workers,
-                        collate_fn=collate)
+            for img, tgt, out in zip(imgs, targets, outputs):
+                # 真实 COCO image_id
+                image_id = int(tgt["image_id"].item())
+                H, W = img.shape[-2], img.shape[-1]
 
-    with out.open("w") as f, torch.no_grad():
-        for imgs, metas in loader:
-            tensors = [tfm(im).to(cfg.device) for im in imgs]  # list[Tensor CxHxW]
-            preds = model(tensors)
-            for pred, meta in zip(preds, metas):
-                boxes = pred["boxes"].detach().cpu().tolist()
-                scores = pred["scores"].detach().cpu().tolist()
-                labels = pred["labels"].detach().cpu().tolist()
-                rec = {
-                    "image_id": meta["image_id"],
-                    "file_name": meta["file_name"],
-                    "size": [meta["w"], meta["h"]],
-                    "boxes": boxes, "scores": scores, "labels": labels
-                }
-                f.write(json.dumps(rec) + "\n")
+                # 取出预测（torch → python），过滤低分
+                boxes  = out["boxes"].detach().float().cpu().numpy().tolist()
+                labels = out["labels"].detach().cpu().numpy().tolist()  # 直接是 COCO 稀疏 category_id
+                scores = out["scores"].detach().float().cpu().numpy().tolist()
 
-    print(f"[detect] wrote {out}")
-    return out
+                if score_thr > 0:
+                    keep = [i for i,s in enumerate(scores) if s >= score_thr]
+                    boxes  = [boxes[i]  for i in keep]
+                    labels = [labels[i] for i in keep]
+                    scores = [scores[i] for i in keep]
 
+                # 写 jsonl（像素 xyxy、稀疏类 id）
+                rec = {"image_id": image_id, "boxes": boxes, "labels": labels, "scores": scores}
+                fout.write(json.dumps(rec) + "\n")
+                written += 1
+
+                # --- 在线指标（与 GT 同类、IoU>=0.5）---
+                # GT 转 xyxy
+                gt_boxes=[]; gt_labels=[]
+                for a in coco.loadAnns(coco.getAnnIds(imgIds=[image_id], iscrowd=None)):
+                    x,y,w,h = a["bbox"]
+                    gt_boxes.append([x, y, x+w, y+h])
+                    gt_labels.append(int(a["category_id"]))
+
+                if len(boxes):
+                    tp, fp, fn = match_greedy(boxes, labels, scores, gt_boxes, gt_labels, iou_thr=0.5)
+                    all_scores.extend(scores)
+                    all_is_tp.extend(tp.tolist())
+                    total_fn += int(fn)
+
+            # 打印
+            if it % print_every == 0:
+                tp_sum = int(np.sum(all_is_tp))
+                fp_sum = len(all_is_tp) - tp_sum
+                P = tp_sum / max(1, tp_sum + fp_sum)
+                R = tp_sum / max(1, tp_sum + total_fn)
+                F1 = 2*P*R / max(1e-8, P+R)
+                AP50_est = approx_ap50()
+                dt = time.time()-t0
+                print(f"[detect] {it:5d}/{len(dl)} imgs  "
+                      f"P={P:.3f} R={R:.3f} F1={F1:.3f}  AP50~{AP50_est:.3f}  "
+                      f"TP={tp_sum} FP={fp_sum} FN={total_fn}  time={dt:.1f}s")
+
+    print(f"[detect] wrote {out_file}  images={written}  total_time={time.time()-t0:.1f}s")
+    return out_file
 
 def stage_viz_frcnn_vs_gt(cfg, det_file: Path,
                           iou_thr: float = 0.5,
