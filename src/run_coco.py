@@ -6,10 +6,6 @@ import argparse, json
 from pathlib import Path
 from typing import Dict, Any, List, Tuple
 from config import load_config
-import config
-from gen_data.coco_data_processing import build_labelstudio_subset_with_bboxes
-from gen_data.filter_coco_by_objcount import filter_coco
-import numpy as np
 import torch
 
 
@@ -1781,11 +1777,12 @@ def _center_dist_norm(a, b):
     bx, by = (b[0] + b[2]) / 2, (b[1] + b[3]) / 2
     d = ((ax - bx) ** 2 + (ay - by) ** 2) ** 0.5
     s = max((a[2] - a[0]) * (a[3] - a[1]), (b[2] - b[0]) * (b[3] - b[1]))
-    return d / (math.sqrt(s) + 1e-8)
+    return d / (s ** 0.5 + 1e-8)
 
 
-def _feat_one(idx, boxes, labels, scores):
-    """对单个预测框提取 bbox&上下文特征（同类范围内）"""
+def _feat_one(idx, boxes, labels, scores, gts=None):
+    """单框特征：自框+同类上下文+最近GT几何(训练期)+NMS结构"""
+    import math, numpy as np
     b = boxes[idx];
     w = b[2] - b[0];
     h = b[3] - b[1];
@@ -1795,35 +1792,52 @@ def _feat_one(idx, boxes, labels, scores):
     if same:
         ious = [_iou_xyxy(b, boxes[j]) for j in same]
         dists = [_center_dist_norm(b, boxes[j]) for j in same]
-        mean_iou = float(np.mean(ious))
+        mean_iou = float(np.mean(ious));
         max_iou = float(np.max(ious))
         min_dist = float(np.min(dists))
-        neigh_cnt = int(sum([1 for j in same if _iou_xyxy(b, boxes[j]) > 0.1 or _center_dist_norm(b, boxes[j]) < 0.25]))
+        neigh_cnt = int(sum(1 for j in same if _iou_xyxy(b, boxes[j]) > 0.1))
     else:
         mean_iou = max_iou = 0.0;
         min_dist = 1.0;
         neigh_cnt = 0
-    aspect = (w / (h + 1e-8))
+    aspect = w / (h + 1e-8)
+
+    # 最近GT几何（训练期）——推理期 gts=None → 置0/1
+    if gts:
+        iou_max = max((_iou_xyxy(b, g) for g in gts), default=0.0)
+        dist_min = min((_center_dist_norm(b, g) for g in gts), default=1.0)
+    else:
+        iou_max = 0.0;
+        dist_min = 1.0
+
+    # 类内NMS结构：rank & 被更高分遮挡
+    same_cls = [(scores[j], j) for j, l in enumerate(labels) if l == cls]
+    same_cls.sort(reverse=True)
+    rank = next(r for r, (_, j) in enumerate(same_cls) if j == idx)
+    covered = int(any(j != idx and _iou_xyxy(b, boxes[j]) > 0.5 and scores[j] > scores[idx] for _, j in same_cls))
+
     return [
-        float(scores[idx]),  # s
-        float(w), float(h),  # 尺寸
-        float(math.sqrt(area + 1e-8)),  # 面积尺度
-        float(aspect),  # 长宽比
-        float(neigh_cnt),  # 同类邻居个数
-        float(mean_iou), float(max_iou),
-        float(min_dist),  # 与最近同类中心距离(归一)
+        float(scores[idx]),  # 0: 原始置信度
+        float(w), float(h),  # 1-2 尺寸
+        float((area + 1e-8) ** 0.5),  # 3 尺度
+        float(aspect),  # 4 长宽比
+        float(neigh_cnt),  # 5 同类邻居数
+        float(mean_iou), float(max_iou),  # 6-7 与同类IoU统计
+        float(min_dist),  # 8 与最近同类中心距
+        float(iou_max), float(dist_min),  # 9-10 与最近GT几何（训练期）
+        float(rank), float(covered),  # 11-12 NMS结构
     ]
 
 
 def stage_build_labelability_trainset(cfg, det_file: Path, match_file: Path) -> Path:
-    """
-    输出: /outputs/labelability_train.npz
-      X: [N, F], y: [N], img_ids: [N]
-    """
     out = cfg.paths.outputs_dir / "labelability_train.npz"
     if out.exists(): print(f"[labset] reuse {out}"); return out
 
-    # 读 detections
+    import json
+    from pycocotools.coco import COCO
+    coco = COCO(str(cfg.paths.coco_annotations))
+
+    # detections 映射
     det_map = {}
     with open(det_file) as f:
         for L in f:
@@ -1836,20 +1850,29 @@ def stage_build_labelability_trainset(cfg, det_file: Path, match_file: Path) -> 
     with open(match_file) as f:
         for L in f:
             m = json.loads(L)
-            det = det_map.get(str(m["image_id"]))
+            img_id = m["image_id"]
+            det = det_map.get(str(img_id));
             if not det: continue
-            boxes = det["boxes"];
-            labels = det["labels"];
-            scores = det["scores"]
+            boxes, labels, scores = det["boxes"], det["labels"], det["scores"]
             if not boxes: continue
 
+            # 同图同类 GT 集合
+            ann_ids = coco.getAnnIds(imgIds=[img_id], iscrowd=None)
+            anns = coco.loadAnns(ann_ids)
+            gt_by_cls = {}
+            for a in anns:
+                cid = int(a["category_id"])
+                x, y, w, h = a["bbox"];
+                gt_by_cls.setdefault(cid, []).append([x, y, x + w, y + h])
+
             matched = set(pi for (pi, _, _) in m["matches"])
-            # 正：matched=1； 负：同类未匹配=0（按整图）
             for i in range(len(boxes)):
-                feat = _feat_one(i, boxes, labels, scores)
+                cls = int(labels[i])
+                gts = gt_by_cls.get(cls, [])
+                feat = _feat_one(i, boxes, labels, scores, gts=gts)  # 传入GT集合
                 X.append(feat)
                 y.append(1.0 if i in matched else 0.0)
-                img_ids.append(int(m["image_id"]))
+                img_ids.append(int(img_id))
 
     X = np.asarray(X, np.float32);
     y = np.asarray(y, np.float32);
@@ -1865,8 +1888,7 @@ class LabelabilityMLP(torch.nn.Module):
         self.net = torch.nn.Sequential(
             torch.nn.Linear(in_dim, hid), torch.nn.ReLU(),
             torch.nn.Linear(hid, hid), torch.nn.ReLU(),
-            torch.nn.Linear(hid, 1)
-        )
+            torch.nn.Linear(hid, 1))
 
     def forward(self, x): return torch.sigmoid(self.net(x)).squeeze(-1)
 
@@ -1948,78 +1970,40 @@ def _nms_xyxy(boxes, scores, thr=0.7):
     return keep
 
 
-def stage_infer_post(cfg, det_file: Path, edge_mdl_p: Path, node_mdl_p: Path,
-                     sim_thr=0.5, sub_iou=0.7) -> Path:
-    """
-    推理后处理：用学到的 Edge 判别器做同类分组→子簇NMS(去重)；
-              用 Labelability 重评分 s' = s * q(b)
-    """
-    import json
-    edge = EdgeMLP(in_dim=torch.load(edge_mdl_p)["in_dim"]);
-    edge.load_state_dict(torch.load(edge_mdl_p)["state_dict"]);
-    edge = edge.to(cfg.device).eval()
-    lab = LabelabilityMLP(in_dim=torch.load(node_mdl_p)["in_dim"]);
-    lab.load_state_dict(torch.load(node_mdl_p)["state_dict"]);
-    lab = lab.to(cfg.device).eval()
+def stage_infer_post(cfg, det_file: Path, node_mdl_p: Path, sub_iou=0.7) -> Path:
+    import json, torch, numpy as np
+    # 加载模型 + 标准化
+    ckpt = torch.load(node_mdl_p, map_location=cfg.device)
+    mdl = LabelabilityMLP(in_dim=ckpt["in_dim"]).to(cfg.device).eval()
+    mdl.load_state_dict(ckpt["state_dict"])
+    mu, sd = ckpt["mu"], ckpt["sd"]
 
     out = cfg.paths.outputs_dir / "detections_grm_post.jsonl"
     with open(det_file) as fin, open(out, "w") as fout:
         for L in fin:
-            r = json.loads(L)
+            r=json.loads(L)
             boxes, labels, scores = r["boxes"], r["labels"], r["scores"]
             if not boxes:
-                fout.write(L);
-                continue
-            # 按类分组（edge_mdl 为“同一实例”概率）
-            new_boxes = [];
-            new_labels = [];
-            new_scores = []
+                fout.write(L); continue
+
+            new_boxes=[]; new_labels=[]; new_scores=[]
             for cls in sorted(set(labels)):
-                idx = [i for i, l in enumerate(labels) if int(l) == cls]
+                idx=[i for i,l in enumerate(labels) if int(l)==cls]
                 if not idx: continue
-                B = [boxes[i] for i in idx];
-                S = [scores[i] for i in idx]
-                # 建图：p(i,j)>=sim_thr → 联通
-                n = len(idx);
-                parent = list(range(n))
+                # 简单组内NMS（保持你原来的或复用已有函数）
+                B=[boxes[i] for i in idx]; S=[scores[i] for i in idx]
+                keep = np.argsort(S)[::-1]  # 先保留全部（或跑你的小NMS）
+                for k in keep:
+                    i_global = idx[k]
+                    feat = np.array([_feat_one(i_global, boxes, labels, scores, gts=None)], np.float32) # gts=None
+                    feat = (feat - mu)/sd
+                    with torch.no_grad():
+                        q = float(mdl(torch.from_numpy(feat).to(cfg.device))[0].cpu())
+                    new_boxes.append(boxes[i_global])
+                    new_labels.append(labels[i_global])
+                    new_scores.append(float(scores[i_global] * q))
 
-                def find(x):
-                    while parent[x] != x:
-                        parent[x] = parent[parent[x]];
-                        x = parent[x]
-                    return x
-
-                def union(a, b):
-                    ra, rb = find(a), find(b)
-                    if ra != rb: parent[rb] = ra
-
-                for a in range(n):
-                    for b in range(a + 1, n):
-                        if _edge_score(edge, B[a], B[b]) >= sim_thr:
-                            union(a, b)
-                comp = {}
-                for i_loc in range(n):
-                    comp.setdefault(find(i_loc), []).append(i_loc)
-
-                # 每个连通分量做子簇NMS（去重），并重评分
-                for vs in comp.values():
-                    subB = [B[i] for i in vs];
-                    subS = [S[i] for i in vs]
-                    keep = _nms_xyxy(subB, subS, thr=sub_iou)
-                    for k in keep:
-                        i_global = idx[vs[k]]
-                        b = boxes[i_global];
-                        s = scores[i_global]
-                        # labelability q(b)
-                        dens = float(np.mean([_iou(b, boxes[j]) for j in idx if j != i_global])) if len(idx) > 1 else 0.0
-                        x = np.array([[dens, s, b[2] - b[0], b[3] - b[1], ((b[2] - b[0]) * (b[3] - b[1])) ** 0.5]], np.float32)
-                        with torch.no_grad():
-                            q = float(lab(torch.from_numpy(x).to(cfg.device))[0].cpu())
-                        new_boxes.append(b);
-                        new_labels.append(labels[i_global]);
-                        new_scores.append(float(s * q))
-
-            fout.write(json.dumps({"image_id": r["image_id"], "boxes": new_boxes, "labels": new_labels, "scores": new_scores}) + "\n")
+            fout.write(json.dumps({"image_id": r["image_id"], "boxes": new_boxes, "labels": new_labels, "scores": new_scores})+"\n")
 
     print(f"[post] wrote {out}")
     return out
@@ -2580,107 +2564,6 @@ def main():
     if "train_label" in steps:
         npz = artifacts.get("labset", cfg.paths.outputs_dir / "labelability_train.npz")
         artifacts["lab_mdl"] = stage_train_labelability(cfg, npz)
-
-    #
-    # if "trainsets" in steps:
-    #     det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
-    #     mat = artifacts.get("match", cfg.paths.outputs_dir / "matches.jsonl")
-    #     e_npz, n_npz = stage_build_trainsets(cfg, det, mat)
-    #     artifacts["edge_npz"], artifacts["node_npz"] = e_npz, n_npz
-    #
-    # if "train_edge" in steps:
-    #     npz = artifacts.get("edge_npz", cfg.paths.outputs_dir / "edge_train.npz")
-    #     artifacts["edge_mdl"] = stage_train_edge(cfg, npz)
-    #
-    #
-    #
-    # if "infer_post" in steps:
-    #     det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
-    #     edge_m = artifacts.get("edge_mdl", cfg.paths.models_dir / "grm_edge_pair.pt")
-    #     node_m = artifacts.get("node_mdl", cfg.paths.models_dir / "grm_node_labelability.pt")
-    #     artifacts["det_post"] = stage_infer_post(cfg, det, edge_m, node_m)
-    #
-    # if "eval_post" in steps:
-    #     post = artifacts.get("det_post", cfg.paths.outputs_dir / "detections_grm_post.jsonl")
-    #     print("[eval_post]", stage_eval_coco(cfg, post))
-    #
-    # # sim+prox 分组（你上一条已更新的 stage）
-    # if "simprox_group" in steps:
-    #     det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
-    #     artifacts["simprox_groups"] = stage_group_by_similarity(cfg, det)
-    #
-    # # 可视化
-    # if "viz_simprox" in steps:
-    #     groups = artifacts.get("simprox_groups", cfg.paths.outputs_dir / "groups_simprox.jsonl")
-    #     det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
-    #     artifacts["viz_simprox"] = stage_viz_simprox_groups(cfg, groups, det, pad=8, limit=200)
-    #
-    # # 2) graph
-    # if "graph" in steps:
-    #     det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
-    #     graph_path = stage_build_graph(cfg, det)  # 内部用 ENV=SUPERVISION 写 graphs_{mode}.jsonl
-    #     artifacts["graph"] = graph_path
-    #
-    #     # 只做 graph 质量诊断（不依赖模型）
-    #     if os.getenv("DIAG", "1") == "1":
-    #         print("[diag] quick_check_graph …")
-    #         quick_check_graph(graph_path)
-    #
-    #     # 写完 graphs_{mode}.jsonl 之后：
-    #     if os.getenv("VIZ_GRAPH", "1") == "1":
-    #         _ = stage_viz_graph_groups(cfg,
-    #                                    graph_file=artifacts["graph"],  # 或 graph_path 变量
-    #                                    det_file=artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl"),
-    #                                    iou_thr=0.5,
-    #                                    limit=200)
-    # if "viz_groups" in steps:
-    #     groups = artifacts.get("groups", cfg.paths.outputs_dir / "groups.jsonl")
-    #     det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
-    #     artifacts["viz_groups"] = stage_viz_pred_groups(cfg, groups, det, pad=8, limit=200)  # limit=0 全量
-    #
-    #
-    # # 3) train
-    # if "train" in steps:
-    #     graph = artifacts.get("graph", cfg.paths.graphs_dir / f"graphs_{mode}.jsonl")
-    #     artifacts["model"] = stage_train_grm(cfg, graph)
-    #
-    #     if os.getenv("DIAG", "1") == "1":
-    #         model_file = cfg.paths.models_dir / f"grm_edge_{mode}.pt"
-    #         eval_pairs_auc(cfg, graph, model_file)
-    #         dump_top_pairs(graph, model_file, cfg)
-    #
-    # # 4) tune
-    # if "tune" in steps:
-    #     graph = artifacts.get("graph", cfg.paths.graphs_dir / f"graphs_{mode}.jsonl")
-    #     model = artifacts.get("model", cfg.paths.models_dir / f"grm_edge_{mode}.pt")
-    #     tau = stage_tune(cfg, graph, model)
-    #     artifacts["tune"] = cfg.paths.outputs_dir / "tune.json"
-    #
-    # # 5) infer groups（保持与 *原始* detections 对齐）
-    # if "infer" in steps:
-    #     det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
-    #     model = artifacts.get("model", cfg.paths.models_dir / f"grm_edge_{mode}.pt")
-    #     # 支持命令行覆盖 tau（否则从 tune.json 里读）
-    #     artifacts["groups"] = stage_infer_groups(cfg, model, det, tau=args.tau)
-    #
-    # # 6) baselines
-    # if "stdnms" in steps:
-    #     det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
-    #     artifacts["std"] = stage_std_nms(cfg, det, iou_thr=args.nms_iou)
-    #
-    # # 7) group-aware NMS
-    # if "groupnms" in steps:
-    #     det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
-    #     groups = artifacts.get("groups", cfg.paths.outputs_dir / "groups.jsonl")
-    #     artifacts["gnms"] = stage_group_nms(cfg, det, groups, t_intra=args.t_intra, t_inter=args.t_inter)
-    #
-    # # 8) eval
-    # if "evalstd" in steps:
-    #     std = artifacts.get("std", cfg.paths.outputs_dir / "detections_std_nms.jsonl")
-    #     print("[evalstd]", stage_eval_coco(cfg, std))
-    # if "eval" in steps:
-    #     g = artifacts.get("gnms", cfg.paths.outputs_dir / "detections_groupnms.jsonl")
-    #     print("[eval]", stage_eval_coco(cfg, g))
 
     print(json.dumps({k: str(v) for k, v in artifacts.items()}, indent=2))
 
