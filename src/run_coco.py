@@ -2332,169 +2332,295 @@ def _logit_clip(p, eps=1e-6):
     return math.log(p / (1.0 - p))
 
 
-def stage_infer_post(
-        cfg,
-        det_file: Path = None,
-        node_mdl_p: Path = None,
-        sub_iou: float = 0.65,
-        temp: float = 2.0,
-        save_name: str = "detections_post.jsonl"
-) -> Path:
-    """
-    Labelability 后处理（不新增检测，只重排/降权）：
-      1) 载入 labelability MLP（自动读取 ckpt.meta，或从 state_dict 反推结构）
-      2) 对每个预测框提取几何/上下文特征，得到 p_label
-      3) 分数重标定（只降不升）：s' = min( s, s * (p_label)^(1/temp) )
-      4) 同类“包含抑制”（Subsumption）：若 j 分数更高且 IoU(i,j)≥sub_iou，则再把 i 的分数乘以 0.1
+# ===================== helpers =====================
 
-    输入:  detections.jsonl  (image_id, boxes[xyxy], labels[COCO稀疏], scores)
-    输出:  /outputs/detections_post.jsonl （同字段，scores 已更新）
-    注：不做硬删除，COCOeval 会按分数截断；这样更稳健。
-    """
-    import json, numpy as np, torch
-    from pathlib import Path
-    from pycocotools.coco import COCO
+import json, math, numpy as np, torch, torch.nn as nn
+from pathlib import Path
 
-    # ---------- 路径 ----------
-    if det_file is None:
-        det_file = cfg.paths.detections_dir / "detections.jsonl"
-    if node_mdl_p is None:
-        node_mdl_p = cfg.paths.models_dir / "grm_node_labelability.pt"
-    out = cfg.paths.outputs_dir / save_name
-    out.parent.mkdir(parents=True, exist_ok=True)
 
-    # ---------- 工具 ----------
-    def _area(b):
-        return max(0., b[2] - b[0]) * max(0., b[3] - b[1])
+def _sigmoid(z):
+    z = np.clip(z, -20, 20)
+    return 1.0 / (1.0 + np.exp(-z))
 
-    def _iou(a, b):
-        x1 = max(a[0], b[0]);
-        y1 = max(a[1], b[1])
-        x2 = min(a[2], b[2]);
-        y2 = min(a[3], b[3])
-        inter = max(0., x2 - x1) * max(0., y2 - y1)
-        return inter / max(1e-8, _area(a) + _area(b) - inter)
 
-    def sigmoid(x):
-        return 1.0 / (1.0 + np.exp(-x))
+def _load_temperature(cfg, override=None):
+    if override is not None:
+        return float(override)
+    p = cfg.paths.outputs_dir / "lab_viz" / "calib_summary.json"
+    if p.exists():
+        try:
+            T = float(json.load(open(p))["T_star"])
+            return max(T, 1.0)  # 过置信保护
+        except Exception:
+            return 1.0
+    return 1.0
 
-    # ---------- 定义模型（需与训练一致） ----------
-    import torch.nn as nn
-    class LabelabilityMLP(nn.Module):
-        def __init__(self, in_dim: int, hidden: list[int] = [64, 64], act: str = "relu"):
-            super().__init__()
-            act_layer = nn.ReLU if act == "relu" else nn.GELU
-            layers = []
-            last = in_dim
-            for h in hidden:
-                layers += [nn.Linear(last, h), act_layer(inplace=True)]
-                last = h
-            layers += [nn.Linear(last, 1)]
-            self.net = nn.Sequential(*layers)
 
-        def forward(self, x):  # x:[N,D]
-            return self.net(x).squeeze(-1)  # logits:[N]
-
-    # ---------- 读取 ckpt（优先 meta；否则从 state_dict 反推结构） ----------
-    ckpt = torch.load(node_mdl_p, map_location=cfg.device, weights_only=False)
-    sd = ckpt.get("state_dict", ckpt)
+def _build_node_model_from_ckpt(ckpt, device):
+    sd = ckpt["state_dict"]
     meta = ckpt.get("meta", {})
 
-    def rebuild_from_state_dict(sd):
-        in_dim = int(sd["net.0.weight"].shape[1])
-        hidden = []
-        k = 2
-        while f"net.{k}.weight" in sd:
-            W = sd[f"net.{k}.weight"]
-            out_dim = int(W.shape[0])
-            if out_dim == 1:
-                break
-            hidden.append(out_dim)
-            k += 2
-        return in_dim, (hidden if hidden else [64])
+    def is_sem(sd, meta):
+        if meta.get("type") == "LabelabilitySem": return True
+        if any(k.startswith("emb.") for k in sd.keys()): return True
+        if any(k.startswith("mlp.") for k in sd.keys()): return True
+        return False
 
-    if meta and "in_dim" in meta:
-        in_dim = int(meta["in_dim"])
-        hidden = list(meta.get("hidden", [64, 64]))
-    else:
-        in_dim, hidden = rebuild_from_state_dict(sd)
+    if is_sem(sd, meta):
+        Dg = int(meta.get("in_dim_geo"))
+        K = int(meta.get("num_classes", 91))
+        d = int(meta.get("emb_dim", 64))
 
-    mdl = LabelabilityMLP(in_dim=in_dim, hidden=hidden).to(cfg.device).eval()
-    mdl.load_state_dict(sd, strict=False)
+        class LabelabilitySem(nn.Module):
+            def __init__(self, Dg, K, d=64, hidden=(128, 64)):
+                super().__init__()
+                self.emb = nn.Embedding(K, d)
+                self.mlp = nn.Sequential(
+                    nn.Linear(Dg + d + d + d, hidden[0]), nn.ReLU(),
+                    nn.Linear(hidden[0], hidden[1]), nn.ReLU(),
+                    nn.Linear(hidden[1], 1),
+                )
 
-    AMP = bool(cfg.device.startswith("cuda"))
+            def agg(self, ids, ws):
+                mask = (ids >= 0).float().unsqueeze(-1)
+                e = self.emb(torch.clamp(ids, min=0))
+                return (e * (ws.unsqueeze(-1) * mask)).sum(1)
 
-    # ---------- COCO（仅用于尺寸/一致性） ----------
-    coco = COCO(str(cfg.paths.coco_annotations))
-    coco_imgs = coco.imgs  # dict[id] -> rec
+            def forward(self, geo, cid, ctx_i, ctx_w, nb_i, nb_w):
+                e_node = self.emb(torch.clamp(cid, min=0))
+                e_ctx = self.agg(ctx_i, ctx_w)
+                e_nb = self.agg(nb_i, nb_w)
+                x = torch.cat([geo, e_node, e_ctx, e_nb], dim=-1)
+                return self.mlp(x).squeeze(-1)
 
-    # ---------- 扫描 detections.jsonl 并写出 post 结果 ----------
-    total_boxes = 0
-    changed = 0
-    subsumed_cnt = 0
+        mdl = LabelabilitySem(Dg, K, d).to(device)
+        mdl.load_state_dict(sd, strict=True)
+        return mdl, {"type": "sem", "Dg": Dg, "K": K, "d": d}
 
-    with open(det_file, "r") as fin, open(out, "w") as fout, torch.no_grad(), torch.amp.autocast('cuda', enabled=AMP):
-        for line in fin:
-            r = json.loads(line)
-            img_id = int(r["image_id"])
-            boxes = r.get("boxes", []) or []
-            labels = r.get("labels", []) or []
-            scores = r.get("scores", []) or []
-            n = len(boxes)
-            total_boxes += n
-            if n == 0 or img_id not in coco_imgs:
-                fout.write(json.dumps(r) + "\n");
+    # 兼容旧 MLP（仅几何）
+    in_dim = ckpt.get("in_dim")
+    if in_dim is None:
+        for k in ("net.0.weight", "net.2.weight", "net.4.weight"):
+            if k in sd: in_dim = int(sd[k].shape[1]); break
+
+    class LabelabilityMLP(nn.Module):
+        def __init__(self, in_dim, hidden=(128, 64)):
+            super().__init__()
+            self.net = nn.Sequential(
+                nn.Linear(in_dim, hidden[0]), nn.ReLU(),
+                nn.Linear(hidden[0], hidden[1]), nn.ReLU(),
+                nn.Linear(hidden[1], 1),
+            )
+
+        def forward(self, x): return self.net(x).squeeze(-1)
+
+    mdl = LabelabilityMLP(in_dim).to(device)
+    mdl.load_state_dict(sd, strict=True)
+    return mdl, {"type": "mlp", "in_dim": in_dim}
+
+
+def _bbox_to_geo(b, W, H):
+    # b = [x,y,w,h,score,cat]
+    x, y, w, h = b[:4]
+    cx = (x + w / 2) / max(W, 1)
+    cy = (y + h / 2) / max(H, 1)
+    a = (w * h) / max(W * H, 1)
+    r = w / max(h, 1e-6)
+    s = b[4]
+    return [cx, cy, a, r, s]
+
+
+def _pair_iou_xywh(a, b):
+    ax, ay, aw, ah = a[:4];
+    bx, by, bw, bh = b[:4]
+    ax2, ay2 = ax + aw, ay + ah
+    bx2, by2 = bx + bw, by + bh
+    ix1, iy1 = max(ax, bx), max(ay, by)
+    ix2, iy2 = min(ax2, bx2), min(ay2, by2)
+    iw, ih = max(0, ix2 - ix1), max(0, iy2 - iy1)
+    inter = iw * ih
+    union = aw * ah + bw * bh - inter + 1e-6
+    return inter / union
+
+
+def _build_semctx_features(boxes, W, H, K=91, Kc=10, Kn=10):
+    """
+    boxes: list of [x,y,w,h,score,cat]（同一张图，已按 score 从高到低截断 Top-K）
+    产出：
+      geo: (N,5)
+      cid: (N,)
+      ctx_ids, ctx_ws: (N,Kc)
+      nb_ids,  nb_ws : (N,Kn)
+    """
+    N = len(boxes)
+    if N == 0:
+        return (np.zeros((0, 5), np.float32), np.zeros((0,), np.int64),
+                np.full((0, Kc), -1, np.int64), np.zeros((0, Kc), np.float32),
+                np.full((0, Kn), -1, np.int64), np.zeros((0, Kn), np.float32))
+
+    # geo + cat
+    geo = np.array([_bbox_to_geo(b, W, H) for b in boxes], dtype=np.float32)
+    cid = np.array([int(b[5]) for b in boxes], dtype=np.int64)
+    scr = np.array([float(b[4]) for b in boxes], dtype=np.float32)
+
+    # 图像级上下文（按类别聚合 top 分数）
+    ctx_sum = np.zeros((K,), dtype=np.float32)
+    for c in range(K):
+        m = (cid == c)
+        if m.any():
+            ctx_sum[c] = float(scr[m].sum())  # 也可用 count 或 max
+    ctx_pairs = [(c, ctx_sum[c]) for c in range(K) if ctx_sum[c] > 0]
+    ctx_pairs.sort(key=lambda x: x[1], reverse=True)
+    ctx_ids = np.full((N, Kc), -1, dtype=np.int64)
+    ctx_ws = np.zeros((N, Kc), dtype=np.float32)
+    top_ctx = ctx_pairs[:Kc]
+    for i in range(N):
+        for j, (c, v) in enumerate(top_ctx):
+            ctx_ids[i, j] = c
+            ctx_ws[i, j] = v
+
+    # 邻域（同图内其它框，按 IoU 或距离做权重）
+    nb_ids = np.full((N, Kn), -1, dtype=np.int64)
+    nb_ws = np.zeros((N, Kn), dtype=np.float32)
+    for i in range(N):
+        c0 = cid[i];
+        bi = boxes[i]
+        neigh = []
+        for j in range(N):
+            if j == i: continue
+            bj = boxes[j]
+            # 同类优先，其次异类也可少量纳入
+            iou = _pair_iou_xywh(bi, bj)
+            w = iou * (1.2 if cid[j] == c0 else 0.6)
+            if w > 0: neigh.append((cid[j], w))
+        neigh.sort(key=lambda x: x[1], reverse=True)
+        for k, (cc, ww) in enumerate(neigh[:Kn]):
+            nb_ids[i, k] = cc
+            nb_ws[i, k] = ww
+
+    return geo, cid, ctx_ids, ctx_ws, nb_ids, nb_ws
+
+
+# ===================== main stage =====================
+
+def stage_infer_post(cfg, det_file: Path, node_mdl_p: Path,
+                     topk=300, sub_iou=0.65, temp=None, keep_json_fields=("image_id", "category_id", "bbox", "score")):
+    """
+    使用 labelability 模型对检测结果做后处理：
+      - 只作用于每图 Top-K；
+      - 与训练一致构造 几何+语义上下文 特征；
+      - logits / T 取 sigmoid 得 p_lab；
+      - 重新打分：score *= p_lab^(1/T)（可在你处再加低置信衰减等规则）；
+      - 可选删除“被大框完全覆盖的小框”（subsumed by IoU）。
+    """
+    det_file = Path(det_file)
+    node_mdl_p = Path(node_mdl_p)
+    assert det_file.exists(), f"not found: {det_file}"
+    assert node_mdl_p.exists(), f"not found: {node_mdl_p}"
+
+    # 载入模型 & 温度
+    ckpt = torch.load(node_mdl_p, map_location=cfg.device)
+    mdl, meta = _build_node_model_from_ckpt(ckpt, cfg.device);
+    mdl.eval()
+    T_use = _load_temperature(cfg, override=temp)
+    print(f"[infer_post] loaded node model: {meta}  | temperature={T_use:.2f}  | topk={topk}")
+
+    # 读 detections.jsonl
+    out_lines = []
+    changed_imgs, subsumed_cnt, total_boxes = 0, 0, 0
+
+    # 如果有 val 的尺寸信息，可选读取；否则用 bbox 相对尺度即可
+    # 这里从结果里推不出图尺寸，特征只用归一化/相对比率，不依赖原始宽高
+    # 若你已存 image_w/h，可在 JSONL 里一起读出替换 W,H
+
+    with open(det_file, "r") as f:
+        for li, line in enumerate(f):
+            rec = json.loads(line)
+            img_id = rec["image_id"]
+            W = rec.get("width", 1)  # 无则设 1（归一化相对值）
+            H = rec.get("height", 1)
+
+            dets = rec.get("detections", [])  # list of dicts
+            # -> boxes: [x,y,w,h,score,cat]
+            boxes_all = []
+            for d in dets:
+                x, y, w, h = d["bbox"]
+                s = float(d.get("score", 0.0))
+                c = int(d.get("category_id", 0))
+                boxes_all.append([x, y, w, h, s, c])
+
+            total_boxes += len(boxes_all)
+            if len(boxes_all) == 0:
+                out_lines.append(line);
                 continue
 
-            # 1) labelability 打分
-            #    _feat_one(i, boxes, labels, scores, gts=None) → np.ndarray[D]
-            feats = []
-            for i in range(n):
-                feats.append(_feat_one(i, boxes, labels, scores, gts=None))
-            X = torch.tensor(np.asarray(feats, np.float32), device=cfg.device)
-            # logits = mdl(X).float().detach().cpu().numpy()
+            # 每图 Top-K（按 score）
+            boxes_all.sort(key=lambda b: b[4], reverse=True)
+            boxes_top = boxes_all[:min(topk, len(boxes_all))]
 
+            # 构造语义上下文特征（与训练一致）
+            geo, cid, ctx_ids, ctx_ws, nb_ids, nb_ws = _build_semctx_features(boxes_top, W, H, K=meta.get("K", 91))
+            # 前向得 logits → prob（带温度）
+            AMP = cfg.device.startswith("cuda")
             with torch.no_grad(), torch.amp.autocast('cuda', enabled=AMP):
-                logits = mdl(X)  # torch tensor
-            p_lab = torch.sigmoid(logits).cpu().numpy()
+                if meta["type"] == "sem":
+                    # 转 tensor
+                    geo_t = torch.tensor(geo, dtype=torch.float32, device=cfg.device)
+                    cid_t = torch.tensor(cid, dtype=torch.int64, device=cfg.device)
+                    ctxi_t = torch.tensor(ctx_ids, dtype=torch.int64, device=cfg.device)
+                    ctxw_t = torch.tensor(ctx_ws, dtype=torch.float32, device=cfg.device)
+                    nbi_t = torch.tensor(nb_ids, dtype=torch.int64, device=cfg.device)
+                    nbw_t = torch.tensor(nb_ws, dtype=torch.float32, device=cfg.device)
+                    logits = mdl(geo_t, cid_t, ctxi_t, ctxw_t, nbi_t, nbw_t).float().cpu().numpy()
+                else:
+                    geo_t = torch.tensor(geo, dtype=torch.float32, device=cfg.device)
+                    logits = mdl(geo_t).float().cpu().numpy()
 
-            scores_new = []
-            for s, pl in zip(scores, p_lab):
-                s2 = float(s) * (float(pl) ** (1.0 / max(1e-6, temp)))
-                s2 = min(float(s), s2)
-                scores_new.append(s2)
+            logits = logits / float(T_use)
+            p_lab = _sigmoid(logits)
 
-            # 3) 同类包含抑制：若存在 j：同类、s_new[j] > s_new[i] 且 IoU≥sub_iou，则 i 乘以 0.1
-            #    复杂度 O(n^2)；n 通常较小（已过 NMS），可接受
-            if n > 1 and sub_iou > 0:
-                by_cls = {}
-                for i, c in enumerate(labels):
-                    by_cls.setdefault(int(c), []).append(i)
-                for c, idxs in by_cls.items():
-                    if len(idxs) <= 1:
-                        continue
-                    # 只与同类比较
-                    for a in idxs:
-                        for b in idxs:
-                            if b == a:
-                                continue
-                            if scores_new[b] <= scores_new[a]:
-                                continue
-                            if _iou(boxes[a], boxes[b]) >= sub_iou:
-                                scores_new[a] *= 0.1
+            # 重新打分（你可以替换为更保守/激进的策略）
+            # 这里采用：score' = score * p_lab^(1/T_use)
+            for i, b in enumerate(boxes_top):
+                b[4] = float(b[4] * (p_lab[i] ** (1.0 / float(T_use))))
+
+            changed_imgs += 1
+
+            # 可选：移除被大框“覆盖”的小框（sub_iou 阈值）
+            if sub_iou is not None and sub_iou > 0:
+                keep = [True] * len(boxes_top)
+                for i in range(len(boxes_top)):
+                    if not keep[i]: continue
+                    for j in range(len(boxes_top)):
+                        if i == j or not keep[j]: continue
+                        # j 被 i 覆盖？（要求同类 & i 分数更高）
+                        if boxes_top[i][5] == boxes_top[j][5] and boxes_top[i][4] >= boxes_top[j][4]:
+                            if _pair_iou_xywh(boxes_top[i], boxes_top[j]) >= sub_iou:
+                                keep[j] = False;
                                 subsumed_cnt += 1
-                                break  # a 已被更高分同类覆盖，跳出内层
+                boxes_top = [b for k, b in enumerate(boxes_top) if keep[k]]
 
-            if any(abs(s2 - s1) > 1e-8 for s1, s2 in zip(scores, scores_new)):
-                changed += 1
+            # 合并回剩余的框（只改 Top-K，其它保持原样）
+            new_boxes = boxes_top + boxes_all[len(boxes_top):]
 
-            # 写回
-            rec = {"image_id": img_id, "boxes": boxes, "labels": labels, "scores": scores_new}
-            fout.write(json.dumps(rec) + "\n")
+            # 写回 JSONL（保持原字段）
+            new_dets = []
+            for b in new_boxes:
+                new_dets.append({
+                    "bbox": [b[0], b[1], b[2], b[3]],
+                    "score": float(b[4]),
+                    "category_id": int(b[5]),
+                })
+            rec["detections"] = new_dets
+            out_lines.append(json.dumps(rec))
 
-    print(f"[infer_post] wrote {out}  boxes={total_boxes}  changed_imgs={changed}  "
-          f"subsumed={subsumed_cnt}  sub_iou={sub_iou}  temp={temp}")
-    return out
+    out_p = cfg.paths.outputs_dir / "detections_post.jsonl"
+    out_p.parent.mkdir(parents=True, exist_ok=True)
+    with open(out_p, "w") as f:
+        for s in out_lines: f.write(s if s.endswith("\n") else s + "\n")
+
+    print(f"[infer_post] wrote {out_p}  boxes={total_boxes}  changed_imgs={changed_imgs}  subsumed={subsumed_cnt}  sub_iou={sub_iou}  temp={T_use}")
+    return out_p
 
 
 def stage_infer_groups(cfg, model_file: Path, det_file: Path, tau: float = None) -> Path:
@@ -3825,6 +3951,7 @@ def main():
         labset = cfg.paths.outputs_dir / "labelability_train_semctx.npz"
         node_m = cfg.paths.models_dir / "grm_node_labelability.pt"
         T_star = diag_labelability_calibration(cfg, labset, node_m)
+
     if "grid" in steps:
         det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
         node = artifacts.get("node_mdl", cfg.paths.models_dir / "grm_node_labelability.pt")
@@ -3834,7 +3961,7 @@ def main():
         det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
         node_m = artifacts.get("lab_mdl", cfg.paths.models_dir / "grm_node_labelability.pt")
         # 可用命令行或环境变量传 sub_iou / temp；这里给默认
-        artifacts["det_post"] = stage_infer_post(cfg, det, node_m, sub_iou=0.50, temp=2.0)
+        artifacts["det_post"] = stage_infer_post(cfg, det, node_m, sub_iou=0.50, temp=1.5)
 
     if "eval_post" in steps:
         post = artifacts.get("det_post", cfg.paths.outputs_dir / "detections_grm_post.jsonl")
