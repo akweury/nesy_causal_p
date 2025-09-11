@@ -157,6 +157,7 @@ make docker-eval GPU_ID=0
 make docker-eval-std GPU_ID=0
 
 make run-docker STEPS=detect,match,labset,train_label,infer_post,eval_post GPU_ID=1
+make run-docker STEPS=detect GPU_ID=1
 make run-filter GPU_ID=1
 ```
 

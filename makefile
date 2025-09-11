@@ -55,26 +55,36 @@ run-filter:
 	  python -m gen_data.filter_coco_by_objcount --remote --data_split train
 
 
-
 # ---- Only detect in Docker (GPU) ----
+
 docker-detect:
 	$(MAKE) run-docker STEPS=detect
+
 docker-graph:
 	$(MAKE) run-docker STEPS=detect,graph
+
 docker-grm:
 	$(MAKE) run-docker STEPS=detect,graph,train
+
 docker-tune:
 	$(MAKE) run-docker STEPS=detect,graph,train,tune
+
 docker-infer:
 	$(MAKE) run-docker STEPS=detect,graph,train,tune,infer
+
 docker-std-nms:
 	$(MAKE) run-docker STEPS=detect,graph,train,tune,infer,stdnms
+
 docker-group-nms:
 	$(MAKE) run-docker STEPS=detect,graph,train,tune,infer,groupnms
+
 docker-eval:
 	$(MAKE) run-docker STEPS=detect,graph,train,tune,infer,groupnms,eval --remote --supervision distill -t_intra 0.90 --t_inter 0.50
+
 docker-eval-std:
 	$(MAKE) run-docker STEPS=detect,graph,train,tune,infer,stdnm,evalstd
+
+
 # ---- Run locally (macOS CPU) ----
 run-local:
 	CONFIG_PROFILE=local \
