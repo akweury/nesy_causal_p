@@ -3400,14 +3400,14 @@ def main():
         mat = artifacts.get("match", cfg.paths.outputs_dir / "matches.jsonl")
         artifacts["viz_match"] = stage_viz_match(cfg, det, mat, limit=200)
 
+    # --- 新管线: labelability ---
     if "labset" in steps:
         det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
-        mat = artifacts.get("match", cfg.paths.outputs_dir / "matches.jsonl")
-        artifacts["labset"] = stage_build_labelability_trainset(cfg, det, mat)
+        artifacts["labset"] = stage_build_labelability_trainset(cfg, det)
 
     if "train_label" in steps:
-        npz = artifacts.get("labset", cfg.paths.outputs_dir / "labelability_train.npz")
-        artifacts["lab_mdl"] = stage_train_labelability(cfg, npz)
+        labset = artifacts.get("labset", cfg.paths.outputs_dir / "labelability_train.npz")
+        artifacts["node_mdl"] = stage_train_labelability(cfg, labset)
 
     if "grid" in steps:
         det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
