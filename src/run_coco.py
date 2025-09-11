@@ -2981,7 +2981,7 @@ def stage_eval_post(cfg, det_file: Path = None, save_name: str = "eval_detection
 
     def xyxy_to_xywh(b):
         x1, y1, x2, y2 = b
-        return [float(x1), float(y1), float(max(0.0, x2 - x1)), float(max(0.0, y2 - y1))]
+        return [float(x1), float(y1), float(max(0.0, x2-x1)), float(max(0.0, y2-y1))]
 
     results = []
     with open(det_file, "r") as fin:
@@ -3002,11 +3002,9 @@ def stage_eval_post(cfg, det_file: Path = None, save_name: str = "eval_detection
 
     coco_dt = coco.loadRes(results)
     E = COCOeval(coco, coco_dt, iouType="bbox")
-    E.evaluate();
-    E.accumulate();
-    E.summarize()
+    E.evaluate(); E.accumulate(); E.summarize()
 
-    keys = ["AP", "AP50", "AP75", "APs", "APm", "APl", "AR1", "AR10", "AR100", "ARs", "ARm", "ARl"]
+    keys = ["AP","AP50","AP75","APs","APm","APl","AR1","AR10","AR100","ARs","ARm","ARl"]
     metrics = {k: float(v) for k, v in zip(keys, E.stats)}
     metrics["evaluated_images"] = int(len(coco.getImgIds()))
 
@@ -3014,8 +3012,6 @@ def stage_eval_post(cfg, det_file: Path = None, save_name: str = "eval_detection
     json.dump(metrics, open(out_p, "w"))
     print(f"[eval_post] wrote {out_p}")
     return metrics
-
-
 def stage_check_detections(cfg, det_file: Path = None, sample_k: int = 24, iou_thr: float = 0.5) -> Path:
     """
     检查 detections.jsonl 的正确性：
