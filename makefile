@@ -48,7 +48,9 @@ run-filter:
 	  -e DATA_ROOT=/coco_2017 \
 	  -e SUPERVISION=distill \
 	  -e COCO_IMAGES=/coco_2017/selected/train2017 \
+	  -e COCO_VAL_IMAGES=/coco_2017/selected/val2017 \
 	  -e COCO_ANN=/coco_2017/selected/annotations/instances_train2017.json \
+	  -e COCO_VAL_ANN=/coco_2017/selected/annotations/instances_val2017.json \
 	  -e WORK_DIR=/grm_output/run \
 	  -e DEVICE=cuda:$(GPU_ID) \
 	  -e NUM_WORKERS=0 \
