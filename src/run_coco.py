@@ -161,13 +161,12 @@ def stage_detect(cfg,
     out_dir = cfg.paths.detections_dir
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    if split=="train":
+    if split == "train":
         out_file = out_dir / "detections.jsonl"
     elif split == "val":
         out_file = out_dir / "detections_val.jsonl"
     else:
         raise ValueError(f"Unknown split: {split}")
-
 
     if out_file.exists():
         print(f"[detect] reuse {out_file}")
@@ -175,7 +174,7 @@ def stage_detect(cfg,
 
     # ---- 路径与 split 校验 ----
 
-    if split=="train":
+    if split == "train":
         img_root = Path(cfg.paths.coco_images)
         ann_file = Path(cfg.paths.coco_annotations)
     elif split == "val":
@@ -1964,13 +1963,13 @@ def _feat_one(idx, boxes, labels, scores, gts=None):
 
 
 def stage_build_labelability_trainset(
-    cfg,
-    det_file: Path = None,
-    save_npz: str = "labelability_train_semctx.npz",
-    C_MAX: int = 10,
-    NB_MAX: int = 8,
-    use_area_weight: bool = True,
-    knn_metric: str = "center"  # "center" or "iou"
+        cfg,
+        det_file: Path = None,
+        save_npz: str = "labelability_train_semctx.npz",
+        C_MAX: int = 10,
+        NB_MAX: int = 8,
+        use_area_weight: bool = True,
+        knn_metric: str = "center"  # "center" or "iou"
 ) -> Path:
     """
     产出可标注性训练集（含语义上下文）：
@@ -1985,7 +1984,6 @@ def stage_build_labelability_trainset(
       nb_ws:[N, NB_MAX]      # 近邻权重（按距离/IoU）
     """
     import json, numpy as np
-    from pathlib import Path
     from pycocotools.coco import COCO
 
     if det_file is None:
@@ -1998,28 +1996,42 @@ def stage_build_labelability_trainset(
     for img_id in coco.getImgIds():
         ann_by_img[img_id] = coco.loadAnns(coco.getAnnIds(imgIds=[img_id], iscrowd=None))
 
-    def area(b): return max(0., b[2]-b[0]) * max(0., b[3]-b[1])
-    def iou(a,b):
-        x1=max(a[0],b[0]); y1=max(a[1],b[1]); x2=min(a[2],b[2]); y2=min(a[3],b[3])
-        inter=max(0.,x2-x1)*max(0.,y2-y1)
-        return inter/max(1e-8, area(a)+area(b)-inter)
-    def box_center(b): return (0.5*(b[0]+b[2]), 0.5*(b[1]+b[3]))
+    def area(b):
+        return max(0., b[2] - b[0]) * max(0., b[3] - b[1])
 
-    X_geo=[]; y=[]; img_ids=[]; cat_id=[]
-    ctx_cats=[]; ctx_ws=[]
-    nb_cats=[]; nb_ws=[]
+    def iou(a, b):
+        x1 = max(a[0], b[0]);
+        y1 = max(a[1], b[1]);
+        x2 = min(a[2], b[2]);
+        y2 = min(a[3], b[3])
+        inter = max(0., x2 - x1) * max(0., y2 - y1)
+        return inter / max(1e-8, area(a) + area(b) - inter)
 
-    with open(det_file,"r") as fin:
+    def box_center(b):
+        return (0.5 * (b[0] + b[2]), 0.5 * (b[1] + b[3]))
+
+    X_geo = [];
+    y = [];
+    img_ids = [];
+    cat_id = []
+    ctx_cats = [];
+    ctx_ws = []
+    nb_cats = [];
+    nb_ws = []
+
+    with open(det_file, "r") as fin:
         for line in fin:
             r = json.loads(line)
             img_id = int(r["image_id"])
-            boxes  = r.get("boxes",[]) or []
-            labels = r.get("labels",[]) or []
-            scores = r.get("scores",[]) or []
-            if len(boxes)==0: continue
+            boxes = r.get("boxes", []) or []
+            labels = r.get("labels", []) or []
+            scores = r.get("scores", []) or []
+            if len(boxes) == 0: continue
 
             # 图像全局统计
-            W = coco.imgs[img_id]["width"]; H = coco.imgs[img_id]["height"]; Aimg=W*H
+            W = coco.imgs[img_id]["width"];
+            H = coco.imgs[img_id]["height"];
+            Aimg = W * H
             areas = [area(b) for b in boxes]
             max_area = max(areas) if areas else 1.0
 
@@ -2027,74 +2039,77 @@ def stage_build_labelability_trainset(
             # 统计类频次与总面积
             cnt = {}
             mass = {}
-            for c,b in zip(labels, boxes):
-                c=int(c); cnt[c]=cnt.get(c,0)+1; mass[c]=mass.get(c,0.0)+area(b)
+            for c, b in zip(labels, boxes):
+                c = int(c);
+                cnt[c] = cnt.get(c, 0) + 1;
+                mass[c] = mass.get(c, 0.0) + area(b)
             # 取权重并归一化
             if use_area_weight:
                 # 面积占比
                 items = sorted(mass.items(), key=lambda kv: kv[1], reverse=True)[:C_MAX]
-                total = sum(v for _,v in items) or 1.0
-                cats_sel = [c for c,_ in items]
-                ws_sel   = [v/total for _,v in items]
+                total = sum(v for _, v in items) or 1.0
+                cats_sel = [c for c, _ in items]
+                ws_sel = [v / total for _, v in items]
             else:
                 # 频次占比
                 items = sorted(cnt.items(), key=lambda kv: kv[1], reverse=True)[:C_MAX]
-                total = sum(v for _,v in items) or 1.0
-                cats_sel = [c for c,_ in items]
-                ws_sel   = [v/total for _,v in items]
+                total = sum(v for _, v in items) or 1.0
+                cats_sel = [c for c, _ in items]
+                ws_sel = [v / total for _, v in items]
             # pad
-            cats_sel += [-1]*(C_MAX-len(cats_sel))
-            ws_sel   += [0.0]*(C_MAX-len(ws_sel))
+            cats_sel += [-1] * (C_MAX - len(cats_sel))
+            ws_sel += [0.0] * (C_MAX - len(ws_sel))
 
             # 每框处理
             centers = [box_center(b) for b in boxes]
-            for i,(b,c,s) in enumerate(zip(boxes,labels,scores)):
+            for i, (b, c, s) in enumerate(zip(boxes, labels, scores)):
                 # y 标签（蒸馏：同类且IoU>=0.5 视为“会被标注”）
-                pos=False
+                pos = False
                 for a in ann_by_img[img_id]:
-                    if int(a["category_id"])==int(c):
+                    if int(a["category_id"]) == int(c):
                         # GT bbox xywh -> xyxy
-                        x,yh,w,h=a["bbox"]
-                        g=[x,yh,x+w,yh+h]
-                        if iou(b,g)>=0.5:
-                            pos=True; break
+                        x, yh, w, h = a["bbox"]
+                        g = [x, yh, x + w, yh + h]
+                        if iou(b, g) >= 0.5:
+                            pos = True;
+                            break
 
                 # 几何特征
-                cx,cy=centers[i]
-                ar = area(b)/max(1.0,Aimg)                  # 占图面积比
-                rel = area(b)/max(1.0,max_area)             # 相对最大框
-                norm_cx, norm_cy = cx/W, cy/H               # 归一中心
+                cx, cy = centers[i]
+                ar = area(b) / max(1.0, Aimg)  # 占图面积比
+                rel = area(b) / max(1.0, max_area)  # 相对最大框
+                norm_cx, norm_cy = cx / W, cy / H  # 归一中心
                 # 距离最近的K个框（用于邻域）
-                dists=[]
-                for j,(bj) in enumerate(boxes):
-                    if j==i: continue
-                    if knn_metric=="center":
-                        cx2,cy2 = centers[j]
-                        d = ((cx-cx2)**2 + (cy-cy2)**2)**0.5
-                        dists.append((d,j))
+                dists = []
+                for j, (bj) in enumerate(boxes):
+                    if j == i: continue
+                    if knn_metric == "center":
+                        cx2, cy2 = centers[j]
+                        d = ((cx - cx2) ** 2 + (cy - cy2) ** 2) ** 0.5
+                        dists.append((d, j))
                     else:
-                        d = 1.0 - iou(b,bj)
-                        dists.append((d,j))
-                dists.sort(key=lambda x:x[0])
-                neigh = [j for _,j in dists[:NB_MAX]]
+                        d = 1.0 - iou(b, bj)
+                        dists.append((d, j))
+                dists.sort(key=lambda x: x[0])
+                neigh = [j for _, j in dists[:NB_MAX]]
                 # 邻域类别与权重
                 nb_c = [int(labels[j]) for j in neigh]
-                if knn_metric=="center":
-                    ww=[]
-                    for d,j in dists[:NB_MAX]:
-                        wgt = 1.0/max(1e-3,d/(max(W,H)))     # 近的权重大
+                if knn_metric == "center":
+                    ww = []
+                    for d, j in dists[:NB_MAX]:
+                        wgt = 1.0 / max(1e-3, d / (max(W, H)))  # 近的权重大
                         ww.append(wgt)
                 else:
-                    ww=[]
-                    for d,j in dists[:NB_MAX]:
-                        iou_ = 1.0-d
+                    ww = []
+                    for d, j in dists[:NB_MAX]:
+                        iou_ = 1.0 - d
                         ww.append(iou_)
                 # 归一化
                 ssum = sum(ww) or 1.0
-                nb_w = [w/ssum for w in ww]
+                nb_w = [w / ssum for w in ww]
                 # pad
-                nb_c += [-1]*(NB_MAX-len(nb_c))
-                nb_w += [0.0]*(NB_MAX-len(nb_w))
+                nb_c += [-1] * (NB_MAX - len(nb_c))
+                nb_w += [0.0] * (NB_MAX - len(nb_w))
 
                 # 组合几何（可加你已有的 Dg 特征：与最近同类IoU、密度、topk均值等）
                 geo = [float(s), ar, rel, norm_cx, norm_cy]
@@ -2109,13 +2124,13 @@ def stage_build_labelability_trainset(
                 nb_ws.append(nb_w)
 
     X_geo = np.asarray(X_geo, np.float32)
-    y     = np.asarray(y, np.float32)
-    img_ids=np.asarray(img_ids, np.int64)
+    y = np.asarray(y, np.float32)
+    img_ids = np.asarray(img_ids, np.int64)
     cat_id = np.asarray(cat_id, np.int64)
-    ctx_cats=np.asarray(ctx_cats, np.int64)
-    ctx_ws  =np.asarray(ctx_ws, np.float32)
-    nb_cats =np.asarray(nb_cats, np.int64)
-    nb_ws   =np.asarray(nb_ws, np.float32)
+    ctx_cats = np.asarray(ctx_cats, np.int64)
+    ctx_ws = np.asarray(ctx_ws, np.float32)
+    nb_cats = np.asarray(nb_cats, np.int64)
+    nb_ws = np.asarray(nb_ws, np.float32)
 
     np.savez(out, X_geo=X_geo, y=y, img_ids=img_ids, cat_id=cat_id,
              ctx_cats=ctx_cats, ctx_ws=ctx_ws, nb_cats=nb_cats, nb_ws=nb_ws)
@@ -2134,166 +2149,65 @@ class LabelabilityMLP(torch.nn.Module):
     def forward(self, x): return torch.sigmoid(self.net(x)).squeeze(-1)
 
 
-def stage_train_labelability(
-    cfg,
-    npz_path: Path,
-    epochs: int = 5,
-    lr: float = 1e-3,
-    bs: int = 8192,
-    emb_dim: int = 64,
-    num_classes: int = 91,   # COCO 稀疏 id 数（按需调整）
-) -> Path:
-    """
-    训练 Labelability 模型：几何 + 类别语义（node/ctx/nb）→ 是否会被标注
-    模型： [geo] + emb(cat_id) + sum( emb(ctx_cats) * ctx_ws ) + sum( emb(nb_cats) * nb_ws ) -> MLP -> logit
-    """
-    import json, numpy as np, torch
-    import torch.nn as nn
-    from torch.utils.data import TensorDataset, DataLoader
-    from pathlib import Path
+def stage_train_labelability(cfg, npz_path: Path, epochs=5, batch_size=512):
+    import numpy as np, torch
+    from torch.utils.data import DataLoader, TensorDataset, random_split
+    import torch.nn as nn, torch.optim as optim
+    from sklearn.metrics import roc_auc_score
 
     dat = np.load(npz_path)
-    X_geo  = torch.tensor(dat["X_geo"],  dtype=torch.float32)
-    y      = torch.tensor(dat["y"],      dtype=torch.float32)
-    img_ids= torch.tensor(dat["img_ids"],dtype=torch.int64)
-    cat_id = torch.tensor(dat["cat_id"], dtype=torch.int64)
-    ctx_cats=torch.tensor(dat["ctx_cats"],dtype=torch.int64)
-    ctx_ws  =torch.tensor(dat["ctx_ws"],  dtype=torch.float32)
-    nb_cats =torch.tensor(dat["nb_cats"], dtype=torch.int64)
-    nb_ws   =torch.tensor(dat["nb_ws"],   dtype=torch.float32)
+    X, y = dat["X"], dat["y"]
 
-    N, Dg = X_geo.shape
-    print(f"[labset] X={tuple(X_geo.shape)} pos_rate={float(y.mean()):.3f}")
+    X = torch.tensor(X, dtype=torch.float32)
+    y = torch.tensor(y, dtype=torch.float32)
 
-    # === 划分 train/val（按 image_id 分）===
-    uniq = img_ids.unique()
-    perm = torch.randperm(len(uniq))
-    n_val = max(1, int(0.1*len(uniq)))
-    val_imgs = set(uniq[perm[:n_val]].tolist())
-    idx_va = [i for i,im in enumerate(img_ids.tolist()) if im in val_imgs]
-    idx_tr = [i for i in range(N) if i not in idx_va]
+    ds = TensorDataset(X, y)
+    n_val = int(0.1 * len(ds))
+    n_train = len(ds) - n_val
+    train_ds, val_ds = random_split(ds, [n_train, n_val])
+    train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False)
 
-    def sel(idx):
-        idx = torch.tensor(idx, dtype=torch.long)
-        return (X_geo.index_select(0, idx),
-                y.index_select(0, idx),
-                img_ids.index_select(0, idx),
-                cat_id.index_select(0, idx),
-                ctx_cats.index_select(0, idx),
-                ctx_ws.index_select(0, idx),
-                nb_cats.index_select(0, idx),
-                nb_ws.index_select(0, idx))
-    tr = sel(idx_tr); va = sel(idx_va)
+    in_dim = X.shape[1]
+    mdl = LabelabilityMLP(in_dim).to(cfg.device)
+    opt = optim.Adam(mdl.parameters(), lr=1e-3)
+    loss_fn = nn.BCEWithLogitsLoss()
 
-    class DS(torch.utils.data.Dataset):
-        def __init__(self, pack): self.pack = pack
-        def __len__(self): return self.pack[0].shape[0]
-        def __getitem__(self, i):
-            return tuple(p[i] for p in self.pack)
-    ds_tr = DS(tr); ds_va = DS(va)
+    print(f"[lab] start training, X={X.shape}, pos_rate={y.mean().item():.3f}, train={n_train}, val={n_val}")
 
-    dl_tr = DataLoader(ds_tr, batch_size=bs, shuffle=True, num_workers=0)
-    dl_va = DataLoader(ds_va, batch_size=bs, shuffle=False, num_workers=0)
-
-    # === 模型 ===
-    class LabelabilitySem(nn.Module):
-        def __init__(self, Dg, K, d=64, hidden=(128,64), act="relu"):
-            super().__init__()
-            self.emb = nn.Embedding(K, d)                 # 类别嵌入共享用于 node/ctx/nb
-            actf = nn.ReLU if act=="relu" else nn.GELU
-            self.mlp = nn.Sequential(
-                nn.Linear(Dg + d + d + d, hidden[0]),
-                actf(),
-                nn.Linear(hidden[0], hidden[1]),
-                actf(),
-                nn.Linear(hidden[1], 1),
-            )
-        def agg(self, ids, ws):
-            # ids:[B,M], ws:[B,M] -> sum_j (emb[id]*w)
-            mask = (ids>=0).float().unsqueeze(-1)         # [B,M,1]
-            e = self.emb(torch.clamp(ids, min=0))         # [B,M,d]（-1→0，但被mask清零）
-            w = ws.unsqueeze(-1) * mask                   # [B,M,1]
-            return (e * w).sum(dim=1)                     # [B,d]
-        def forward(self, geo, cat_id, ctx_ids, ctx_w, nb_ids, nb_w):
-            e_node = self.emb(torch.clamp(cat_id, min=0)) # [B,d]
-            e_ctx  = self.agg(ctx_ids, ctx_w)             # [B,d]
-            e_nb   = self.agg(nb_ids, nb_w)               # [B,d]
-            x = torch.cat([geo, e_node, e_ctx, e_nb], dim=-1)
-            return self.mlp(x).squeeze(-1)                # logits:[B]
-
-    mdl = LabelabilitySem(Dg, num_classes, d=emb_dim).to(cfg.device)
-
-    # 可选：用 CLIP 文本嵌入初始化（略）。也可按 supercategory 做共享（略）。
-
-    # 不平衡
-    pos_rate = float(y[idx_tr].mean())
-    pos_weight = None
-    if 0 < pos_rate < 1:
-        pw = (1 - pos_rate) / max(1e-6, pos_rate)
-        pos_weight = torch.tensor([pw], device=cfg.device)
-
-    crit = nn.BCEWithLogitsLoss(pos_weight=pos_weight) if pos_weight is not None else nn.BCEWithLogitsLoss()
-    opt = torch.optim.AdamW(mdl.parameters(), lr=lr, weight_decay=1e-4)
-
-    AMP = bool(cfg.device.startswith("cuda"))
-    scaler = torch.cuda.amp.GradScaler(enabled=AMP)
-
-    def auc_on_loader(m):
-        m.eval()
-        from sklearn.metrics import roc_auc_score
-        all_t=[]; all_p=[]
-        with torch.no_grad(), torch.amp.autocast('cuda', enabled=AMP):
-            for geo,yy,_,cid,cc,ccw,nbc,nbw in dl_va:
-                geo=geo.to(cfg.device); yy=yy.to(cfg.device)
-                cid=cid.to(cfg.device); cc=cc.to(cfg.device); ccw=ccw.to(cfg.device)
-                nbc=nbc.to(cfg.device); nbw=nbw.to(cfg.device)
-                logits = m(geo,cid,cc,ccw,nbc,nbw).float().cpu().numpy()
-                prob = 1/(1+np.exp(-np.clip(logits,-20,20)))
-                all_t.append(yy.cpu().numpy()); all_p.append(prob)
-        t = np.concatenate(all_t); p = np.concatenate(all_p)
-        if len(np.unique(t))<2: return 0.5
-        return float(roc_auc_score(t,p))
-
-    best_auc=-1.0
-    save_p = cfg.paths.models_dir / "grm_node_labelability.pt"
-    save_p.parent.mkdir(parents=True, exist_ok=True)
-
-    for ep in range(1, epochs+1):
+    for ep in range(1, epochs + 1):
         mdl.train()
-        tot, n = 0.0, 0
-        for geo,yy,_,cid,cc,ccw,nbc,nbw in dl_tr:
-            geo=geo.to(cfg.device); yy=yy.to(cfg.device)
-            cid=cid.to(cfg.device); cc=cc.to(cfg.device); ccw=ccw.to(cfg.device)
-            nbc=nbc.to(cfg.device); nbw=nbw.to(cfg.device)
-            opt.zero_grad(set_to_none=True)
-            with torch.amp.autocast('cuda', enabled=AMP):
-                logits = mdl(geo,cid,cc,ccw,nbc,nbw)
-                loss = crit(logits, yy)
-            scaler.scale(loss).backward()
-            scaler.step(opt); scaler.update()
-            tot += float(loss.item())*geo.size(0); n += geo.size(0)
-        loss_tr = tot/max(1,n)
+        tot_loss, n = 0.0, 0
+        for bi, (xb, yb) in enumerate(train_loader):
+            xb, yb = xb.to(cfg.device), yb.to(cfg.device)
+            opt.zero_grad()
+            with torch.cuda.amp.autocast(enabled=cfg.device.startswith("cuda")):
+                logits = mdl(xb).squeeze(-1)
+                loss = loss_fn(logits, yb)
+            loss.backward(); opt.step()
+            tot_loss += loss.item() * len(xb); n += len(xb)
 
-        auc_va = auc_on_loader(mdl)
-        print(f"[lab] ep{ep} loss_tr={loss_tr:.4f}  AUC_va={auc_va:.3f}")
+            if bi % 50 == 0:  # 每 50 个 batch 打印一次
+                print(f"[lab][ep{ep}] batch {bi}/{len(train_loader)} loss={loss.item():.4f}")
 
-        if auc_va>best_auc:
-            best_auc=auc_va
-            torch.save({
-                "state_dict": mdl.state_dict(),
-                "meta": {
-                    "in_dim_geo": Dg,
-                    "num_classes": num_classes,
-                    "emb_dim": emb_dim,
-                    "hidden": [128,64],
-                    "auc_va": best_auc,
-                    "type": "LabelabilitySem"
-                }
-            }, save_p)
+        # 验证
+        mdl.eval()
+        all_logits, all_y = [], []
+        with torch.no_grad():
+            for xb, yb in val_loader:
+                xb, yb = xb.to(cfg.device), yb.to(cfg.device)
+                logits = mdl(xb).squeeze(-1)
+                all_logits.append(logits.cpu()); all_y.append(yb.cpu())
+        all_logits = torch.cat(all_logits).numpy()
+        all_y = torch.cat(all_y).numpy()
+        auc = roc_auc_score(all_y, all_logits) if len(set(all_y)) > 1 else 0.5
 
-    print(f"[lab] saved {save_p}")
-    return save_p
+        print(f"[lab] ep{ep} loss_tr={tot_loss/n:.4f}  AUC_va={auc:.3f}")
 
+    out = cfg.paths.models_dir / "grm_node_labelability.pt"
+    torch.save({"state_dict": mdl.state_dict(), "in_dim": in_dim}, out)
+    print(f"[lab] saved {out}")
+    return out
 
 
 def _edge_score(mdl, a, b):
@@ -2999,8 +2913,6 @@ def _xyxy_to_xywh(b):
     return [float(x1), float(y1), float(max(0, x2 - x1)), float(max(0, y2 - y1))]
 
 
-
-
 def stage_eval_post(cfg, det_file: Path = None, save_name: str = "eval_detections_post.json") -> dict:
     """
     评测 detection/post 结果（jsonl: {image_id, boxes[xyxy], labels[cat_id], scores}）
@@ -3066,21 +2978,21 @@ def stage_eval_post(cfg, det_file: Path = None, save_name: str = "eval_detection
         for line in fin:
             r = json.loads(line)
             img_id = int(r["image_id"])
-            boxes  = r.get("boxes", []) or []
+            boxes = r.get("boxes", []) or []
             labels = r.get("labels", []) or []
             scores = r.get("scores", []) or []
             for b, c, s in zip(boxes, labels, scores):
                 results.append({
                     "image_id": img_id,
-                    "category_id": int(c),      # COCO 稀疏 id
-                    "bbox": xyxy_to_xywh(b),    # COCO 要求 xywh
+                    "category_id": int(c),  # COCO 稀疏 id
+                    "bbox": xyxy_to_xywh(b),  # COCO 要求 xywh
                     "score": float(s),
                 })
 
     if not results:
-        zeros = {"AP":0,"AP50":0,"AP75":0,"APs":0,"APm":0,"APl":0,
-                 "AR1":0,"AR10":0,"AR100":0,"ARs":0,"ARm":0,"ARl":0,
-                 "evaluated_images":0}
+        zeros = {"AP": 0, "AP50": 0, "AP75": 0, "APs": 0, "APm": 0, "APl": 0,
+                 "AR1": 0, "AR10": 0, "AR100": 0, "ARs": 0, "ARm": 0, "ARl": 0,
+                 "evaluated_images": 0}
         out_p = cfg.paths.outputs_dir / save_name
         out_p.parent.mkdir(parents=True, exist_ok=True)
         json.dump(zeros, open(out_p, "w"))
@@ -3091,9 +3003,11 @@ def stage_eval_post(cfg, det_file: Path = None, save_name: str = "eval_detection
 
     # ---- 正式评测 ----
     E = COCOeval(coco, coco_dt, iouType="bbox")
-    E.evaluate(); E.accumulate(); E.summarize()
+    E.evaluate();
+    E.accumulate();
+    E.summarize()
 
-    keys = ["AP","AP50","AP75","APs","APm","APl","AR1","AR10","AR100","ARs","ARm","ARl"]
+    keys = ["AP", "AP50", "AP75", "APs", "APm", "APl", "AR1", "AR10", "AR100", "ARs", "ARm", "ARl"]
     metrics = {k: float(v) for k, v in zip(keys, E.stats)}
     metrics["evaluated_images"] = int(len(coco.getImgIds()))
 
@@ -3102,7 +3016,6 @@ def stage_eval_post(cfg, det_file: Path = None, save_name: str = "eval_detection
     json.dump(metrics, open(out_p, "w"))
     print(f"[eval_post] wrote {out_p}")
     return metrics
-
 
 
 def stage_check_detections(cfg, det_file: Path = None, sample_k: int = 24, iou_thr: float = 0.5) -> Path:
