@@ -177,8 +177,8 @@ def stage_detect(cfg,
 
     class CocoDetWrap(CocoDetection):
         def __getitem__(self, idx):
-            img, targets = super().__getitem__(idx)      # targets: list[ann dict]
-            image_id = int(self.ids[idx])                # 真实 COCO image_id
+            img, targets = super().__getitem__(idx)  # targets: list[ann dict]
+            image_id = int(self.ids[idx])  # 真实 COCO image_id
             return img, targets, image_id
 
     ds = CocoDetWrap(str(img_root), str(ann_file), transform=tfm)
@@ -204,35 +204,42 @@ def stage_detect(cfg,
     model = fasterrcnn_resnet50_fpn(weights=weights).to(cfg.device).eval()
 
     # ---- 工具 ----
-    def _area(b): return max(0., b[2]-b[0]) * max(0., b[3]-b[1])
-    def _iou(a,b):
-        x1=max(a[0],b[0]); y1=max(a[1],b[1])
-        x2=min(a[2],b[2]); y2=min(a[3],b[3])
-        inter=max(0., x2-x1)*max(0., y2-y1)
-        return inter / max(1e-8, _area(a)+_area(b)-inter)
+    def _area(b):
+        return max(0., b[2] - b[0]) * max(0., b[3] - b[1])
+
+    def _iou(a, b):
+        x1 = max(a[0], b[0]);
+        y1 = max(a[1], b[1])
+        x2 = min(a[2], b[2]);
+        y2 = min(a[3], b[3])
+        inter = max(0., x2 - x1) * max(0., y2 - y1)
+        return inter / max(1e-8, _area(a) + _area(b) - inter)
 
     # 同类、按分数贪心匹配
     def match_greedy(pred_boxes, pred_labels, pred_scores, gt_boxes, gt_labels, iou_thr=0.5):
-        if len(pred_boxes)==0:
+        if len(pred_boxes) == 0:
             return np.zeros(0, bool), np.zeros(0, bool), 0
         order = np.argsort(-np.asarray(pred_scores))
         used = set()
         tp = np.zeros(len(pred_boxes), dtype=bool)
         fp = np.zeros(len(pred_boxes), dtype=bool)
         gt_idx_by_class = {}
-        for i,(gb,gl) in enumerate(zip(gt_boxes, gt_labels)):
+        for i, (gb, gl) in enumerate(zip(gt_boxes, gt_labels)):
             gt_idx_by_class.setdefault(int(gl), []).append(i)
         for pidx in order:
             c = int(pred_labels[pidx])
             candid = gt_idx_by_class.get(c, [])
-            best = -1; best_iou = 0.0
+            best = -1;
+            best_iou = 0.0
             for gi in candid:
                 if gi in used: continue
                 iou = _iou(pred_boxes[pidx], gt_boxes[gi])
                 if iou > best_iou:
-                    best_iou = iou; best = gi
+                    best_iou = iou;
+                    best = gi
             if best >= 0 and best_iou >= iou_thr:
-                tp[pidx] = True; used.add(best)
+                tp[pidx] = True;
+                used.add(best)
             else:
                 fp[pidx] = True
         fn = (len(gt_boxes) - len(used))
@@ -240,18 +247,20 @@ def stage_detect(cfg,
 
     # 在线 AP50 估计（全局）
     all_scores, all_is_tp, total_fn = [], [], 0
+
     def approx_ap50():
-        if len(all_scores)==0:
+        if len(all_scores) == 0:
             return 0.0
         s = np.asarray(all_scores, np.float32)
         y = np.asarray(all_is_tp, np.bool_)
-        order = np.argsort(-s); y = y[order]
+        order = np.argsort(-s);
+        y = y[order]
         tp_cum = np.cumsum(y)
         fp_cum = np.cumsum(~y)
         P = tp_cum / np.maximum(1, tp_cum + fp_cum)
         R = tp_cum / max(1, (tp_cum[-1] + total_fn))
         ap = 0.0
-        for t in np.linspace(0,1,11):
+        for t in np.linspace(0, 1, 11):
             p = np.max(P[R >= t]) if np.any(R >= t) else 0.0
             ap += p
         return ap / 11.0
@@ -268,13 +277,13 @@ def stage_detect(cfg,
                 image_id = int(image_id)
 
                 # 预测（像素 xyxy；labels 已是 COCO 稀疏 category_id）
-                boxes  = out["boxes"].detach().float().cpu().numpy().tolist()
+                boxes = out["boxes"].detach().float().cpu().numpy().tolist()
                 labels = out["labels"].detach().cpu().numpy().tolist()
                 scores = out["scores"].detach().float().cpu().numpy().tolist()
 
                 if score_thr > 0:
-                    keep = [i for i,s in enumerate(scores) if s >= score_thr]
-                    boxes  = [boxes[i]  for i in keep]
+                    keep = [i for i, s in enumerate(scores) if s >= score_thr]
+                    boxes = [boxes[i] for i in keep]
                     labels = [labels[i] for i in keep]
                     scores = [scores[i] for i in keep]
 
@@ -287,10 +296,11 @@ def stage_detect(cfg,
                 written += 1
 
                 # ---- 在线指标（与 GT 同类、IoU>=0.5）----
-                gt_boxes=[]; gt_labels=[]
+                gt_boxes = [];
+                gt_labels = []
                 for a in coco.loadAnns(coco.getAnnIds(imgIds=[image_id], iscrowd=None)):
-                    x,y,w,h = a["bbox"]
-                    gt_boxes.append([x, y, x+w, y+h])
+                    x, y, w, h = a["bbox"]
+                    gt_boxes.append([x, y, x + w, y + h])
                     gt_labels.append(int(a["category_id"]))
 
                 if len(boxes):
@@ -304,14 +314,15 @@ def stage_detect(cfg,
                 fp_sum = len(all_is_tp) - tp_sum
                 P = tp_sum / max(1, tp_sum + fp_sum)
                 R = tp_sum / max(1, tp_sum + total_fn)
-                F1 = 2*P*R / max(1e-8, P+R)
+                F1 = 2 * P * R / max(1e-8, P + R)
                 AP50_est = approx_ap50()
                 print(f"[detect] {it:5d}/{len(dl)} imgs  "
                       f"P={P:.3f} R={R:.3f} F1={F1:.3f}  AP50~{AP50_est:.3f}  "
-                      f"TP={tp_sum} FP={fp_sum} FN={total_fn}  time={time.time()-t0:.1f}s")
+                      f"TP={tp_sum} FP={fp_sum} FN={total_fn}  time={time.time() - t0:.1f}s")
 
-    print(f"[detect] wrote {out_file}  images={written}  total_time={time.time()-t0:.1f}s")
+    print(f"[detect] wrote {out_file}  images={written}  total_time={time.time() - t0:.1f}s")
     return out_file
+
 
 def stage_viz_frcnn_vs_gt(cfg, det_file: Path,
                           iou_thr: float = 0.5,
@@ -2053,117 +2064,158 @@ class LabelabilityMLP(torch.nn.Module):
     def forward(self, x): return torch.sigmoid(self.net(x)).squeeze(-1)
 
 
-def stage_train_labelability(cfg, npz_path, epochs=5, lr=1e-3, hidden=64):
+def stage_train_labelability(cfg, npz_path: Path, epochs: int = 5, lr: float = 1e-3, bs: int = 4096) -> Path:
     """
-    训练 labelability 模型：判断预测框是否符合“会被人工标注”的风格
-    输入: npz (由 stage_build_labelability_trainset 构建)
-    输出: 保存模型 ckpt
+    训练“可标注性”节点分类器（几何+上下文特征 → 是否会被标注）:
+      - 输入: labelability_train.npz (X[N,D], y[N], img_ids[N])
+      - 模型: MLP(in_dim=D, hidden=[64,64], out=1)
+      - 输出: /models/grm_node_labelability.pt (含 meta)
     """
-    import numpy as np, torch, torch.nn as nn, torch.nn.functional as F
+    import json, math, numpy as np, torch
+    import torch.nn as nn
+    import torch.nn.functional as F
     from torch.utils.data import TensorDataset, DataLoader
-    from sklearn.metrics import roc_auc_score
     from pathlib import Path
 
-    # ---------------- 加载与清洗 ----------------
-    dat = np.load(npz_path, allow_pickle=True)
-    X = np.asarray(dat["X"], np.float32)
-    y = np.asarray(dat["y"], np.float32)
-    img_ids = np.asarray(dat.get("img_ids", np.arange(len(y))), np.int64)
+    # ===== 小工具 =====
+    def try_auc(y_true_np, y_pred_np):
+        # 返回 AUC；当 val 只有单类时，返回 0.5 并打印 warn
+        y_true_np = np.asarray(y_true_np).astype(np.float32)
+        y_pred_np = np.asarray(y_pred_np).astype(np.float32)
+        if len(np.unique(y_true_np)) < 2:
+            print("[lab][warn] val y has single class; force AUC=0.5")
+            return 0.5
+        try:
+            from sklearn.metrics import roc_auc_score
+            return float(roc_auc_score(y_true_np, y_pred_np))
+        except Exception:
+            # 简易 AUC（排序法）
+            order = np.argsort(y_pred_np)
+            ranks = np.empty_like(order);
+            ranks[order] = np.arange(len(y_pred_np))
+            pos = (y_true_np > 0.5)
+            n_pos = int(pos.sum());
+            n_neg = len(y_true_np) - n_pos
+            if n_pos == 0 or n_neg == 0: return 0.5
+            auc = (ranks[pos].sum() - n_pos * (n_pos - 1) / 2) / (n_pos * n_neg)
+            return float(auc)
 
-    # 清洗坏值
-    X = np.nan_to_num(X, posinf=1e6, neginf=-1e6)
-
-    print(f"[labset] X={X.shape} pos_rate={y.mean():.3f}")
-
-    # ---------------- 分层切分 ----------------
-    rng = np.random.default_rng(123)
-    uniq = np.unique(img_ids)
-    rng.shuffle(uniq)
-
-    def split_with_both_classes(uniq_ids, val_ratio=0.2, max_tries=20):
-        for _ in range(max_tries):
-            cut = int(len(uniq_ids) * (1 - val_ratio))
-            tr_ids = set(uniq_ids[:cut]);
-            va_ids = set(uniq_ids[cut:])
-            tr_mask = np.array([i in tr_ids for i in img_ids])
-            va_mask = np.array([i in va_ids for i in img_ids])
-            if len(np.unique(y[va_mask])) == 2 and len(np.unique(y[tr_mask])) == 2:
-                return tr_mask, va_mask
-            rng.shuffle(uniq_ids)
-        return tr_mask, va_mask
-
-    tr_mask, va_mask = split_with_both_classes(uniq)
-    Xtr, ytr = X[tr_mask], y[tr_mask]
-    Xva, yva = X[va_mask], y[va_mask]
-
-    # ---------------- 标准化 ----------------
-    mu = Xtr.mean(0, keepdims=True)
-    sd = Xtr.std(0, keepdims=True)
-    sd = np.where(sd < 1e-6, 1.0, sd).astype(np.float32)
-    Xtr = (Xtr - mu) / sd
-    Xva = (Xva - mu) / sd
-
-    # ---------------- DataLoader ----------------
-    Xtr_t = torch.from_numpy(Xtr)
-    ytr_t = torch.from_numpy(ytr).float().unsqueeze(1)
-    Xva_t = torch.from_numpy(Xva)
-    yva_t = torch.from_numpy(yva).float().unsqueeze(1)
-
-    tr_loader = DataLoader(TensorDataset(Xtr_t, ytr_t), batch_size=512, shuffle=True)
-
-    # ---------------- 模型 ----------------
-    in_dim = X.shape[1]
-
-    class MLP(nn.Module):
-        def __init__(self, in_dim, hidden):
+    class LabelabilityMLP(nn.Module):
+        def __init__(self, in_dim: int, hidden: list[int] = [64, 64], act: str = "relu", dropout: float = 0.0):
             super().__init__()
-            self.net = nn.Sequential(
-                nn.Linear(in_dim, hidden), nn.ReLU(),
-                nn.Linear(hidden, 1)
-            )
+            hs = list(hidden)
+            layers = []
+            last = in_dim
+            for h in hs:
+                layers += [nn.Linear(last, h), nn.ReLU(inplace=True) if act == "relu" else nn.GELU()]
+                if dropout > 0: layers += [nn.Dropout(p=dropout)]
+                last = h
+            layers += [nn.Linear(last, 1)]
+            self.net = nn.Sequential(*layers)
 
-        def forward(self, x): return torch.sigmoid(self.net(x))
+        def forward(self, x):  # x:[B,D]
+            return self.net(x).squeeze(-1)  # logits:[B]
 
-    mdl = MLP(in_dim, hidden).to(cfg.device)
-    opt = torch.optim.Adam(mdl.parameters(), lr=lr)
+    # ===== 读数据 =====
+    npz_path = Path(npz_path)
+    dat = np.load(npz_path)
+    X = torch.tensor(dat["X"], dtype=torch.float32)
+    y = torch.tensor(dat["y"], dtype=torch.float32)
+    N, D = X.shape
+    print(f"[labset] X={tuple(X.shape)} pos_rate={float(y.mean()):.3f}")
 
-    # ---------------- 训练循环 ----------------
+    # ===== 划分 train/val =====
+    # 以 image_id 分层更稳（同图不泄漏），若没有 img_ids 就按样本随机
+    if "img_ids" in dat:
+        img_ids = dat["img_ids"]
+        uniq = np.unique(img_ids)
+        rng = np.random.default_rng(1234)
+        rng.shuffle(uniq)
+        n_val = max(1, int(0.1 * len(uniq)))
+        val_imgs = set(uniq[:n_val])
+        idx_tr = [i for i, im in enumerate(img_ids) if im not in val_imgs]
+        idx_va = [i for i, im in enumerate(img_ids) if im in val_imgs]
+    else:
+        idx = np.arange(N)
+        rng = np.random.default_rng(1234);
+        rng.shuffle(idx)
+        n_val = max(1, int(0.1 * N))
+        idx_va = idx[:n_val].tolist();
+        idx_tr = idx[n_val:].tolist()
+
+    X_tr, y_tr = X[idx_tr], y[idx_tr]
+    X_va, y_va = X[idx_va], y[idx_va]
+
+    ds_tr = TensorDataset(X_tr, y_tr)
+    ds_va = TensorDataset(X_va, y_va)
+
+    dl_tr = DataLoader(ds_tr, batch_size=bs, shuffle=True, num_workers=0, pin_memory=False)
+    dl_va = DataLoader(ds_va, batch_size=bs, shuffle=False, num_workers=0, pin_memory=False)
+
+    # ===== 模型/损失/优化 =====
+    hidden = [64, 64]  # 与 infer_post 保持一致；也可放 cfg
+    mdl = LabelabilityMLP(in_dim=D, hidden=hidden).to(cfg.device)
+    pos_weight = None
+    pos_rate = float(y_tr.mean().item()) if y_tr.numel() else 0.0
+    if 0 < pos_rate < 1:
+        pos_weight = torch.tensor([(1 - pos_rate) / max(1e-6, pos_rate)], device=cfg.device)
+    crit = nn.BCEWithLogitsLoss(pos_weight=pos_weight) if pos_weight is not None else nn.BCEWithLogitsLoss()
+    opt = torch.optim.AdamW(mdl.parameters(), lr=lr, weight_decay=1e-4)
+
+    AMP = bool(cfg.device.startswith("cuda"))
+    scaler = torch.cuda.amp.GradScaler(enabled=AMP)
+
+    best_auc = -1.0
+    save_p = cfg.paths.models_dir / "grm_node_labelability.pt"
+    save_p.parent.mkdir(parents=True, exist_ok=True)
+
+    # ===== 训练循环 =====
     for ep in range(1, epochs + 1):
         mdl.train()
-        losses = []
-        for xb, yb in tr_loader:
-            xb, yb = xb.to(cfg.device), yb.to(cfg.device)
-            p = mdl(xb)
-            loss = F.binary_cross_entropy(p, yb)
-            opt.zero_grad();
-            loss.backward();
-            opt.step()
-            losses.append(loss.item())
+        loss_tr = 0.0;
+        n_tr = 0
+        for xb, yb in dl_tr:
+            xb = xb.to(cfg.device, non_blocking=True)
+            yb = yb.to(cfg.device, non_blocking=True)
+            opt.zero_grad(set_to_none=True)
+            with torch.cuda.amp.autocast(enabled=AMP):
+                logits = mdl(xb)
+                loss = crit(logits, yb)
+            scaler.scale(loss).backward()
+            scaler.step(opt);
+            scaler.update()
+            loss_tr += float(loss.item()) * xb.size(0);
+            n_tr += xb.size(0)
+        loss_tr = loss_tr / max(1, n_tr)
 
-        # 验证 AUC
+        # --- 验证 ---
         mdl.eval()
         with torch.no_grad():
-            pva = mdl(Xva_t.to(cfg.device)).cpu().numpy().ravel()
-        if len(np.unique(yva)) < 2:
-            auc = 0.5
-            print(f"[lab][warn] val y has single class; force AUC=0.5")
-        else:
-            auc = roc_auc_score(yva, pva)
+            all_p = [];
+            all_t = []
+            for xb, yb in dl_va:
+                xb = xb.to(cfg.device, non_blocking=True)
+                logits = mdl(xb).float().cpu().numpy()
+                all_p.append(1 / (1 + np.exp(-logits)))  # sigmoid
+                all_t.append(yb.numpy())
+            if all_p:
+                p = np.concatenate(all_p);
+                t = np.concatenate(all_t)
+                auc = try_auc(t, p)
+            else:
+                auc = 0.5
+        print(f"[lab] ep{ep} loss_tr={loss_tr:.4f}  AUC_va={auc:.3f}")
 
-        print(f"[lab] ep{ep} loss_tr={np.mean(losses):.4f}  AUC_va={auc:.3f}")
+        # 保存最好
+        if auc > best_auc:
+            best_auc = auc
+            torch.save({
+                "state_dict": mdl.state_dict(),
+                "meta": {"in_dim": D, "hidden": hidden, "act": "relu", "auc_va": best_auc}
+            }, save_p)
 
-    # ---------------- 保存 ----------------
-    out = cfg.paths.models_dir / "grm_node_labelability.pt"
-    ckpt = {
-        "state_dict": mdl.state_dict(),
-        "mu": mu.astype(np.float32),
-        "sd": sd.astype(np.float32),
-        "in_dim": in_dim
-    }
-    Path(out).parent.mkdir(parents=True, exist_ok=True)
-    torch.save(ckpt, out)
-    print(f"[lab] saved {out}")
-    return out
+    print(f"[lab] saved {save_p}")
+    return save_p
 
 
 def _edge_score(mdl, a, b):
