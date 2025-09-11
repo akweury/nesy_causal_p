@@ -2251,88 +2251,163 @@ def _logit_clip(p, eps=1e-6):
     return math.log(p / (1.0 - p))
 
 
-def stage_infer_post(cfg, det_file: Path, node_mdl_p: Path = None,
-                     sub_iou: float = 0.7, temp: float = 1.0,
-                     alpha: float = 0.3, q_floor: float = 0.5) -> Path:
-    # ...载入 ckpt/mu/sd/mdl，predict_q(...) 同前...
-    # 计算 q，做温度缩放
-    # q = predict_q(feats); 若 temp!=1 做 logit 温度；然后：
-
+def stage_infer_post(
+    cfg,
+    det_file: Path = None,
+    node_mdl_p: Path = None,
+    sub_iou: float = 0.65,
+    temp: float = 2.0,
+    save_name: str = "detections_post.jsonl"
+) -> Path:
     """
-    无GT推理风格化：
-      - 载入 labelability 模型（含 mu/sd）
-      - 特征：与训练一致的 _feat_one(..., gts=None)
-      - 温度缩放(可选)：q' = sigmoid(logit(q)/T)
-      - 重评分 s' = s * q'
-      - 类内 NMS(sub_iou)
-    """
-    import json, torch, numpy as np, math
+    Labelability 后处理（不新增检测，只重排/降权）：
+      1) 载入 labelability MLP（自动读取 ckpt.meta，或从 state_dict 反推结构）
+      2) 对每个预测框提取几何/上下文特征，得到 p_label
+      3) 分数重标定（只降不升）：s' = min( s, s * (p_label)^(1/temp) )
+      4) 同类“包含抑制”（Subsumption）：若 j 分数更高且 IoU(i,j)≥sub_iou，则再把 i 的分数乘以 0.1
 
+    输入:  detections.jsonl  (image_id, boxes[xyxy], labels[COCO稀疏], scores)
+    输出:  /outputs/detections_post.jsonl （同字段，scores 已更新）
+    注：不做硬删除，COCOeval 会按分数截断；这样更稳健。
+    """
+    import json, numpy as np, torch
+    from pathlib import Path
+    from pycocotools.coco import COCO
+
+    # ---------- 路径 ----------
+    if det_file is None:
+        det_file = cfg.paths.detections_dir / "detections.jsonl"
     if node_mdl_p is None:
         node_mdl_p = cfg.paths.models_dir / "grm_node_labelability.pt"
-    ckpt = torch.load(node_mdl_p, map_location=cfg.device, weights_only=False)
-    in_dim = int(ckpt["in_dim"])
-    mu, sd = ckpt["mu"], ckpt["sd"]  # [1,F]
-    mdl = LabelabilityMLP(in_dim=in_dim).to(cfg.device).eval()
-    mdl.load_state_dict(ckpt["state_dict"])
-
-    def predict_q(feat_np):
-        # feat_np: [N,F] np.float32
-        x = (feat_np - mu) / sd
-        with torch.no_grad():
-            q = mdl(torch.from_numpy(x).to(cfg.device)).cpu().numpy().reshape(-1)
-        if temp and abs(temp - 1.0) > 1e-6:
-            # 温度缩放在 logit 空间
-            q = np.array([1.0 / (1.0 + math.exp(_logit_clip(qq) / float(temp) * -1.0)) for qq in q], dtype=np.float32)
-        return q.astype(np.float32)
-
-    out = cfg.paths.outputs_dir / "detections_grm_post.jsonl"
+    out = cfg.paths.outputs_dir / save_name
     out.parent.mkdir(parents=True, exist_ok=True)
 
-    num_imgs = 0
-    with open(det_file) as fin, open(out, "w") as fout:
-        for L in fin:
-            r = json.loads(L)
-            boxes, labels, scores = r["boxes"], r["labels"], r["scores"]
-            if not boxes:
-                fout.write(L);
+    # ---------- 工具 ----------
+    def _area(b): return max(0., b[2]-b[0]) * max(0., b[3]-b[1])
+    def _iou(a,b):
+        x1=max(a[0],b[0]); y1=max(a[1],b[1])
+        x2=min(a[2],b[2]); y2=min(a[3],b[3])
+        inter=max(0., x2-x1)*max(0., y2-y1)
+        return inter / max(1e-8, _area(a)+_area(b)-inter)
+
+    def sigmoid(x): return 1.0 / (1.0 + np.exp(-x))
+
+    # ---------- 定义模型（需与训练一致） ----------
+    import torch.nn as nn
+    class LabelabilityMLP(nn.Module):
+        def __init__(self, in_dim: int, hidden: list[int] = [64,64], act: str = "relu"):
+            super().__init__()
+            act_layer = nn.ReLU if act == "relu" else nn.GELU
+            layers = []
+            last = in_dim
+            for h in hidden:
+                layers += [nn.Linear(last, h), act_layer(inplace=True)]
+                last = h
+            layers += [nn.Linear(last, 1)]
+            self.net = nn.Sequential(*layers)
+        def forward(self, x):  # x:[N,D]
+            return self.net(x).squeeze(-1)   # logits:[N]
+
+    # ---------- 读取 ckpt（优先 meta；否则从 state_dict 反推结构） ----------
+    ckpt = torch.load(node_mdl_p, map_location=cfg.device, weights_only=False)
+    sd   = ckpt.get("state_dict", ckpt)
+    meta = ckpt.get("meta", {})
+
+    def rebuild_from_state_dict(sd):
+        in_dim = int(sd["net.0.weight"].shape[1])
+        hidden = []
+        k = 2
+        while f"net.{k}.weight" in sd:
+            W = sd[f"net.{k}.weight"]
+            out_dim = int(W.shape[0])
+            if out_dim == 1:
+                break
+            hidden.append(out_dim)
+            k += 2
+        return in_dim, (hidden if hidden else [64])
+
+    if meta and "in_dim" in meta:
+        in_dim  = int(meta["in_dim"])
+        hidden  = list(meta.get("hidden", [64,64]))
+    else:
+        in_dim, hidden = rebuild_from_state_dict(sd)
+
+    mdl = LabelabilityMLP(in_dim=in_dim, hidden=hidden).to(cfg.device).eval()
+    mdl.load_state_dict(sd, strict=False)
+
+    AMP = bool(cfg.device.startswith("cuda"))
+
+    # ---------- COCO（仅用于尺寸/一致性） ----------
+    coco = COCO(str(cfg.paths.coco_annotations))
+    coco_imgs = coco.imgs  # dict[id] -> rec
+
+    # ---------- 扫描 detections.jsonl 并写出 post 结果 ----------
+    total_boxes = 0
+    changed = 0
+    subsumed_cnt = 0
+
+    with open(det_file, "r") as fin, open(out, "w") as fout, torch.no_grad(), torch.amp.autocast('cuda', enabled=AMP):
+        for line in fin:
+            r = json.loads(line)
+            img_id = int(r["image_id"])
+            boxes  = r.get("boxes", []) or []
+            labels = r.get("labels", []) or []
+            scores = r.get("scores", []) or []
+            n = len(boxes)
+            total_boxes += n
+            if n == 0 or img_id not in coco_imgs:
+                fout.write(json.dumps(r) + "\n");
                 continue
 
-            # 逐类：重评分 + NMS
-            new_boxes = [];
-            new_labels = [];
-            new_scores = []
-            classes = sorted(set(int(c) for c in labels))
-            for cls in classes:
-                idx = [i for i, l in enumerate(labels) if int(l) == cls]
-                if not idx: continue
-                # 计算 q(b)
-                feats = np.stack([np.array(_feat_one(i, boxes, labels, scores, gts=None), np.float32) for i in idx], axis=0)
-                q = predict_q(feats)
-                q = np.maximum(q, q_floor)
-                s = np.array([scores[i] for i in idx], np.float32)
-                s_prime = (np.power(s, 1.0 - alpha) * np.power(q, alpha)).tolist()
-                # 接着按 s_prime 做 NMS，写出 detections_grm_post.jsonl（可在文件名加参数后缀以免覆盖）
-                # s_prime = (np.array([scores[i] for i in idx], np.float32) * q).tolist()
+            # 1) labelability 打分
+            #    _feat_one(i, boxes, labels, scores, gts=None) → np.ndarray[D]
+            feats = []
+            for i in range(n):
+                feats.append(_feat_one(i, boxes, labels, scores, gts=None))
+            X = torch.tensor(np.asarray(feats, np.float32), device=cfg.device)
+            logits = mdl(X).float().detach().cpu().numpy()
+            p_lab = sigmoid(logits)  # [n] ∈ (0,1)
 
-                # NMS（对 s' 排序）
-                B = [boxes[i] for i in idx]
-                keep = _nms_xyxy(B, s_prime, thr=sub_iou)
-                for k in keep:
-                    new_boxes.append(B[k])
-                    new_labels.append(cls)
-                    new_scores.append(float(s_prime[k]))
+            # 2) 只降不升的温度缩放重标定
+            #    s' = min( s, s * (p_lab)^(1/temp) )
+            scores_new = []
+            for s, pl in zip(scores, p_lab):
+                s2 = float(s) * (float(pl) ** (1.0 / max(1e-6, temp)))
+                s2 = min(float(s), s2)
+                scores_new.append(s2)
 
-            fout.write(json.dumps({
-                "image_id": r["image_id"],
-                "boxes": new_boxes,
-                "labels": new_labels,
-                "scores": new_scores
-            }) + "\n")
-            num_imgs += 1
+            # 3) 同类包含抑制：若存在 j：同类、s_new[j] > s_new[i] 且 IoU≥sub_iou，则 i 乘以 0.1
+            #    复杂度 O(n^2)；n 通常较小（已过 NMS），可接受
+            if n > 1 and sub_iou > 0:
+                by_cls = {}
+                for i, c in enumerate(labels):
+                    by_cls.setdefault(int(c), []).append(i)
+                for c, idxs in by_cls.items():
+                    if len(idxs) <= 1:
+                        continue
+                    # 只与同类比较
+                    for a in idxs:
+                        for b in idxs:
+                            if b == a:
+                                continue
+                            if scores_new[b] <= scores_new[a]:
+                                continue
+                            if _iou(boxes[a], boxes[b]) >= sub_iou:
+                                scores_new[a] *= 0.1
+                                subsumed_cnt += 1
+                                break  # a 已被更高分同类覆盖，跳出内层
 
-    print(f"[post] wrote {out}  imgs={num_imgs}  sub_iou={sub_iou}  temp={temp}")
+            if any(abs(s2 - s1) > 1e-8 for s1, s2 in zip(scores, scores_new)):
+                changed += 1
+
+            # 写回
+            rec = {"image_id": img_id, "boxes": boxes, "labels": labels, "scores": scores_new}
+            fout.write(json.dumps(rec) + "\n")
+
+    print(f"[infer_post] wrote {out}  boxes={total_boxes}  changed_imgs={changed}  "
+          f"subsumed={subsumed_cnt}  sub_iou={sub_iou}  temp={temp}")
     return out
+
 
 
 def stage_infer_groups(cfg, model_file: Path, det_file: Path, tau: float = None) -> Path:
