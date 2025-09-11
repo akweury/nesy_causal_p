@@ -2365,11 +2365,12 @@ def stage_infer_post(
             for i in range(n):
                 feats.append(_feat_one(i, boxes, labels, scores, gts=None))
             X = torch.tensor(np.asarray(feats, np.float32), device=cfg.device)
-            logits = mdl(X).float().detach().cpu().numpy()
-            p_lab = sigmoid(logits)  # [n] ∈ (0,1)
+            # logits = mdl(X).float().detach().cpu().numpy()
 
-            # 2) 只降不升的温度缩放重标定
-            #    s' = min( s, s * (p_lab)^(1/temp) )
+            with torch.no_grad(), torch.amp.autocast('cuda', enabled=AMP):
+                logits = mdl(X)  # torch tensor
+            p_lab = torch.sigmoid(logits).cpu().numpy()
+
             scores_new = []
             for s, pl in zip(scores, p_lab):
                 s2 = float(s) * (float(pl) ** (1.0 / max(1e-6, temp)))
@@ -3017,41 +3018,6 @@ def stage_eval_post(cfg, det_post_file: Path = None, iouType: str = "bbox") -> D
     return summary
 
 
-def stage_grid_search(cfg,
-                      det_file: Path,
-                      node_mdl_p: Path,
-                      sub_ious=(0.60, 0.65, 0.70),
-                      temps=(1.5, 2.0, 2.5),
-                      alphas=(0.2, 0.3, 0.5),
-                      q_floor=0.5):
-    """
-    小网格搜索 s' = s^(1-α) * (q_T)^α, 并在 val 上评测。
-    需要：stage_infer_post 支持 alpha/temp/q_floor/sub_iou 参数。
-    产物：/outputs/grid_results.json, /outputs/grid_results.csv
-    """
-    import json, csv, time
-    out_json = cfg.paths.outputs_dir / "grid_results.json"
-    out_csv = cfg.paths.outputs_dir / "grid_results.csv"
-    results = []
-    for si in sub_ious:
-        for T in temps:
-            for a in alphas:
-                print(f"[grid] sub_iou={si}  temp={T}  alpha={a}  q_floor={q_floor}")
-                det_post = stage_infer_post(cfg, det_file, node_mdl_p,
-                                            sub_iou=si, temp=T, alpha=a, q_floor=q_floor)
-                metrics = stage_eval_post(cfg, det_post)
-                rec = {"sub_iou": si, "temp": T, "alpha": a, "q_floor": q_floor, **metrics}
-                results.append(rec)
-
-    # 保存
-    with open(out_json, "w") as f:
-        json.dump(results, f, indent=2)
-    with open(out_csv, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=list(results[0].keys()))
-        writer.writeheader();
-        writer.writerows(results)
-    print(f"[grid] wrote {out_json}\n[grid] wrote {out_csv}")
-    return out_csv
 
 
 def stage_check_detections(cfg, det_file: Path = None, sample_k: int = 24, iou_thr: float = 0.5) -> Path:
@@ -3473,7 +3439,94 @@ def stage_quick_eval(cfg, det_file: Path, iouType="bbox"):
     print("[quick_eval]", summary)
     return out
 
+def stage_grid(
+    cfg,
+    det_file: Path = None,
+    node_mdl: Path = None,
+    cand_sub = (0.45, 0.50, 0.55, 0.60),
+    cand_temp = (1.5, 2.0, 2.5, 3.0),
+    ar_drop_pp_max: float = 0.5,
+    save_csv: str = "grid_results.csv"
+) -> Path:
+    """
+    网格搜索后处理参数以最大化 mAP (AP@[.50:.95])，并约束 AR100 下降 ≤ ar_drop_pp_max。
+    结果保存到 /outputs/grid_results.csv，返回该 CSV 路径。
+    """
+    import csv, json
+    from pathlib import Path
 
+    if det_file is None:
+        det_file = cfg.paths.detections_dir / "detections.jsonl"
+    if node_mdl is None:
+        node_mdl = cfg.paths.models_dir / "grm_node_labelability.pt"
+
+    out_csv = cfg.paths.outputs_dir / save_csv
+    out_csv.parent.mkdir(parents=True, exist_ok=True)
+
+    # —— 评测 baseline（未后处理）——
+    print("[grid] evaluating baseline …")
+    base_metrics = stage_eval_post(cfg, det_file)   # 直接复用同一个 eval 入口
+    base_AP   = float(base_metrics.get("AP", 0.0))
+    base_AP75 = float(base_metrics.get("AP75", 0.0))
+    base_AR100= float(base_metrics.get("AR100", 0.0))
+    print(f"[grid] baseline  AP={base_AP:.3f}  AP75={base_AP75:.3f}  AR100={base_AR100:.3f}")
+
+    # —— 网格搜索 ——
+    rows = []
+    best = None  # (AP, AP75), record
+    for si in cand_sub:
+        for tp in cand_temp:
+            save_name = f"detections_post_s{si:.2f}_t{tp:.2f}.jsonl"
+            post_path = stage_infer_post(cfg, det_file, node_mdl, sub_iou=float(si), temp=float(tp), save_name=save_name)
+            metrics  = stage_eval_post(cfg, post_path)
+
+            rec = {
+                "sub_iou": float(si),
+                "temp": float(tp),
+                **{k: float(v) for k,v in metrics.items() if isinstance(v,(int,float))},
+            }
+            # 增加相对变化
+            rec["dAP"]    = rec.get("AP",0.0)    - base_AP
+            rec["dAP50"]  = rec.get("AP50",0.0)  - base_metrics.get("AP50",0.0)
+            rec["dAP75"]  = rec.get("AP75",0.0)  - base_AP75
+            rec["dAR100"] = rec.get("AR100",0.0) - base_AR100
+            rows.append(rec)
+
+            # 约束：AR100 不得下降超过 ar_drop_pp_max
+            if rec["dAR100"] < -ar_drop_pp_max/100.0:
+                print(f"[grid] skip (AR drop too big): sub_iou={si} temp={tp}  AR100={rec['AR100']:.3f}")
+                continue
+
+            key = (rec.get("AP",0.0), rec.get("AP75",0.0))
+            if best is None or key > best[0]:
+                best = (key, rec)
+
+            print(f"[grid] tried sub_iou={si:.2f} temp={tp:.2f}  →  AP={rec['AP']:.3f} (Δ{rec['dAP']:+.3f})  "
+                  f"AP75={rec['AP75']:.3f}  AR100={rec['AR100']:.3f} (Δ{rec['dAR100']:+.3f})")
+
+    # —— 写 CSV ——
+    if rows:
+        # 确定列顺序
+        cols = ["sub_iou","temp","AP","AP50","AP75","APs","APm","APl","AR1","AR10","AR100","ARs","ARm","ARl","dAP","dAP50","dAP75","dAR100"]
+        with open(out_csv, "w", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=cols)
+            w.writeheader()
+            for r in rows:
+                w.writerow({c: r.get(c,"") for c in cols})
+        print(f"[grid] wrote {out_csv}  rows={len(rows)}")
+    else:
+        print("[grid] no rows written (all filtered?)")
+
+    # —— 打印最优 ——
+    if best:
+        b = best[1]
+        print(f"[grid][BEST] sub_iou={b['sub_iou']:.2f}  temp={b['temp']:.2f}  "
+              f"AP={b['AP']:.3f} (Δ{b['dAP']:+.3f})  AP75={b['AP75']:.3f}  "
+              f"AR100={b['AR100']:.3f} (Δ{b['dAR100']:+.3f})")
+    else:
+        print("[grid] no feasible best under AR constraint")
+
+    return out_csv
 # ---------- CLI ----------
 def main():
     parser = argparse.ArgumentParser("GRM-COCO pipeline")
@@ -3540,8 +3593,8 @@ def main():
 
     if "grid" in steps:
         det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
-        node_m = artifacts.get("lab_mdl", cfg.paths.models_dir / "grm_node_labelability.pt")
-        artifacts["grid"] = stage_grid_search(cfg, det, node_m)
+        node = artifacts.get("node_mdl", cfg.paths.models_dir / "grm_node_labelability.pt")
+        artifacts["grid"] = stage_grid(cfg, det_file=det, node_mdl=node)
 
     if "infer_post" in steps:
         det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
