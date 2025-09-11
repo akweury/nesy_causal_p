@@ -1674,7 +1674,7 @@ def main():
         artifacts["grid"] = stage_grid(cfg, det_file=det, node_mdl=node)
 
     if "infer_post" in steps:
-        det = artifacts.get("det", cfg.paths.detections_dir / "detections_val.jsonl")
+        det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
         node_m = artifacts.get("lab_mdl", cfg.paths.models_dir / "grm_node_labelability.pt")
         # 可用命令行或环境变量传 sub_iou / temp；这里给默认
         artifacts["det_post"] = stage_infer_post(cfg, det, node_m, sub_iou=0.50, temp=1.2)
