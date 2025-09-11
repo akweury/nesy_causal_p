@@ -2916,109 +2916,85 @@ def _xyxy_to_xywh(b):
     return [float(x1), float(y1), float(max(0, x2 - x1)), float(max(0, y2 - y1))]
 
 
-def stage_eval_post(cfg, det_post_file: Path = None, iouType: str = "bbox") -> Dict[str, float]:
+def stage_eval_post(cfg, det_file: Path = None, save_name: str = "eval_detections_post.json") -> dict:
     """
-    评测风格化后的检测结果（s' = s*q(b) 之后）:
-      - 输入: detections_grm_post.jsonl（xyxy, class id, score）
-      - 输出: /outputs/eval_detections_grm_post.json (AP 指标)
-              /outputs/eval_detections_grm_post_per_class.json (每类AP)
+    评测 detections_post.jsonl（或任意 jsonl），优先使用 VAL 集：
+      - 环境变量优先：COCO_VAL_ANN / COCO_VAL_IMAGES
+      - 否则回退：cfg.paths.coco_annotations / cfg.paths.coco_images
+    输入：jsonl 每行 {image_id, boxes[xyxy], labels[cat_id], scores}
+    输出：返回指标 dict，并写入 /outputs/eval_*.json
     """
-    import json
-    import numpy as np
-    # shim for old pycocotools expecting np.float/np.int/np.bool
-    if not hasattr(np, "float"): np.float = float
-    if not hasattr(np, "int"):   np.int = int
-    if not hasattr(np, "bool"):  np.bool = bool
+    import os, json, numpy as np
+    from pathlib import Path
     from pycocotools.coco import COCO
     from pycocotools.cocoeval import COCOeval
 
-    if det_post_file is None:
-        det_post_file = cfg.paths.outputs_dir / "detections_grm_post.jsonl"
+    # numpy 兼容（pycocotools 部分版本需要）
+    if not hasattr(np, "float"):
+        np.float = float  # type: ignore[attr-defined]
 
-    # 1) jsonl -> COCO result list
+    if det_file is None:
+        det_file = cfg.paths.outputs_dir / "detections_post.jsonl"
+
+    # ====== 用 VAL 集（若提供）======
+    ann_val = os.getenv("COCO_VAL_ANN", "")
+    img_val = os.getenv("COCO_VAL_IMAGES", "")
+    if ann_val and Path(ann_val).exists():
+        ann_file = Path(ann_val)
+        img_root = Path(img_val) if img_val else cfg.paths.coco_images
+        print(f"[eval_post] use VAL ann: {ann_file}")
+    else:
+        ann_file = cfg.paths.coco_annotations
+        img_root = cfg.paths.coco_images
+        print(f"[eval_post] fallback TRAIN ann: {ann_file}")
+
+    # ====== 读取 GT / 构造 COCO results ======
+    coco = COCO(str(ann_file))
+    def xyxy_to_xywh(b):
+        x1,y1,x2,y2 = b
+        return [float(x1), float(y1), float(max(0.0, x2-x1)), float(max(0.0, y2-y1))]
+
     results = []
-    with open(det_post_file, "r") as f:
-        for L in f:
-            r = json.loads(L)
+    with open(det_file, "r") as fin:
+        for line in fin:
+            r = json.loads(line)
             img_id = int(r["image_id"])
-            boxes = r.get("boxes", [])
-            labels = r.get("labels", [])
-            scores = r.get("scores", [])
+            boxes  = r.get("boxes", []) or []
+            labels = r.get("labels", []) or []
+            scores = r.get("scores", []) or []
             for b, c, s in zip(boxes, labels, scores):
                 results.append({
                     "image_id": img_id,
-                    "category_id": int(c),
-                    "bbox": _xyxy_to_xywh(b),
+                    "category_id": int(c),         # 已是 COCO 稀疏 id
+                    "bbox": xyxy_to_xywh(b),       # COCO 要求 xywh
                     "score": float(s),
                 })
 
-    # 2) run COCO eval
-    cocoGt = COCO(str(cfg.paths.coco_annotations))
-    if len(results) == 0:
-        raise RuntimeError(f"[eval_post] no detections in {det_post_file}")
+    # 若没有结果，直接返回零分
+    if not results:
+        zeros = {"AP":0,"AP50":0,"AP75":0,"APs":0,"APm":0,"APl":0,
+                 "AR1":0,"AR10":0,"AR100":0,"ARs":0,"ARm":0,"ARl":0,
+                 "evaluated_images":0}
+        out_p = cfg.paths.outputs_dir / save_name
+        json.dump(zeros, open(out_p, "w"))
+        print(f"[eval_post] wrote {out_p}")
+        return zeros
 
-    cocoDt = cocoGt.loadRes(results)
-    E = COCOeval(cocoGt, cocoDt, iouType)
-    E.params.imgIds = sorted({r["image_id"] for r in results})
-    E.evaluate();
-    E.accumulate();
-    E.summarize()
+    coco_dt = coco.loadRes(results)
 
-    # 3) 汇总主指标
-    summary = {
-        "AP": float(E.stats[0]),
-        "AP50": float(E.stats[1]),
-        "AP75": float(E.stats[2]),
-        "APs": float(E.stats[3]),
-        "APm": float(E.stats[4]),
-        "APl": float(E.stats[5]),
-        "AR1": float(E.stats[6]),
-        "AR10": float(E.stats[7]),
-        "AR100": float(E.stats[8]),
-        "ARs": float(E.stats[9]),
-        "ARm": float(E.stats[10]),
-        "ARl": float(E.stats[11]),
-        "evaluated_images": len(E.params.imgIds),
-    }
-    out_sum = cfg.paths.outputs_dir / "eval_detections_grm_post.json"
-    with open(out_sum, "w") as f:
-        json.dump(summary, f, indent=2)
-    print(f"[eval_post] wrote {out_sum}")
-    print(f"[eval_post] {summary}")
+    # ====== 正式评测 ======
+    E = COCOeval(coco, coco_dt, iouType="bbox")
+    E.evaluate(); E.accumulate(); E.summarize()
 
-    # 4) 按类 AP（健壮版）
-    per_class = {}
-    cat_ids = sorted(list(cocoGt.cats.keys()))
-    for cid in cat_ids:
-        E_c = COCOeval(cocoGt, cocoDt, iouType)
-        E_c.params.imgIds = E.params.imgIds
-        E_c.params.catIds = [cid]
-        # 仅当该类有 det 或 GT 时再评
-        has_gt = len(cocoGt.getAnnIds(catIds=[cid], imgIds=E.params.imgIds)) > 0
-        has_dt = any(r["category_id"] == cid for r in results)
-        if not (has_gt and has_dt):
-            per_class[str(cid)] = {"name": cocoGt.cats[cid]["name"], "AP": 0.0, "AP50": 0.0, "AP75": 0.0}
-            continue
-        E_c.evaluate();
-        E_c.accumulate()
-        # 某些情况下仍可能没有 stats（比如 evalImgs 为空），加保护
-        if not hasattr(E_c, "stats") or E_c.stats is None or len(E_c.stats) < 3:
-            per_class[str(cid)] = {"name": cocoGt.cats[cid]["name"], "AP": 0.0, "AP50": 0.0, "AP75": 0.0}
-        else:
-            ap = 0.0 if np.isnan(E_c.stats[0]) else float(E_c.stats[0])
-            ap50 = 0.0 if np.isnan(E_c.stats[1]) else float(E_c.stats[1])
-            ap75 = 0.0 if np.isnan(E_c.stats[2]) else float(E_c.stats[2])
-            per_class[str(cid)] = {"name": cocoGt.cats[cid]["name"], "AP": ap, "AP50": ap50, "AP75": ap75}
+    stats = E.stats  # 12 维
+    keys = ["AP","AP50","AP75","APs","APm","APl","AR1","AR10","AR100","ARs","ARm","ARl"]
+    metrics = {k: float(v) for k, v in zip(keys, stats)}
+    metrics["evaluated_images"] = int(len(coco.getImgIds()))
 
-    out_pc = cfg.paths.outputs_dir / "eval_detections_grm_post_per_class.json"
-    with open(out_pc, "w") as f:
-        json.dump(per_class, f, indent=2)
-    print(f"[eval_post] wrote {out_pc}")
-
-    return summary
-
-
-
+    out_p = cfg.paths.outputs_dir / save_name
+    json.dump(metrics, open(out_p, "w"))
+    print(f"[eval_post] wrote {out_p}")
+    return metrics
 
 def stage_check_detections(cfg, det_file: Path = None, sample_k: int = 24, iou_thr: float = 0.5) -> Path:
     """
