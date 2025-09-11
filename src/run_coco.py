@@ -3676,7 +3676,7 @@ def main():
         artifacts["labset"] = stage_build_labelability_trainset(cfg, det)
 
     if "train_label" in steps:
-        labset = artifacts.get("labset", cfg.paths.outputs_dir / "labelability_train.npz")
+        labset = artifacts.get("labset", cfg.paths.outputs_dir / "labelability_train_semctx.npz")
         artifacts["node_mdl"] = stage_train_labelability(cfg, labset)
 
     if "grid" in steps:
