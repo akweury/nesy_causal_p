@@ -2938,69 +2938,97 @@ def _xyxy_to_xywh(b):
     return [float(x1), float(y1), float(max(0, x2 - x1)), float(max(0, y2 - y1))]
 
 
+
+
 def stage_eval_post(cfg, det_file: Path = None, save_name: str = "eval_detections_post.json") -> dict:
     """
-    评测 detection 结果（支持 train/val 区分）
-    - det_file: 指定检测结果文件（train= detections.jsonl, val= detections_val.jsonl）
-    - ann/val 路径优先从环境变量 COCO_VAL_ANN / COCO_VAL_IMAGES 读取
+    评测 detection/post 结果（jsonl: {image_id, boxes[xyxy], labels[cat_id], scores}）
+    - 自动按 det_file 名称选择 ann（文件名含“val”→ val2017，否则 train2017）
+    - 若仍与 COCO 集不匹配，自动在 train/val 之间切换到匹配的那套 ann
+    - 写出 /outputs/{save_name} 并返回 metrics 字典
     """
-    import os, json, numpy as np
+    import os, json, itertools, numpy as np
     from pathlib import Path
     from pycocotools.coco import COCO
     from pycocotools.cocoeval import COCOeval
 
-    # numpy 兼容性
+    # numpy 兼容（pycocotools 旧版使用 np.float）
     if not hasattr(np, "float"):
         np.float = float  # type: ignore[attr-defined]
 
-    # === 选择 detection 文件 ===
+    # ---- 选择 detection 文件 ----
     if det_file is None:
-        # 优先 val 的结果
-        val_det = cfg.paths.outputs_dir / "detections_val.jsonl"
-        train_det = cfg.paths.outputs_dir / "detections.jsonl"
-        if val_det.exists():
-            det_file = val_det
-            print(f"[eval_post] use VAL detections: {det_file}")
-        else:
-            det_file = train_det
-            print(f"[eval_post] fallback TRAIN detections: {det_file}")
+        det_file = cfg.paths.outputs_dir / "detections_val.jsonl"
+    det_file = Path(det_file)
+    use_val_hint = ("val" in det_file.stem.lower()) or ("val" in det_file.name.lower())
 
-    # === 选择标注文件 ===
-    ann_val = os.getenv("COCO_VAL_ANN", "")
-    img_val = os.getenv("COCO_VAL_IMAGES", "")
-    if ann_val and Path(ann_val).exists():
-        ann_file = Path(ann_val)
-        img_root = Path(img_val) if img_val else cfg.paths.coco_images
-        print(f"[eval_post] use VAL ann: {ann_file}")
-    else:
-        ann_file = cfg.paths.coco_annotations
-        img_root = cfg.paths.coco_images
-        print(f"[eval_post] fallback TRAIN ann: {ann_file}")
+    # ---- 可用的 ann 路径 ----
+    ann_train = Path(cfg.paths.coco_annotations)
+    ann_val_env = os.getenv("COCO_VAL_ANN", "")
+    ann_val = Path(ann_val_env) if ann_val_env and Path(ann_val_env).exists() else None
 
+    # 先按文件名 hint 选 ann
+    ann_file = ann_val if (use_val_hint and ann_val is not None) else ann_train
     coco = COCO(str(ann_file))
 
+    # ---- 先抽样读取 det 的 image_id，判断是否与当前 COCO 集匹配 ----
+    def ids_match(sample_img_ids, coco_obj):
+        ids = set(sample_img_ids)
+        coco_ids = set(coco_obj.getImgIds())
+        if not ids: return False
+        hit = len(ids & coco_ids) / len(ids)
+        return hit >= 0.9  # 90% 以上在集合内
+
+    sample_img_ids = []
+    with open(det_file, "r") as fin:
+        for line in itertools.islice(fin, 5000):
+            r = json.loads(line)
+            sample_img_ids.append(int(r["image_id"]))
+
+    # 若不匹配且另一套 ann 存在，则自动切换
+    if not ids_match(sample_img_ids, coco) and ann_val is not None:
+        alt = COCO(str(ann_val if ann_file == ann_train else ann_train))
+        if ids_match(sample_img_ids, alt):
+            coco = alt
+            ann_file = ann_val if ann_file == ann_train else ann_train
+            print(f"[eval_post] auto-switched ann to: {ann_file}")
+        else:
+            print("[eval_post][warn] sample image_ids match neither train nor val ann; proceeding with current ann.")
+
+    # ---- 读取 det_file 并构造 COCO results ----
     def xyxy_to_xywh(b):
-        x1, y1, x2, y2 = b
-        return [float(x1), float(y1), float(max(0.0, x2-x1)), float(max(0.0, y2-y1))]
+        x1, y1, x2, y2 = float(b[0]), float(b[1]), float(b[2]), float(b[3])
+        return [x1, y1, max(0.0, x2 - x1), max(0.0, y2 - y1)]
 
     results = []
     with open(det_file, "r") as fin:
         for line in fin:
             r = json.loads(line)
             img_id = int(r["image_id"])
-            for b, c, s in zip(r["boxes"], r["labels"], r["scores"]):
+            boxes  = r.get("boxes", []) or []
+            labels = r.get("labels", []) or []
+            scores = r.get("scores", []) or []
+            for b, c, s in zip(boxes, labels, scores):
                 results.append({
                     "image_id": img_id,
-                    "category_id": int(c),
-                    "bbox": xyxy_to_xywh(b),
+                    "category_id": int(c),      # COCO 稀疏 id
+                    "bbox": xyxy_to_xywh(b),    # COCO 要求 xywh
                     "score": float(s),
                 })
 
     if not results:
-        print("[eval_post] no detections to evaluate")
-        return {}
+        zeros = {"AP":0,"AP50":0,"AP75":0,"APs":0,"APm":0,"APl":0,
+                 "AR1":0,"AR10":0,"AR100":0,"ARs":0,"ARm":0,"ARl":0,
+                 "evaluated_images":0}
+        out_p = cfg.paths.outputs_dir / save_name
+        out_p.parent.mkdir(parents=True, exist_ok=True)
+        json.dump(zeros, open(out_p, "w"))
+        print(f"[eval_post] wrote {out_p} (empty results)")
+        return zeros
 
     coco_dt = coco.loadRes(results)
+
+    # ---- 正式评测 ----
     E = COCOeval(coco, coco_dt, iouType="bbox")
     E.evaluate(); E.accumulate(); E.summarize()
 
@@ -3009,9 +3037,13 @@ def stage_eval_post(cfg, det_file: Path = None, save_name: str = "eval_detection
     metrics["evaluated_images"] = int(len(coco.getImgIds()))
 
     out_p = cfg.paths.outputs_dir / save_name
+    out_p.parent.mkdir(parents=True, exist_ok=True)
     json.dump(metrics, open(out_p, "w"))
     print(f"[eval_post] wrote {out_p}")
     return metrics
+
+
+
 def stage_check_detections(cfg, det_file: Path = None, sample_k: int = 24, iou_thr: float = 0.5) -> Path:
     """
     检查 detections.jsonl 的正确性：
