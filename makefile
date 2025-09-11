@@ -32,7 +32,7 @@ run-docker:
 	  -e COCO_ANN=/coco_2017/selected/annotations/instances_train2017.json \
 	  -e WORK_DIR=/grm_output/run \
 	  -e DEVICE=cuda:$(GPU_ID) \
-	  -e NUM_WORKERS=8 \
+	  -e NUM_WORKERS=4 \
 	  -e MAX_IMAGES="$(MAX_IMAGES)" \
 	  $(IMAGE) \
 	  python -m src.run_coco --steps $(STEPS) --remote --t_intra 0.75 --t_inter 0.5
