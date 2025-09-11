@@ -1524,12 +1524,28 @@ def stage_infer_post(cfg, det_file: Path, node_mdl_p: Path,
 
         dets = rec.get("detections", [])
         # 统一成 [x,y,w,h,score,cat]
+        # 统一成 [x,y,w,h,score,cat]
         boxes_all = []
         for d in dets:
-            x,y,w,h = d["bbox"]
-            s = float(d.get("score", 0.0))
-            c = int(d.get("category_id", 0))
-            boxes_all.append([x,y,w,h,s,c])
+            if isinstance(d, dict):
+                # COCO 风格
+                x, y, w, h = d["bbox"]
+                s = float(d.get("score", 0.0))
+                c = int(d.get("category_id", 0))
+            else:
+                # 数组/列表风格: [x,y,w,h,score,cat] 或 [x,y,w,h] / [x,y,w,h,score]
+                arr = list(d)
+                if len(arr) >= 6:
+                    x, y, w, h, s, c = arr[:6]
+                elif len(arr) == 5:
+                    x, y, w, h, s = arr
+                    c = 0
+                elif len(arr) == 4:
+                    x, y, w, h = arr
+                    s, c = 0.0, 0
+                else:
+                    continue
+            boxes_all.append([float(x), float(y), float(w), float(h), float(s), int(c)])
 
         total_boxes += len(boxes_all)
         if total_imgs == 1:
@@ -1606,6 +1622,12 @@ def stage_infer_post(cfg, det_file: Path, node_mdl_p: Path,
 
     print(f"[infer_post] wrote {out_p}  boxes={total_boxes}  changed_imgs={changed_imgs}  subsumed={subsumed_cnt}  sub_iou={sub_iou}  temp={T_use}")
     return out_p
+
+
+
+
+
+
 # ---------- CLI ----------
 def main():
     parser = argparse.ArgumentParser("GRM-COCO pipeline")
