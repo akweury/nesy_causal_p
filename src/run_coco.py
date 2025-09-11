@@ -141,7 +141,7 @@ def dump_top_pairs(graph_path, model_path, cfg, K=5, samples=3):
 def stage_detect(cfg,
                  batch_size: int = 2,
                  score_thr: float = 0.001,
-                 print_every: int = 50) -> Path:
+                 print_every: int = 50, split="train") -> Path:
     """
     运行 FasterRCNN-ResNet50-FPN（预训练）在 cfg.paths.coco_images/annotations 上推理：
       - 输出: detections.jsonl（像素级 xyxy，labels=COCO 稀疏 category_id，scores）
@@ -160,14 +160,31 @@ def stage_detect(cfg,
 
     out_dir = cfg.paths.detections_dir
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_file = out_dir / "detections.jsonl"
+
+    if split=="train":
+        out_file = out_dir / "detections.jsonl"
+    elif split == "val":
+        out_file = out_dir / "detections_val.jsonl"
+    else:
+        raise ValueError(f"Unknown split: {split}")
+
+
     if out_file.exists():
         print(f"[detect] reuse {out_file}")
         return out_file
 
     # ---- 路径与 split 校验 ----
-    img_root = Path(cfg.paths.coco_images)
-    ann_file = Path(cfg.paths.coco_annotations)
+
+    if split=="train":
+        img_root = Path(cfg.paths.coco_images)
+        ann_file = Path(cfg.paths.coco_annotations)
+    elif split == "val":
+        img_root = Path(cfg.paths.coco_images_val)
+        ann_file = Path(cfg.paths.coco_annotations_val)
+
+    else:
+        raise ValueError(f"Unknown split: {split}")
+
     assert img_root.exists(), f"COCO_IMAGES not found: {img_root}"
     assert ann_file.exists(), f"COCO_ANN not found: {ann_file}"
     coco = COCO(str(ann_file))
@@ -2252,12 +2269,12 @@ def _logit_clip(p, eps=1e-6):
 
 
 def stage_infer_post(
-    cfg,
-    det_file: Path = None,
-    node_mdl_p: Path = None,
-    sub_iou: float = 0.65,
-    temp: float = 2.0,
-    save_name: str = "detections_post.jsonl"
+        cfg,
+        det_file: Path = None,
+        node_mdl_p: Path = None,
+        sub_iou: float = 0.65,
+        temp: float = 2.0,
+        save_name: str = "detections_post.jsonl"
 ) -> Path:
     """
     Labelability 后处理（不新增检测，只重排/降权）：
@@ -2283,19 +2300,24 @@ def stage_infer_post(
     out.parent.mkdir(parents=True, exist_ok=True)
 
     # ---------- 工具 ----------
-    def _area(b): return max(0., b[2]-b[0]) * max(0., b[3]-b[1])
-    def _iou(a,b):
-        x1=max(a[0],b[0]); y1=max(a[1],b[1])
-        x2=min(a[2],b[2]); y2=min(a[3],b[3])
-        inter=max(0., x2-x1)*max(0., y2-y1)
-        return inter / max(1e-8, _area(a)+_area(b)-inter)
+    def _area(b):
+        return max(0., b[2] - b[0]) * max(0., b[3] - b[1])
 
-    def sigmoid(x): return 1.0 / (1.0 + np.exp(-x))
+    def _iou(a, b):
+        x1 = max(a[0], b[0]);
+        y1 = max(a[1], b[1])
+        x2 = min(a[2], b[2]);
+        y2 = min(a[3], b[3])
+        inter = max(0., x2 - x1) * max(0., y2 - y1)
+        return inter / max(1e-8, _area(a) + _area(b) - inter)
+
+    def sigmoid(x):
+        return 1.0 / (1.0 + np.exp(-x))
 
     # ---------- 定义模型（需与训练一致） ----------
     import torch.nn as nn
     class LabelabilityMLP(nn.Module):
-        def __init__(self, in_dim: int, hidden: list[int] = [64,64], act: str = "relu"):
+        def __init__(self, in_dim: int, hidden: list[int] = [64, 64], act: str = "relu"):
             super().__init__()
             act_layer = nn.ReLU if act == "relu" else nn.GELU
             layers = []
@@ -2305,12 +2327,13 @@ def stage_infer_post(
                 last = h
             layers += [nn.Linear(last, 1)]
             self.net = nn.Sequential(*layers)
+
         def forward(self, x):  # x:[N,D]
-            return self.net(x).squeeze(-1)   # logits:[N]
+            return self.net(x).squeeze(-1)  # logits:[N]
 
     # ---------- 读取 ckpt（优先 meta；否则从 state_dict 反推结构） ----------
     ckpt = torch.load(node_mdl_p, map_location=cfg.device, weights_only=False)
-    sd   = ckpt.get("state_dict", ckpt)
+    sd = ckpt.get("state_dict", ckpt)
     meta = ckpt.get("meta", {})
 
     def rebuild_from_state_dict(sd):
@@ -2327,8 +2350,8 @@ def stage_infer_post(
         return in_dim, (hidden if hidden else [64])
 
     if meta and "in_dim" in meta:
-        in_dim  = int(meta["in_dim"])
-        hidden  = list(meta.get("hidden", [64,64]))
+        in_dim = int(meta["in_dim"])
+        hidden = list(meta.get("hidden", [64, 64]))
     else:
         in_dim, hidden = rebuild_from_state_dict(sd)
 
@@ -2350,7 +2373,7 @@ def stage_infer_post(
         for line in fin:
             r = json.loads(line)
             img_id = int(r["image_id"])
-            boxes  = r.get("boxes", []) or []
+            boxes = r.get("boxes", []) or []
             labels = r.get("labels", []) or []
             scores = r.get("scores", []) or []
             n = len(boxes)
@@ -2408,7 +2431,6 @@ def stage_infer_post(
     print(f"[infer_post] wrote {out}  boxes={total_boxes}  changed_imgs={changed}  "
           f"subsumed={subsumed_cnt}  sub_iou={sub_iou}  temp={temp}")
     return out
-
 
 
 def stage_infer_groups(cfg, model_file: Path, det_file: Path, tau: float = None) -> Path:
@@ -2918,25 +2940,32 @@ def _xyxy_to_xywh(b):
 
 def stage_eval_post(cfg, det_file: Path = None, save_name: str = "eval_detections_post.json") -> dict:
     """
-    评测 detections_post.jsonl（或任意 jsonl），优先使用 VAL 集：
-      - 环境变量优先：COCO_VAL_ANN / COCO_VAL_IMAGES
-      - 否则回退：cfg.paths.coco_annotations / cfg.paths.coco_images
-    输入：jsonl 每行 {image_id, boxes[xyxy], labels[cat_id], scores}
-    输出：返回指标 dict，并写入 /outputs/eval_*.json
+    评测 detection 结果（支持 train/val 区分）
+    - det_file: 指定检测结果文件（train= detections.jsonl, val= detections_val.jsonl）
+    - ann/val 路径优先从环境变量 COCO_VAL_ANN / COCO_VAL_IMAGES 读取
     """
     import os, json, numpy as np
     from pathlib import Path
     from pycocotools.coco import COCO
     from pycocotools.cocoeval import COCOeval
 
-    # numpy 兼容（pycocotools 部分版本需要）
+    # numpy 兼容性
     if not hasattr(np, "float"):
         np.float = float  # type: ignore[attr-defined]
 
+    # === 选择 detection 文件 ===
     if det_file is None:
-        det_file = cfg.paths.outputs_dir / "detections_post.jsonl"
+        # 优先 val 的结果
+        val_det = cfg.paths.outputs_dir / "detections_val.jsonl"
+        train_det = cfg.paths.outputs_dir / "detections.jsonl"
+        if val_det.exists():
+            det_file = val_det
+            print(f"[eval_post] use VAL detections: {det_file}")
+        else:
+            det_file = train_det
+            print(f"[eval_post] fallback TRAIN detections: {det_file}")
 
-    # ====== 用 VAL 集（若提供）======
+    # === 选择标注文件 ===
     ann_val = os.getenv("COCO_VAL_ANN", "")
     img_val = os.getenv("COCO_VAL_IMAGES", "")
     if ann_val and Path(ann_val).exists():
@@ -2948,53 +2977,44 @@ def stage_eval_post(cfg, det_file: Path = None, save_name: str = "eval_detection
         img_root = cfg.paths.coco_images
         print(f"[eval_post] fallback TRAIN ann: {ann_file}")
 
-    # ====== 读取 GT / 构造 COCO results ======
     coco = COCO(str(ann_file))
+
     def xyxy_to_xywh(b):
-        x1,y1,x2,y2 = b
-        return [float(x1), float(y1), float(max(0.0, x2-x1)), float(max(0.0, y2-y1))]
+        x1, y1, x2, y2 = b
+        return [float(x1), float(y1), float(max(0.0, x2 - x1)), float(max(0.0, y2 - y1))]
 
     results = []
     with open(det_file, "r") as fin:
         for line in fin:
             r = json.loads(line)
             img_id = int(r["image_id"])
-            boxes  = r.get("boxes", []) or []
-            labels = r.get("labels", []) or []
-            scores = r.get("scores", []) or []
-            for b, c, s in zip(boxes, labels, scores):
+            for b, c, s in zip(r["boxes"], r["labels"], r["scores"]):
                 results.append({
                     "image_id": img_id,
-                    "category_id": int(c),         # 已是 COCO 稀疏 id
-                    "bbox": xyxy_to_xywh(b),       # COCO 要求 xywh
+                    "category_id": int(c),
+                    "bbox": xyxy_to_xywh(b),
                     "score": float(s),
                 })
 
-    # 若没有结果，直接返回零分
     if not results:
-        zeros = {"AP":0,"AP50":0,"AP75":0,"APs":0,"APm":0,"APl":0,
-                 "AR1":0,"AR10":0,"AR100":0,"ARs":0,"ARm":0,"ARl":0,
-                 "evaluated_images":0}
-        out_p = cfg.paths.outputs_dir / save_name
-        json.dump(zeros, open(out_p, "w"))
-        print(f"[eval_post] wrote {out_p}")
-        return zeros
+        print("[eval_post] no detections to evaluate")
+        return {}
 
     coco_dt = coco.loadRes(results)
-
-    # ====== 正式评测 ======
     E = COCOeval(coco, coco_dt, iouType="bbox")
-    E.evaluate(); E.accumulate(); E.summarize()
+    E.evaluate();
+    E.accumulate();
+    E.summarize()
 
-    stats = E.stats  # 12 维
-    keys = ["AP","AP50","AP75","APs","APm","APl","AR1","AR10","AR100","ARs","ARm","ARl"]
-    metrics = {k: float(v) for k, v in zip(keys, stats)}
+    keys = ["AP", "AP50", "AP75", "APs", "APm", "APl", "AR1", "AR10", "AR100", "ARs", "ARm", "ARl"]
+    metrics = {k: float(v) for k, v in zip(keys, E.stats)}
     metrics["evaluated_images"] = int(len(coco.getImgIds()))
 
     out_p = cfg.paths.outputs_dir / save_name
     json.dump(metrics, open(out_p, "w"))
     print(f"[eval_post] wrote {out_p}")
     return metrics
+
 
 def stage_check_detections(cfg, det_file: Path = None, sample_k: int = 24, iou_thr: float = 0.5) -> Path:
     """
@@ -3415,14 +3435,15 @@ def stage_quick_eval(cfg, det_file: Path, iouType="bbox"):
     print("[quick_eval]", summary)
     return out
 
+
 def stage_grid(
-    cfg,
-    det_file: Path = None,
-    node_mdl: Path = None,
-    cand_sub = (0.45, 0.50, 0.55, 0.60),
-    cand_temp = (1.5, 2.0, 2.5, 3.0),
-    ar_drop_pp_max: float = 0.5,
-    save_csv: str = "grid_results.csv"
+        cfg,
+        det_file: Path = None,
+        node_mdl: Path = None,
+        cand_sub=(0.45, 0.50, 0.55, 0.60),
+        cand_temp=(1.5, 2.0, 2.5, 3.0),
+        ar_drop_pp_max: float = 0.5,
+        save_csv: str = "grid_results.csv"
 ) -> Path:
     """
     网格搜索后处理参数以最大化 mAP (AP@[.50:.95])，并约束 AR100 下降 ≤ ar_drop_pp_max。
@@ -3441,10 +3462,10 @@ def stage_grid(
 
     # —— 评测 baseline（未后处理）——
     print("[grid] evaluating baseline …")
-    base_metrics = stage_eval_post(cfg, det_file)   # 直接复用同一个 eval 入口
-    base_AP   = float(base_metrics.get("AP", 0.0))
+    base_metrics = stage_eval_post(cfg, det_file)  # 直接复用同一个 eval 入口
+    base_AP = float(base_metrics.get("AP", 0.0))
     base_AP75 = float(base_metrics.get("AP75", 0.0))
-    base_AR100= float(base_metrics.get("AR100", 0.0))
+    base_AR100 = float(base_metrics.get("AR100", 0.0))
     print(f"[grid] baseline  AP={base_AP:.3f}  AP75={base_AP75:.3f}  AR100={base_AR100:.3f}")
 
     # —— 网格搜索 ——
@@ -3454,26 +3475,26 @@ def stage_grid(
         for tp in cand_temp:
             save_name = f"detections_post_s{si:.2f}_t{tp:.2f}.jsonl"
             post_path = stage_infer_post(cfg, det_file, node_mdl, sub_iou=float(si), temp=float(tp), save_name=save_name)
-            metrics  = stage_eval_post(cfg, post_path)
+            metrics = stage_eval_post(cfg, post_path)
 
             rec = {
                 "sub_iou": float(si),
                 "temp": float(tp),
-                **{k: float(v) for k,v in metrics.items() if isinstance(v,(int,float))},
+                **{k: float(v) for k, v in metrics.items() if isinstance(v, (int, float))},
             }
             # 增加相对变化
-            rec["dAP"]    = rec.get("AP",0.0)    - base_AP
-            rec["dAP50"]  = rec.get("AP50",0.0)  - base_metrics.get("AP50",0.0)
-            rec["dAP75"]  = rec.get("AP75",0.0)  - base_AP75
-            rec["dAR100"] = rec.get("AR100",0.0) - base_AR100
+            rec["dAP"] = rec.get("AP", 0.0) - base_AP
+            rec["dAP50"] = rec.get("AP50", 0.0) - base_metrics.get("AP50", 0.0)
+            rec["dAP75"] = rec.get("AP75", 0.0) - base_AP75
+            rec["dAR100"] = rec.get("AR100", 0.0) - base_AR100
             rows.append(rec)
 
             # 约束：AR100 不得下降超过 ar_drop_pp_max
-            if rec["dAR100"] < -ar_drop_pp_max/100.0:
+            if rec["dAR100"] < -ar_drop_pp_max / 100.0:
                 print(f"[grid] skip (AR drop too big): sub_iou={si} temp={tp}  AR100={rec['AR100']:.3f}")
                 continue
 
-            key = (rec.get("AP",0.0), rec.get("AP75",0.0))
+            key = (rec.get("AP", 0.0), rec.get("AP75", 0.0))
             if best is None or key > best[0]:
                 best = (key, rec)
 
@@ -3483,12 +3504,12 @@ def stage_grid(
     # —— 写 CSV ——
     if rows:
         # 确定列顺序
-        cols = ["sub_iou","temp","AP","AP50","AP75","APs","APm","APl","AR1","AR10","AR100","ARs","ARm","ARl","dAP","dAP50","dAP75","dAR100"]
+        cols = ["sub_iou", "temp", "AP", "AP50", "AP75", "APs", "APm", "APl", "AR1", "AR10", "AR100", "ARs", "ARm", "ARl", "dAP", "dAP50", "dAP75", "dAR100"]
         with open(out_csv, "w", newline="") as f:
             w = csv.DictWriter(f, fieldnames=cols)
             w.writeheader()
             for r in rows:
-                w.writerow({c: r.get(c,"") for c in cols})
+                w.writerow({c: r.get(c, "") for c in cols})
         print(f"[grid] wrote {out_csv}  rows={len(rows)}")
     else:
         print("[grid] no rows written (all filtered?)")
@@ -3503,6 +3524,8 @@ def stage_grid(
         print("[grid] no feasible best under AR constraint")
 
     return out_csv
+
+
 # ---------- CLI ----------
 def main():
     parser = argparse.ArgumentParser("GRM-COCO pipeline")

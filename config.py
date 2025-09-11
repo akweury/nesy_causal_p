@@ -191,6 +191,8 @@ class Paths:
     graphs_dir: Path
     models_dir: Path
     outputs_dir: Path
+    coco_images_val: Path
+    coco_annotations_val: Path
 
 
 @dataclass
@@ -226,13 +228,20 @@ def load_config() -> Config:
     co_img = os.getenv("COCO_IMAGES")
     co_ann = os.getenv("COCO_ANN")
 
+    co_img_val = os.getenv("COCO_VAL_IMAGES")
+    co_ann_val = os.getenv("COCO_VAL_ANN")
+
+
     coco_images = Path(co_img) if co_img else base["data_root"] / "coco" / "images" / "train2017"
     coco_annotations = Path(co_ann) if co_ann else base["data_root"] / "coco" / "annotations" / "instances_train2017.json"
-
+    coco_images_val = Path(co_img_val) if co_img_val else base["data_root"] / "coco" / "images" / "val2017"
+    coco_annotations_val = Path(co_ann_val) if co_ann_val else base["data_root"] / "coco" / "annotations" / "instances_val2017.json"
     paths = Paths(
         data_root=base["data_root"],
         coco_images=coco_images,
         coco_annotations=coco_annotations,
+        coco_images_val=coco_images_val,
+        coco_annotations_val=coco_annotations_val,
         work_dir=work,
         detections_dir=work / "detections",
         graphs_dir=work / "graphs",
