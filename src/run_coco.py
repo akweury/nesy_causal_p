@@ -2503,126 +2503,74 @@ def _build_semctx_features(boxes, W, H, K=91, Kc=10, Kn=10):
 
 # ===================== main stage =====================
 
-def stage_infer_post(cfg, det_file: Path, node_mdl_p: Path,
-                     topk=300, sub_iou=0.65, temp=None, keep_json_fields=("image_id", "category_id", "bbox", "score")):
-    """
-    使用 labelability 模型对检测结果做后处理：
-      - 只作用于每图 Top-K；
-      - 与训练一致构造 几何+语义上下文 特征；
-      - logits / T 取 sigmoid 得 p_lab；
-      - 重新打分：score *= p_lab^(1/T)（可在你处再加低置信衰减等规则）；
-      - 可选删除“被大框完全覆盖的小框”（subsumed by IoU）。
-    """
-    det_file = Path(det_file)
-    node_mdl_p = Path(node_mdl_p)
-    assert det_file.exists(), f"not found: {det_file}"
-    assert node_mdl_p.exists(), f"not found: {node_mdl_p}"
+def stage_infer_post(cfg, det_file, node_mdl_p, sub_iou=0.5, temp=1.0, topk=300):
+    print(f"[infer_post] loading detections from {det_file}")
+    dets = [json.loads(line) for line in open(det_file)]
+    print(f"[infer_post] total dets loaded: {len(dets)}")
 
-    # 载入模型 & 温度
+    print(f"[infer_post] loading node model from {node_mdl_p}")
     ckpt = torch.load(node_mdl_p, map_location=cfg.device)
-    mdl, meta = _build_node_model_from_ckpt(ckpt, cfg.device);
-    mdl.eval()
-    T_use = _load_temperature(cfg, override=temp)
-    print(f"[infer_post] loaded node model: {meta}  | temperature={T_use:.2f}  | topk={topk}")
+    sd = ckpt["state_dict"] if "state_dict" in ckpt else ckpt
+    meta = ckpt.get("meta", {})
+    print(f"[infer_post] node model meta: {meta}")
 
-    # 读 detections.jsonl
-    out_lines = []
-    changed_imgs, subsumed_cnt, total_boxes = 0, 0, 0
+    in_dim = meta.get("Dg", 5)
+    K = meta.get("K", 91)
+    d = meta.get("d", 64)
+    mdl = LabelabilityMLP(in_dim=in_dim, n_classes=K, d=d)
+    mdl.load_state_dict(sd, strict=False)
+    mdl.to(cfg.device).eval()
 
-    # 如果有 val 的尺寸信息，可选读取；否则用 bbox 相对尺度即可
-    # 这里从结果里推不出图尺寸，特征只用归一化/相对比率，不依赖原始宽高
-    # 若你已存 image_w/h，可在 JSONL 里一起读出替换 W,H
+    kept, subsumed, changed_imgs = [], 0, set()
+    for i, det in enumerate(dets):
+        boxes = det.get("boxes", [])
+        labels = det.get("labels", [])
+        if not boxes:
+            continue
 
-    with open(det_file, "r") as f:
-        for li, line in enumerate(f):
-            rec = json.loads(line)
-            img_id = rec["image_id"]
-            W = rec.get("width", 1)  # 无则设 1（归一化相对值）
-            H = rec.get("height", 1)
+        if i % 1000 == 0:
+            print(f"[infer_post] processing {i}/{len(dets)}  boxes={len(boxes)}")
 
-            dets = rec.get("detections", [])  # list of dicts
-            # -> boxes: [x,y,w,h,score,cat]
-            boxes_all = []
-            for d in dets:
-                x, y, w, h = d["bbox"]
-                s = float(d.get("score", 0.0))
-                c = int(d.get("category_id", 0))
-                boxes_all.append([x, y, w, h, s, c])
+        # ==== debug: 看前几张图的原始输入 ====
+        if i < 3:
+            print(f"[infer_post][debug] img {det.get('image_id')} first_box={boxes[0]} label={labels[0]}")
 
-            total_boxes += len(boxes_all)
-            if len(boxes_all) == 0:
-                out_lines.append(line);
-                continue
+        # === 简化的特征构造（几何特征 + 类别 onehot） ===
+        X_geo = []
+        for box, label in zip(boxes, labels):
+            x, y, w, h = box
+            area = w * h
+            aspect = w / (h + 1e-6)
+            X_geo.append([x, y, w, h, area, aspect])
+        X_geo = torch.tensor(X_geo, dtype=torch.float32, device=cfg.device)
 
-            # 每图 Top-K（按 score）
-            boxes_all.sort(key=lambda b: b[4], reverse=True)
-            boxes_top = boxes_all[:min(topk, len(boxes_all))]
+        # 类别 onehot
+        X_cat = torch.zeros(len(labels), K, device=cfg.device)
+        for j, cid in enumerate(labels):
+            if cid < K:
+                X_cat[j, cid] = 1.0
 
-            # 构造语义上下文特征（与训练一致）
-            geo, cid, ctx_ids, ctx_ws, nb_ids, nb_ws = _build_semctx_features(boxes_top, W, H, K=meta.get("K", 91))
-            # 前向得 logits → prob（带温度）
-            AMP = cfg.device.startswith("cuda")
-            with torch.no_grad(), torch.amp.autocast('cuda', enabled=AMP):
-                if meta["type"] == "sem":
-                    # 转 tensor
-                    geo_t = torch.tensor(geo, dtype=torch.float32, device=cfg.device)
-                    cid_t = torch.tensor(cid, dtype=torch.int64, device=cfg.device)
-                    ctxi_t = torch.tensor(ctx_ids, dtype=torch.int64, device=cfg.device)
-                    ctxw_t = torch.tensor(ctx_ws, dtype=torch.float32, device=cfg.device)
-                    nbi_t = torch.tensor(nb_ids, dtype=torch.int64, device=cfg.device)
-                    nbw_t = torch.tensor(nb_ws, dtype=torch.float32, device=cfg.device)
-                    logits = mdl(geo_t, cid_t, ctxi_t, ctxw_t, nbi_t, nbw_t).float().cpu().numpy()
-                else:
-                    geo_t = torch.tensor(geo, dtype=torch.float32, device=cfg.device)
-                    logits = mdl(geo_t).float().cpu().numpy()
+        # 拼接
+        X = torch.cat([X_geo, X_cat], dim=1)
 
-            logits = logits / float(T_use)
-            p_lab = _sigmoid(logits)
+        with torch.no_grad():
+            logits = mdl(X) / temp
+            probs = torch.sigmoid(logits).cpu().numpy()
 
-            # 重新打分（你可以替换为更保守/激进的策略）
-            # 这里采用：score' = score * p_lab^(1/T_use)
-            for i, b in enumerate(boxes_top):
-                b[4] = float(b[4] * (p_lab[i] ** (1.0 / float(T_use))))
+        if i < 3:  # 仅前几张打印
+            print(f"[infer_post][debug] logits shape={logits.shape} probs[0:5]={probs[:5]}")
 
-            changed_imgs += 1
+        # TODO subsume 逻辑
+        kept.append(det)
 
-            # 可选：移除被大框“覆盖”的小框（sub_iou 阈值）
-            if sub_iou is not None and sub_iou > 0:
-                keep = [True] * len(boxes_top)
-                for i in range(len(boxes_top)):
-                    if not keep[i]: continue
-                    for j in range(len(boxes_top)):
-                        if i == j or not keep[j]: continue
-                        # j 被 i 覆盖？（要求同类 & i 分数更高）
-                        if boxes_top[i][5] == boxes_top[j][5] and boxes_top[i][4] >= boxes_top[j][4]:
-                            if _pair_iou_xywh(boxes_top[i], boxes_top[j]) >= sub_iou:
-                                keep[j] = False;
-                                subsumed_cnt += 1
-                boxes_top = [b for k, b in enumerate(boxes_top) if keep[k]]
+    out = cfg.paths.outputs_dir / "detections_post.jsonl"
+    with open(out, "w") as f:
+        for d in kept:
+            f.write(json.dumps(d) + "\n")
 
-            # 合并回剩余的框（只改 Top-K，其它保持原样）
-            new_boxes = boxes_top + boxes_all[len(boxes_top):]
-
-            # 写回 JSONL（保持原字段）
-            new_dets = []
-            for b in new_boxes:
-                new_dets.append({
-                    "bbox": [b[0], b[1], b[2], b[3]],
-                    "score": float(b[4]),
-                    "category_id": int(b[5]),
-                })
-            rec["detections"] = new_dets
-            out_lines.append(json.dumps(rec))
-
-    out_p = cfg.paths.outputs_dir / "detections_post.jsonl"
-    out_p.parent.mkdir(parents=True, exist_ok=True)
-    with open(out_p, "w") as f:
-        for s in out_lines: f.write(s if s.endswith("\n") else s + "\n")
-
-    print(f"[infer_post] wrote {out_p}  boxes={total_boxes}  changed_imgs={changed_imgs}  subsumed={subsumed_cnt}  sub_iou={sub_iou}  temp={T_use}")
-    return out_p
-
-
+    print(f"[infer_post] wrote {out}  boxes={sum(len(d.get('boxes', [])) for d in kept)} "
+          f" changed_imgs={len(changed_imgs)} subsumed={subsumed} sub_iou={sub_iou} temp={temp}")
+    return out
 def stage_infer_groups(cfg, model_file: Path, det_file: Path, tau: float = None) -> Path:
     """
     读 detections.jsonl & 训练好的边分类器 → 并查集合并成组
