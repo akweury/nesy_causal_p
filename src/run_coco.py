@@ -2134,158 +2134,166 @@ class LabelabilityMLP(torch.nn.Module):
     def forward(self, x): return torch.sigmoid(self.net(x)).squeeze(-1)
 
 
-def stage_train_labelability(cfg, npz_path: Path, epochs: int = 5, lr: float = 1e-3, bs: int = 4096) -> Path:
+def stage_train_labelability(
+    cfg,
+    npz_path: Path,
+    epochs: int = 5,
+    lr: float = 1e-3,
+    bs: int = 8192,
+    emb_dim: int = 64,
+    num_classes: int = 91,   # COCO 稀疏 id 数（按需调整）
+) -> Path:
     """
-    训练“可标注性”节点分类器（几何+上下文特征 → 是否会被标注）:
-      - 输入: labelability_train.npz (X[N,D], y[N], img_ids[N])
-      - 模型: MLP(in_dim=D, hidden=[64,64], out=1)
-      - 输出: /models/grm_node_labelability.pt (含 meta)
+    训练 Labelability 模型：几何 + 类别语义（node/ctx/nb）→ 是否会被标注
+    模型： [geo] + emb(cat_id) + sum( emb(ctx_cats) * ctx_ws ) + sum( emb(nb_cats) * nb_ws ) -> MLP -> logit
     """
-    import json, math, numpy as np, torch
+    import json, numpy as np, torch
     import torch.nn as nn
-    import torch.nn.functional as F
     from torch.utils.data import TensorDataset, DataLoader
     from pathlib import Path
 
-    # ===== 小工具 =====
-    def try_auc(y_true_np, y_pred_np):
-        # 返回 AUC；当 val 只有单类时，返回 0.5 并打印 warn
-        y_true_np = np.asarray(y_true_np).astype(np.float32)
-        y_pred_np = np.asarray(y_pred_np).astype(np.float32)
-        if len(np.unique(y_true_np)) < 2:
-            print("[lab][warn] val y has single class; force AUC=0.5")
-            return 0.5
-        try:
-            from sklearn.metrics import roc_auc_score
-            return float(roc_auc_score(y_true_np, y_pred_np))
-        except Exception:
-            # 简易 AUC（排序法）
-            order = np.argsort(y_pred_np)
-            ranks = np.empty_like(order);
-            ranks[order] = np.arange(len(y_pred_np))
-            pos = (y_true_np > 0.5)
-            n_pos = int(pos.sum());
-            n_neg = len(y_true_np) - n_pos
-            if n_pos == 0 or n_neg == 0: return 0.5
-            auc = (ranks[pos].sum() - n_pos * (n_pos - 1) / 2) / (n_pos * n_neg)
-            return float(auc)
-
-    class LabelabilityMLP(nn.Module):
-        def __init__(self, in_dim: int, hidden: list[int] = [64, 64], act: str = "relu", dropout: float = 0.0):
-            super().__init__()
-            hs = list(hidden)
-            layers = []
-            last = in_dim
-            for h in hs:
-                layers += [nn.Linear(last, h), nn.ReLU(inplace=True) if act == "relu" else nn.GELU()]
-                if dropout > 0: layers += [nn.Dropout(p=dropout)]
-                last = h
-            layers += [nn.Linear(last, 1)]
-            self.net = nn.Sequential(*layers)
-
-        def forward(self, x):  # x:[B,D]
-            return self.net(x).squeeze(-1)  # logits:[B]
-
-    # ===== 读数据 =====
-    npz_path = Path(npz_path)
     dat = np.load(npz_path)
-    X = torch.tensor(dat["X"], dtype=torch.float32)
-    y = torch.tensor(dat["y"], dtype=torch.float32)
-    N, D = X.shape
-    print(f"[labset] X={tuple(X.shape)} pos_rate={float(y.mean()):.3f}")
+    X_geo  = torch.tensor(dat["X_geo"],  dtype=torch.float32)
+    y      = torch.tensor(dat["y"],      dtype=torch.float32)
+    img_ids= torch.tensor(dat["img_ids"],dtype=torch.int64)
+    cat_id = torch.tensor(dat["cat_id"], dtype=torch.int64)
+    ctx_cats=torch.tensor(dat["ctx_cats"],dtype=torch.int64)
+    ctx_ws  =torch.tensor(dat["ctx_ws"],  dtype=torch.float32)
+    nb_cats =torch.tensor(dat["nb_cats"], dtype=torch.int64)
+    nb_ws   =torch.tensor(dat["nb_ws"],   dtype=torch.float32)
 
-    # ===== 划分 train/val =====
-    # 以 image_id 分层更稳（同图不泄漏），若没有 img_ids 就按样本随机
-    if "img_ids" in dat:
-        img_ids = dat["img_ids"]
-        uniq = np.unique(img_ids)
-        rng = np.random.default_rng(1234)
-        rng.shuffle(uniq)
-        n_val = max(1, int(0.1 * len(uniq)))
-        val_imgs = set(uniq[:n_val])
-        idx_tr = [i for i, im in enumerate(img_ids) if im not in val_imgs]
-        idx_va = [i for i, im in enumerate(img_ids) if im in val_imgs]
-    else:
-        idx = np.arange(N)
-        rng = np.random.default_rng(1234);
-        rng.shuffle(idx)
-        n_val = max(1, int(0.1 * N))
-        idx_va = idx[:n_val].tolist();
-        idx_tr = idx[n_val:].tolist()
+    N, Dg = X_geo.shape
+    print(f"[labset] X={tuple(X_geo.shape)} pos_rate={float(y.mean()):.3f}")
 
-    X_tr, y_tr = X[idx_tr], y[idx_tr]
-    X_va, y_va = X[idx_va], y[idx_va]
+    # === 划分 train/val（按 image_id 分）===
+    uniq = img_ids.unique()
+    perm = torch.randperm(len(uniq))
+    n_val = max(1, int(0.1*len(uniq)))
+    val_imgs = set(uniq[perm[:n_val]].tolist())
+    idx_va = [i for i,im in enumerate(img_ids.tolist()) if im in val_imgs]
+    idx_tr = [i for i in range(N) if i not in idx_va]
 
-    ds_tr = TensorDataset(X_tr, y_tr)
-    ds_va = TensorDataset(X_va, y_va)
+    def sel(idx):
+        idx = torch.tensor(idx, dtype=torch.long)
+        return (X_geo.index_select(0, idx),
+                y.index_select(0, idx),
+                img_ids.index_select(0, idx),
+                cat_id.index_select(0, idx),
+                ctx_cats.index_select(0, idx),
+                ctx_ws.index_select(0, idx),
+                nb_cats.index_select(0, idx),
+                nb_ws.index_select(0, idx))
+    tr = sel(idx_tr); va = sel(idx_va)
 
-    dl_tr = DataLoader(ds_tr, batch_size=bs, shuffle=True, num_workers=0, pin_memory=False)
-    dl_va = DataLoader(ds_va, batch_size=bs, shuffle=False, num_workers=0, pin_memory=False)
+    class DS(torch.utils.data.Dataset):
+        def __init__(self, pack): self.pack = pack
+        def __len__(self): return self.pack[0].shape[0]
+        def __getitem__(self, i):
+            return tuple(p[i] for p in self.pack)
+    ds_tr = DS(tr); ds_va = DS(va)
 
-    # ===== 模型/损失/优化 =====
-    hidden = [64, 64]  # 与 infer_post 保持一致；也可放 cfg
-    mdl = LabelabilityMLP(in_dim=D, hidden=hidden).to(cfg.device)
+    dl_tr = DataLoader(ds_tr, batch_size=bs, shuffle=True, num_workers=0)
+    dl_va = DataLoader(ds_va, batch_size=bs, shuffle=False, num_workers=0)
+
+    # === 模型 ===
+    class LabelabilitySem(nn.Module):
+        def __init__(self, Dg, K, d=64, hidden=(128,64), act="relu"):
+            super().__init__()
+            self.emb = nn.Embedding(K, d)                 # 类别嵌入共享用于 node/ctx/nb
+            actf = nn.ReLU if act=="relu" else nn.GELU
+            self.mlp = nn.Sequential(
+                nn.Linear(Dg + d + d + d, hidden[0]),
+                actf(),
+                nn.Linear(hidden[0], hidden[1]),
+                actf(),
+                nn.Linear(hidden[1], 1),
+            )
+        def agg(self, ids, ws):
+            # ids:[B,M], ws:[B,M] -> sum_j (emb[id]*w)
+            mask = (ids>=0).float().unsqueeze(-1)         # [B,M,1]
+            e = self.emb(torch.clamp(ids, min=0))         # [B,M,d]（-1→0，但被mask清零）
+            w = ws.unsqueeze(-1) * mask                   # [B,M,1]
+            return (e * w).sum(dim=1)                     # [B,d]
+        def forward(self, geo, cat_id, ctx_ids, ctx_w, nb_ids, nb_w):
+            e_node = self.emb(torch.clamp(cat_id, min=0)) # [B,d]
+            e_ctx  = self.agg(ctx_ids, ctx_w)             # [B,d]
+            e_nb   = self.agg(nb_ids, nb_w)               # [B,d]
+            x = torch.cat([geo, e_node, e_ctx, e_nb], dim=-1)
+            return self.mlp(x).squeeze(-1)                # logits:[B]
+
+    mdl = LabelabilitySem(Dg, num_classes, d=emb_dim).to(cfg.device)
+
+    # 可选：用 CLIP 文本嵌入初始化（略）。也可按 supercategory 做共享（略）。
+
+    # 不平衡
+    pos_rate = float(y[idx_tr].mean())
     pos_weight = None
-    pos_rate = float(y_tr.mean().item()) if y_tr.numel() else 0.0
     if 0 < pos_rate < 1:
-        pos_weight = torch.tensor([(1 - pos_rate) / max(1e-6, pos_rate)], device=cfg.device)
+        pw = (1 - pos_rate) / max(1e-6, pos_rate)
+        pos_weight = torch.tensor([pw], device=cfg.device)
+
     crit = nn.BCEWithLogitsLoss(pos_weight=pos_weight) if pos_weight is not None else nn.BCEWithLogitsLoss()
     opt = torch.optim.AdamW(mdl.parameters(), lr=lr, weight_decay=1e-4)
 
     AMP = bool(cfg.device.startswith("cuda"))
     scaler = torch.cuda.amp.GradScaler(enabled=AMP)
 
-    best_auc = -1.0
+    def auc_on_loader(m):
+        m.eval()
+        from sklearn.metrics import roc_auc_score
+        all_t=[]; all_p=[]
+        with torch.no_grad(), torch.amp.autocast('cuda', enabled=AMP):
+            for geo,yy,_,cid,cc,ccw,nbc,nbw in dl_va:
+                geo=geo.to(cfg.device); yy=yy.to(cfg.device)
+                cid=cid.to(cfg.device); cc=cc.to(cfg.device); ccw=ccw.to(cfg.device)
+                nbc=nbc.to(cfg.device); nbw=nbw.to(cfg.device)
+                logits = m(geo,cid,cc,ccw,nbc,nbw).float().cpu().numpy()
+                prob = 1/(1+np.exp(-np.clip(logits,-20,20)))
+                all_t.append(yy.cpu().numpy()); all_p.append(prob)
+        t = np.concatenate(all_t); p = np.concatenate(all_p)
+        if len(np.unique(t))<2: return 0.5
+        return float(roc_auc_score(t,p))
+
+    best_auc=-1.0
     save_p = cfg.paths.models_dir / "grm_node_labelability.pt"
     save_p.parent.mkdir(parents=True, exist_ok=True)
 
-    # ===== 训练循环 =====
-    for ep in range(1, epochs + 1):
+    for ep in range(1, epochs+1):
         mdl.train()
-        loss_tr = 0.0;
-        n_tr = 0
-        for xb, yb in dl_tr:
-            xb = xb.to(cfg.device, non_blocking=True)
-            yb = yb.to(cfg.device, non_blocking=True)
+        tot, n = 0.0, 0
+        for geo,yy,_,cid,cc,ccw,nbc,nbw in dl_tr:
+            geo=geo.to(cfg.device); yy=yy.to(cfg.device)
+            cid=cid.to(cfg.device); cc=cc.to(cfg.device); ccw=ccw.to(cfg.device)
+            nbc=nbc.to(cfg.device); nbw=nbw.to(cfg.device)
             opt.zero_grad(set_to_none=True)
-            with torch.cuda.amp.autocast(enabled=AMP):
-                logits = mdl(xb)
-                loss = crit(logits, yb)
+            with torch.amp.autocast('cuda', enabled=AMP):
+                logits = mdl(geo,cid,cc,ccw,nbc,nbw)
+                loss = crit(logits, yy)
             scaler.scale(loss).backward()
-            scaler.step(opt);
-            scaler.update()
-            loss_tr += float(loss.item()) * xb.size(0);
-            n_tr += xb.size(0)
-        loss_tr = loss_tr / max(1, n_tr)
+            scaler.step(opt); scaler.update()
+            tot += float(loss.item())*geo.size(0); n += geo.size(0)
+        loss_tr = tot/max(1,n)
 
-        # --- 验证 ---
-        mdl.eval()
-        with torch.no_grad():
-            all_p = [];
-            all_t = []
-            for xb, yb in dl_va:
-                xb = xb.to(cfg.device, non_blocking=True)
-                logits = mdl(xb).float().cpu().numpy()
-                all_p.append(1 / (1 + np.exp(-logits)))  # sigmoid
-                all_t.append(yb.numpy())
-            if all_p:
-                p = np.concatenate(all_p);
-                t = np.concatenate(all_t)
-                auc = try_auc(t, p)
-            else:
-                auc = 0.5
-        print(f"[lab] ep{ep} loss_tr={loss_tr:.4f}  AUC_va={auc:.3f}")
+        auc_va = auc_on_loader(mdl)
+        print(f"[lab] ep{ep} loss_tr={loss_tr:.4f}  AUC_va={auc_va:.3f}")
 
-        # 保存最好
-        if auc > best_auc:
-            best_auc = auc
+        if auc_va>best_auc:
+            best_auc=auc_va
             torch.save({
                 "state_dict": mdl.state_dict(),
-                "meta": {"in_dim": D, "hidden": hidden, "act": "relu", "auc_va": best_auc}
+                "meta": {
+                    "in_dim_geo": Dg,
+                    "num_classes": num_classes,
+                    "emb_dim": emb_dim,
+                    "hidden": [128,64],
+                    "auc_va": best_auc,
+                    "type": "LabelabilitySem"
+                }
             }, save_p)
 
     print(f"[lab] saved {save_p}")
     return save_p
+
 
 
 def _edge_score(mdl, a, b):
