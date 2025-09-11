@@ -3558,7 +3558,7 @@ def main():
 
     # 1) detect
     if "detect" in steps:
-        artifacts["det"] = stage_detect(cfg)
+        artifacts["det"] = stage_detect(cfg, split="val")
     if "checkdet" in steps:
         det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
         artifacts["sanity"] = stage_quick_sanity(cfg, det)
