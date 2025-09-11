@@ -1963,110 +1963,163 @@ def _feat_one(idx, boxes, labels, scores, gts=None):
     ]
 
 
-def stage_build_labelability_trainset(cfg,
-                                      det_file: Path,
-                                      iou_thr: float = 0.5,
-                                      neg_ratio: int = 3,
-                                      save_name: str = "labelability_train.npz") -> Path:
+def stage_build_labelability_trainset(
+    cfg,
+    det_file: Path = None,
+    save_npz: str = "labelability_train_semctx.npz",
+    C_MAX: int = 10,
+    NB_MAX: int = 8,
+    use_area_weight: bool = True,
+    knn_metric: str = "center"  # "center" or "iou"
+) -> Path:
     """
-    从 detections.jsonl + COCO GT 现场构造 labelability 训练集：
-      - 正样本：与同类 GT IoU>=iou_thr 的预测框
-      - 负样本：同图同类未匹配框（下采样，正:负≈1:neg_ratio）
-      - 特征仅用 bbox/上下文/NMS 结构（_feat_one(..., gts=None)），与推理一致
-    输出: /outputs/labelability_train.npz (X[N,D], y[N], img_ids[N])
+    产出可标注性训练集（含语义上下文）：
+    保存字段：
+      X_geo: [N, Dg]         # 几何与全局几何（面积比、相对尺度、中心距等）
+      y:     [N]             # 标签（是否与任一GT同类且IoU>=0.5）
+      img_ids:[N]
+      cat_id:[N]             # 当前框类别（COCO稀疏id）
+      ctx_cats:[N, C_MAX]    # 图像级类别索引（不足-1）
+      ctx_ws:[N, C_MAX]      # 对应权重（频次比例或面积占比）
+      nb_cats:[N, NB_MAX]    # K近邻类别（不足-1）
+      nb_ws:[N, NB_MAX]      # 近邻权重（按距离/IoU）
     """
     import json, numpy as np
-    from collections import defaultdict
+    from pathlib import Path
     from pycocotools.coco import COCO
 
-    out = cfg.paths.outputs_dir / save_name
-    if out.exists():
-        print(f"[labset] reuse {out}")
-        return out
-
-    def _area(b):
-        return max(0, b[2] - b[0]) * max(0, b[3] - b[1])
-
-    def _iou(a, b):
-        x1 = max(a[0], b[0]);
-        y1 = max(a[1], b[1]);
-        x2 = min(a[2], b[2]);
-        y2 = min(a[3], b[3])
-        inter = max(0, x2 - x1) * max(0, y2 - y1)
-        return inter / max(1e-8, _area(a) + _area(b) - inter)
+    if det_file is None:
+        det_file = cfg.paths.detections_dir / "detections.jsonl"
+    out = cfg.paths.outputs_dir / save_npz
+    out.parent.mkdir(parents=True, exist_ok=True)
 
     coco = COCO(str(cfg.paths.coco_annotations))
+    ann_by_img = {}
+    for img_id in coco.getImgIds():
+        ann_by_img[img_id] = coco.loadAnns(coco.getAnnIds(imgIds=[img_id], iscrowd=None))
 
-    X, y, img_ids = [], [], []
-    imgs_total = 0
-    pos_total = 0
-    no_gt_overlap = 0
+    def area(b): return max(0., b[2]-b[0]) * max(0., b[3]-b[1])
+    def iou(a,b):
+        x1=max(a[0],b[0]); y1=max(a[1],b[1]); x2=min(a[2],b[2]); y2=min(a[3],b[3])
+        inter=max(0.,x2-x1)*max(0.,y2-y1)
+        return inter/max(1e-8, area(a)+area(b)-inter)
+    def box_center(b): return (0.5*(b[0]+b[2]), 0.5*(b[1]+b[3]))
 
-    with open(det_file, "r") as fin:
-        for L in fin:
-            r = json.loads(L)
+    X_geo=[]; y=[]; img_ids=[]; cat_id=[]
+    ctx_cats=[]; ctx_ws=[]
+    nb_cats=[]; nb_ws=[]
+
+    with open(det_file,"r") as fin:
+        for line in fin:
+            r = json.loads(line)
             img_id = int(r["image_id"])
-            boxes = r.get("boxes", [])
-            labels = [int(c) for c in r.get("labels", [])]
-            scores = r.get("scores", [])
-            if not boxes:
-                continue
-            imgs_total += 1
+            boxes  = r.get("boxes",[]) or []
+            labels = r.get("labels",[]) or []
+            scores = r.get("scores",[]) or []
+            if len(boxes)==0: continue
 
-            # 按同图构建同类 GT 框
-            ann_ids = coco.getAnnIds(imgIds=[img_id], iscrowd=None)
-            anns = coco.loadAnns(ann_ids)
-            gt_by_cls = defaultdict(list)
-            for a in anns:
-                cid = int(a["category_id"])
-                x0, y0, w, h = a["bbox"]
-                gt_by_cls[cid].append([x0, y0, x0 + w, y0 + h])
+            # 图像全局统计
+            W = coco.imgs[img_id]["width"]; H = coco.imgs[img_id]["height"]; Aimg=W*H
+            areas = [area(b) for b in boxes]
+            max_area = max(areas) if areas else 1.0
 
-            # 计算正样本集合
-            matched = set()
-            for i, b in enumerate(boxes):
-                cls = labels[i]
-                gts = gt_by_cls.get(cls, [])
-                if any(_iou(b, g) >= iou_thr for g in gts):
-                    matched.add(i)
+            # ctx（按预测分布或GT都可；这里用“预测分布”，与推理一致）
+            # 统计类频次与总面积
+            cnt = {}
+            mass = {}
+            for c,b in zip(labels, boxes):
+                c=int(c); cnt[c]=cnt.get(c,0)+1; mass[c]=mass.get(c,0.0)+area(b)
+            # 取权重并归一化
+            if use_area_weight:
+                # 面积占比
+                items = sorted(mass.items(), key=lambda kv: kv[1], reverse=True)[:C_MAX]
+                total = sum(v for _,v in items) or 1.0
+                cats_sel = [c for c,_ in items]
+                ws_sel   = [v/total for _,v in items]
+            else:
+                # 频次占比
+                items = sorted(cnt.items(), key=lambda kv: kv[1], reverse=True)[:C_MAX]
+                total = sum(v for _,v in items) or 1.0
+                cats_sel = [c for c,_ in items]
+                ws_sel   = [v/total for _,v in items]
+            # pad
+            cats_sel += [-1]*(C_MAX-len(cats_sel))
+            ws_sel   += [0.0]*(C_MAX-len(ws_sel))
 
-            pos_idx = sorted(list(matched))
-            neg_idx = [i for i in range(len(boxes)) if i not in matched]
+            # 每框处理
+            centers = [box_center(b) for b in boxes]
+            for i,(b,c,s) in enumerate(zip(boxes,labels,scores)):
+                # y 标签（蒸馏：同类且IoU>=0.5 视为“会被标注”）
+                pos=False
+                for a in ann_by_img[img_id]:
+                    if int(a["category_id"])==int(c):
+                        # GT bbox xywh -> xyxy
+                        x,yh,w,h=a["bbox"]
+                        g=[x,yh,x+w,yh+h]
+                        if iou(b,g)>=0.5:
+                            pos=True; break
 
-            pos_total += len(pos_idx)
-            if len(pos_idx) == 0:
-                no_gt_overlap += 1
+                # 几何特征
+                cx,cy=centers[i]
+                ar = area(b)/max(1.0,Aimg)                  # 占图面积比
+                rel = area(b)/max(1.0,max_area)             # 相对最大框
+                norm_cx, norm_cy = cx/W, cy/H               # 归一中心
+                # 距离最近的K个框（用于邻域）
+                dists=[]
+                for j,(bj) in enumerate(boxes):
+                    if j==i: continue
+                    if knn_metric=="center":
+                        cx2,cy2 = centers[j]
+                        d = ((cx-cx2)**2 + (cy-cy2)**2)**0.5
+                        dists.append((d,j))
+                    else:
+                        d = 1.0 - iou(b,bj)
+                        dists.append((d,j))
+                dists.sort(key=lambda x:x[0])
+                neigh = [j for _,j in dists[:NB_MAX]]
+                # 邻域类别与权重
+                nb_c = [int(labels[j]) for j in neigh]
+                if knn_metric=="center":
+                    ww=[]
+                    for d,j in dists[:NB_MAX]:
+                        wgt = 1.0/max(1e-3,d/(max(W,H)))     # 近的权重大
+                        ww.append(wgt)
+                else:
+                    ww=[]
+                    for d,j in dists[:NB_MAX]:
+                        iou_ = 1.0-d
+                        ww.append(iou_)
+                # 归一化
+                ssum = sum(ww) or 1.0
+                nb_w = [w/ssum for w in ww]
+                # pad
+                nb_c += [-1]*(NB_MAX-len(nb_c))
+                nb_w += [0.0]*(NB_MAX-len(nb_w))
 
-            # 负样本下采样：同图控制比例（避免全负）
-            if len(pos_idx) > 0 and len(neg_idx) > len(pos_idx) * neg_ratio:
-                rng = np.random.default_rng(123 + img_id)
-                neg_idx = rng.choice(neg_idx, size=len(pos_idx) * neg_ratio, replace=False).tolist()
+                # 组合几何（可加你已有的 Dg 特征：与最近同类IoU、密度、topk均值等）
+                geo = [float(s), ar, rel, norm_cx, norm_cy]
 
-            # 写入特征（训练/推理一致：gts=None）
-            for i in pos_idx:
-                feat = _feat_one(i, boxes, labels, scores, gts=None)
-                X.append(feat);
-                y.append(1.0);
+                X_geo.append(geo)
+                y.append(1.0 if pos else 0.0)
                 img_ids.append(img_id)
-            for i in neg_idx:
-                feat = _feat_one(i, boxes, labels, scores, gts=None)
-                X.append(feat);
-                y.append(0.0);
-                img_ids.append(img_id)
+                cat_id.append(int(c))
+                ctx_cats.append(cats_sel)
+                ctx_ws.append(ws_sel)
+                nb_cats.append(nb_c)
+                nb_ws.append(nb_w)
 
-    X = np.asarray(X, np.float32)
-    y = np.asarray(y, np.float32)
-    img_ids = np.asarray(img_ids, np.int64)
+    X_geo = np.asarray(X_geo, np.float32)
+    y     = np.asarray(y, np.float32)
+    img_ids=np.asarray(img_ids, np.int64)
+    cat_id = np.asarray(cat_id, np.int64)
+    ctx_cats=np.asarray(ctx_cats, np.int64)
+    ctx_ws  =np.asarray(ctx_ws, np.float32)
+    nb_cats =np.asarray(nb_cats, np.int64)
+    nb_ws   =np.asarray(nb_ws, np.float32)
 
-    # 清洗
-    X = np.nan_to_num(X, posinf=1e6, neginf=-1e6)
-
-    out.parent.mkdir(parents=True, exist_ok=True)
-    np.savez_compressed(out, X=X, y=y, img_ids=img_ids)
-
-    pos_rate = float(y.mean()) if len(y) else 0.0
-    print(f"[labset] X={X.shape} pos_rate={pos_rate:.3f} imgs={imgs_total} "
-          f"pos_boxes={pos_total} imgs_no_pos={no_gt_overlap}")
+    np.savez(out, X_geo=X_geo, y=y, img_ids=img_ids, cat_id=cat_id,
+             ctx_cats=ctx_cats, ctx_ws=ctx_ws, nb_cats=nb_cats, nb_ws=nb_ws)
+    print(f"[labset] X={X_geo.shape} pos_rate={float(y.mean()):.3f} saved -> {out}")
     return out
 
 
