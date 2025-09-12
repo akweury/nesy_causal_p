@@ -1606,7 +1606,23 @@ def stage_infer_post(cfg, det_file: Path, node_mdl_p: Path,
         dets = rec.get("detections", [])
 
         # 统一 → xyxy
-        boxes_all = _parse_to_xyxy_list(dets)
+        # === 解析成统一格式 [x1,y1,x2,y2,score,cat] ===
+        boxes_all = []
+        if "boxes" in rec and "labels" in rec and "scores" in rec:
+            B = rec["boxes"];
+            L = rec["labels"];
+            S = rec["scores"]
+            n = min(len(B), len(L), len(S))
+            for i in range(n):
+                x, y, w, h = B[i]  # 你的保存是 xywh（从样例看）
+                x1, y1, x2, y2 = x, y, x + w, y + h
+                boxes_all.append([float(x1), float(y1), float(x2), float(y2),
+                                  float(S[i]), int(L[i])])
+        else:
+            # 回落到通用分支（dict/list）
+            boxes_all = _parse_to_xyxy_list(rec.get("detections", []))
+
+
         total_boxes += len(boxes_all)
         if total_imgs == 1:
             print(f"[infer_post] first_record: image_id={img_id}  boxes={len(boxes_all)}")
