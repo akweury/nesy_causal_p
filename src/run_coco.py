@@ -1563,7 +1563,7 @@ def _build_semctx_geo_xyxy(boxes_xyxy, W, H, K=91, C_MAX=10, NB_MAX=8):
 
 # ---------- main stage ----------
 def stage_infer_post(cfg, det_file: Path, node_mdl_p: Path,
-                     topk=300, sub_iou=0.50, temp=None,
+                     topk=150, sub_iou=0.50, temp=None,
                      C_MAX=10, NB_MAX=8):
     """
     与训练对齐的后处理（标注风格化）：
@@ -1621,7 +1621,6 @@ def stage_infer_post(cfg, det_file: Path, node_mdl_p: Path,
         else:
             # 回落到通用分支（dict/list）
             boxes_all = _parse_to_xyxy_list(rec.get("detections", []))
-
 
         total_boxes += len(boxes_all)
         if total_imgs == 1:
@@ -1699,7 +1698,7 @@ def stage_infer_post(cfg, det_file: Path, node_mdl_p: Path,
         ]
         out_lines.append(json.dumps(rec))
 
-        if total_imgs % 500 == 0:
+        if total_imgs % 2000 == 0:
             print(f"[infer_post] progress: imgs={total_imgs}  cum_boxes={total_boxes}  "
                   f"changed_imgs={changed_imgs}  subsumed={subsumed_cnt}")
 
@@ -1712,6 +1711,48 @@ def stage_infer_post(cfg, det_file: Path, node_mdl_p: Path,
     print(f"[infer_post] wrote {out_p}  boxes={total_boxes}  changed_imgs={changed_imgs}  "
           f"subsumed={subsumed_cnt}  sub_iou={sub_iou}  temp={T_use}")
     return out_p
+
+
+def stage_grid_temp(cfg, det_file: Path, node_mdl: Path,
+                    temps=(1.0, 1.5, 2.0, 3.0, 5.0, 10.0),
+                    out_csv="grid_temp.csv"):
+    """
+    仅重打分（不删框）观察不同 temp 对 AP 的影响。
+    写 CSV: temp,AP,AP50,AP75,AR100,ΔAP
+    """
+    import csv
+    from copy import deepcopy
+
+    det_file = Path(det_file)
+    out_csv = cfg.paths.outputs_dir / out_csv
+    out_csv.parent.mkdir(parents=True, exist_ok=True)
+
+    # baseline：直接评测原始 detections（不经过 infer_post）
+    base_metrics = stage_eval_post(cfg, det_file)
+    base_AP = float(base_metrics.get("AP", 0.0))
+
+    rows = []
+    for T in temps:
+        print(f"[grid_temp] try temp={T}")
+        det_post = stage_infer_post(cfg, det_file, node_mdl, sub_iou=0.0, temp=T)
+        mts = stage_eval_post(cfg, det_post)
+        row = {
+            "temp": T,
+            "AP": float(mts.get("AP", 0.0)),
+            "AP50": float(mts.get("AP50", 0.0)),
+            "AP75": float(mts.get("AP75", 0.0)),
+            "AR100": float(mts.get("AR100", 0.0)),
+            "dAP": float(mts.get("AP", 0.0)) - base_AP,
+        }
+        print(f"[grid_temp] temp={T} → AP={row['AP']:.3f} (Δ{row['dAP']:+.3f}) AP75={row['AP75']:.3f} AR100={row['AR100']:.3f}")
+        rows.append(row)
+
+    with open(out_csv, "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=["temp", "AP", "AP50", "AP75", "AR100", "dAP"])
+        w.writeheader();
+        w.writerows(rows)
+    print(f"[grid_temp] wrote {out_csv}")
+    return out_csv
 
 
 # ---------- CLI ----------
@@ -1786,6 +1827,10 @@ def main():
         node_m = artifacts.get("lab_mdl", cfg.paths.models_dir / "grm_node_labelability.pt")
         # 可用命令行或环境变量传 sub_iou / temp；这里给默认
         artifacts["det_post"] = stage_infer_post(cfg, det, node_m, sub_iou=args.sub_iou, temp=args.temp)
+    if "gridtemp" in steps:
+        det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
+        node = artifacts.get("node_mdl", cfg.paths.models_dir / "grm_node_labelability.pt")
+        artifacts["gridtemp"] = stage_grid_temp(cfg, det, node)
 
     if "eval_post" in steps:
         post = artifacts.get("det_post", cfg.paths.outputs_dir / "detections_grm_post.jsonl")
