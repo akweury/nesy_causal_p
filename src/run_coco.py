@@ -1826,6 +1826,7 @@ def main():
         det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
         node_m = artifacts.get("lab_mdl", cfg.paths.models_dir / "grm_node_labelability.pt")
         # 可用命令行或环境变量传 sub_iou / temp；这里给默认
+        print(f"Sub_IOU={args.sub_iou}  Temp={args.temp}  Tau={args.tau}")
         artifacts["det_post"] = stage_infer_post(cfg, det, node_m, sub_iou=args.sub_iou, temp=args.temp)
     if "gridtemp" in steps:
         det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
