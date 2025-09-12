@@ -2,11 +2,10 @@
 
 
 # pipeline.py
-import argparse, json
+import argparse
 from pathlib import Path
-from typing import Dict, Any, List, Tuple
+from typing import Dict
 from config import load_config
-import torch
 
 
 # ---------- 阶段占位符（逐步实现） ----------
@@ -1791,10 +1790,10 @@ def main():
         # 可用命令行或环境变量传 sub_iou / temp；这里给默认
         print(f"Sub_IOU={args.sub_iou}  Temp={args.temp}  Tau={args.tau}")
         artifacts["det_post"] = stage_infer_post(cfg, det, node_m, sub_iou=args.sub_iou, temp=args.temp, post_mode=args.post_mode)
-    if "gridtemp" in steps:
-        det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
-        node = artifacts.get("node_mdl", cfg.paths.models_dir / "grm_node_labelability.pt")
-        artifacts["gridtemp"] = stage_grid_temp(cfg, det, node)
+    # if "gridtemp" in steps:
+    #     det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
+    #     node = artifacts.get("node_mdl", cfg.paths.models_dir / "grm_node_labelability.pt")
+    #     artifacts["gridtemp"] = stage_grid_temp(cfg, det, node)
 
     if "eval_post" in steps:
         post = artifacts.get("det_post", cfg.paths.outputs_dir / "detections_grm_post.jsonl")
