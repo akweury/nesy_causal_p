@@ -1724,7 +1724,7 @@ def main():
     parser.add_argument("--t_inter", type=float, default=0.5)
     parser.add_argument("--nms_iou", type=float, default=0.5)
     parser.add_argument("--sub_iou", type=float, default=0.5)
-    parser.add_argument("--temp", type=float, default=2.0)
+    parser.add_argument("--temp", type=float, default=1.0)
     parser.add_argument("--supervision", type=str, default="distill",  # ← 改默认为 distill，和实际一致
                         choices=["heur", "gt", "distill"])
     parser.add_argument("--tau", type=float, default=None, help="override tune.json for infer")  # 可选：手动设阈值
