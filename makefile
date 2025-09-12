@@ -58,7 +58,7 @@ run-filter:
 	  -e NUM_WORKERS=0 \
 	  -e MAX_IMAGES="$(MAX_IMAGES)" \
 	  $(IMAGE) \
-	  python -m gen_data.filter_coco_by_objcount --remote --data_split val --temp $(TEMP) --sub_iou $(SUB_IOU)
+	  python -m gen_data.filter_coco_by_objcount --remote --data_split val --temp $(TEMP) --sub_iou $(SUB_IOU) --post_mode $(POST_MODE)
 
 # ---- Only detect in Docker (GPU) ----
 
