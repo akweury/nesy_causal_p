@@ -39,7 +39,7 @@ run-docker:
 	  -e NUM_WORKERS=0 \
 	  -e MAX_IMAGES="$(MAX_IMAGES)" \
 	  $(IMAGE) \
-	  python -m src.run_coco --steps $(STEPS) --remote --t_intra 0.75 --t_inter 0.5
+	  python -m src.run_coco --steps $(STEPS) --remote --t_intra 0.75 --t_inter 0.5  --temp $(TEMP) --sub_iou $(SUB_IOU)
 
 run-filter:
 	docker run --gpus all --rm -it \
