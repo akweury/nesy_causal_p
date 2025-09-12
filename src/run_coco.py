@@ -1785,7 +1785,7 @@ def main():
         det = artifacts.get("det", cfg.paths.detections_dir / "detections.jsonl")
         node_m = artifacts.get("lab_mdl", cfg.paths.models_dir / "grm_node_labelability.pt")
         # 可用命令行或环境变量传 sub_iou / temp；这里给默认
-        artifacts["det_post"] = stage_infer_post(cfg, det, node_m, sub_iou=0.0, temp=2)
+        artifacts["det_post"] = stage_infer_post(cfg, det, node_m, sub_iou=args.sub_iou, temp=args.temp)
 
     if "eval_post" in steps:
         post = artifacts.get("det_post", cfg.paths.outputs_dir / "detections_grm_post.jsonl")
