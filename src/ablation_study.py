@@ -34,7 +34,6 @@ def run_ablation(train_data, val_data, test_data, obj_model, group_model, train_
     train_img_labels = [1] * len(train_val_data["positive"]) + [0] * len(train_val_data["negative"])
     # train rule + calibrator
     obj_times = torch.zeros(len(train_img_labels))
-    group_times = torch.zeros(len(train_img_labels))
 
     hard, soft, group_nums, obj_list, group_list = training.ground_facts(train_val_data, obj_model, group_model, hyp_params, train_principle, args.device, ablation_flags, obj_times)
     base_rules = training.train_rules(hard, soft, obj_list, group_list, group_nums, train_img_labels, hyp_params, ablation_flags, obj_times)
