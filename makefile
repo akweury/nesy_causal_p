@@ -8,8 +8,8 @@ OUT_DIR:=/home/ml-jsha/storage/GRM_output
 STEPS      ?= detect,graph,train,tune,infer,groupnms,eval
 MAX_IMAGES ?=               # e.g. 200 for quick test
 GPU_ID     ?= 0             # default GPU id
-TEMP      ?= 1.0           # default temperature for filtering
-SUB_IOU   ?= 0.5           # default subgraph IoU for filtering
+# TEMP      ?= 1.0           # default temperature for filtering
+# SUB_IOU   ?= 0.5           # default subgraph IoU for filtering
 
 .PHONY: build run-docker run-local detect docker-detect help
 
