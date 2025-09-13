@@ -1,6 +1,17 @@
 # Created by MacBook Pro at 02.09.25
 
 def gpt_conversation(train_positive, train_negative, principle):
+    background_knowledge = (
+        "You are given images containing multiple objects and groups. "
+        "Each object and group has attributes: shape, color, size, position, and group membership. "
+        "Logical patterns in the image may involve single relations (e.g., all objects have the same color) "
+        "or combinations of multiple relations (e.g., objects with the same shape are grouped together and mirrored along the x-axis). "
+        "You can reason about: "
+        "Individual attributes: shape, color, size, position; "
+        "Group properties: number of members, grouping principle; "
+        "Relations: same/different shape, color, size; mirrored positions; unique/diverse attributes within groups. "
+        "Analyze the image by identifying both simple and complex combinations of these relations."
+    )
     conversation = [
         {
             "role": "user",
@@ -18,6 +29,7 @@ def gpt_conversation(train_positive, train_negative, principle):
 
                 # Task instruction
                 {"type": "input_text", "text": (
+                    f"{background_knowledge}\n\n"
                     f"You are an AI reasoning about visual patterns using Gestalt principles.\n\n"
                     f"Principle under consideration: {principle}.\n\n"
                     "Based on the Positive and Negative examples, infer the logic rules "
