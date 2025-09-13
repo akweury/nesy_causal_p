@@ -110,7 +110,7 @@ def run_gpt5(args):
             pattern_folders = pattern_folders[start_num:start_num + task_num]
         else:
             pattern_folders = pattern_folders[start_num:]
-    rtpt = RTPT(name_initials='JIS', experiment_name=f'Elvis-gpt5-{principle}', max_iterations=len(pattern_folders))
+    rtpt = RTPT(name_initials='JIS', experiment_name=f'GRM-gpt5-{principle}', max_iterations=len(pattern_folders))
     rtpt.start()
     for pattern_folder in pattern_folders:
         rtpt.step()
