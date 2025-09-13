@@ -7,12 +7,14 @@ import config
 from baselines import internVL3
 from baselines import vit
 from baselines import llava
+from baselines import gpt5
 
 # List of baseline models
 baseline_models = {
     "vit": vit.run_vit,
     "llava": llava.run_llava,
-    "internVL3_78B": internVL3.run_internVL3_78B
+    "internVL3_78B": internVL3.run_internVL3_78B,
+    "gpt5": gpt5.run_gpt5,
 }
 
 
