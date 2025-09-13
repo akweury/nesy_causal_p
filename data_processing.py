@@ -196,6 +196,8 @@ def draw_final_calibrator_gain_figure(json_path, output_path=config.output / "ca
 
 
 if __name__ == "__main__":
+    print("Ablation study result analysis")
+
     # print_ablation_results(config.output/"ablation_summary_closure_20250718_110518.json")
     # draw_final_calibrator_gain_figure(config.output / "ablation_summary_closure_20250718_110518.json")
 
@@ -204,7 +206,7 @@ if __name__ == "__main__":
     # draw_final_calibrator_gain_figure(config.output / "ablation_summary_continuity_20250718_110525.json")
 
     # symmetry
-    # print_ablation_results(config.output/"ablation_summary_symmetry_20250722_095458.json")
+    print_ablation_results(config.output/"ablation_summary_symmetry_20250722_095458.json")
     # draw_final_calibrator_gain_figure(config.output / "ablation_summary_symmetry_20250721_092532.json")
 
     # proximity
@@ -212,7 +214,7 @@ if __name__ == "__main__":
     # draw_final_calibrator_gain_figure(config.output / "ablation_summary_proximity_20250720_070246.json")
 
     # similarity
-    print_ablation_results(config.output/"ablation_summary_similarity_20250721_092307.json")
+    # print_ablation_results(config.output/"ablation_summary_similarity_20250721_092307.json")
     # draw_final_calibrator_gain_figure(config.output / "ablation_summary_similarity_20250721_092307.json")
 
 
