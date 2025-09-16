@@ -16,9 +16,9 @@ from mbg.scorer import scorer_config
 
 ABLATED_CONFIGS = {
     "hard_ogc": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": True, "use_calibrator": True},
-    "hard_obj": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": False, "use_calibrator": False},
-    "hard_og": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": True, "use_calibrator": False},
-    "hard_obj_calib": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": False, "use_calibrator": True},
+    # "hard_obj": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": False, "use_calibrator": False},
+    # "hard_og": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": True, "use_calibrator": False},
+    # "hard_obj_calib": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": False, "use_calibrator": True},
 }
 
 
@@ -41,7 +41,8 @@ def run_ablation(train_data, val_data, test_data, obj_model, group_model, train_
 
     calibrator = training.train_calibrator(final_rules, obj_list, group_list, hard, soft, train_img_labels, hyp_params, ablation_flags, args.device)
     eval_metrics = evaluation.eval_rules(test_data, obj_model, group_model, final_rules, hyp_params, train_principle, args.device, calibrator)
-
+    if eval_metrics["acc"]>0.9:
+        print(f"High acc {eval_metrics['acc']} in {task_name} for {mode_name} with rules: {final_rules}")
     return eval_metrics
 
 

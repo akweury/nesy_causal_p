@@ -80,7 +80,7 @@ CUDA_VISIBLE_DEVICES=3,4,5 python -m baselines.eval_models --batch_size 1 --prin
 python -m baselines.eval_models --batch_size 1 --principle proximity --model gpt5 --img_num 3 --device_id 0 --img_size 224 --remote
 python -m baselines.eval_models --batch_size 1 --principle similarity --model gpt5 --img_num 3 --device_id 0 --img_size 224 --remote
 python -m baselines.eval_models --batch_size 1 --principle closure --model gpt5 --img_num 3 --device_id 0 --img_size 224 --remote
-python -m baselines.eval_models --batch_size 1 --principle symmetry --model gpt5 --img_num 3 --device_id 13 --img_size 224 --remote
+python -m baselines.eval_models --batch_size 1 --principle symmetry --model gpt5 --img_num 3 --device_id 0 --img_size 224 --remote
 python -m baselines.eval_models --batch_size 1 --principle continuity --model gpt5 --img_num 3 --device_id 0 --img_size 224 --remote
 ```
 

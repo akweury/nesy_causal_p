@@ -48,28 +48,32 @@ def get_results_path(remote=False, principle=None, model_name=None, img_num=None
 def parse_task_name(task_name):
     info = {}
     # Related concepts after 'rel_'
-    rel_match = re.search(r'rel_([a-zA-Z_]+)', task_name)
-    if rel_match:
-        info['related_concepts'] = rel_match.group(1).split('_')[:-1]
-
+    info['related_concepts'] = []
+    # Append related concepts based on substrings in task_name
+    for concept in ['shape', 'color', 'size', 'count']:
+        if f"_{concept}_" in task_name and concept not in info['related_concepts']:
+            info['related_concepts'].append(concept)
+        if "big_small" in task_name:
+            info['related_concepts'].append("size")
     # Group number (number after related concepts)
-    group_num_match = re.search(r'rel_[a-zA-Z_]+_(\d+)', task_name)
+    group_num_match = re.search(r'_(\d+)_', task_name[10:])
     if group_num_match:
         info['group_num'] = int(group_num_match.group(1))
     else:
         if "grid" in task_name:
             info['group_num'] = 4
         else:
-            raise ValueError(f"Task name '{task_name}' does not contain a valid group number.")
-    # Group size (s, m, l, xl after group number)
-    size_match = re.search(r'rel_[a-zA-Z_]+_\d+_(s|m|l|xl)', task_name)
+            info['group_num'] = 1
+            # raise ValueError(f"Task name '{task_name}' does not contain a valid group number.")
+    # Group size: s|m|l|xl after group number (with or without trailing underscore)
+    size_match = re.search(r'_(s|m|l|xl)(?:_|$)', task_name)
     if size_match:
         info['group_size'] = size_match.group(1)
-
-    # Irrelated concepts after 'irrel_'
-    irrel_match = re.search(r'irrel_([a-zA-Z_]+)', task_name)
-    if irrel_match:
-        info['irrelated_concepts'] = irrel_match.group(1).split('_')[:-1]
+    else:
+        # Also check if s|m|l|xl is at the very end (no underscore)
+        end_size_match = re.search(r'(s|m|l|xl)$', task_name)
+        if end_size_match:
+            info['group_size'] = end_size_match.group(1)
 
     # Rule type at the end ('all' or 'exist')
     rule_match = re.search(r'(all|exist)$', task_name)
