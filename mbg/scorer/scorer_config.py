@@ -29,6 +29,7 @@ POS_WEIGHT = 3
 
 def get_model_file_name(remote, principle):
     model_name = config.get_proj_output_path(remote) / f"neural_{principle}_model.pt"
+    print(f"Model path: {model_name}")
     return model_name
 
 
