@@ -114,7 +114,7 @@ def shape_to_id(name):
     return n
 
 class GrbDataset(Dataset):
-    def __init__(self, folder_path: str, mode: str, val_split: float = 0.2, task_num=None):
+    def __init__(self, folder_path: str, mode: str, val_split: float = 0.4, task_num=None):
         assert mode in ["train", "val", "test"]
         self.samples = []
         if task_num is None:

@@ -124,76 +124,68 @@ def print_ablation_results(json_path):
                 pct_change = ((avg_acc - hard_obj_acc) / hard_obj_acc) * 100
                 print(f"Change vs hard_obj: {pct_change:+.0f}%")
 
+
 def draw_final_calibrator_gain_figure(json_path, output_path=config.output / "calibrator_gain_vs_clause_quality.pdf"):
-    # Load JSON file
+    import matplotlib.pyplot as plt
+    import numpy as np
+    import json
+
+    plt.rcParams.update({
+        "font.size": 22,
+        "axes.titlesize": 28,
+        "axes.labelsize": 24,
+        "xtick.labelsize": 20,
+        "ytick.labelsize": 20,
+        "legend.fontsize": 22
+    })
+
     with open(json_path, "r") as f:
         data = json.load(f)
 
-    # Extract analysis from hard_obj_calib mode
-    results = data["per_task_results"]["hard_obj_calib"]
-    gain_with_clause = []
-    gain_without_clause = []
+    ogc_results = data["per_task_results"]["hard_ogc"]
+    og_results = data["per_task_results"]["hard_og"]
 
-    for task in results:
-        analysis = task.get("analysis", {})
-        cal_scores = analysis.get("calibrated_scores", [])
-        van_scores = analysis.get("vanilla_scores", [])
-        clause_flags = analysis.get("rule_pool_has_good_clause", [])
+    def get_counts(results, key_prefix="calibrated"):
+        helps, no_help, worse = [], [], []
+        for res in results:
+            analysis = res.get("analysis", {})
+            cal_scores = analysis.get(f"{key_prefix}_scores", [])
+            van_scores = analysis.get("vanilla_scores", [])
+            groundtruth_labels = analysis.get("groundtruth_labels", [])
+            for c, v, gt in zip(cal_scores, van_scores, groundtruth_labels):
+                if key_prefix == "calibrated":
+                    if (gt == 1 and v < 0.5 < c) or (gt == 0 and v > 0.5 > c):
+                        helps.append(1)
+                    elif (gt == 1 and v > 0.5 and c > 0.5) or (gt == 0 and v < 0.5 and c < 0.5):
+                        no_help.append(1)
+                    else:
+                        worse.append(1)
+                else:
+                    if (gt == 1 and v < 0.5) or (gt == 0 and v > 0.5):
+                        worse.append(1)
+                    else:
+                        no_help.append(1)
+        return [sum(helps), sum(no_help), sum(worse)]
 
-        for c, v, has_good in zip(cal_scores, van_scores, clause_flags):
-            gain = c - v
-            if has_good:
-                gain_with_clause.append(gain)
-            else:
-                gain_without_clause.append(gain)
+    ogc_counts = get_counts(ogc_results, key_prefix="calibrated")
+    og_counts = get_counts(og_results, key_prefix="vanilla")
 
-    # Compute stats
-    def describe(gains):
-        return np.mean(gains), np.std(gains), len(gains)
+    categories = ["Helps", "No Help", "Worse"]
+    x = np.arange(len(categories))
+    width = 0.35
 
-    mean_with, std_with, n_with = describe(gain_with_clause)
-    mean_without, std_without, n_without = describe(gain_without_clause)
-
-    # Run t-test
-    t_stat, p_value = ttest_ind(gain_with_clause, gain_without_clause, equal_var=False)
-
-    # Plot setup
-    plt.figure(figsize=(7, 5))
-    categories = ["Good Clause Exists", "No Good Clause"]
-    means = [mean_with, mean_without]
-    stds = [std_with, std_without]
-
-    # Bar plot
-    bars = plt.bar(categories, means, yerr=stds, capsize=8, color=["#4C72B0", "#DD8452"], edgecolor="black")
-
-    # Overlay jittered dots
-    jitter = 0.08
-    for i, data in enumerate([gain_with_clause, gain_without_clause]):
-        x = np.random.normal(i, jitter, size=len(data))
-        plt.scatter(x, data, color="black", alpha=0.4, s=10)
-
-    # Labels and formatting
-    plt.axhline(0, color="gray", linestyle="--", linewidth=1)
-    plt.ylabel("Average Score Gain (Calibrated − Vanilla)", fontsize=12)
-    plt.xticks(fontsize=11)
-    plt.yticks(fontsize=11)
-    plt.title("Calibrator Score Gain Relative to Clause Pool Quality", fontsize=13)
-    plt.grid(axis="y", linestyle="--", linewidth=0.5)
-
-    # Annotate p-value
-    p_label = f"t-test p = {p_value:.1e}"
-    plt.text(0.5, max(means) + max(stds) * 1.2, p_label,
-             ha="center", fontsize=10, bbox=dict(boxstyle="round,pad=0.3", edgecolor="gray", facecolor="white"))
-
+    plt.figure(figsize=(10, 7))
+    plt.bar(x - width/2, ogc_counts, width, label="Calibrated (ogc)", color="#4C72B0", edgecolor="black")
+    plt.bar(x + width/2, og_counts, width, label="Vanilla (og)", color="#DD8452", edgecolor="black")
+    plt.ylabel("Count")
+    plt.title("Calibrator Effect Summary (Grouped)")
+    plt.xticks(x, categories)
+    plt.legend()
     plt.tight_layout()
     plt.savefig(output_path)
     plt.close()
 
     print(f"Figure saved to {output_path}")
-    print(f"Good Clause Exists: n={n_with}, mean={mean_with:.4f}, std={std_with:.4f}")
-    print(f"No Good Clause:     n={n_without}, mean={mean_without:.4f}, std={std_without:.4f}")
-    print(f"T-test p-value: {p_value:.4e}")
-
 
 if __name__ == "__main__":
     print("Ablation study result analysis")
@@ -206,8 +198,8 @@ if __name__ == "__main__":
     # draw_final_calibrator_gain_figure(config.output / "ablation_summary_continuity_20250718_110525.json")
 
     # symmetry
-    print_ablation_results(config.output/"ablation_summary_symmetry_20250722_095458.json")
-    # draw_final_calibrator_gain_figure(config.output / "ablation_summary_symmetry_20250721_092532.json")
+    # print_ablation_results(config.output/"ablation_summary_symmetry_20250722_095458.json")
+    # draw_final_calibrator_gain_figure(config.get_proj_output_path() / "symmetry"/ "ablation_summary_symmetry_20250904_202041.json")
 
     # proximity
     # print_ablation_results(config.output/"ablation_summary_proximity_20250720_070246.json")
@@ -215,8 +207,9 @@ if __name__ == "__main__":
 
     # similarity
     # print_ablation_results(config.output/"ablation_summary_similarity_20250721_092307.json")
-    # draw_final_calibrator_gain_figure(config.output / "ablation_summary_similarity_20250721_092307.json")
+    draw_final_calibrator_gain_figure(config.output / "ablation_summary_similarity_20250721_092307.json")
 
 
+    # draw_final_calibrator_gain_figure(config.output / "ablation_summary_proximity_20250720_070246.json")
     # main_ablation()
     # run_ablation()

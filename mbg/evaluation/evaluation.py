@@ -12,7 +12,7 @@ from mbg.grounding import grounding
 from mbg.language.clause_generation import Clause, ScoredRule
 from mbg import patch_preprocess
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
-
+from mbg.scorer import improved_calibrator
 
 def _evaluate_clause(
         clause: Clause,
@@ -521,7 +521,9 @@ def eval_rules(val_data, obj_model, group_model, learned_rules, hyp_params, eval
 
         # 5) compute image-level score
         if calibrator:
-            calibrated_score = float(calibrator(torch.tensor(rule_score).to(device)).detach().cpu().numpy())
+            calibrated_score = calibrator.predict_from_scores(rule_score, device)  # 返回校准后的概率
+            # calibrated_score = float(calibrator(torch.tensor(rule_score).to(device)).detach().cpu().numpy())
+            # calibrated_score = improved_calibrator.calibrate_one_image(calibrator, rule_score, hyp_params, device)
         else:
             calibrated_score = None
         vanilla_score = compute_image_score(kept_rules, rule_score_dict)

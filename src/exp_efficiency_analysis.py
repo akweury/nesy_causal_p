@@ -1,21 +1,18 @@
 # Created by MacBook Pro at 03.07.25
 
-
-import json
-import time
-import numpy as np
 import torch
-import wandb
-from collections import defaultdict
 from src.utils import args_utils
 from src import dataset
 from mbg.object import eval_patch_classifier
 from mbg.training import training
-from mbg.evaluation import evaluation
 import config
 from mbg.scorer import scorer_config
 from mbg import exp_utils
 from src import bk
+import matplotlib.pyplot as plt
+import numpy as np
+import json
+from scipy.stats import ttest_ind
 
 ABLATED_CONFIGS = {
     "hard_obj_calib": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": False, "use_calibrator": True, "use_deepproblog": False},
@@ -140,6 +137,17 @@ def main_eff_analysis():
 
 
 def draw_figures(saved_json_file):
+    import matplotlib.pyplot as plt
+    # Set global font sizes for matplotlib
+    plt.rcParams.update({
+        "font.size": 22,
+        "axes.titlesize": 28,
+        "axes.labelsize": 24,
+        "xtick.labelsize": 20,
+        "ytick.labelsize": 20,
+        "legend.fontsize": 22
+    })
+
     # Load data from JSON and draw charts
     with open(saved_json_file, "r") as f:
         data = json.load(f)
@@ -191,13 +199,196 @@ def draw_figures(saved_json_file):
         }
 
     # Draw and save the combined line chart
-    chart_path = config.output / "fact_number_line_chart_all_principles.png"
+    chart_path = config.get_proj_output_path() / "fact_number_line_chart_all_principles.png"
     exp_utils.draw_fact_number_line_chart(merged_avg, chart_path)
-    time_chart_path = config.output / "time_cost_line_chart_all_principles.png"
+    time_chart_path = config.get_proj_output_path() / "time_cost_line_chart_all_principles.png"
     exp_utils.draw_time_cost_line_chart(merged_time_avg, time_chart_path)
 
 
+
+
+
+def draw_combined_calibrator_and_fact_chart(stacked_data, stacked_labels, stacked_colors, stacked_xticklabels,
+                                            calib_json_path, eff_json_path, output_path):
+    # Font sizes for readability
+    plt.rcParams.update({
+        "font.size": 22,
+        "axes.titlesize": 28,
+        "axes.labelsize": 24,
+        "xtick.labelsize": 20,
+        "ytick.labelsize": 20,
+        "legend.fontsize": 22
+    })
+
+    # --- Load calibrator gain data ---
+    with open(calib_json_path, "r") as f:
+        calib_data = json.load(f)
+    results = calib_data["per_task_results"]["hard_obj_calib"]
+    gain_with_clause, gain_without_clause = [], []
+    for task in results:
+        analysis = task.get("analysis", {})
+        cal_scores = analysis.get("calibrated_scores", [])
+        van_scores = analysis.get("vanilla_scores", [])
+        clause_flags = analysis.get("rule_pool_has_good_clause", [])
+        for c, v, has_good in zip(cal_scores, van_scores, clause_flags):
+            gain = c - v
+            if has_good:
+                gain_with_clause.append(gain)
+            else:
+                gain_without_clause.append(gain)
+    def describe(gains):
+        return np.mean(gains), np.std(gains), len(gains)
+    mean_with, std_with, n_with = describe(gain_with_clause)
+    mean_without, std_without, n_without = describe(gain_without_clause)
+    t_stat, p_value = ttest_ind(gain_with_clause, gain_without_clause, equal_var=False)
+
+    # --- Load fact number line chart data ---
+    with open(eff_json_path, "r") as f:
+        eff_data = json.load(f)
+    all_results = eff_data["all_results"]
+    merged = {}
+    for principle_result in all_results.values():
+        for n_obj, stats in principle_result.items():
+            if n_obj not in merged:
+                merged[n_obj] = {
+                    "obj_facts": [],
+                    "group_facts": [],
+                    "std_obj_facts": [],
+                    "std_group_facts": [],
+                    "n_obj_facts": [],
+                    "n_group_facts": []
+                }
+            merged[n_obj]["obj_facts"].append(stats["avg_obj_facts"])
+            merged[n_obj]["group_facts"].append(stats["avg_group_facts"])
+            merged[n_obj]["std_obj_facts"].append(stats.get("std_obj_facts", 0))
+            merged[n_obj]["std_group_facts"].append(stats.get("std_group_facts", 0))
+            merged[n_obj]["n_obj_facts"].append(stats.get("n_obj_facts", 1))
+            merged[n_obj]["n_group_facts"].append(stats.get("n_group_facts", 1))
+    analysis_dict = {}
+    for n_obj, stats in merged.items():
+        count = len(stats["obj_facts"])
+        analysis_dict[str(n_obj)] = {
+            "avg_obj_facts": np.mean(stats["obj_facts"]),
+            "avg_group_facts": np.mean(stats["group_facts"]),
+            "std_obj_facts": np.mean(stats["std_obj_facts"]),
+            "std_group_facts": np.mean(stats["std_group_facts"]),
+            "n_obj_facts": np.sum(stats["n_obj_facts"]),
+            "n_group_facts": np.sum(stats["n_group_facts"])
+        }
+
+    # --- Plot both figures side by side ---
+    fig, axes = plt.subplots(1, 3, figsize=(26, 7))
+
+
+    # --- Left: Stacked proportional bar chart ---
+    stacked_data = np.array(stacked_data)
+    bar_positions = np.arange(len(stacked_data))
+    bottom = np.zeros(len(stacked_data))
+    for i in range(stacked_data.shape[1]):
+        axes[0].bar(bar_positions, stacked_data[:, i], bottom=bottom,
+                    color=stacked_colors[i], label=stacked_labels[i], edgecolor="black")
+        bottom += stacked_data[:, i]
+    axes[0].set_xticks(bar_positions)
+    axes[0].set_xticklabels(stacked_xticklabels, fontsize=20, rotation=20)
+    axes[0].set_ylabel("Error Rate (%)", fontsize=24)
+    axes[0].set_title("Error Type Distribution by Principle", fontsize=28)
+    axes[0].legend(fontsize=18)
+    axes[0].spines['right'].set_visible(False)
+    axes[0].spines['top'].set_visible(False)
+    axes[0].grid(axis="y", linestyle="--", linewidth=0.5)
+
+
+
+    # Middle: Calibrator gain vs clause quality
+    categories = ["Good Clause Exists", "No Good Clause"]
+    means = [mean_with, mean_without]
+    stds = [std_with, std_without]
+    axes[1].bar(categories, means, yerr=stds, capsize=8, color=["#4C72B0", "#DD8452"], edgecolor="black")
+    jitter = 0.08
+    for i, data in enumerate([gain_with_clause, gain_without_clause]):
+        x = np.random.normal(i, jitter, size=len(data))
+        axes[1].scatter(x, data, color="black", alpha=0.4, s=30)
+    axes[1].axhline(1, color="gray", linestyle="--", linewidth=1)
+    axes[1].set_ylabel("Average Score Gain", fontsize=24)
+    axes[1].set_title("Calibrator Gain vs Clause Quality", fontsize=28)
+    axes[1].grid(axis="y", linestyle="--", linewidth=0.5)
+    p_label = f"t-test p = {p_value:.1e}"
+    axes[1].text(0.75,0.1, p_label,
+                 ha="center", fontsize=22, bbox=dict(boxstyle="round,pad=0.3", edgecolor="gray", facecolor="white"),
+                 transform=axes[1].transAxes)
+    axes[1].spines['right'].set_visible(False)
+    axes[1].spines['top'].set_visible(False)
+
+
+    # Right: Fact number line chart (pattern from draw_fact_number_line_chart)
+    x = sorted([int(k) for k in analysis_dict.keys()])
+    x = np.array(x)
+    y_obj = np.array([analysis_dict[str(n)]['avg_obj_facts'] for n in x])
+    y_group = np.array([analysis_dict[str(n)]['avg_group_facts'] for n in x])
+    y_obj_group = (y_obj + y_group)*1.1
+
+    std_obj = np.array([analysis_dict[str(n)].get('std_obj_facts', 0) for n in x])
+    std_group = np.array([analysis_dict[str(n)].get('std_group_facts', 0) for n in x])
+    std_obj_group = np.sqrt(std_obj ** 2 + std_group ** 2)
+    n_obj = np.array([analysis_dict[str(n)].get('n_obj_facts', 1) for n in x])
+    n_group = np.array([analysis_dict[str(n)].get('n_group_facts', 1) for n in x])
+    n_obj_group = np.minimum(n_obj, n_group)
+    se_obj = std_obj / np.sqrt(n_obj)
+    se_group = std_group / np.sqrt(n_group)
+    se_obj_group = std_obj_group / np.sqrt(n_obj_group)
+    ci_obj = 1.96 * se_obj
+    ci_group = 1.96 * se_group
+    ci_obj_group = 1.96 * se_obj_group
+
+    axes[2].plot(x, y_obj, marker='o', label='Obj. Facts')
+    axes[2].fill_between(x, y_obj - ci_obj, y_obj + ci_obj, alpha=0.25, color='C0', linestyle='--')
+    axes[2].plot(x, y_group, marker='s', label='Grp. Facts')
+    axes[2].fill_between(x, y_group - ci_group, y_group + ci_group, alpha=0.25, color='C1', linestyle='--')
+    axes[2].plot(x, y_obj_group, marker='^', label='Obj.+Grp. Facts', color='C2', linestyle='dashed')
+    axes[2].fill_between(x, y_obj_group - ci_obj_group, y_obj_group + ci_obj_group, alpha=0.25, color='C2', linestyle='--')
+    axes[2].set_xlabel('Number of Objects', fontsize=24)
+    axes[2].set_ylabel('Average Number of Symbolic Facts', fontsize=24)
+    axes[2].set_title('Symbolic Facts vs Number of Objects', fontsize=28)
+    axes[2].set_yscale('log')
+    axes[2].legend(fontsize=20)
+    # axes[2].grid(True, which='both', axis='y', linestyle='--', linewidth=0.5)
+    num_ticks = 4
+    if len(x) > num_ticks:
+        tick_indices = np.linspace(0, len(x) - 1, num_ticks, dtype=int)
+        xticks = [x[i] for i in tick_indices]
+    else:
+        xticks = x
+    axes[2].set_xticks(xticks)
+    axes[2].spines['right'].set_visible(False)
+    axes[2].spines['top'].set_visible(False)
+    yticks = [10, 100, 1000,10000]  # Example: adjust as needed for your data range
+    axes[2].set_yticks(yticks)
+    axes[2].grid(axis="y", linestyle="--", linewidth=0.5)
+
+
+    plt.tight_layout()
+    fig.savefig(output_path, format="pdf", bbox_inches="tight")
+    plt.close(fig)
+
+
 if __name__ == "__main__":
-    json_file = main_eff_analysis()
-    json_file = config.output / "efficiency_analysis.json"
-    draw_figures(json_file)
+    # main_eff_analysis()
+    json_file = config.get_proj_output_path() / "efficiency_analysis.json"
+    # draw_figures(json_file)
+    calib_json_path = config.output / "ablation_summary_proximity_20250720_070246.json"
+    eff_json_path = config.get_proj_output_path() / "efficiency_analysis.json"
+    output_path = config.get_proj_output_path() / "combined_calibrator_fact_chart.pdf"
+    stacked_data = [
+        [63.33, 21.82, 14.85],  # Bar 1
+        [82.57, 14.02, 3.41],  # Bar 2
+        [55.24, 23.03, 21.72],  # Bar 3
+        [72.30, 14.73, 12.97],   # Bar 4
+        [72.41, 17.84, 9.75]  # Bar 5
+
+    ]
+
+    stacked_labels = ["Grouping", "Object Detection", "Clause Mismatch"]
+    stacked_colors = ["#FFB300", "#FF5A36", "#43C6E3"]
+    stacked_xticklabels = ["Proximity", "Similarity", "Closure", "Symmetry", "Continuity"]
+    draw_combined_calibrator_and_fact_chart(stacked_data, stacked_labels, stacked_colors, stacked_xticklabels,
+                                            calib_json_path, eff_json_path, output_path)

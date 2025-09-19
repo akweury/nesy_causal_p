@@ -49,7 +49,7 @@ LR = 1e-3
 DEVICE = "cpu"
 
 
-def load_scorer_model(principle_name, device, remote, input_dim=7):
+def load_scorer_model(principle_name, device, remote=False, input_dim=7):
     model = ContextContourScorer(input_dim=input_dim).to(device)
     model_name = get_model_file_name_best(remote, principle_name)
     model.load_state_dict(torch.load(model_name, map_location=device))

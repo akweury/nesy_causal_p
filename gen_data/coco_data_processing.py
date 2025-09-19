@@ -192,9 +192,7 @@ def build_labelstudio_subset_with_bboxes(
 
 if __name__ == "__main__":
     args = args_utils.get_args()
-
     # coco_to_labelstudio(args)
-
     n_imgs, n_boxes = build_labelstudio_subset_with_bboxes(
         coco_json_path=config.get_coco_path(args.remote) / "original" / "annotations" / "instances_val2017.json",
         subset_dir=config.get_coco_path(args.remote) / "selected" / "val2017",
@@ -202,7 +200,7 @@ if __name__ == "__main__":
         image_field_name="img",
         rect_field_name="obj",
         rect_label_value="object",
-        max_images=None,  # 或者先生成前 500 张试试
+        max_images=None,
         skip_crowd=True,
         id_from_filename=False
     )

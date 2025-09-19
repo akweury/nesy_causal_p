@@ -13,6 +13,7 @@ from mbg.training import training
 from mbg.evaluation import evaluation
 import config
 from mbg.scorer import scorer_config
+from mbg.scorer import improved_calibrator
 
 ABLATED_CONFIGS = {
     "hard_ogc": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": True, "use_calibrator": True},
@@ -35,13 +36,49 @@ def run_ablation(train_data, val_data, test_data, obj_model, group_model, train_
     # train rule + calibrator
     obj_times = torch.zeros(len(train_img_labels))
 
-    hard, soft, group_nums, obj_list, group_list = training.ground_facts(train_val_data, obj_model, group_model, hyp_params, train_principle, args.device, ablation_flags, obj_times)
+    hard, soft, group_nums, obj_list, group_list = training.ground_facts(train_val_data, obj_model, group_model, hyp_params, train_principle, args.device, ablation_flags,
+                                                                         obj_times)
     base_rules = training.train_rules(hard, soft, obj_list, group_list, group_nums, train_img_labels, hyp_params, ablation_flags, obj_times)
     final_rules = training.extend_rules(base_rules, hard, soft, train_img_labels, obj_list, group_list, hyp_params)
-
-    calibrator = training.train_calibrator(final_rules, obj_list, group_list, hard, soft, train_img_labels, hyp_params, ablation_flags, args.device)
+    # calibrator = training.train_calibrator(final_rules, obj_list, group_list, hard, soft, train_img_labels, hyp_params, ablation_flags, args.device)
+    calibrator = improved_calibrator.train_calibrator(final_rules, obj_list, group_list, hard, soft, train_img_labels, hyp_params, ablation_flags, args.device)
     eval_metrics = evaluation.eval_rules(test_data, obj_model, group_model, final_rules, hyp_params, train_principle, args.device, calibrator)
-    if eval_metrics["acc"]>0.9:
+    if eval_metrics["acc"] > 0.9:
+        print(f"High acc {eval_metrics['acc']} in {task_name} for {mode_name} with rules: {final_rules}")
+    return eval_metrics
+
+
+def run_ablation_train_val(train_data, val_data, test_data, obj_model, group_model, train_principle, args, mode_name,
+                           ablation_flags):
+    task_name = train_data["task"]
+    train_data = {
+        "task": task_name,
+        "positive": train_data["positive"],
+        "negative": train_data["negative"]
+    }
+    val_data = {
+        "task": task_name,
+        "positive": val_data["positive"],
+        "negative": val_data["negative"]
+    }
+    hyp_params = {"prox": 0.9, "sim": 0.5, "top_k": 5, "conf_th": 0.5, "patch_dim": 7}
+    train_img_labels = [1] * len(train_data["positive"]) + [0] * len(train_data["negative"])
+    val_img_labels = [1] * len(val_data["positive"]) + [0] * len(val_data["negative"])
+    # train rule + calibrator
+    obj_times = torch.zeros(len(train_img_labels))
+    val_obj_times = torch.zeros(len(val_img_labels))
+
+    hard, soft, group_nums, obj_list, group_list = training.ground_facts(train_data, obj_model, group_model, hyp_params, train_principle, args.device, ablation_flags, obj_times)
+    val_hard, val_soft, val_group_nums, val_obj_list, val_group_list = training.ground_facts(val_data, obj_model, group_model, hyp_params, train_principle, args.device,
+                                                                                             ablation_flags, val_obj_times)
+
+    base_rules = training.train_rules(hard, soft, obj_list, group_list, group_nums, train_img_labels, hyp_params, ablation_flags, obj_times)
+    final_rules = training.extend_rules(base_rules, hard, soft, train_img_labels, obj_list, group_list, hyp_params)
+    # calibrator = training.train_calibrator(final_rules, obj_list, group_list, hard, soft, train_img_labels, hyp_params, ablation_flags, args.device)
+    calibrator = improved_calibrator.train_calibrator(final_rules, val_obj_list, val_group_list, val_hard, val_soft, val_img_labels, hyp_params, ablation_flags, args.device)
+
+    eval_metrics = evaluation.eval_rules(test_data, obj_model, group_model, final_rules, hyp_params, train_principle, args.device, calibrator)
+    if eval_metrics["acc"] > 0.9:
         print(f"High acc {eval_metrics['acc']} in {task_name} for {mode_name} with rules: {final_rules}")
     return eval_metrics
 
@@ -76,7 +113,7 @@ def main_ablation():
         for mode_name, ablation_flags in ABLATED_CONFIGS.items():
 
             t1 = time.time()
-            test_metrics = run_ablation(train_data, val_data, test_data, obj_model, group_model,
+            test_metrics = run_ablation_train_val(train_data, val_data, test_data, obj_model, group_model,
                                         train_principle, args, mode_name, ablation_flags)
             t2 = time.time()
             print(f"  Running ablation: {mode_name} in {t2 - t1} seconds")

@@ -32,7 +32,15 @@ def get_raw_patterns_path(remote=False):
     if not os.path.exists(raw_patterns_path):
         os.makedirs(raw_patterns_path)
     return raw_patterns_path
+def get_coco_patterns_path(remote=False):
+    if remote:
+        raw_patterns_path = Path('/gen_data')
+    else:
+        raw_patterns_path = storage / "coco"
 
+    if not os.path.exists(raw_patterns_path):
+        os.makedirs(raw_patterns_path)
+    return raw_patterns_path
 
 def get_coco_path(remote=False):
     if remote:

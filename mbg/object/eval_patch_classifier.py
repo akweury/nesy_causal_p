@@ -14,7 +14,7 @@ import mbg.mbg_config as param
 from mbg import patch_preprocess
 
 
-def load_model(device, remote):
+def load_model(device, remote=False):
 
     model_path = param.get_patch_model_path(remote)
     model = PatchClassifier(
