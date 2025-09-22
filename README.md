@@ -90,7 +90,7 @@ python -m baselines.eval_models --batch_size 1 --principle continuity --model gp
 python -m src.ablation_study --device 10 --task_id 6 --line_min_size 3
 python -m src.ablation_study --device 0 --principle closure
 python -m src.ablation_study --device 1 --principle similarity
-python -m src.ablation_study --device 0 --principle proximity
+python -m src.ablation_study --device 5 --principle proximity --remote
 python -m src.ablation_study --device 0 --principle continuity
 python -m src.ablation_study --device 7 --principle symmetry --remote
 
