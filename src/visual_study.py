@@ -232,6 +232,85 @@ def visual_grp_tasks(imgs, grp_preds, axs, i):
     return axs
 
 
+
+
+def visual_tasks(img, grp_preds, save_path):
+    import matplotlib.pyplot as plt
+    from torchvision.transforms.functional import to_pil_image
+
+    plt.rcParams['font.family'] = 'Times New Roman'
+
+    img_np = to_pil_image(img.cpu()).convert("RGB")
+    cmap = plt.get_cmap("tab10")
+
+    fig, ax = plt.subplots(figsize=(6, 6))
+    ax.imshow(img_np)
+    ax.axis("off")
+
+    for i, group in enumerate(grp_preds):
+        members = group["members"]
+        if len(members) == 0:
+            continue
+
+        xs, ys, ws, hs = zip(*[(m["s"]["x"], m["s"]["y"], m["s"]["w"], m["s"]["h"]) for m in members])
+        img_w, img_h = img_np.width, img_np.height
+        x0 = min(x * img_w for x in xs)
+        y0 = min(y * img_h for y in ys)
+        x1 = max((x + w) * img_w for x, w in zip(xs, ws))
+        y1 = max((y + h) * img_h for y, h in zip(ys, hs))
+
+        color = cmap(i % 10)
+        rect = plt.Rectangle((x0, y0), x1 - x0, y1 - y0,
+                             linewidth=2.5, edgecolor=color, facecolor='none')
+        ax.add_patch(rect)
+        ax.text(x0 + 3, y0 - 5, f"Group {i}", color=color, fontsize=10, weight='bold',
+                bbox=dict(facecolor='white', alpha=0.5, edgecolor='none', pad=1))
+
+    plt.tight_layout()
+    plt.savefig(save_path, format="png", dpi=200)
+    plt.close()
+    print(f"Saved all groups visualization to {save_path}")
+
+
+
+
+
+def save_all_groups_one_figure(img, grp_preds, save_path):
+    import matplotlib.pyplot as plt
+    TF = __import__('torchvision.transforms.functional', fromlist=['to_pil_image']).to_pil_image
+
+    img_np = TF(img.cpu()).convert("RGB")
+    cmap = plt.get_cmap("tab10")
+
+    fig, ax = plt.subplots(figsize=(6, 6))
+    ax.imshow(img_np)
+    ax.axis("off")
+
+    for i, group in enumerate(grp_preds):
+        members = group["members"]
+        if len(members) == 0:
+            continue
+
+        xs, ys, ws, hs = zip(*[(m["s"]["x"], m["s"]["y"], m["s"]["w"], m["s"]["h"]) for m in members])
+        img_w, img_h = img_np.width, img_np.height
+        x0 = min(x * img_w for x in xs)
+        y0 = min(y * img_h for y in ys)
+        x1 = max((x + w) * img_w for x, w in zip(xs, ws))
+        y1 = max((y + h) * img_h for y, h in zip(ys, hs))
+
+        color = cmap(i % 10)
+        rect = plt.Rectangle((x0, y0), x1 - x0, y1 - y0,
+                             linewidth=2.5, edgecolor=color, facecolor='none')
+        ax.add_patch(rect)
+        ax.text(x0 + 3, y0 - 5, f"Group {i}", color=color, fontsize=8, weight='bold',
+                bbox=dict(facecolor='white', alpha=0.5, edgecolor='none', pad=1))
+
+    plt.tight_layout()
+    plt.savefig(save_path, format="pdf", dpi=200)
+    plt.close()
+    print(f"Saved all groups visualization to {save_path}")
+
+
 def visualize_multiple_tasks(device="cpu", save_path=None):
     save_path = save_path or config.output / "od_visual.png"
     obj_model = eval_patch_classifier.load_model(device)
@@ -265,12 +344,13 @@ def visualize_multiple_tasks(device="cpu", save_path=None):
     print(f"Saved 2x2 visualization grid to {save_path}")
 
 
-def visualize_multiple_tasks_grp(device="cpu", save_path=None):
+def visualize_multiple_tasks_grp(device="cpu"):
     prin = "proximity"
 
-    for prin in ["proximity", "closure", "similarity", "continuity", "symmetry"]:
+    for prin in ["symmetry", "proximity", "closure", "continuity"]:
         obj_model = eval_patch_classifier.load_model(device)
-        group_model_closure = scorer_config.load_scorer_model(prin, device)
+        input_dim = 5 if prin == "similarity" else 7
+        group_model_closure = scorer_config.load_scorer_model(prin, device, input_dim=input_dim)
 
         # Get closure task folders
         if prin == "closure":
@@ -302,13 +382,19 @@ def visualize_multiple_tasks_grp(device="cpu", save_path=None):
             meta, obj_preds, _ = patch_preprocess.align_gt_data_and_pred_data(meta, obj_preds)
             # axs = visual_obj_tasks(obj_preds, meta, axs)
 
-            grp_preds = eval_groups.eval_groups(obj_preds, group_model_closure, "closure", device, dim=7)
+            grp_preds = eval_groups.eval_groups(obj_preds, group_model_closure, prin, device, dim=input_dim)
             axs_grp = visual_grp_tasks(imgs, grp_preds, axs_grp, i)
+            save_all_groups_one_figure(imgs[0], grp_preds, config.output / "grouping" / f"group_vis_grid_{prin}_{folder_name}.pdf")
             # ax.set_title(folder_name)
 
         plt.tight_layout()
-        plt.savefig(config.output / f"group_vis_grid_{prin}.png", dpi=200)
+        plt.savefig(config.output / f"group_vis_grid_{prin}_single.png", dpi=200)
         plt.close()
+
+def visual_grps(imgs, grp_preds, task_name):
+    for i, img_data in enumerate(imgs):
+        img = patch_preprocess.load_images_fast(img_data["image_path"], device="cpu")
+        visual_tasks(img[0], grp_preds[i], config.output/"grouping" / f"{task_name}_img_{i}.png")
 
 
 def main():
@@ -317,3 +403,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+

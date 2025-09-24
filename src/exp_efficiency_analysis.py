@@ -344,21 +344,24 @@ def draw_combined_calibrator_and_fact_chart(stacked_data, stacked_labels, stacke
     fig.savefig(output_path, format="pdf", bbox_inches="tight")
     plt.close(fig)
 
+
 def draw_calibrator_chart(stacked_data, stacked_labels, stacked_colors, stacked_xticklabels, output_path):
     import matplotlib.pyplot as plt
     import numpy as np
+    plt.rcParams['font.family'] = 'Times New Roman'
+
     plt.rcParams.update({
-        "font.size": 22,
+        "font.size": 24,
         "axes.titlesize": 28,
         "axes.labelsize": 24,
-        "xtick.labelsize": 20,
-        "ytick.labelsize": 20,
-        "legend.fontsize": 22
+        "xtick.labelsize": 24,
+        "ytick.labelsize": 24,
+        "legend.fontsize": 24
     })
     stacked_data = np.array(stacked_data)
     bar_positions = np.arange(len(stacked_data))
     bottom = np.zeros(len(stacked_data))
-    fig, ax = plt.subplots(figsize=(9, 7))
+    fig, ax = plt.subplots(figsize=(6, 5))
     for i in range(stacked_data.shape[1]):
         ax.bar(bar_positions, stacked_data[:, i], bottom=bottom,
                color=stacked_colors[i], label=stacked_labels[i], edgecolor="black")
@@ -366,8 +369,8 @@ def draw_calibrator_chart(stacked_data, stacked_labels, stacked_colors, stacked_
     ax.set_xticks(bar_positions)
     ax.set_xticklabels(stacked_xticklabels, fontsize=20, rotation=20)
     ax.set_ylabel("Error Rate (%)", fontsize=24)
-    ax.set_title("Error Type Distribution by Principle", fontsize=28)
-    ax.legend(fontsize=18)
+    ax.set_title("Error Type Distribution by Principle", fontsize=25)
+    ax.legend(fontsize=15, loc="lower right")
     ax.spines['right'].set_visible(False)
     ax.spines['top'].set_visible(False)
     ax.grid(axis="y", linestyle="--", linewidth=0.5)
@@ -375,9 +378,12 @@ def draw_calibrator_chart(stacked_data, stacked_labels, stacked_colors, stacked_
     fig.savefig(output_path, format="pdf", bbox_inches="tight")
     plt.close(fig)
 
+
 def draw_fact_chart(eff_json_path, output_path):
     import numpy as np
+    import matplotlib.pyplot as plt
 
+    plt.rcParams['font.family'] = 'Times New Roman'
 
     # --- Load fact number line chart data ---
     with open(eff_json_path, "r") as f:
@@ -416,12 +422,12 @@ def draw_fact_chart(eff_json_path, output_path):
     import matplotlib.pyplot as plt
     import numpy as np
     plt.rcParams.update({
-        "font.size": 22,
+        "font.size": 24,
         "axes.titlesize": 28,
         "axes.labelsize": 24,
-        "xtick.labelsize": 20,
-        "ytick.labelsize": 20,
-        "legend.fontsize": 22
+        "xtick.labelsize": 24,
+        "ytick.labelsize": 24,
+        "legend.fontsize": 24
     })
     x = sorted([int(k) for k in analysis_dict.keys()])
     x = np.array(x)
@@ -440,7 +446,7 @@ def draw_fact_chart(eff_json_path, output_path):
     ci_obj = 1.96 * se_obj
     ci_group = 1.96 * se_group
     ci_obj_group = 1.96 * se_obj_group
-    fig, ax = plt.subplots(figsize=(9, 7))
+    fig, ax = plt.subplots(figsize=(6, 5))
     ax.plot(x, y_obj, marker='o', label='Obj. Facts')
     ax.fill_between(x, y_obj - ci_obj, y_obj + ci_obj, alpha=0.25, color='C0', linestyle='--')
     ax.plot(x, y_group, marker='s', label='Grp. Facts')
@@ -448,10 +454,10 @@ def draw_fact_chart(eff_json_path, output_path):
     ax.plot(x, y_obj_group, marker='^', label='Obj.+Grp. Facts', color='C2', linestyle='dashed')
     ax.fill_between(x, y_obj_group - ci_obj_group, y_obj_group + ci_obj_group, alpha=0.25, color='C2', linestyle='--')
     ax.set_xlabel('Number of Objects', fontsize=24)
-    ax.set_ylabel('Average Number of Symbolic Facts', fontsize=24)
-    ax.set_title('Symbolic Facts vs Number of Objects', fontsize=28)
+    ax.set_ylabel('Avg. Fact Num.', fontsize=24)
+    # ax.set_title('Symbolic Facts vs Number of Objects', fontsize=26)
     ax.set_yscale('log')
-    ax.legend(fontsize=20)
+    ax.legend(loc="lower right",fontsize=15 )
     num_ticks = 4
     if len(x) > num_ticks:
         tick_indices = np.linspace(0, len(x) - 1, num_ticks, dtype=int)
@@ -467,6 +473,7 @@ def draw_fact_chart(eff_json_path, output_path):
     plt.tight_layout()
     fig.savefig(output_path, format="pdf", bbox_inches="tight")
     plt.close(fig)
+
 
 if __name__ == "__main__":
     # main_eff_analysis()
@@ -484,11 +491,11 @@ if __name__ == "__main__":
 
     ]
 
-    stacked_labels = ["Grouping", "Object Detection", "Clause Mismatch"]
+    stacked_labels = ["Grouping", "Object Detection", "Rule Mismatch"]
     stacked_colors = ["#FFB300", "#FF5A36", "#43C6E3"]
     stacked_xticklabels = ["Proximity", "Similarity", "Closure", "Symmetry", "Continuity"]
     # draw_combined_calibrator_and_fact_chart(stacked_data, stacked_labels, stacked_colors, stacked_xticklabels,
     #                                         calib_json_path, eff_json_path, output_path)
     draw_calibrator_chart(stacked_data, stacked_labels, stacked_colors, stacked_xticklabels,
                                         config.get_proj_output_path() / "calibrator_chart.pdf")
-    draw_fact_chart(eff_json_path, config.get_proj_output_path() / "fact_chart.pdf")
+    # draw_fact_chart(eff_json_path, config.get_proj_output_path() / "fact_chart.pdf")

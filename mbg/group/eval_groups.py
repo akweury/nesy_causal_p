@@ -19,8 +19,8 @@ def embedding_principles(group_principle):
     return p_g
 
 
-def embedding_group_neural_features(group_objs,device, input_dim=7):
-    group_patches = torch.stack([o["h"] for o in group_objs])
+def embedding_group_neural_features(group_objs, device, input_dim=7):
+    group_patches = torch.stack([o["h"] for o in group_objs])[:,:,:, :input_dim].to(device)  # (G, P, L, D)
     # build the encoder (dims must match your patch-encoder settings):
     group_encoder = NeuralGroupEncoder(
         input_dim=input_dim,
@@ -45,7 +45,7 @@ def construct_group_representations(objs, group_obj_ids, principle, input_dim, d
     for g_i, group_obj_id in enumerate(group_obj_ids):
         group_objs = [objs[i] for i in group_obj_id]
         # s_g = dict_group_features(group_objs)
-        h_g = embedding_group_neural_features(group_objs,device, input_dim)
+        h_g = embedding_group_neural_features(group_objs, device, input_dim)
         p_g = principle
         grp = {
             "id": g_i,
@@ -59,7 +59,7 @@ def construct_group_representations(objs, group_obj_ids, principle, input_dim, d
 
 
 @torch.no_grad()
-def group_objects_with_model(model, objects, device, input_type="pos_color_size", threshold=0.5):
+def group_objects_with_model(model, objects, device, input_type="pos_color_size", threshold=0.5, dim=7):
     """
     Args:
         model: trained ContextContourScorer model
@@ -82,7 +82,7 @@ def group_objects_with_model(model, objects, device, input_type="pos_color_size"
         else:
             ctx_tensor = torch.stack(context).unsqueeze(0).to(device)
 
-        logit = model(ci, cj, ctx_tensor)
+        logit = model(ci[:, :, :, :dim], cj[:, :, :, :dim], ctx_tensor[:, :, :, :, :dim])
         prob = torch.sigmoid(logit).item()
         if prob > threshold:
             G.add_edge(i, j)
@@ -94,7 +94,9 @@ def group_objects_with_model(model, objects, device, input_type="pos_color_size"
 def eval_groups(objs, group_model, principle, device, dim):
     # symbolic_objs = [o["s"] for o in objs]
     neural_objs = [o["h"] for o in objs]
-    group_ids = group_objects_with_model(group_model, neural_objs, device)
+    if  principle=="similarity":
+        dim = 5
+    group_ids = group_objects_with_model(group_model, neural_objs, device, dim=dim)
     # encoding the groups
     groups = construct_group_representations(objs, group_ids, principle, dim, device)
     return groups

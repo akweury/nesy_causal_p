@@ -14,12 +14,13 @@ from mbg.evaluation import evaluation
 import config
 from mbg.scorer import scorer_config
 from mbg.scorer import improved_calibrator
-
+from src import visual_study
 ABLATED_CONFIGS = {
-    "hard_ogc": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": True, "use_calibrator": True},
-    "hard_obj": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": False, "use_calibrator": False},
+    # "hard_ogc": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": True, "use_calibrator": True},
+    # "hard_obj": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": False, "use_calibrator": False},
     "hard_og": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": True, "use_calibrator": False},
-    "hard_obj_calib": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": False, "use_calibrator": True},
+    # "hard_obj_calib": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": False, "use_calibrator": True},
+
 }
 
 
@@ -78,9 +79,13 @@ def run_ablation_train_val(train_data, val_data, test_data, obj_model, group_mod
     calibrator = improved_calibrator.train_calibrator(final_rules, val_obj_list, val_group_list, val_hard, val_soft, val_img_labels, hyp_params, ablation_flags, args.device)
 
     eval_metrics = evaluation.eval_rules(test_data, obj_model, group_model, final_rules, hyp_params, train_principle, args.device, calibrator)
-    if eval_metrics["acc"] > 0.9:
+    if eval_metrics["acc"] > 0.8:
+
         print(f"High acc {eval_metrics['acc']} in {task_name} for {mode_name} with rules: {final_rules}")
-    return eval_metrics
+        print("Train rules:", final_rules)
+        visual_study.visual_grps(train_data["positive"]+train_data["negative"], group_list, task_name[0])
+        print("Val rules:", final_rules)
+    return eval_metrics, final_rules
 
 
 def main_ablation():
@@ -106,6 +111,8 @@ def main_ablation():
     all_auc = {conf: [] for conf in ABLATED_CONFIGS}
     all_acc = {conf: [] for conf in ABLATED_CONFIGS}
     for task_idx, (train_data, val_data, test_data) in enumerate(combined_loader):
+        if task_idx<137:
+            continue
         task_name = train_data["task"]
         print(f"\nTask {task_idx + 1}/{len(combined_loader)}: {task_name}")
 
@@ -113,14 +120,18 @@ def main_ablation():
         for mode_name, ablation_flags in ABLATED_CONFIGS.items():
 
             t1 = time.time()
-            test_metrics = run_ablation_train_val(train_data, val_data, test_data, obj_model, group_model,
+            test_metrics, final_rules = run_ablation_train_val(train_data, val_data, test_data, obj_model, group_model,
                                         train_principle, args, mode_name, ablation_flags)
             t2 = time.time()
             print(f"  Running ablation: {mode_name} in {t2 - t1} seconds")
             for k in ["acc", "f1", "auc"]:
                 results_summary[mode_name][k].append(test_metrics.get(k, 0))
                 # print(f"task: {task_idx + 1}/{len(combined_loader)}: {k} {test_metrics.get(k, 0)}")
+
+
             test_acc = test_metrics.get("acc", 0)
+            if test_acc>0.9:
+                print(f"High acc {test_acc} in {task_name} for {mode_name}")
             test_auc = test_metrics.get("auc", 0)
             test_f1 = test_metrics.get("f1", 0)
 

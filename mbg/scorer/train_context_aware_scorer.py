@@ -30,7 +30,7 @@ def train_model(args, principle, input_type, sample_size, device, log_wandb=True
     model_path_latest = str(model_path).replace(".pt", "_latest.pt")
 
     # Input dimension
-    input_dim_map = {"pos": 2, "pos_color": 5, "pos_color_size": 7, "color_size": 4}
+    input_dim_map = {"pos": 2, "pos_color": 5, "pos_color_size": 7, "color_size": 5}
     if input_type not in input_dim_map:
         raise ValueError(f"Unsupported input type: {input_type}")
     input_dim = input_dim_map[input_type]
