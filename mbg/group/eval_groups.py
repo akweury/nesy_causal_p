@@ -20,7 +20,7 @@ def embedding_principles(group_principle):
 
 
 def embedding_group_neural_features(group_objs, device, input_dim=7):
-    group_patches = torch.stack([o["h"] for o in group_objs])[:,:,:, :input_dim].to(device)  # (G, P, L, D)
+    group_patches = torch.stack([o["h"] for o in group_objs])[:, :, :, :input_dim].to(device)  # (G, P, L, D)
     # build the encoder (dims must match your patch-encoder settings):
     group_encoder = NeuralGroupEncoder(
         input_dim=input_dim,
@@ -91,12 +91,12 @@ def group_objects_with_model(model, objects, device, input_type="pos_color_size"
     return groups
 
 
-def eval_groups(objs, group_model, principle, device, dim):
+def eval_groups(objs, group_model, principle, device, dim, grp_th=0.5):
     # symbolic_objs = [o["s"] for o in objs]
     neural_objs = [o["h"] for o in objs]
-    if  principle=="similarity":
+    if principle == "similarity":
         dim = 5
-    group_ids = group_objects_with_model(group_model, neural_objs, device, dim=dim)
+    group_ids = group_objects_with_model(group_model, neural_objs, device, dim=dim, threshold=grp_th)
     # encoding the groups
     groups = construct_group_representations(objs, group_ids, principle, dim, device)
     return groups

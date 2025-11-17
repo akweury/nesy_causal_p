@@ -27,7 +27,7 @@ def main_metric():
         principles = [args.principle]
     else:
         principles = all_principles
-    principles = all_principles
+    # principles = all_principles
 
     wandb.init(project="gestalt_eval", config=args.__dict__)
     obj_model = eval_patch_classifier.load_model(args.device)
@@ -64,14 +64,26 @@ def run_one_principle(principle, args, obj_model, results):
     group_model = scorer_config.load_scorer_model(principle, args.device)
     principle_path = getattr(config, f"grb_{principle}")
     combined_loader = dataset.load_combined_dataset(principle_path, task_num=args.top_data)
+
+    for grp_th in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]:
+        obj_scores = {k: [] for k in ["mAP", "precision",
+                                      "recall", "f1", "shape_accuracy", "color_accuracy", "size_accuracy", "count_accuracy"]}
+        group_scores = {k: [] for k in ["mAP", "precision", "recall", "f1", "acc", "binary_f1",
+                                        "group_count_accuracy", "group_obj_num_accuracy"]}
+        for task_idx, (train_data, val_data, test_data) in enumerate(list(combined_loader)[:50]):
+            run_one_task(principle, task_idx, train_data, args, obj_model, group_model, obj_scores, group_scores, grp_th=grp_th)
+        for metric in ["mAP", "precision", "recall", "f1"]:
+            results["group_detection"][metric].extend(group_scores[metric])
+        print(f"\nSummary for principle: {principle}, grp_th: {grp_th}")
+        print(f"{np.mean(results['group_detection']['f1'])}, {np.std(results['group_detection']['f1'])}")
+
     obj_scores = {k: [] for k in ["mAP", "precision",
                                   "recall", "f1", "shape_accuracy", "color_accuracy", "size_accuracy", "count_accuracy"]}
     group_scores = {k: [] for k in ["mAP", "precision", "recall", "f1", "acc", "binary_f1",
                                     "group_count_accuracy", "group_obj_num_accuracy"]}
-
     for task_idx, (train_data, val_data, test_data) in enumerate(combined_loader):
         print(f"\nRunning principle: {principle}, Task {task_idx + 1}/{len(combined_loader)}")
-        run_one_task(principle, task_idx, train_data, args, obj_model, group_model, obj_scores, group_scores)
+        run_one_task(principle, task_idx, train_data, args, obj_model, group_model, obj_scores, group_scores, grp_th=grp_th)
     for metric in obj_scores:
         results["per_principle"][principle][f"obj_{metric}"] = obj_scores[metric]
     results["per_principle"][principle]["group_mAP"] = group_scores["mAP"]
@@ -89,6 +101,10 @@ def run_one_principle(principle, args, obj_model, results):
     results["group_detection"]["group_count_accuracy"].extend(group_scores["group_count_accuracy"])
     results["group_detection"]["group_obj_num_accuracy"].extend(group_scores["group_obj_num_accuracy"])
 
+    print(f"\nSummary for principle: {principle}")
+    print(np.mean(results["group_detection"]["precision"]))
+    print(np.std(results["group_detection"]["precision"]))
+
     wandb.log({f"{principle}/summary": {
         **{f"obj_{k}_mean": float(np.mean(obj_scores[k])) for k in obj_scores},
         **{f"group_{k}_mean": float(np.mean(group_scores[k])) for k in group_scores}
@@ -105,7 +121,7 @@ def update_gt_objects(gt_objects):
     return gt_objects
 
 
-def run_one_task(principle, task_idx, train_data, args, obj_model, group_model, obj_scores, group_scores):
+def run_one_task(principle, task_idx, train_data, args, obj_model, group_model, obj_scores, group_scores, grp_th=0.5):
     hyp_params = {"prox": 0.9, "sim": 0.5, "top_k": 5, "conf_th": 0.5, "patch_dim": 7}
     obj_lists, groups_list = [], []
     train_val_data = train_data
@@ -117,7 +133,7 @@ def run_one_task(principle, task_idx, train_data, args, obj_model, group_model, 
     for img_idx, img in enumerate(imgs):
         objs = eval_patch_classifier.evaluate_image(obj_model, img, args.device)
         obj_lists.append(objs)
-        groups = eval_groups.eval_groups(objs, group_model, principle, args.device, dim=hyp_params["patch_dim"])
+        groups = eval_groups.eval_groups(objs, group_model, principle, args.device, dim=hyp_params["patch_dim"], grp_th=grp_th)
         groups_list.append(groups)
         # Debug: plot group bounding boxes
         gt_group_boxes, _ = extract_ground_truth_groups(gt_objects[img_idx])
