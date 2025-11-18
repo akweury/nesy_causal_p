@@ -1,5 +1,7 @@
-from mbg.group.gd_transformer import GroupingTransformer, ShapeEmbedding, contour_to_fd8
-from mbg import patch_preprocess
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
+
 from tqdm import tqdm
 import json
 from pathlib import Path
@@ -12,11 +14,11 @@ from torch.utils.data import DataLoader, Dataset
 import wandb
 import argparse
 import torch.nn.functional as F
+
 import config
 from src import bk
-import sys
-import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
+from mbg.group.gd_transformer import GroupingTransformer, ShapeEmbedding, contour_to_fd8
+from mbg import patch_preprocess
 
 
 try:
