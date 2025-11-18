@@ -1,3 +1,5 @@
+from mbg.group.gd_transformer import GroupingTransformer, ShapeEmbedding, contour_to_fd8
+from mbg import patch_preprocess
 from tqdm import tqdm
 import json
 from pathlib import Path
@@ -16,8 +18,6 @@ import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 
-from mbg import patch_preprocess
-from mbg.group.gd_transformer import GroupingTransformer, ShapeEmbedding, contour_to_fd8
 
 try:
     from rtpt import RTPT
@@ -166,7 +166,7 @@ def train_grouping(model,
     model = model.to(device)
     optimizer = optim.Adam(model.parameters(), lr=lr)
     criterion = GroupingLoss()
-    
+
     best_loss = float('inf')
     best_acc = 0.0
 
@@ -203,27 +203,28 @@ def train_grouping(model,
                     f"Epoch {epoch} | Batch {batch_idx} | Loss {loss.item():.4f}")
 
         avg_loss = total_loss / len(train_loader)
-        
+
         # Calculate accuracy (percentage of correct predictions)
         model.eval()
         correct = 0
         total = 0
         with torch.no_grad():
             for pos, color, size, shape, gt in train_loader:
-                pos, color, size, shape, gt = pos.to(device), color.to(device), size.to(device), shape.to(device), gt.to(device)
+                pos, color, size, shape, gt = pos.to(device), color.to(
+                    device), size.to(device), shape.to(device), gt.to(device)
                 pred = model(pos, color, size, shape)
                 pred_binary = (torch.sigmoid(pred) > 0.5).float()
                 correct += (pred_binary == gt).sum().item()
                 total += gt.numel()
-        
+
         accuracy = correct / total if total > 0 else 0
-        
+
         wandb.log({
             "epoch_loss": avg_loss,
             "epoch_accuracy": accuracy,
             "epoch": epoch
         })
-        
+
         # Save best model
         if save_path and avg_loss < best_loss:
             best_loss = avg_loss
@@ -236,48 +237,50 @@ def train_grouping(model,
                 'accuracy': accuracy
             }, save_path)
             wandb.log({"best_loss": best_loss, "best_accuracy": best_acc})
-            print(f"Saved best model with loss {best_loss:.4f} and accuracy {best_acc:.4f}")
-        
+            print(
+                f"Saved best model with loss {best_loss:.4f} and accuracy {best_acc:.4f}")
+
         print(
             f"==> Epoch {epoch} | Avg Loss {avg_loss:.4f} | Accuracy {accuracy:.4f}")
-    
+
     return best_acc, best_loss
 
 
 def train_model(args, principle, input_type, sample_size, device, log_wandb=True, n=100, epochs=10, data_num=100000):
     """Train a grouping model with the given parameters"""
     # Setup data
-    
-    
-    
+
     data_path = config.get_raw_patterns_path(args.remote) / principle / "train"
-    
-    
+
     model_dir = config.get_proj_output_path(args.remote) / "models"
     model_dir.mkdir(exist_ok=True)
-    
+
     model_name = f"gd_transformer_{principle}_{input_type}_s{sample_size}_n{n}_d{data_num}.pt"
     save_path = model_dir / model_name
-    
+
     # Load data
-    data_list_path = data_path / f"grouped_data_s{sample_size}_n{n}_d{data_num}.pkl"
+    data_list_path = data_path / \
+        f"grouped_data_s{sample_size}_n{n}_d{data_num}.pkl"
     if data_list_path.exists():
         with open(data_list_path, "rb") as f:
             data_list = pickle.load(f)
         # Move loaded data to device if needed
         for i, (pos, color, size, shape, gt) in enumerate(data_list):
-            data_list[i] = (pos.to(device), color.to(device), size.to(device), shape.to(device), gt.to(device))
+            data_list[i] = (pos.to(device), color.to(device), size.to(
+                device), shape.to(device), gt.to(device))
     else:
         data_list = get_data_list(data_path, task_num=n, device=device)
         with open(data_list_path, "wb") as f:
             # Save data in CPU format to avoid device issues when loading
-            cpu_data_list = [(pos.cpu(), color.cpu(), size.cpu(), shape.cpu(), gt.cpu()) for pos, color, size, shape, gt in data_list]
+            cpu_data_list = [(pos.cpu(), color.cpu(), size.cpu(), shape.cpu(
+            ), gt.cpu()) for pos, color, size, shape, gt in data_list]
             pickle.dump(cpu_data_list, f)
-    
+
     # Create dataset and dataloader
-    dataset = GroupDataset(data_list[:data_num] if len(data_list) > data_num else data_list)
+    dataset = GroupDataset(data_list[:data_num] if len(
+        data_list) > data_num else data_list)
     train_loader = DataLoader(dataset, batch_size=1, shuffle=True)
-    
+
     # Initialize model
     print(f"Initializing model on {device}...")
     model = GroupingTransformer(
@@ -288,7 +291,7 @@ def train_model(args, principle, input_type, sample_size, device, log_wandb=True
         depth=4,
         rel_dim=64
     ).to(device)
-    
+
     # Train
     best_acc, best_loss = train_grouping(
         model,
@@ -298,7 +301,7 @@ def train_model(args, principle, input_type, sample_size, device, log_wandb=True
         epochs=epochs,
         save_path=str(save_path)
     )
-    
+
     return best_acc, best_loss
 
 
@@ -400,11 +403,12 @@ if __name__ == "__main__":
     # Dummy dataset (replace with your GRM object-extractor outputs)
     # -------------------------------------------------------------
     args = init()
+    base_dir = config.get_raw_patterns_path(args.remote)
 
-    data_list_path = config.grb_base / args.principle / "train" / "data_list.pkl"
+    data_list_path = base_dir / args.principle / "train" / "data_list.pkl"
     device = args.device
     print(f"Using device: {device}")
-    
+
     if data_list_path.exists():
         print(f"Loading cached data_list from {data_list_path}")
         with open(data_list_path, "rb") as f:
@@ -412,15 +416,18 @@ if __name__ == "__main__":
         # Move data to device
         print("Moving data to device...")
         for i, (pos, color, size, shape, gt) in enumerate(data_list):
-            data_list[i] = (pos.to(device), color.to(device), size.to(device), shape.to(device), gt.to(device))
+            data_list[i] = (pos.to(device), color.to(device), size.to(
+                device), shape.to(device), gt.to(device))
     else:
+
         print("Generating new data...")
         data_list = get_data_list(
-            config.grb_base / args.principle / "train", task_num=30, device=device)
+            base_dir / args.principle / "train", task_num=30, device=device)
         # save data_list to a file for fast loading next time
         with open(data_list_path, "wb") as f:
             # Save in CPU format to avoid device issues when loading
-            cpu_data_list = [(pos.cpu(), color.cpu(), size.cpu(), shape.cpu(), gt.cpu()) for pos, color, size, shape, gt in data_list]
+            cpu_data_list = [(pos.cpu(), color.cpu(), size.cpu(), shape.cpu(
+            ), gt.cpu()) for pos, color, size, shape, gt in data_list]
             pickle.dump(cpu_data_list, f)
 
     dataset = GroupDataset(data_list)
@@ -449,17 +456,19 @@ if __name__ == "__main__":
         "device": device,
         "principle": args.principle if hasattr(args, 'principle') else "unknown"
     })
-    
+
     # Setup model saving
-    model_dir = config.get_proj_output_path(getattr(args, 'remote', False)) / "models"
+    model_dir = config.get_proj_output_path(
+        getattr(args, 'remote', False)) / "models"
     model_dir.mkdir(exist_ok=True)
-    save_path = model_dir / f"gd_transformer_{getattr(args, 'principle', 'unknown')}_standalone.pt"
-    
+    save_path = model_dir / \
+        f"gd_transformer_{getattr(args, 'principle', 'unknown')}_standalone.pt"
+
     train_grouping(model,
                    train_loader,
                    device=device,
                    lr=1e-4,
                    epochs=20,
                    save_path=str(save_path))
-    
+
     wandb.finish()
