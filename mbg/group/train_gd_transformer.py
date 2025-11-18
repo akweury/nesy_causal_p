@@ -74,10 +74,10 @@ def get_data_list(root_dir, task_num, device="cpu"):
                 obj_contours = torch.stack([patch_preprocess.preprocess_rgb_image_to_patch_set_torch(
                     obj, points_per_patch=5)[0][0][:, :, :2].reshape(-1, 2) for obj in obj_imgs]).to(device)
                 objs_fd8 = torch.stack([contour_to_fd8(c)
-                                       for c in obj_contours])
+                                       for c in obj_contours]).to(device)
 
                 shape_ids = torch.tensor(
-                    [bk.bk_shapes_2.index(obj["shape"]) for obj in objects])
+                    [bk.bk_shapes_2.index(obj["shape"]) for obj in objects]).to(device)
 
                 data_list.append({
                     "pos": [[obj["x"], obj["y"]] for obj in objects],
