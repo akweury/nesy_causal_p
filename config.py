@@ -25,7 +25,7 @@ def clear_folder(folder_path):
 
 def get_raw_patterns_path(remote=False):
     if remote:
-        raw_patterns_path = Path('/gen_data')
+        raw_patterns_path = Path('/gen_data/res_1024_pin_False')
     else:
         raw_patterns_path = grb_base
 
