@@ -247,7 +247,12 @@ def train_grouping(model,
 def train_model(args, principle, input_type, sample_size, device, log_wandb=True, n=100, epochs=10, data_num=100000):
     """Train a grouping model with the given parameters"""
     # Setup data
-    data_path = config.grb_base / principle / "train"
+    
+    
+    
+    data_path = config.get_raw_patterns_path(args.remote) / principle / "train"
+    
+    
     model_dir = config.get_proj_output_path(args.remote) / "models"
     model_dir.mkdir(exist_ok=True)
     
