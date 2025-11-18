@@ -1,0 +1,112 @@
+{
+  "overall": {
+    "object_detection": {
+      "mAP": {
+        "mean": 1.0000000000000002,
+        "std": 0.0
+      },
+      "precision": {
+        "mean": 1.0,
+        "std": 0.0
+      },
+      "recall": {
+        "mean": 1.0,
+        "std": 0.0
+      },
+      "f1": {
+        "mean": 1.0,
+        "std": 0.0
+      },
+      "shape_accuracy": {
+        "mean": 0.9058441558441559,
+        "std": 0.022727272727272763
+      },
+      "color_accuracy": {
+        "mean": 1.0,
+        "std": 0.0
+      }
+    },
+    "group_detection": {
+      "mAP": {
+        "mean": 1.0000000000000002,
+        "std": 0.0
+      },
+      "precision": {
+        "mean": 1.0,
+        "std": 0.0
+      },
+      "recall": {
+        "mean": 1.0,
+        "std": 0.0
+      },
+      "f1": {
+        "mean": 1.0,
+        "std": 0.0
+      },
+      "binary_accuracy": {
+        "mean": 1.0,
+        "std": 0.0
+      },
+      "binary_f1": {
+        "mean": 1.0,
+        "std": 0.0
+      }
+    }
+  },
+  "per_principle": {
+    "proximity": {
+      "object_detection": {
+        "mAP": {
+          "mean": 1.0000000000000002,
+          "std": 0.0
+        },
+        "precision": {
+          "mean": 1.0,
+          "std": 0.0
+        },
+        "recall": {
+          "mean": 1.0,
+          "std": 0.0
+        },
+        "f1": {
+          "mean": 1.0,
+          "std": 0.0
+        },
+        "shape_accuracy": {
+          "mean": 0.9058441558441559,
+          "std": 0.022727272727272763
+        },
+        "color_accuracy": {
+          "mean": 1.0,
+          "std": 0.0
+        }
+      },
+      "group_detection": {
+        "mAP": {
+          "mean": 1.0000000000000002,
+          "std": 0.0
+        },
+        "precision": {
+          "mean": 1.0,
+          "std": 0.0
+        },
+        "recall": {
+          "mean": 1.0,
+          "std": 0.0
+        },
+        "f1": {
+          "mean": 1.0,
+          "std": 0.0
+        },
+        "acc": {
+          "mean": 1.0,
+          "std": 0.0
+        },
+        "binary_f1": {
+          "mean": 1.0,
+          "std": 0.0
+        }
+      }
+    }
+  }
+}
