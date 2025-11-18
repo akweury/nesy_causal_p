@@ -248,63 +248,66 @@ def train_grouping(model,
     return best_acc, best_loss
 
 
-def train_model(args, principle, input_type, sample_size, device, log_wandb=True, n=100, epochs=10, data_num=100000):
-    """Train a grouping model with the given parameters"""
-    # Setup data
+# def train_model(args, principle, input_type, sample_size, device, log_wandb=True, n=100, epochs=10, data_num=100000):
+#     """Train a grouping model with the given parameters"""
+#     # Setup data
 
-    data_path = config.get_raw_patterns_path(args.remote) / principle / "train"
+#     data_path = config.get_raw_patterns_path(args.remote) / principle / "train"
 
-    model_dir = config.get_proj_output_path(args.remote) / "models"
-    model_dir.mkdir(exist_ok=True)
+#     model_dir = config.get_proj_output_path(args.remote) / "models"
+#     model_dir.mkdir(exist_ok=True)
 
-    model_name = f"gd_transformer_{principle}_{input_type}_s{sample_size}_n{n}_d{data_num}.pt"
-    save_path = model_dir / model_name
+#     model_name = f"gd_transformer_{principle}_{input_type}_s{sample_size}_n{n}_d{data_num}.pt"
+#     save_path = model_dir / model_name
 
-    # Load data
-    data_list_path = data_path / \
-        f"grouped_data_s{sample_size}_n{n}_d{data_num}.pkl"
-    if data_list_path.exists():
-        with open(data_list_path, "rb") as f:
-            data_list = pickle.load(f)
-        # Move loaded data to device if needed
-        for i, (pos, color, size, shape, gt) in enumerate(data_list):
-            data_list[i] = (pos.to(device), color.to(device), size.to(
-                device), shape.to(device), gt.to(device))
-    else:
-        data_list = get_data_list(data_path, task_num=n, device=device)
-        with open(data_list_path, "wb") as f:
-            # Save data in CPU format to avoid device issues when loading
-            cpu_data_list = [(pos.cpu(), color.cpu(), size.cpu(), shape.cpu(
-            ), gt.cpu()) for pos, color, size, shape, gt in data_list]
-            pickle.dump(cpu_data_list, f)
+#     # Load data
+#     data_list_path = data_path / \
+#         f"grouped_data_s{sample_size}_n{n}_d{data_num}.pkl"
+#     if data_list_path.exists():
+#         with open(data_list_path, "rb") as f:
+#             data_list = pickle.load(f)
+#         # Move loaded data to device if needed
+#         for i, (pos, color, size, shape, gt) in enumerate(data_list):
+#             data_list[i] = (pos.to(device), color.to(device), size.to(
+#                 device), shape.to(device), gt.to(device))
+#     else:
+#         data_list = get_data_list(data_path, task_num=n, device=device)
+#         with open(data_list_path, "wb") as f:
+#             # Save data in CPU format to avoid device issues when loading
+#             cpu_data_list = [[single_data["pos"].cpu(), 
+#                              single_data["color"].cpu(), 
+#                              single_data["size"].cpu(), 
+#                              single_data["contour"].cpu(), 
+#                              single_data["group"].cpu()] for single_data in data_list]
+#             pickle.dump(cpu_data_list, f)
 
-    # Create dataset and dataloader
-    dataset = GroupDataset(data_list[:data_num] if len(
-        data_list) > data_num else data_list)
-    train_loader = DataLoader(dataset, batch_size=1, shuffle=True)
+#     # Create dataset and dataloader
+#     dataset = GroupDataset(data_list[:data_num] if len(
+#         data_list) > data_num else data_list)
+#     train_loader = DataLoader(dataset, batch_size=1, shuffle=True)
 
-    # Initialize model
-    print(f"Initializing model on {device}...")
-    model = GroupingTransformer(
-        shape_dim=16,
-        app_dim=0,
-        d_model=128,
-        num_heads=4,
-        depth=4,
-        rel_dim=64
-    ).to(device)
+#     # Initialize model
+#     print(f"Initializing model on {device}...")
+#     model = GroupingTransformer(
+#         shape_dim=16,
+#         app_dim=0,
+#         d_model=128,
+#         num_heads=4,
+#         depth=4,
+#         rel_dim=64
+#     ).to(device)
 
-    # Train
-    best_acc, best_loss = train_grouping(
-        model,
-        train_loader,
-        device=device,
-        lr=1e-4,
-        epochs=epochs,
-        save_path=str(save_path)
-    )
+#     # Train
+#     best_acc, best_loss = train_grouping(
+#         model,
+#         train_loader,
+#         device=device,
+#         lr=1e-4,
+#         epochs=epochs,
+#         save_path=str(save_path)
+#     )
 
-    return best_acc, best_loss
+#     return best_acc, best_loss
 
 
 def parse_device(device_str):
@@ -316,53 +319,53 @@ def parse_device(device_str):
         raise ValueError(f"Invalid device string: {device_str}")
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--device", default="cuda:0" if torch.cuda.is_available()
-                        else "cpu", help="Device to train on")
-    parser.add_argument("--epochs", type=int, default=10)
-    parser.add_argument("--sample_size_list", type=str,
-                        default="5,10,20,50,100")
-    parser.add_argument("--n", type=int, default=100)
-    parser.add_argument("--principle", type=str)
-    parser.add_argument("--input_types", type=str, default="pos_color_size")
-    parser.add_argument("--data_nums", type=str,
-                        default="10000,50000,100000", )
-    parser.add_argument("--remove_cache", action="store_true",
-                        help="Remove existing cache files before processing")
-    parser.add_argument("--remote", action="store_true")
-    args = parser.parse_args()
-    args.device = parse_device(args.device)
-    input_type = args.input_types
+# def main():
+#     parser = argparse.ArgumentParser()
+#     parser.add_argument("--device", default="cuda:0" if torch.cuda.is_available()
+#                         else "cpu", help="Device to train on")
+#     parser.add_argument("--epochs", type=int, default=10)
+#     parser.add_argument("--sample_size_list", type=str,
+#                         default="5,10,20,50,100")
+#     parser.add_argument("--n", type=int, default=100)
+#     parser.add_argument("--principle", type=str)
+#     parser.add_argument("--input_types", type=str, default="pos_color_size")
+#     parser.add_argument("--data_nums", type=str,
+#                         default="10000,50000,100000", )
+#     parser.add_argument("--remove_cache", action="store_true",
+#                         help="Remove existing cache files before processing")
+#     parser.add_argument("--remote", action="store_true")
+#     args = parser.parse_args()
+#     args.device = parse_device(args.device)
+#     input_type = args.input_types
 
-    data_num_list = [int(x) for x in args.data_nums.split(",")]
-    sample_size_list = [int(x) for x in args.sample_size_list.split(",")]
-    report = []
-    p = args.principle
-    if RTPT_AVAILABLE:
-        rtpt = RTPT(name_initials='JIS',
-                    experiment_name=f'GRMGDTR{args.principle}', max_iterations=1)
-        rtpt.start()
-    for data_num in data_num_list:
-        for sample_size in sample_size_list:
-            wandb.init(project=f"GD_TRANS_TRAIN-{args.principle}", config={"epochs": args.epochs, "batch_size": 1, "learning_rate": 1e-3,
-                                                                           "sample_size": sample_size, "device": args.device,
-                                                                           "input_type": input_type, "data_num": data_num},
-                       name=f"s{sample_size}_n{args.n}_d{data_num}_ep{args.epochs}")
+#     data_num_list = [int(x) for x in args.data_nums.split(",")]
+#     sample_size_list = [int(x) for x in args.sample_size_list.split(",")]
+#     report = []
+#     p = args.principle
+#     if RTPT_AVAILABLE:
+#         rtpt = RTPT(name_initials='JIS',
+#                     experiment_name=f'GRMGDTR{args.principle}', max_iterations=1)
+#         rtpt.start()
+#     for data_num in data_num_list:
+#         for sample_size in sample_size_list:
+#             wandb.init(project=f"GD_TRANS_TRAIN-{args.principle}", config={"epochs": args.epochs, "batch_size": 1, "learning_rate": 1e-3,
+#                                                                            "sample_size": sample_size, "device": args.device,
+#                                                                            "input_type": input_type, "data_num": data_num},
+#                        name=f"s{sample_size}_n{args.n}_d{data_num}_ep{args.epochs}")
 
-            print(f"\n=== Training {p} with {input_type} ===")
-            acc, loss = train_model(args, p, input_type, sample_size, args.device,
-                                    log_wandb=True, n=args.n, epochs=args.epochs, data_num=data_num)
-            report.append((p, input_type, data_num, sample_size, acc, loss))
-            wandb.finish()
+#             print(f"\n=== Training {p} with {input_type} ===")
+#             acc, loss = train_model(args, p, input_type, sample_size, args.device,
+#                                     log_wandb=True, n=args.n, epochs=args.epochs, data_num=data_num)
+#             report.append((p, input_type, data_num, sample_size, acc, loss))
+#             wandb.finish()
 
-    # Final report
-    print("\n==== Final Report ====")
-    print(f"{'Principle':<12} {'Input Type':<16} {'Data Num':>10} {'Sample Size':>10} {'Accuracy':>10} {'Loss':>10}")
-    print("-" * 62)
-    for p, input_type, data_num, sample_size, a, l in report:
-        print(
-            f"{p:<12} {input_type:<16} {data_num:>10} {sample_size:>10} {a:>10.4f} {l:>10.4f}")
+#     # Final report
+#     print("\n==== Final Report ====")
+#     print(f"{'Principle':<12} {'Input Type':<16} {'Data Num':>10} {'Sample Size':>10} {'Accuracy':>10} {'Loss':>10}")
+#     print("-" * 62)
+#     for p, input_type, data_num, sample_size, a, l in report:
+#         print(
+#             f"{p:<12} {input_type:<16} {data_num:>10} {sample_size:>10} {a:>10.4f} {l:>10.4f}")
 
 
 def init():
@@ -377,6 +380,8 @@ def init():
     parser.add_argument("--input_types", type=str, default="pos_color_size")
     parser.add_argument("--data_nums", type=str,
                         default="10000,50000,100000", )
+    parser.add_argument("--task_num", type=int, default=5,
+                        help="Number of tasks to process")
     parser.add_argument("--remove_cache", action="store_true",
                         help="Remove existing cache files before processing")
     parser.add_argument("--remote", action="store_true")
@@ -406,7 +411,7 @@ if __name__ == "__main__":
     # -------------------------------------------------------------
     args = init()
     base_dir = config.get_raw_patterns_path(args.remote)
-
+    task_num = args.task_num
     data_list_path = base_dir / args.principle / "train" / "data_list.pkl"
     device = args.device
     print(f"Using device: {device}")
@@ -417,21 +422,26 @@ if __name__ == "__main__":
             data_list = pickle.load(f)
         # Move data to device
         print("Moving data to device...")
-        for i, (pos, color, size, shape, gt) in enumerate(data_list):
-            data_list[i] = (pos.to(device), color.to(device), size.to(
-                device), shape.to(device), gt.to(device))
+        for i, single_data in enumerate(data_list):
+            data_list[i] = [torch.tensor(single_data["pos"]).to(device), 
+                             torch.tensor(single_data["color"]).to(device), 
+                             torch.tensor(single_data["size"]).to(device), 
+                             torch.tensor(single_data["contour"]).to(device), 
+                             torch.tensor(single_data["group"]).to(device)]
     else:
-
         print("Generating new data...")
         data_list = get_data_list(
-            base_dir / args.principle / "train", task_num=30, device=device)
+            base_dir / args.principle / "train", task_num=task_num, device=device)
         # save data_list to a file for fast loading next time
         with open(data_list_path, "wb") as f:
             # Save in CPU format to avoid device issues when loading
-            cpu_data_list = [(pos.cpu(), color.cpu(), size.cpu(), shape.cpu(
-            ), gt.cpu()) for pos, color, size, shape, gt in data_list]
+            cpu_data_list =  [{"pos":single_data["pos"], 
+                             "color":single_data["color"], 
+                             "size":single_data["size"], 
+                             "contour":single_data["contour"].tolist(), 
+                             "group":single_data["group"]} for single_data in data_list]
             pickle.dump(cpu_data_list, f)
-
+            
     dataset = GroupDataset(data_list)
     train_loader = DataLoader(dataset, batch_size=1, shuffle=True)
 
