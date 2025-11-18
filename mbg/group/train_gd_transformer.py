@@ -17,7 +17,7 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '../..'))
 
 from mbg import patch_preprocess
-from gd_transformer import GroupingTransformer, ShapeEmbedding, contour_to_fd8
+from mbg.group.gd_transformer import GroupingTransformer, ShapeEmbedding, contour_to_fd8
 
 try:
     from rtpt import RTPT
