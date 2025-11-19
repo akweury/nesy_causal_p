@@ -11,6 +11,7 @@ import config
 from mbg.scorer import scorer_config
 from mbg import patch_preprocess
 from mbg.group import eval_groups
+from mbg.group.train_gd_transformer import load_group_transformer
 from sklearn.metrics import accuracy_score, f1_score
 from src.metric_od_gd_utils import compare_attributes, match_objects, compute_ap, extract_ground_truth_groups, \
     extract_predicted_groups
@@ -61,7 +62,42 @@ def run_all_principles(principles, args, obj_model):
 
 
 def run_one_principle(principle, args, obj_model, results):
-    group_model = scorer_config.load_scorer_model(principle, args.device)
+    
+    # Load group model - try transformer first, fallback to scorer model
+    try:
+        # Try to load transformer model
+        transformer_model_dir = config.get_proj_output_path(getattr(args, 'remote', False)) / "models"
+        transformer_model_path = transformer_model_dir / f"gd_transformer_{principle}_standalone.pt"
+        
+        if transformer_model_path.exists():
+            print(f"Loading transformer model for {principle} from {transformer_model_path}")
+            group_model, _ = load_group_transformer(
+                model_path=str(transformer_model_path),
+                device=args.device,
+                shape_dim=16,
+                app_dim=0,
+œ                d_model=128,
+                num_heads=4,
+                depth=4,
+                rel_dim=64
+            )
+            # Ensure model is on correct device
+            group_model = group_model.to(args.device)
+            use_transformer = True
+        else:
+            print(f"Transformer model not found, using scorer model for {principle}")
+            group_model = scorer_config.load_scorer_model(principle, args.device)
+            # Ensure model is on correct device
+            group_model = group_model.to(args.device)
+            use_transformer = False
+    except Exception as e:
+        print(f"Failed to load transformer model: {e}")
+        print(f"Falling back to scorer model for {principle}")
+        group_model = scorer_config.load_scorer_model(principle, args.device)
+        # Ensure model is on correct device
+        group_model = group_model.to(args.device)
+        use_transformer = False 
+    
     principle_path = getattr(config, f"grb_{principle}")
     combined_loader = dataset.load_combined_dataset(principle_path, task_num=args.top_data)
 
@@ -71,7 +107,7 @@ def run_one_principle(principle, args, obj_model, results):
         group_scores = {k: [] for k in ["mAP", "precision", "recall", "f1", "acc", "binary_f1",
                                         "group_count_accuracy", "group_obj_num_accuracy"]}
         for task_idx, (train_data, val_data, test_data) in enumerate(list(combined_loader)[:50]):
-            run_one_task(principle, task_idx, train_data, args, obj_model, group_model, obj_scores, group_scores, grp_th=grp_th)
+            run_one_task(principle, task_idx, train_data, args, obj_model, group_model, obj_scores, group_scores, grp_th=grp_th, use_transformer=use_transformer)
         for metric in ["mAP", "precision", "recall", "f1"]:
             results["group_detection"][metric].extend(group_scores[metric])
         print(f"\nSummary for principle: {principle}, grp_th: {grp_th}")
@@ -81,9 +117,15 @@ def run_one_principle(principle, args, obj_model, results):
                                   "recall", "f1", "shape_accuracy", "color_accuracy", "size_accuracy", "count_accuracy"]}
     group_scores = {k: [] for k in ["mAP", "precision", "recall", "f1", "acc", "binary_f1",
                                     "group_count_accuracy", "group_obj_num_accuracy"]}
+    
+    
+    
+    
+    
+    
     for task_idx, (train_data, val_data, test_data) in enumerate(combined_loader):
         print(f"\nRunning principle: {principle}, Task {task_idx + 1}/{len(combined_loader)}")
-        run_one_task(principle, task_idx, train_data, args, obj_model, group_model, obj_scores, group_scores, grp_th=grp_th)
+        run_one_task(principle, task_idx, train_data, args, obj_model, group_model, obj_scores, group_scores, grp_th=grp_th, use_transformer=use_transformer)
     for metric in obj_scores:
         results["per_principle"][principle][f"obj_{metric}"] = obj_scores[metric]
     results["per_principle"][principle]["group_mAP"] = group_scores["mAP"]
@@ -121,7 +163,7 @@ def update_gt_objects(gt_objects):
     return gt_objects
 
 
-def run_one_task(principle, task_idx, train_data, args, obj_model, group_model, obj_scores, group_scores, grp_th=0.5):
+def run_one_task(principle, task_idx, train_data, args, obj_model, group_model, obj_scores, group_scores, grp_th=0.5, use_transformer=False):
     hyp_params = {"prox": 0.9, "sim": 0.5, "top_k": 5, "conf_th": 0.5, "patch_dim": 7}
     obj_lists, groups_list = [], []
     train_val_data = train_data
@@ -133,7 +175,30 @@ def run_one_task(principle, task_idx, train_data, args, obj_model, group_model, 
     for img_idx, img in enumerate(imgs):
         objs = eval_patch_classifier.evaluate_image(obj_model, img, args.device)
         obj_lists.append(objs)
-        groups = eval_groups.eval_groups(objs, group_model, principle, args.device, dim=hyp_params["patch_dim"], grp_th=grp_th)
+        
+        if use_transformer:
+            # Use transformer model to get group IDs directly
+            group_ids = eval_groups.get_transformer_group_ids(
+                transformer_model=group_model,
+                objects=objs,
+                device=args.device,
+                threshold=grp_th
+            )
+            # Convert group IDs to group format expected by evaluation
+            groups = []
+            for g_i, group_obj_ids in enumerate(group_ids):
+                group_objs = [objs[i] for i in group_obj_ids]
+                grp = {
+                    "id": g_i,
+                    "child_obj_ids": group_obj_ids,
+                    "members": group_objs,
+                    "principle": principle
+                }
+                groups.append(grp)
+        else:
+            # Use traditional eval_groups method
+            groups = eval_groups.eval_groups(objs, group_model, principle, args.device, dim=hyp_params["patch_dim"], grp_th=grp_th)
+        
         groups_list.append(groups)
         # Debug: plot group bounding boxes
         gt_group_boxes, _ = extract_ground_truth_groups(gt_objects[img_idx])

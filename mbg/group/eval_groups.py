@@ -4,11 +4,13 @@ import networkx as nx
 from itertools import combinations
 import torch
 import torch.nn.functional as F
+import numpy as np
 
 from mbg.scorer import scorer_config
 from mbg.group import proximity_grouping
 from mbg.group import symbolic_group_features
 from mbg.group.neural_group_features import NeuralGroupEncoder
+from mbg.group.gd_transformer import GroupingTransformer
 from src import bk
 
 
@@ -99,4 +101,101 @@ def eval_groups(objs, group_model, principle, device, dim, grp_th=0.5):
     group_ids = group_objects_with_model(group_model, neural_objs, device, dim=dim, threshold=grp_th)
     # encoding the groups
     groups = construct_group_representations(objs, group_ids, principle, dim, device)
+    return groups
+
+
+@torch.no_grad()
+def get_transformer_group_ids(transformer_model, objects, device, threshold=0.5):
+    """
+    Use transformer group detector to get group IDs
+    
+    Args:
+        transformer_model: trained GroupingTransformer model
+        objects: list of object dicts with keys 'position', 'color', 'size', 'contour'
+        device: cuda or cpu
+        threshold: probability threshold to consider two objects grouped
+    
+    Returns:
+        List of groups, each group is a list of object indices
+    """
+    transformer_model = transformer_model.to(device).eval()
+    
+    n = len(objects)
+    if n <= 1:
+        return [[i] for i in range(n)]  # Each object in its own group
+    
+    # Extract features from objects
+    positions = []
+    colors = []
+    sizes = []
+    shapes = []
+    
+    for obj in objects:
+        # Extract position (x, y)
+        if 'position' in obj:
+            pos = obj['position'][:2]  # Take first 2 coordinates
+        elif 'pos' in obj:
+            pos = obj['pos'][:2]
+        else:
+            pos = [0.0, 0.0]  # Default position
+        positions.append(pos)
+        
+        # Extract color (r, g, b)
+        if 'color' in obj:
+            color = obj['color'][:3]  # Take first 3 color channels
+        else:
+            color = [0.0, 0.0, 0.0]  # Default color
+        colors.append(color)
+        
+        # Extract size
+        if 'size' in obj:
+            size = [obj['size']] if isinstance(obj['size'], (int, float)) else obj['size'][:1]
+        else:
+            size = [1.0]  # Default size
+        sizes.append(size)
+        
+        # Extract shape/contour features
+        if 'contour' in obj:
+            shape = obj['contour']
+            if isinstance(shape, torch.Tensor):
+                shape = shape.flatten()
+            elif isinstance(shape, (list, np.ndarray)):
+                shape = torch.tensor(shape, dtype=torch.float32).flatten()
+            # Ensure consistent shape dimension (pad or truncate to 16)
+            if len(shape) < 16:
+                shape = torch.cat([shape, torch.zeros(16 - len(shape), dtype=torch.float32)])
+            else:
+                shape = shape[:16]
+        else:
+            shape = torch.zeros(16, dtype=torch.float32)  # Default shape features
+        shapes.append(shape)
+    
+    # Convert to tensors
+    pos_tensor = torch.tensor(positions, dtype=torch.float32).to(device)  # (N, 2)
+    color_tensor = torch.tensor(colors, dtype=torch.float32).to(device)   # (N, 3)
+    size_tensor = torch.tensor(sizes, dtype=torch.float32).to(device)     # (N, 1)
+    shape_tensor = torch.stack(shapes).to(device)                         # (N, 16)
+    
+    # Add batch dimension
+    pos_tensor = pos_tensor.unsqueeze(0)      # (1, N, 2)
+    color_tensor = color_tensor.unsqueeze(0)  # (1, N, 3)
+    size_tensor = size_tensor.unsqueeze(0)    # (1, N, 1)
+    shape_tensor = shape_tensor.unsqueeze(0)  # (1, N, 16)
+    
+    # Get predictions from transformer
+    with torch.no_grad():
+        pred = transformer_model(pos_tensor, color_tensor, size_tensor, shape_tensor)  # (1, N, N)
+        pred = torch.sigmoid(pred).squeeze(0)  # (N, N)
+    
+    # Build graph from predictions
+    G = nx.Graph()
+    G.add_nodes_from(range(n))
+    
+    for i in range(n):
+        for j in range(i + 1, n):
+            if pred[i, j].item() > threshold:
+                G.add_edge(i, j)
+    
+    # Extract connected components as groups
+    groups = [list(comp) for comp in nx.connected_components(G)]
     return groups

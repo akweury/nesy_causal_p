@@ -309,3 +309,6 @@ class GroupingTransformer(nn.Module):
         affinity = 0.5 * (affinity + affinity.transpose(1, 2))
 
         return affinity
+    
+    
+    

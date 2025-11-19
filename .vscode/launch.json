@@ -7,7 +7,7 @@
       "request": "launch",
       "module": "src.metric_od_gd",
       "console": "integratedTerminal",
-      "args": ["--principle", "proximity"]
+      "args": ["--principle", "continuity"]
     }
   ]
 }

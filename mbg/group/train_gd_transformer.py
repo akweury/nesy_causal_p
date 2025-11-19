@@ -325,6 +325,61 @@ def train_grouping(model,
     return best_acc, best_loss
 
 
+def load_group_transformer(model_path, device="cuda", shape_dim=16, app_dim=0, d_model=128, num_heads=4, depth=4, rel_dim=64):
+    """
+    Load a trained GroupingTransformer model from checkpoint
+    
+    Args:
+        model_path: path to the saved model checkpoint
+        device: device to load model on ('cuda' or 'cpu')
+        shape_dim: shape embedding dimension (must match training config)
+        app_dim: appearance dimension (must match training config)  
+        d_model: transformer model dimension (must match training config)
+        num_heads: number of attention heads (must match training config)
+        depth: number of transformer layers (must match training config)
+        rel_dim: relative geometry dimension (must match training config)
+    
+    Returns:
+        model: loaded GroupingTransformer model in eval mode
+        checkpoint_info: dict with training info (epoch, accuracy, loss, etc.)
+    """
+    # Initialize model with same architecture as training
+    model = GroupingTransformer(
+        shape_dim=shape_dim,
+        app_dim=app_dim,
+        d_model=d_model,
+        num_heads=num_heads,
+        depth=depth,
+        rel_dim=rel_dim
+    ).to(device)
+    
+    # Load checkpoint
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(f"Model checkpoint not found at: {model_path}")
+    
+    checkpoint = torch.load(model_path, map_location=device)
+    
+    # Load model state
+    if 'model_state_dict' in checkpoint:
+        model.load_state_dict(checkpoint['model_state_dict'])
+        checkpoint_info = {
+            'epoch': checkpoint.get('epoch', 'unknown'),
+            'train_loss': checkpoint.get('train_loss', 'unknown'),
+            'test_loss': checkpoint.get('test_loss', 'unknown'),
+            'test_accuracy': checkpoint.get('test_accuracy', 'unknown')
+        }
+    else:
+        # Assume checkpoint is just the model state dict
+        model.load_state_dict(checkpoint)
+        checkpoint_info = {'epoch': 'unknown', 'train_loss': 'unknown', 'test_loss': 'unknown', 'test_accuracy': 'unknown'}
+    
+    model.eval()
+    print(f"Loaded GroupingTransformer from {model_path}")
+    print(f"Checkpoint info: {checkpoint_info}")
+    
+    return model, checkpoint_info
+
+
 def evaluate_model(model, test_loader, device="cuda"):
     """
     Evaluate model on test data
