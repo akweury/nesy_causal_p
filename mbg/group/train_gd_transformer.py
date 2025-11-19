@@ -11,7 +11,12 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
-import wandb
+try:
+    import wandb
+    WANDB_AVAILABLE = True
+except ImportError:
+    print("Warning: wandb not available, training metrics will not be logged")
+    WANDB_AVAILABLE = False
 import argparse
 import torch.nn.functional as F
 
@@ -29,7 +34,17 @@ except ImportError:
     RTPT = None
 
 
-def get_data_list(root_dir, task_num, device="cpu"):
+def get_data_list(root_dir, task_num, device="cpu", train_test_split=0.8):
+    """
+    Args:
+        root_dir: Path to data directory
+        task_num: Number of tasks to process
+        device: Device to place tensors on
+        train_test_split: Fraction of data for training (rest for testing)
+    
+    Returns:
+        train_data_list, test_data_list: Split datasets
+    """
     data_list = []
 
     # Get all task directories and randomly shuffle them
@@ -90,7 +105,14 @@ def get_data_list(root_dir, task_num, device="cpu"):
                     "group": [obj["group_id"] for obj in objects],
                 })
 
-    return data_list
+    # Split data into train and test
+    random.shuffle(data_list)
+    split_idx = int(len(data_list) * train_test_split)
+    train_data_list = data_list[:split_idx]
+    test_data_list = data_list[split_idx:]
+    
+    print(f"Data split: {len(train_data_list)} train, {len(test_data_list)} test")
+    return train_data_list, test_data_list
 
 # -------------------------------------------------------------------------
 # 1. Dataset Example
@@ -218,11 +240,12 @@ def train_grouping(model,
             total_loss += loss.item()
 
             if batch_idx % log_interval == 0:
-                wandb.log({
-                    "batch_loss": loss.item(),
-                    "epoch": epoch,
-                    "batch": batch_idx
-                })
+                if WANDB_AVAILABLE:
+                    wandb.log({
+                        "batch_loss": loss.item(),
+                        "epoch": epoch,
+                        "batch": batch_idx
+                    })
                 print(
                     f"Epoch {epoch} | Batch {batch_idx} | Loss {loss.item():.4f}")
 
@@ -265,7 +288,8 @@ def train_grouping(model,
                 'loss': avg_loss,
                 'accuracy': accuracy
             }, save_path)
-            wandb.log({"best_loss": best_loss, "best_accuracy": best_acc})
+            if WANDB_AVAILABLE:
+                wandb.log({"best_loss": best_loss, "best_accuracy": best_acc})
             print(
                 f"Saved best model with loss {best_loss:.4f} and accuracy {best_acc:.4f}")
 
@@ -275,66 +299,37 @@ def train_grouping(model,
     return best_acc, best_loss
 
 
-# def train_model(args, principle, input_type, sample_size, device, log_wandb=True, n=100, epochs=10, data_num=100000):
-#     """Train a grouping model with the given parameters"""
-#     # Setup data
-
-#     data_path = config.get_raw_patterns_path(args.remote) / principle / "train"
-
-#     model_dir = config.get_proj_output_path(args.remote) / "models"
-#     model_dir.mkdir(exist_ok=True)
-
-#     model_name = f"gd_transformer_{principle}_{input_type}_s{sample_size}_n{n}_d{data_num}.pt"
-#     save_path = model_dir / model_name
-
-#     # Load data
-#     data_list_path = data_path / \
-#         f"grouped_data_s{sample_size}_n{n}_d{data_num}.pkl"
-#     if data_list_path.exists():
-#         with open(data_list_path, "rb") as f:
-#             data_list = pickle.load(f)
-#         # Move loaded data to device if needed
-#         for i, (pos, color, size, shape, gt) in enumerate(data_list):
-#             data_list[i] = (pos.to(device), color.to(device), size.to(
-#                 device), shape.to(device), gt.to(device))
-#     else:
-#         data_list = get_data_list(data_path, task_num=n, device=device)
-#         with open(data_list_path, "wb") as f:
-#             # Save data in CPU format to avoid device issues when loading
-#             cpu_data_list = [[single_data["pos"].cpu(), 
-#                              single_data["color"].cpu(), 
-#                              single_data["size"].cpu(), 
-#                              single_data["contour"].cpu(), 
-#                              single_data["group"].cpu()] for single_data in data_list]
-#             pickle.dump(cpu_data_list, f)
-
-#     # Create dataset and dataloader
-#     dataset = GroupDataset(data_list[:data_num] if len(
-#         data_list) > data_num else data_list)
-#     train_loader = DataLoader(dataset, batch_size=1, shuffle=True)
-
-#     # Initialize model
-#     print(f"Initializing model on {device}...")
-#     model = GroupingTransformer(
-#         shape_dim=16,
-#         app_dim=0,
-#         d_model=128,
-#         num_heads=4,
-#         depth=4,
-#         rel_dim=64
-#     ).to(device)
-
-#     # Train
-#     best_acc, best_loss = train_grouping(
-#         model,
-#         train_loader,
-#         device=device,
-#         lr=1e-4,
-#         epochs=epochs,
-#         save_path=str(save_path)
-#     )
-
-#     return best_acc, best_loss
+def evaluate_model(model, test_loader, device="cuda"):
+    """
+    Evaluate model on test data
+    """
+    model.eval()
+    criterion = GroupingLoss()
+    total_loss = 0.0
+    correct = 0
+    total = 0
+    
+    with torch.no_grad():
+        for pos, color, size, shape, gt in test_loader:
+            # Add batch dimension for single scene
+            pos = pos.unsqueeze(0).to(device)
+            color = color.unsqueeze(0).to(device)
+            size = size.unsqueeze(0).to(device)
+            shape = shape.unsqueeze(0).to(device)
+            gt = gt.unsqueeze(0).to(device)
+            
+            pred = model(pos, color, size, shape)
+            loss = criterion(pred, gt)
+            total_loss += loss.item()
+            
+            pred_binary = (torch.sigmoid(pred) > 0.5).float()
+            correct += (pred_binary == gt).sum().item()
+            total += gt.numel()
+    
+    avg_loss = total_loss / len(test_loader)
+    accuracy = correct / total if total > 0 else 0
+    
+    return avg_loss, accuracy
 
 
 def parse_device(device_str):
@@ -396,33 +391,65 @@ if __name__ == "__main__":
     if data_list_path.exists():
         print(f"Loading cached data_list from {data_list_path}")
         with open(data_list_path, "rb") as f:
-            data_list = pickle.load(f)
+            cached_data = pickle.load(f)
+            if isinstance(cached_data, dict) and "train" in cached_data:
+                # New format with train/test split
+                train_data_list = cached_data["train"]
+                test_data_list = cached_data["test"]
+                print(f"Loaded train/test split: {len(train_data_list)} train, {len(test_data_list)} test")
+            else:
+                # Old format, need to split
+                print("Converting old format to train/test split...")
+                data_list = cached_data
+                random.shuffle(data_list)
+                split_idx = int(len(data_list) * 0.8)
+                train_data_list = data_list[:split_idx]
+                test_data_list = data_list[split_idx:]
+                print(f"Split data: {len(train_data_list)} train, {len(test_data_list)} test")
+                
         # Move data to device
         print("Moving data to device...")
-        for i, single_data in enumerate(data_list):
-            data_list[i] = {"pos": torch.tensor(single_data["pos"]).to(device), 
-                            "color":torch.tensor(single_data["color"]).to(device), 
-                            "size":torch.tensor(single_data["size"]).to(device), 
-                            "contour":torch.tensor(single_data["contour"]).to(device), 
-                            "group":torch.tensor(single_data["group"]).to(device)}
+        for i, single_data in enumerate(train_data_list):
+            if isinstance(single_data, dict):
+                train_data_list[i] = {"pos": torch.tensor(single_data["pos"]).to(device) if not isinstance(single_data["pos"], torch.Tensor) else single_data["pos"].to(device), 
+                                     "color": torch.tensor(single_data["color"]).to(device) if not isinstance(single_data["color"], torch.Tensor) else single_data["color"].to(device), 
+                                     "size": torch.tensor(single_data["size"]).to(device) if not isinstance(single_data["size"], torch.Tensor) else single_data["size"].to(device), 
+                                     "contour": torch.tensor(single_data["contour"]).to(device) if not isinstance(single_data["contour"], torch.Tensor) else single_data["contour"].to(device), 
+                                     "group": torch.tensor(single_data["group"]).to(device) if not isinstance(single_data["group"], torch.Tensor) else single_data["group"].to(device)}
+        for i, single_data in enumerate(test_data_list):
+            if isinstance(single_data, dict):
+                test_data_list[i] = {"pos": torch.tensor(single_data["pos"]).to(device) if not isinstance(single_data["pos"], torch.Tensor) else single_data["pos"].to(device), 
+                                    "color": torch.tensor(single_data["color"]).to(device) if not isinstance(single_data["color"], torch.Tensor) else single_data["color"].to(device), 
+                                    "size": torch.tensor(single_data["size"]).to(device) if not isinstance(single_data["size"], torch.Tensor) else single_data["size"].to(device), 
+                                    "contour": torch.tensor(single_data["contour"]).to(device) if not isinstance(single_data["contour"], torch.Tensor) else single_data["contour"].to(device), 
+                                    "group": torch.tensor(single_data["group"]).to(device) if not isinstance(single_data["group"], torch.Tensor) else single_data["group"].to(device)}
     else:
         print("Generating new data...")
-        data_list = get_data_list(
-            base_dir / args.principle / "train", task_num=task_num, device=device)
+        train_data_list, test_data_list = get_data_list(
+            base_dir / args.principle / "train", task_num=task_num, device=device, train_test_split=True)
         # save data_list to a file for fast loading next time
         with open(data_list_path, "wb") as f:
             # Save in CPU format to avoid device issues when loading
-            cpu_data_list =  [{"pos":single_data["pos"], 
+            cpu_train_data = [{"pos":single_data["pos"], 
                              "color":single_data["color"], 
                              "size":single_data["size"], 
                              "contour":single_data["contour"].tolist(), 
-                             "group":single_data["group"]} for single_data in data_list]
-            pickle.dump(cpu_data_list, f)
+                             "group":single_data["group"]} for single_data in train_data_list]
+            cpu_test_data = [{"pos":single_data["pos"], 
+                             "color":single_data["color"], 
+                             "size":single_data["size"], 
+                             "contour":single_data["contour"].tolist(), 
+                             "group":single_data["group"]} for single_data in test_data_list]
+            pickle.dump({"train": cpu_train_data, "test": cpu_test_data}, f)
             
-    dataset = GroupDataset(data_list)
+    # Create train and test datasets
+    train_dataset = GroupDataset(train_data_list)
+    test_dataset = GroupDataset(test_data_list)
+    
     # IMPORTANT: Use batch_size=1 because each scene has different number of objects
     # Variable object counts make true batching impossible without padding/masking
-    train_loader = DataLoader(dataset, batch_size=1, shuffle=True, collate_fn=custom_collate_fn)
+    train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True, collate_fn=custom_collate_fn)
+    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, collate_fn=custom_collate_fn)
 
     # -------------------------------------------------------------
     # Initialize model
@@ -441,6 +468,7 @@ if __name__ == "__main__":
     # Train
     # -------------------------------------------------------------
     # Initialize wandb for this training run
+
     wandb.init(project="gd_transformer_standalone", config={
         "epochs": 20,
         "lr": 1e-4,
@@ -459,7 +487,18 @@ if __name__ == "__main__":
                    train_loader,
                    device=device,
                    lr=1e-4,
-                   epochs=args.epochs,
+                   epochs=20,
                    save_path=str(save_path))
 
+    # Evaluate on test set
+    print("\n=== Test Evaluation ===")
+    test_loss, test_accuracy = evaluate_model(model, test_loader, device)
+    print(f"Test Loss: {test_loss:.4f} | Test Accuracy: {test_accuracy:.4f}")
+    
+    # Log test results
+
+    wandb.log({
+        "test_loss": test_loss,
+        "test_accuracy": test_accuracy
+    })
     wandb.finish()
