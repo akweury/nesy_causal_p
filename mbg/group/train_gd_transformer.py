@@ -200,6 +200,7 @@ class GroupingLoss(nn.Module):
 # -------------------------------------------------------------------------
 def train_grouping(model,
                    train_loader,
+                   test_loader=None,
                    device="cuda",
                    lr=1e-4,
                    epochs=50,
@@ -251,50 +252,75 @@ def train_grouping(model,
 
         avg_loss = total_loss / len(train_loader)
 
-        # Calculate accuracy (percentage of correct predictions)
-        model.eval()
-        correct = 0
-        total = 0
-        with torch.no_grad():
-            for pos, color, size, shape, gt in train_loader:
-                # Add batch dimension for single scene
-                pos = pos.unsqueeze(0).to(device)
-                color = color.unsqueeze(0).to(device)
-                size = size.unsqueeze(0).to(device)
-                shape = shape.unsqueeze(0).to(device)
-                gt = gt.unsqueeze(0).to(device)
-                
-                pred = model(pos, color, size, shape)
-                pred_binary = (torch.sigmoid(pred) > 0.5).float()
-                correct += (pred_binary == gt).sum().item()
-                total += gt.numel()
+        # Evaluate on test data if available
+        test_accuracy = 0
+        test_loss = 0
+        if test_loader:
+            model.eval()
+            test_correct = 0
+            test_total = 0
+            test_loss_total = 0
+            with torch.no_grad():
+                for pos, color, size, shape, gt in test_loader:
+                    # Add batch dimension for single scene
+                    pos = pos.unsqueeze(0).to(device)
+                    color = color.unsqueeze(0).to(device)
+                    size = size.unsqueeze(0).to(device)
+                    shape = shape.unsqueeze(0).to(device)
+                    gt = gt.unsqueeze(0).to(device)
+                    
+                    pred = model(pos, color, size, shape)
+                    loss = criterion(pred, gt)
+                    test_loss_total += loss.item()
+                    
+                    pred_binary = (torch.sigmoid(pred) > 0.5).float()
+                    test_correct += (pred_binary == gt).sum().item()
+                    test_total += gt.numel()
+            
+            test_accuracy = test_correct / test_total if test_total > 0 else 0
+            test_loss = test_loss_total / len(test_loader)
 
-        accuracy = correct / total if total > 0 else 0
+        # Log metrics
+        log_dict = {
+            "epoch": epoch,
+            "train_loss": avg_loss
+        }
+        
+        if test_loader:
+            log_dict.update({
+                "test_loss": test_loss,
+                "test_accuracy": test_accuracy
+            })
+        
+        if WANDB_AVAILABLE:
+            wandb.log(log_dict)
 
-        wandb.log({
-            "epoch_loss": avg_loss,
-            "epoch_accuracy": accuracy,
-            "epoch": epoch
-        })
-
-        # Save best model
-        if save_path and avg_loss < best_loss:
+        # Save best model based on test accuracy if available, otherwise train loss
+        current_metric = test_accuracy if test_loader else -avg_loss  # Use negative loss for minimization
+        if save_path and current_metric > best_acc:
             best_loss = avg_loss
-            best_acc = accuracy
+            best_acc = current_metric
             torch.save({
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
-                'loss': avg_loss,
-                'accuracy': accuracy
+                'train_loss': avg_loss,
+                'test_loss': test_loss if test_loader else None,
+                'test_accuracy': test_accuracy if test_loader else None
             }, save_path)
             if WANDB_AVAILABLE:
                 wandb.log({"best_loss": best_loss, "best_accuracy": best_acc})
+            metric_name = "test accuracy" if test_loader else "train loss"
             print(
-                f"Saved best model with loss {best_loss:.4f} and accuracy {best_acc:.4f}")
+                f"Saved best model with {metric_name} {best_acc:.4f}")
 
-        print(
-            f"==> Epoch {epoch} | Avg Loss {avg_loss:.4f} | Accuracy {accuracy:.4f}")
+        # Print epoch results
+        if test_loader:
+            print(
+                f"==> Epoch {epoch} | Train Loss {avg_loss:.4f} | Test Loss {test_loss:.4f} | Test Acc {test_accuracy:.4f}")
+        else:
+            print(
+                f"==> Epoch {epoch} | Train Loss {avg_loss:.4f}")
 
     return best_acc, best_loss
 
@@ -469,7 +495,7 @@ if __name__ == "__main__":
     # -------------------------------------------------------------
     # Initialize wandb for this training run
 
-    wandb.init(project="gd_transformer_standalone", config={
+    wandb.init(project=f"gd_transformer_{args.principle}", config={
         "epochs": 20,
         "lr": 1e-4,
         "device": device,
@@ -485,20 +511,12 @@ if __name__ == "__main__":
 
     train_grouping(model,
                    train_loader,
+                   test_loader,
                    device=device,
                    lr=1e-4,
                    epochs=20,
                    save_path=str(save_path))
 
-    # Evaluate on test set
-    print("\n=== Test Evaluation ===")
-    test_loss, test_accuracy = evaluate_model(model, test_loader, device)
-    print(f"Test Loss: {test_loss:.4f} | Test Accuracy: {test_accuracy:.4f}")
-    
-    # Log test results
-
-    wandb.log({
-        "test_loss": test_loss,
-        "test_accuracy": test_accuracy
-    })
+    # Training is complete - test evaluation happens during training
+    print("\n=== Training Complete ===")
     wandb.finish()
