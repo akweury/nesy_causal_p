@@ -480,7 +480,7 @@ if __name__ == "__main__":
                    train_loader,
                    device=device,
                    lr=1e-4,
-                   epochs=20,
+                   epochs=args.epochs,
                    save_path=str(save_path))
 
     wandb.finish()
