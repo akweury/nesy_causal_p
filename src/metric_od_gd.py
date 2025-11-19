@@ -76,7 +76,7 @@ def run_one_principle(principle, args, obj_model, results):
                 device=args.device,
                 shape_dim=16,
                 app_dim=0,
-œ                d_model=128,
+                d_model=128,
                 num_heads=4,
                 depth=4,
                 rel_dim=64
