@@ -16,6 +16,8 @@ from torchvision.models.detection import MaskRCNN_ResNet50_FPN_Weights
 from scipy.ndimage import label
 from scipy.optimize import linear_sum_assignment
 
+from mbg.group.gd_transformer import contour_to_fd8, ShapeEmbedding
+from src import bk 
 
 def load_images_fast(image_paths: List[Union[str, Path]], image_size=None, device=None):
     """
@@ -851,3 +853,22 @@ def rgbs2patches(rgb_imgs, input_type):
     else:
         raise ValueError
     return patch_sets, positions, sizes
+
+
+
+
+
+def patch2code(obj_patches, obj_labels, device):
+    shape_encoder = ShapeEmbedding(
+        num_shapes=len(bk.bk_shapes_2),
+        contour_dim=8,
+        hidden_dim=32,
+        shape_dim=16
+    ).to(device)
+        
+    objs_fd8 = torch.stack([contour_to_fd8(c) for c in obj_patches]).to(device)
+    shape_ids = torch.tensor([bk.bk_shapes_2.index(label) for label in obj_labels]).to(device)
+    
+    shape_code = shape_encoder(shape_ids, objs_fd8)
+
+    return shape_code  

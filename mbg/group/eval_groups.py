@@ -12,7 +12,7 @@ from mbg.group import symbolic_group_features
 from mbg.group.neural_group_features import NeuralGroupEncoder
 from mbg.group.gd_transformer import GroupingTransformer
 from src import bk
-
+from mbg.patch_preprocess import patch2code
 
 def embedding_principles(group_principle):
     principles = bk.gestalt_principles
@@ -129,62 +129,20 @@ def get_transformer_group_ids(transformer_model, objects, device, threshold=0.5)
     colors = []
     sizes = []
     shapes = []
+    positions = torch.tensor([[obj['s']['x'],obj['s']['y']] for obj in objects]).to(device).unsqueeze(0)
+    colors = torch.tensor([obj['s']['color'] for obj in objects]).to(device).unsqueeze(0)
+    sizes = torch.tensor([[obj['s']['w']] for obj in objects]).to(device).unsqueeze(0)
     
-    for obj in objects:
-        # Extract position (x, y)
-        if 'position' in obj:
-            pos = obj['position'][:2]  # Take first 2 coordinates
-        elif 'pos' in obj:
-            pos = obj['pos'][:2]
-        else:
-            pos = [0.0, 0.0]  # Default position
-        positions.append(pos)
-        
-        # Extract color (r, g, b)
-        if 'color' in obj:
-            color = obj['color'][:3]  # Take first 3 color channels
-        else:
-            color = [0.0, 0.0, 0.0]  # Default color
-        colors.append(color)
-        
-        # Extract size
-        if 'size' in obj:
-            size = [obj['size']] if isinstance(obj['size'], (int, float)) else obj['size'][:1]
-        else:
-            size = [1.0]  # Default size
-        sizes.append(size)
-        
-        # Extract shape/contour features
-        if 'contour' in obj:
-            shape = obj['contour']
-            if isinstance(shape, torch.Tensor):
-                shape = shape.flatten()
-            elif isinstance(shape, (list, np.ndarray)):
-                shape = torch.tensor(shape, dtype=torch.float32).flatten()
-            # Ensure consistent shape dimension (pad or truncate to 16)
-            if len(shape) < 16:
-                shape = torch.cat([shape, torch.zeros(16 - len(shape), dtype=torch.float32)])
-            else:
-                shape = shape[:16]
-        else:
-            shape = torch.zeros(16, dtype=torch.float32)  # Default shape features
-        shapes.append(shape)
+    obj_labels = [np.array(bk.bk_shapes_2)[obj['s']['shape'].bool().numpy()][0] for obj in objects]
+    obj_patches = torch.stack([obj['h'].reshape(-1,2) for obj in objects])
+    shape_code = patch2code(obj_patches, obj_labels=obj_labels, device=device).unsqueeze(0)
+                          # (N, 16)
     
-    # Convert to tensors
-    pos_tensor = torch.tensor(positions, dtype=torch.float32).to(device)  # (N, 2)
-    color_tensor = torch.tensor(colors, dtype=torch.float32).to(device)   # (N, 3)
-    size_tensor = torch.tensor(sizes, dtype=torch.float32).to(device)     # (N, 1)
-    shape_tensor = torch.stack(shapes).to(device)                         # (N, 16)
-    
-    # Add batch dimension
-    pos_tensor = pos_tensor.unsqueeze(0)      # (1, N, 2)
-    color_tensor = color_tensor.unsqueeze(0)  # (1, N, 3)
-    size_tensor = size_tensor.unsqueeze(0)    # (1, N, 1)
-    shape_tensor = shape_tensor.unsqueeze(0)  # (1, N, 16)
+
     
     # Get predictions from transformer
     with torch.no_grad():
-        pred = transformer_model(pos_tensor, color_tensor, size_tensor, shape_tensor)  # (1, N, N)
+        pred = transformer_model(positions, colors, sizes, shape_code)  # (1, N, N)
         pred = torch.sigmoid(pred).squeeze(0)  # (N, N)
     
     # Build graph from predictions
