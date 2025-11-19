@@ -135,6 +135,25 @@ class GroupDataset(Dataset):
         return pos, color, size, shape, gt
 
 
+def custom_collate_fn(batch):
+    """
+    Custom collate function to handle scenes with different numbers of objects.
+    Since each scene can have different N (number of objects), we cannot batch them.
+    Instead, we return a list of individual samples.
+    """
+    # For grouping tasks, we process one scene at a time
+    # Return the first item in the batch (assuming batch_size=1)
+    if len(batch) == 1:
+        return batch[0]
+    else:
+        # If batch_size > 1, we need to process each scene separately
+        # This is a limitation of grouping tasks with variable object counts
+        raise ValueError(
+            "Batch size > 1 not supported for scenes with variable object counts. "
+            "Please use batch_size=1 for grouping tasks."
+        )
+
+
 # -------------------------------------------------------------------------
 # 2. Grouping Loss (BCE + stability contrastive term)
 # -------------------------------------------------------------------------
@@ -177,12 +196,15 @@ def train_grouping(model,
         total_loss = 0.0
 
         for batch_idx, (pos, color, size, shape, gt) in enumerate(train_loader):
-
-            pos = pos.to(device)
-            color = color.to(device)
-            size = size.to(device)
-            shape = shape.to(device)
-            gt = gt.to(device)
+            # Each scene has different N (number of objects)
+            # pos: (N, 2), color: (N, 3), size: (N, 1), shape: (N, D), gt: (N, N)
+            
+            # Add batch dimension for single scene
+            pos = pos.unsqueeze(0).to(device)  # (1, N, 2)
+            color = color.unsqueeze(0).to(device)  # (1, N, 3)
+            size = size.unsqueeze(0).to(device)  # (1, N, 1)
+            shape = shape.unsqueeze(0).to(device)  # (1, N, D)
+            gt = gt.unsqueeze(0).to(device)  # (1, N, N)
 
             optimizer.zero_grad()
 
@@ -212,8 +234,13 @@ def train_grouping(model,
         total = 0
         with torch.no_grad():
             for pos, color, size, shape, gt in train_loader:
-                pos, color, size, shape, gt = pos.to(device), color.to(
-                    device), size.to(device), shape.to(device), gt.to(device)
+                # Add batch dimension for single scene
+                pos = pos.unsqueeze(0).to(device)
+                color = color.unsqueeze(0).to(device)
+                size = size.unsqueeze(0).to(device)
+                shape = shape.unsqueeze(0).to(device)
+                gt = gt.unsqueeze(0).to(device)
+                
                 pred = model(pos, color, size, shape)
                 pred_binary = (torch.sigmoid(pred) > 0.5).float()
                 correct += (pred_binary == gt).sum().item()
@@ -393,7 +420,9 @@ if __name__ == "__main__":
             pickle.dump(cpu_data_list, f)
             
     dataset = GroupDataset(data_list)
-    train_loader = DataLoader(dataset, batch_size=1, shuffle=True)
+    # IMPORTANT: Use batch_size=1 because each scene has different number of objects
+    # Variable object counts make true batching impossible without padding/masking
+    train_loader = DataLoader(dataset, batch_size=1, shuffle=True, collate_fn=custom_collate_fn)
 
     # -------------------------------------------------------------
     # Initialize model
