@@ -292,16 +292,30 @@ def train_grouping(model,
             total_loss += loss.item()
 
             if batch_idx % log_interval == 0:
-                if WANDB_AVAILABLE:
-                    wandb.log({
-                        "batch_loss": loss.item(),
-                        "epoch": epoch,
-                        "batch": batch_idx
-                    })
                 print(
                     f"Epoch {epoch} | Batch {batch_idx} | Loss {loss.item():.4f}")
 
         avg_loss = total_loss / len(train_loader)
+
+        # Calculate train accuracy
+        model.eval()
+        train_correct = 0
+        train_total = 0
+        with torch.no_grad():
+            for pos, color, size, shape, gt in train_loader:
+                # Add batch dimension for single scene
+                pos = pos.unsqueeze(0).to(device)
+                color = color.unsqueeze(0).to(device)
+                size = size.unsqueeze(0).to(device)
+                shape = shape.unsqueeze(0).to(device)
+                gt = gt.unsqueeze(0).to(device)
+                
+                pred = model(pos, color, size, shape)
+                pred_binary = (torch.sigmoid(pred) > 0.5).float()
+                train_correct += (pred_binary == gt).sum().item()
+                train_total += gt.numel()
+        
+        train_accuracy = train_correct / train_total if train_total > 0 else 0
 
         # Evaluate on test data if available
         test_accuracy = 0
@@ -330,23 +344,15 @@ def train_grouping(model,
             
             test_accuracy = test_correct / test_total if test_total > 0 else 0
             test_loss = test_loss_total / len(test_loader)
-            wandb.log({
-                "test_loss": test_loss,
-                "test_accuracy": test_accuracy
-            })
-        # Log metrics
-        log_dict = {
-            "epoch": epoch,
-            "train_loss": avg_loss
-        }
         
-        if test_loader:
-            log_dict.update({
-                "test_loss": test_loss,
-                "test_accuracy": test_accuracy
-            })
-        
+        # Log train and test accuracy once per epoch
         if WANDB_AVAILABLE:
+            log_dict = {
+                "epoch": epoch,
+                "train_accuracy": train_accuracy
+            }
+            if test_loader:
+                log_dict["test_accuracy"] = test_accuracy
             wandb.log(log_dict)
 
         # Save best model based on test accuracy if available, otherwise train loss
@@ -362,8 +368,6 @@ def train_grouping(model,
                 'test_loss': test_loss if test_loader else None,
                 'test_accuracy': test_accuracy if test_loader else None
             }, save_path)
-            if WANDB_AVAILABLE:
-                wandb.log({"best_loss": best_loss, "best_accuracy": best_acc})
             metric_name = "test accuracy" if test_loader else "train loss"
             print(
                 f"Saved best model with {metric_name} {best_acc:.4f}")
@@ -371,10 +375,10 @@ def train_grouping(model,
         # Print epoch results
         if test_loader:
             print(
-                f"==> Epoch {epoch} | Train Loss {avg_loss:.4f} | Test Loss {test_loss:.4f} | Test Acc {test_accuracy:.4f}")
+                f"==> Epoch {epoch} | Train Acc {train_accuracy:.4f} | Test Acc {test_accuracy:.4f}")
         else:
             print(
-                f"==> Epoch {epoch} | Train Loss {avg_loss:.4f}")
+                f"==> Epoch {epoch} | Train Acc {train_accuracy:.4f}")
 
     return best_acc, best_loss
 
