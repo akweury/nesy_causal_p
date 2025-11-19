@@ -330,7 +330,10 @@ def train_grouping(model,
             
             test_accuracy = test_correct / test_total if test_total > 0 else 0
             test_loss = test_loss_total / len(test_loader)
-
+            wandb.log({
+                "test_loss": test_loss,
+                "test_accuracy": test_accuracy
+            })
         # Log metrics
         log_dict = {
             "epoch": epoch,
