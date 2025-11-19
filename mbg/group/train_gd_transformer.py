@@ -24,6 +24,7 @@ import config
 from src import bk
 from mbg.group.gd_transformer import GroupingTransformer, ShapeEmbedding, contour_to_fd8
 from mbg import patch_preprocess
+from mbg.object import eval_patch_classifier
 
 
 try:
@@ -34,18 +35,25 @@ except ImportError:
     RTPT = None
 
 
-def get_data_list(root_dir, task_num, device="cpu", train_test_split=0.8):
+def get_data_list(root_dir, task_num, device="cpu", train_test_split=0.8, obj_model=None):
     """
     Args:
         root_dir: Path to data directory
         task_num: Number of tasks to process
         device: Device to place tensors on
         train_test_split: Fraction of data for training (rest for testing)
+        obj_model: Trained object detection model (if None, will load default)
     
     Returns:
         train_data_list, test_data_list: Split datasets
     """
     data_list = []
+    
+    # Load object detection model if not provided
+    if obj_model is None:
+        print("Loading object detection model...")
+        obj_model = eval_patch_classifier.load_model(device)
+        print("Object detection model loaded.")
 
     # Get all task directories and randomly shuffle them
     task_dirs = sorted([d for d in root_dir.iterdir() if d.is_dir()])
@@ -60,6 +68,7 @@ def get_data_list(root_dir, task_num, device="cpu", train_test_split=0.8):
         hidden_dim=32,
         shape_dim=16
     ).to(device)
+    
     for task_dir in tqdm(task_dirs, desc="Generate Dataset"):
         for label in ["positive", "negative"]:
             label_dir = task_dir / label
@@ -68,41 +77,83 @@ def get_data_list(root_dir, task_num, device="cpu", train_test_split=0.8):
             json_files = sorted(label_dir.glob("*.json"))
             png_files = sorted(label_dir.glob("*.png"))
             for f_i, json_file in enumerate(json_files):
+                # Load ground truth for group labels only
                 with open(json_file) as f:
                     metadata = json.load(f)
-                objects = metadata.get("img_data", [])
-                obj_imgs = patch_preprocess.img_path2obj_images(
-                    png_files[f_i], device=device)  # Use specified device
-                if len(objects) != len(obj_imgs):
+                gt_objects = metadata.get("img_data", [])
+                
+                if len(gt_objects) < 2:
                     continue
-                if len(objects) < 2:
+                    
+                # Use object detector to get detected objects
+                img_path = png_files[f_i]
+                img = patch_preprocess.load_images_fast([img_path], device=device)[0]
+                detected_objs = eval_patch_classifier.evaluate_image(obj_model, img, device)
+                
+                if len(detected_objs) < 2:
                     continue
-                objects, obj_imgs, permutes = patch_preprocess.align_data_and_imgs(
-                    objects, obj_imgs)
+                
+                # Match detected objects to ground truth for group labels
+                # Simple matching based on position proximity
+                matched_groups = []
+                for det_obj in detected_objs:
+                    det_pos = [det_obj['s']['x'], det_obj['s']['y']]  # x, y position
+                    
+                    # Find closest ground truth object
+                    min_dist = float('inf')
+                    best_match_group = 0  # default group
+                    
+                    for gt_obj in gt_objects:
+                        gt_pos = [gt_obj['x'], gt_obj['y']]
+                        dist = ((det_pos[0] - gt_pos[0])**2 + (det_pos[1] - gt_pos[1])**2)**0.5
+                        if dist < min_dist:
+                            min_dist = dist
+                            best_match_group = gt_obj['group_id']
+                    
+                    matched_groups.append(best_match_group)
 
-                """
-                Each sample:
-                    pos:   (N,2)
-                    color: (N,3)
-                    size:  (N,1)
-                    shape: (N,D_shape)
-                    groups: list of group indices, e.g. [0,0,1,1,1,2] length N
-                """
-                obj_contours = torch.stack([patch_preprocess.preprocess_rgb_image_to_patch_set_torch(
-                    obj, points_per_patch=5)[0][0][:, :, :2].reshape(-1, 2) for obj in obj_imgs]).to(device)
-                objs_fd8 = torch.stack([contour_to_fd8(c)
-                                       for c in obj_contours]).to(device)
-
-                shape_ids = torch.tensor(
-                    [bk.bk_shapes_2.index(obj["shape"]) for obj in objects]).to(device)
-
+                # Extract features from detected objects
+                positions = []
+                colors = []
+                sizes = []
+                shapes = []
+                contours = []
+                
+                for det_obj in detected_objs:
+                    # Position
+                    positions.append([det_obj['s']['x'], det_obj['s']['y']])  # x, y
+                    
+                    # Color (RGB)
+                    colors.append(det_obj['s']['color'])  # r, g, b
+                    
+                    # Size
+                    if isinstance(det_obj['s']['w'], (list, tuple)):
+                        sizes.append([det_obj['s']['w'][0]])
+                    else:
+                        sizes.append([det_obj['s']['w']])
+                    
+                    # Shape - map detected shape to shape ID
+                    detected_shape = bk.bk_shapes_2[det_obj['s']['shape'].argmax()]
+                    shapes.append(detected_shape)
+                
+                
+                # For contours, we need to extract them from detected objects
+                # Assuming detected objects have contour information
+                obj_contours = []
+                for det_obj in detected_objs:
+                    obj_contours.append(det_obj['h'].reshape(-1,2))
+                                    
+                obj_contours = torch.stack(obj_contours).to(device)     
+                
+                # Create shape embeddings
+                shape_embeddings = patch_preprocess.patch2code(obj_contours, obj_labels=shapes, device=device)
                 data_list.append({
-                    "pos": [[obj["x"], obj["y"]] for obj in objects],
-                    "color": [[obj["color_r"], obj["color_g"], obj["color_b"]] for obj in objects],
-                    "size": [[obj["size"]] for obj in objects],
-                    "shape": [bk.bk_shapes_2.index(obj["shape"]) for obj in objects],
-                    "contour": shape_encoder(shape_ids, objs_fd8),
-                    "group": [obj["group_id"] for obj in objects],
+                    "pos": positions,
+                    "color": colors,
+                    "size": sizes,
+                    "shape": shape_embeddings,
+                    "contour": shape_embeddings,
+                    "group": matched_groups,
                 })
 
     # Split data into train and test
@@ -506,8 +557,13 @@ if __name__ == "__main__":
                                     "group": torch.tensor(single_data["group"]).to(device) if not isinstance(single_data["group"], torch.Tensor) else single_data["group"].to(device)}
     else:
         print("Generating new data...")
+        # Load object detection model
+        print("Loading object detection model for data generation...")
+        obj_model = eval_patch_classifier.load_model(device)
+        print("Object detection model loaded.")
+        
         train_data_list, test_data_list = get_data_list(
-            base_dir / args.principle / "train", task_num=task_num, device=device, train_test_split=True)
+            base_dir / args.principle / "train", task_num=task_num, device=device, train_test_split=True, obj_model=obj_model)
         # save data_list to a file for fast loading next time
         with open(data_list_path, "wb") as f:
             # Save in CPU format to avoid device issues when loading
