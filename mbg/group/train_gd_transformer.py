@@ -484,26 +484,16 @@ def init():
     parser.add_argument("--device", default="cuda:0" if torch.cuda.is_available()
                         else "cpu", help="Device to train on")
     parser.add_argument("--epochs", type=int, default=10)
-    parser.add_argument("--sample_size_list", type=str,
-                        default="5,10,20,50,100")
     parser.add_argument("--n", type=int, default=100)
     parser.add_argument("--principle", type=str, default="proximity")
     parser.add_argument("--input_types", type=str, default="pos_color_size")
-    parser.add_argument("--data_nums", type=str,
-                        default="10000,50000,100000", )
-    parser.add_argument("--task_num", type=int, default=5,
+    parser.add_argument("--task_num", type=int, default=10,
                         help="Number of tasks to process")
     parser.add_argument("--remove_cache", action="store_true",
                         help="Remove existing cache files before processing")
     parser.add_argument("--remote", action="store_true")
     args = parser.parse_args()
     args.device = parse_device(args.device)
-    input_type = args.input_types
-
-    data_num_list = [int(x) for x in args.data_nums.split(",")]
-    sample_size_list = [int(x) for x in args.sample_size_list.split(",")]
-    report = []
-    p = args.principle
     if RTPT_AVAILABLE:
         rtpt = RTPT(name_initials='JIS',
                     experiment_name=f'GRMGDTR{args.principle}', max_iterations=1)
@@ -570,7 +560,7 @@ if __name__ == "__main__":
         print("Object detection model loaded.")
         
         train_data_list, test_data_list = get_data_list(
-            base_dir / args.principle / "train", task_num=task_num, device=device, train_test_split=True, obj_model=obj_model)
+            base_dir / args.principle / "train", task_num=task_num, device=device, train_test_split=0.8, obj_model=obj_model)
         # save data_list to a file for fast loading next time
         with open(data_list_path, "wb") as f:
             # Save in CPU format to avoid device issues when loading
