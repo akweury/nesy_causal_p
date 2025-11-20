@@ -14,6 +14,7 @@ from mbg.group.gd_transformer import GroupingTransformer
 from src import bk
 from mbg.patch_preprocess import patch2code
 
+
 def embedding_principles(group_principle):
     principles = bk.gestalt_principles
     p_id = principles.index(group_principle)
@@ -22,7 +23,8 @@ def embedding_principles(group_principle):
 
 
 def embedding_group_neural_features(group_objs, device, input_dim=7):
-    group_patches = torch.stack([o["h"] for o in group_objs])[:, :, :, :input_dim].to(device)  # (G, P, L, D)
+    group_patches = torch.stack([o["h"] for o in group_objs])[
+        :, :, :, :input_dim].to(device)  # (G, P, L, D)
     # build the encoder (dims must match your patch-encoder settings):
     group_encoder = NeuralGroupEncoder(
         input_dim=input_dim,
@@ -37,7 +39,8 @@ def embedding_group_neural_features(group_objs, device, input_dim=7):
 
 
 def dict_group_features(group_objs):
-    group_feature = symbolic_group_features.compute_symbolic_group_features(group_objs, 1024, 1024)
+    group_feature = symbolic_group_features.compute_symbolic_group_features(
+        group_objs, 1024, 1024)
     s_g = group_feature.to_dict()
     return s_g
 
@@ -84,7 +87,8 @@ def group_objects_with_model(model, objects, device, input_type="pos_color_size"
         else:
             ctx_tensor = torch.stack(context).unsqueeze(0).to(device)
 
-        logit = model(ci[:, :, :, :dim], cj[:, :, :, :dim], ctx_tensor[:, :, :, :, :dim])
+        logit = model(ci[:, :, :, :dim], cj[:, :, :, :dim],
+                      ctx_tensor[:, :, :, :, :dim])
         prob = torch.sigmoid(logit).item()
         if prob > threshold:
             G.add_edge(i, j)
@@ -98,9 +102,18 @@ def eval_groups(objs, group_model, principle, device, dim, grp_th=0.5):
     neural_objs = [o["h"] for o in objs]
     if principle == "similarity":
         dim = 5
-    group_ids = group_objects_with_model(group_model, neural_objs, device, dim=dim, threshold=grp_th)
+
+    group_ids = eval_groups.get_transformer_group_ids(
+        transformer_model=group_model,
+        objects=objs,
+        device=device,
+        threshold=grp_th)
+
+    # group_ids = group_objects_with_model(
+    #     group_model, neural_objs, device, dim=dim, threshold=grp_th)
     # encoding the groups
-    groups = construct_group_representations(objs, group_ids, principle, dim, device)
+    groups = construct_group_representations(
+        objs, group_ids, principle, dim, device)
     return groups
 
 
@@ -108,52 +121,56 @@ def eval_groups(objs, group_model, principle, device, dim, grp_th=0.5):
 def get_transformer_group_ids(transformer_model, objects, device, threshold=0.5):
     """
     Use transformer group detector to get group IDs
-    
+
     Args:
         transformer_model: trained GroupingTransformer model
         objects: list of object dicts with keys 'position', 'color', 'size', 'contour'
         device: cuda or cpu
         threshold: probability threshold to consider two objects grouped
-    
+
     Returns:
         List of groups, each group is a list of object indices
     """
     transformer_model = transformer_model.to(device).eval()
-    
+
     n = len(objects)
     if n <= 1:
         return [[i] for i in range(n)]  # Each object in its own group
-    
+
     # Extract features from objects
     positions = []
     colors = []
     sizes = []
     shapes = []
-    positions = torch.tensor([[obj['s']['x'],obj['s']['y']] for obj in objects]).to(device).unsqueeze(0)
-    colors = torch.tensor([obj['s']['color'] for obj in objects]).to(device).unsqueeze(0)
-    sizes = torch.tensor([[obj['s']['w']] for obj in objects]).to(device).unsqueeze(0)
-    
-    obj_labels = [np.array(bk.bk_shapes_2)[obj['s']['shape'].bool().numpy()][0] for obj in objects]
-    obj_patches = torch.stack([obj['h'].reshape(-1,2) for obj in objects])
-    shape_code = patch2code(obj_patches, obj_labels=obj_labels, device=device).unsqueeze(0)
-                          # (N, 16)
-    
+    positions = torch.tensor([[obj['s']['x'], obj['s']['y']]
+                             for obj in objects]).to(device).unsqueeze(0)
+    colors = torch.tensor([obj['s']['color']
+                          for obj in objects]).to(device).unsqueeze(0)
+    sizes = torch.tensor([[obj['s']['w']]
+                         for obj in objects]).to(device).unsqueeze(0)
 
-    
+    obj_labels = [np.array(bk.bk_shapes_2)[
+        obj['s']['shape'].bool().numpy()][0] for obj in objects]
+    obj_patches = torch.stack([obj['h'].reshape(-1, 2) for obj in objects])
+    shape_code = patch2code(
+        obj_patches, obj_labels=obj_labels, device=device).unsqueeze(0)
+    # (N, 16)
+
     # Get predictions from transformer
     with torch.no_grad():
-        pred = transformer_model(positions, colors, sizes, shape_code)  # (1, N, N)
+        pred = transformer_model(
+            positions, colors, sizes, shape_code)  # (1, N, N)
         pred = torch.sigmoid(pred).squeeze(0)  # (N, N)
-    
+
     # Build graph from predictions
     G = nx.Graph()
     G.add_nodes_from(range(n))
-    
+
     for i in range(n):
         for j in range(i + 1, n):
             if pred[i, j].item() > threshold:
                 G.add_edge(i, j)
-    
+
     # Extract connected components as groups
     groups = [list(comp) for comp in nx.connected_components(G)]
     return groups
