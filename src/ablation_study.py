@@ -17,8 +17,8 @@ from mbg.scorer import scorer_config
 from mbg.scorer import improved_calibrator
 from src import visual_study
 ABLATED_CONFIGS = {
-    # "hard_ogc": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": True, "use_calibrator": True},
-    # "hard_obj": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": False, "use_calibrator": False},
+    "hard_ogc": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": True, "use_calibrator": True},
+    "hard_obj": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": False, "use_calibrator": False},
     "hard_og": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": True, "use_calibrator": False},
     # "hard_obj_calib": {"use_hard": True, "use_soft": False, "use_obj": True, "use_group": False, "use_calibrator": True},
 
@@ -99,14 +99,14 @@ def run_ablation_train_val(train_data, val_data, test_data, obj_model, group_mod
 
     eval_metrics = evaluation.eval_rules(
         test_data, obj_model, group_model, final_rules, hyp_params, train_principle, args.device, calibrator)
-    if eval_metrics["acc"] > 0.8:
+    # if eval_metrics["acc"] > 0.8:
 
-        print(
-            f"High acc {eval_metrics['acc']} in {task_name} for {mode_name} with rules: {final_rules}")
-        print("Train rules:", final_rules)
-        visual_study.visual_grps(
-            train_data["positive"]+train_data["negative"], group_list, task_name[0])
-        print("Val rules:", final_rules)
+    #     print(
+    #         f"High acc {eval_metrics['acc']} in {task_name} for {mode_name} with rules: {final_rules}")
+    #     print("Train rules:", final_rules)
+    #     visual_study.visual_grps(
+    #         train_data["positive"]+train_data["negative"], group_list, task_name[0])
+    #     print("Val rules:", final_rules)
     return eval_metrics, final_rules
 
 
@@ -160,8 +160,6 @@ def main_ablation():
     all_auc = {conf: [] for conf in ABLATED_CONFIGS}
     all_acc = {conf: [] for conf in ABLATED_CONFIGS}
     for task_idx, (train_data, val_data, test_data) in enumerate(combined_loader):
-        if task_idx < 137:
-            continue
         task_name = train_data["task"]
         print(f"\nTask {task_idx + 1}/{len(combined_loader)}: {task_name}")
 
