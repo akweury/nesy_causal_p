@@ -103,7 +103,7 @@ def eval_groups(objs, group_model, principle, device, dim, grp_th=0.5):
     if principle == "similarity":
         dim = 5
 
-    group_ids = eval_groups.get_transformer_group_ids(
+    group_ids = get_transformer_group_ids(
         transformer_model=group_model,
         objects=objs,
         device=device,
