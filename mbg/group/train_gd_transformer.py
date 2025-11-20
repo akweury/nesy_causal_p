@@ -604,9 +604,9 @@ if __name__ == "__main__":
     # Initialize wandb for this training run
 
     wandb.init(project=f"gd_transformer_{args.principle}", config={
-        "epochs": 20,
+        "epochs": args.epochs,
         "lr": 1e-4,
-        "device": device,
+        "device": args.device,
         "principle": args.principle if hasattr(args, 'principle') else "unknown"
     })
 
@@ -622,7 +622,7 @@ if __name__ == "__main__":
                    test_loader,
                    device=device,
                    lr=1e-4,
-                   epochs=20,
+                   epochs=args.epochs,
                    save_path=str(save_path))
 
     # Training is complete - test evaluation happens during training
