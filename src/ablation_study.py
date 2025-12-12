@@ -145,7 +145,7 @@ def main_ablation():
     group_model = load_gd_transformer_model(
         train_principle, args.device, args.remote)
 
-    wandb.init(project=f"grb_ablation_{train_principle}",
+    wandb.init(project=f"neumann_{train_principle}",
                config=args.__dict__, name=args.exp_name)
 
     results_summary = defaultdict(lambda: defaultdict(list))
