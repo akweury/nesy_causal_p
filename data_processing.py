@@ -193,21 +193,30 @@ if __name__ == "__main__":
     # print_ablation_results(config.output/"ablation_summary_closure_20250718_110518.json")
     # draw_final_calibrator_gain_figure(config.output / "ablation_summary_closure_20250718_110518.json")
 
+    print_ablation_results(config.output/"grm_ablation_summary_closure_transformer_20251121_104235.json")
+
     # continuity
     # print_ablation_results(config.output/"ablation_summary_continuity_20250718_110525.json")
     # draw_final_calibrator_gain_figure(config.output / "ablation_summary_continuity_20250718_110525.json")
-
+    # print_ablation_results(config.output/"grm_ablation_summary_continuity_transformer_20251120_104518.json")
+    
     # symmetry
     # print_ablation_results(config.output/"ablation_summary_symmetry_20250722_095458.json")
     # draw_final_calibrator_gain_figure(config.get_proj_output_path() / "symmetry"/ "ablation_summary_symmetry_20250904_202041.json")
+    # print_ablation_results(config.output/"grm_ablation_summary_symmetry_transformer_20251120_125143.json")
+    
 
     # proximity
     # print_ablation_results(config.output/"ablation_summary_proximity_20250720_070246.json")
+    # print_ablation_results(config.output/"grm_ablation_summary_proximity_transformer_20251120_193841.json")
+    
+    
     # draw_final_calibrator_gain_figure(config.output / "ablation_summary_proximity_20250720_070246.json")
 
     # similarity
     # print_ablation_results(config.output/"ablation_summary_similarity_20250721_092307.json")
-    draw_final_calibrator_gain_figure(config.output / "ablation_summary_similarity_20250721_092307.json")
+    # print_ablation_results(config.output/"grm_ablation_summary_similarity_transformer_20251121_104125.json")
+    # draw_final_calibrator_gain_figure(config.output / "ablation_summary_similarity_20250721_092307.json")
 
 
     # draw_final_calibrator_gain_figure(config.output / "ablation_summary_proximity_20250720_070246.json")

@@ -33,6 +33,11 @@ def draw_grouped_time_comparison():
     # Data from the table
     principles = ["Proximity", "Similarity", "Closure", "Symmetry", "Continuity"]
     grm_avg = [6.28, 88.76, 10.29, 34.42, 9.32]
+
+    neumann_avg = [4.34, 48.45, 6.80, 24.48, 6.34]
+    vit_avg = [12.49, 10.07, 10.48, 8.43, 9.83]
+    internvl_2b_avg = [5.06, 5.30, 6.26, 5.60, 6.13]
+    llava = [32.02, 23.56, 39.89, 27.26, 30.71]
     internvl_avg = [14.11, 13.34, 15.58, 12.30, 14.89]
     gpt5_avg = [109.45, 94.34, 105.46, 157.56, 82.59]
 

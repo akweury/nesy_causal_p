@@ -179,3 +179,6 @@ make run-filter GPU_ID=1
 python -m src.metric_od_gd --principle continuity --device 5
 python -m mbg.group.train_gd_transformer --remote --task_num 100 --epochs 200 --principle proximity --device 2
 python -m mbg.group.train_gd_transformer --remote --task_num 100 --epochs 1000 --principle similarity --device 6
+python -m src.ablation_study --device 2 --principle proximity --remote
+python -m src.ablation_study --device 5 --principle similarity --remote
+python -m src.ablation_study --device 4 --principle closure --remote
