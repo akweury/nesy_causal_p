@@ -39,12 +39,12 @@ docker build -t grm:latest .
 ``` 
 
 ```
-docker run -it --gpus all -v /home/ml-jsha/nesy_causal_p:/app -v /home/ml-jsha/storage/GRM_output/:/grm_output -v /home/ml-jsha/storage/GRM_Data/:/gen_data --rm grm:latest
+docker run -it --gpus all -v /home/ml-jsha/nesy_causal_p:/app -v /home/ml-jsha/storage/GRM_output/:/grm_output -v /home/ml-jsha/storage/GRM_Data/:/gen_data -v /home/ml-jsha/storage/ELVIS_Data/res_224_pin_False:/home/ml-jsha/storage/ELVIS_Data/res_224_pin_False  --rm grm:latest
 
 ``` 
 
 
-
+/home/ml-jsha/storage/ELVIS_Data/res_224_pin_False
 #### Train: Baseline Models
 
 ##### ViT
@@ -90,7 +90,7 @@ python -m baselines.eval_models --batch_size 1 --principle continuity --model gp
 python -m src.ablation_study --device 10 --task_id 6 --line_min_size 3
 python -m src.ablation_study --device 0 --principle closure
 python -m src.ablation_study --device 1 --principle similarity
-python -m src.ablation_study --device 5 --principle proximity --remote
+python -m src.ablation_study --device 0 --principle proximity --remote
 python -m src.ablation_study --device 5 --principle continuity --remote
 python -m src.ablation_study --device 7 --principle symmetry --remote
 
