@@ -20,6 +20,10 @@ def run_command(cmd, cwd=None, description=""):
         print(f"{description}")
         print('='*60)
     
+    # Use the same Python interpreter that's running this script
+    if cmd.startswith("pip "):
+        cmd = f"{sys.executable} -m {cmd}"
+    
     print(f"Running: {cmd}")
     result = subprocess.run(cmd, shell=True, cwd=cwd, capture_output=False, text=True)
     
