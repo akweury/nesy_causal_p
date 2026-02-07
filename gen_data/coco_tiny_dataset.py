@@ -175,7 +175,6 @@ def filter_coco(args, min_objs=5, max_objs=15, data_split="val"):
     selected_image_ids = set()
     csv_rows = []
 
-    images = images[:1000]
     for img in tqdm(images):
         img_id = img["id"]
         file_name = img["file_name"]
@@ -248,7 +247,7 @@ if __name__ == "__main__":
                         help="Minimum number of objects per image")
     parser.add_argument("--max_objs", type=int, default=15,
                         help="Maximum number of objects per image")
-    parser.add_argument("--max_images", type=int, default=1000,
+    parser.add_argument("--max_images", type=int, default=5000,
                         help="Maximum number of images in the proximity mini-dataset")
     parser.add_argument("--eps_rel", type=float, default=0.10,
                         help="Relative DBSCAN eps (in normalized coord space)")

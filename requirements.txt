@@ -1,7 +1,7 @@
 seaborn
-opencv-python==4.8.0.74
+opencv-python>=4.13.0
 colorlog
-numpy==1.24.0
+numpy>=1.26.0
 Pillow
 ipython
 imageio
@@ -18,12 +18,11 @@ grad-cam
 einops
 stable_baselines3
 gym
-numpy
 debugpy
 faiss-cpu
 kornia
 transformers==4.51.0
-apex
+# apex - removed (difficult to install on Windows, requires manual compilation)
 timm
 accelerate
 pycocotools

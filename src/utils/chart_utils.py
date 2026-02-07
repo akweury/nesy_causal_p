@@ -141,6 +141,8 @@ def visual_np_array(array, filename=None):
         # Save as PNG
         image.save(filename)
     plt.axis('off')
+    plt.imshow(array)
+    plt.show()
 
 
 def van(array, file_name=config.output/"test.png"):

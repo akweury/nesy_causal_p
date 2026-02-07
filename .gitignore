@@ -7,11 +7,13 @@ mbg/group/wandb/
 storage/dataset/
 storage/
 # Byte-compiled / optimized / DLL files
-
+output/
+src/data
 __pycache__/
 *.py[cod]
 *$py.class
-
+.venv/s
+.venv310/
 # C extensions
 *.so
 

@@ -70,7 +70,7 @@ def get_most_frequent_color(args, img):
     smallest_distance = float('inf')
     distances = []
     for color_name, color_rgb in bk.color_matplotlib.items():
-        distance = torch.sqrt((most_frequent.to(torch.uint8) - torch.tensor(color_rgb).to(args.device)).sum() ** 2)
+        distance = torch.sqrt((most_frequent.to(torch.uint8) - torch.tensor(color_rgb).to(args.device)).abs().sum() ** 2)
         distances.append(distance)
         if distance < smallest_distance:
             smallest_distance = distance

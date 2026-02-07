@@ -52,7 +52,7 @@ def get_coco_path(remote=False):
         coco_path = root / 'storage' / 'coco'
 
     if not os.path.exists(coco_path):
-        raise FileNotFoundError(f"Coco annotation file not found at {coco_path}")
+        os.makedirs(coco_path, exist_ok=True)
     return coco_path
 
 
