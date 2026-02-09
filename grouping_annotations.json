@@ -1,0 +1,3182 @@
+{
+  "37777": {
+    "image_id": 37777,
+    "file_name": "000000037777.jpg",
+    "timestamp": "2026-02-07T21:01:51.406039",
+    "num_objects": 14,
+    "groups": [
+      [
+        11,
+        13,
+        9,
+        8,
+        5,
+        10,
+        12
+      ],
+      [
+        0
+      ],
+      [
+        1
+      ],
+      [
+        2
+      ],
+      [
+        3
+      ],
+      [
+        4
+      ],
+      [
+        6
+      ],
+      [
+        7
+      ]
+    ],
+    "annotations": [
+      {
+        "object_id": 0,
+        "bbox": [
+          102.49,
+          118.47,
+          7.9,
+          17.31
+        ],
+        "category_id": 64,
+        "annotation_id": 22328
+      },
+      {
+        "object_id": 1,
+        "bbox": [
+          26.5,
+          215.25,
+          61.5,
+          14.5
+        ],
+        "category_id": 62,
+        "annotation_id": 100948
+      },
+      {
+        "object_id": 2,
+        "bbox": [
+          116.5,
+          189.57,
+          50.0,
+          25.5
+        ],
+        "category_id": 62,
+        "annotation_id": 102453
+      },
+      {
+        "object_id": 3,
+        "bbox": [
+          79.55,
+          178.05,
+          208.36,
+          48.7
+        ],
+        "category_id": 67,
+        "annotation_id": 120305
+      },
+      {
+        "object_id": 4,
+        "bbox": [
+          301.84,
+          74.94,
+          49.62,
+          151.44
+        ],
+        "category_id": 82,
+        "annotation_id": 330768
+      },
+      {
+        "object_id": 5,
+        "bbox": [
+          220.65,
+          178.93,
+          37.84,
+          27.91
+        ],
+        "category_id": 52,
+        "annotation_id": 1042181
+      },
+      {
+        "object_id": 6,
+        "bbox": [
+          137.47,
+          124.11,
+          60.18,
+          71.02
+        ],
+        "category_id": 79,
+        "annotation_id": 1122054
+      },
+      {
+        "object_id": 7,
+        "bbox": [
+          266.33,
+          134.49,
+          27.87,
+          3.47
+        ],
+        "category_id": 81,
+        "annotation_id": 1129584
+      },
+      {
+        "object_id": 8,
+        "bbox": [
+          215.77,
+          184.9,
+          17.26,
+          15.97
+        ],
+        "category_id": 55,
+        "annotation_id": 1556717
+      },
+      {
+        "object_id": 9,
+        "bbox": [
+          231.6,
+          200.96,
+          16.69,
+          15.93
+        ],
+        "category_id": 55,
+        "annotation_id": 1556915
+      },
+      {
+        "object_id": 10,
+        "bbox": [
+          230.55,
+          178.25,
+          11.73,
+          10.98
+        ],
+        "category_id": 55,
+        "annotation_id": 1559169
+      },
+      {
+        "object_id": 11,
+        "bbox": [
+          205.19,
+          187.01,
+          14.99,
+          21.2
+        ],
+        "category_id": 55,
+        "annotation_id": 1559287
+      },
+      {
+        "object_id": 12,
+        "bbox": [
+          241.95,
+          180.42,
+          51.37,
+          45.4
+        ],
+        "category_id": 62,
+        "annotation_id": 1944415
+      },
+      {
+        "object_id": 13,
+        "bbox": [
+          217.89,
+          200.56,
+          14.14,
+          13.49
+        ],
+        "category_id": 55,
+        "annotation_id": 2187566
+      }
+    ]
+  },
+  "252219": {
+    "image_id": 252219,
+    "file_name": "000000252219.jpg",
+    "timestamp": "2026-02-07T21:03:01.702614",
+    "num_objects": 7,
+    "groups": [
+      [
+        1,
+        4
+      ],
+      [
+        2
+      ],
+      [
+        0,
+        5
+      ],
+      [
+        3
+      ],
+      [
+        6
+      ]
+    ],
+    "annotations": [
+      {
+        "object_id": 0,
+        "bbox": [
+          326.28,
+          174.56,
+          71.24,
+          197.25
+        ],
+        "category_id": 1,
+        "annotation_id": 481918
+      },
+      {
+        "object_id": 1,
+        "bbox": [
+          9.79,
+          167.06,
+          121.94,
+          226.45
+        ],
+        "category_id": 1,
+        "annotation_id": 489768
+      },
+      {
+        "object_id": 2,
+        "bbox": [
+          510.44,
+          171.27,
+          123.66,
+          215.76
+        ],
+        "category_id": 1,
+        "annotation_id": 495624
+      },
+      {
+        "object_id": 3,
+        "bbox": [
+          560.73,
+          90.25,
+          79.27,
+          67.32
+        ],
+        "category_id": 28,
+        "annotation_id": 1424143
+      },
+      {
+        "object_id": 4,
+        "bbox": [
+          46.01,
+          211.11,
+          33.55,
+          51.85
+        ],
+        "category_id": 31,
+        "annotation_id": 1437313
+      },
+      {
+        "object_id": 5,
+        "bbox": [
+          345.13,
+          226.41,
+          11.06,
+          22.14
+        ],
+        "category_id": 47,
+        "annotation_id": 1507017
+      },
+      {
+        "object_id": 6,
+        "bbox": [
+          337.06,
+          44.11,
+          61.36,
+          57.17
+        ],
+        "category_id": 10,
+        "annotation_id": 1804847
+      }
+    ]
+  },
+  "174482": {
+    "image_id": 174482,
+    "file_name": "000000174482.jpg",
+    "timestamp": "2026-02-07T21:04:37.534959",
+    "num_objects": 12,
+    "groups": [
+      [
+        0
+      ],
+      [
+        1,
+        9,
+        5,
+        10
+      ],
+      [
+        8
+      ],
+      [
+        2,
+        7,
+        6,
+        4
+      ],
+      [
+        3
+      ],
+      [
+        11
+      ]
+    ],
+    "annotations": [
+      {
+        "object_id": 0,
+        "bbox": [
+          187.74,
+          5.84,
+          310.4,
+          380.49
+        ],
+        "category_id": 2,
+        "annotation_id": 128189
+      },
+      {
+        "object_id": 1,
+        "bbox": [
+          398.03,
+          80.69,
+          81.12,
+          36.8
+        ],
+        "category_id": 3,
+        "annotation_id": 135645
+      },
+      {
+        "object_id": 2,
+        "bbox": [
+          148.45,
+          71.56,
+          92.0,
+          44.27
+        ],
+        "category_id": 3,
+        "annotation_id": 144202
+      },
+      {
+        "object_id": 3,
+        "bbox": [
+          109.26,
+          26.54,
+          8.59,
+          11.57
+        ],
+        "category_id": 10,
+        "annotation_id": 410951
+      },
+      {
+        "object_id": 4,
+        "bbox": [
+          95.07,
+          67.63,
+          6.89,
+          8.34
+        ],
+        "category_id": 10,
+        "annotation_id": 411346
+      },
+      {
+        "object_id": 5,
+        "bbox": [
+          364.21,
+          86.57,
+          31.29,
+          23.67
+        ],
+        "category_id": 3,
+        "annotation_id": 1344072
+      },
+      {
+        "object_id": 6,
+        "bbox": [
+          81.28,
+          76.22,
+          26.81,
+          18.31
+        ],
+        "category_id": 3,
+        "annotation_id": 1348739
+      },
+      {
+        "object_id": 7,
+        "bbox": [
+          122.6,
+          79.2,
+          9.33,
+          14.9
+        ],
+        "category_id": 3,
+        "annotation_id": 1349666
+      },
+      {
+        "object_id": 8,
+        "bbox": [
+          506.05,
+          25.26,
+          133.95,
+          111.97
+        ],
+        "category_id": 8,
+        "annotation_id": 1370706
+      },
+      {
+        "object_id": 9,
+        "bbox": [
+          396.71,
+          80.69,
+          82.13,
+          35.56
+        ],
+        "category_id": 8,
+        "annotation_id": 1374126
+      },
+      {
+        "object_id": 10,
+        "bbox": [
+          476.76,
+          81.15,
+          43.64,
+          39.47
+        ],
+        "category_id": 8,
+        "annotation_id": 1374203
+      },
+      {
+        "object_id": 11,
+        "bbox": [
+          32.65,
+          58.41,
+          5.23,
+          3.45
+        ],
+        "category_id": 10,
+        "annotation_id": 1804403
+      }
+    ]
+  },
+  "480985": {
+    "image_id": 480985,
+    "file_name": "000000480985.jpg",
+    "timestamp": "2026-02-07T21:06:11.198091",
+    "num_objects": 13,
+    "groups": [
+      [
+        0
+      ],
+      [
+        5,
+        3,
+        2,
+        10
+      ],
+      [
+        6,
+        7,
+        8,
+        4,
+        1,
+        9,
+        11,
+        12
+      ]
+    ],
+    "annotations": [
+      {
+        "object_id": 0,
+        "bbox": [
+          14.61,
+          68.54,
+          329.21,
+          421.35
+        ],
+        "category_id": 4,
+        "annotation_id": 148144
+      },
+      {
+        "object_id": 1,
+        "bbox": [
+          284.06,
+          300.79,
+          45.29,
+          63.81
+        ],
+        "category_id": 4,
+        "annotation_id": 149690
+      },
+      {
+        "object_id": 2,
+        "bbox": [
+          47.19,
+          296.12,
+          28.3,
+          33.17
+        ],
+        "category_id": 1,
+        "annotation_id": 235634
+      },
+      {
+        "object_id": 3,
+        "bbox": [
+          32.75,
+          298.94,
+          16.52,
+          29.22
+        ],
+        "category_id": 1,
+        "annotation_id": 236267
+      },
+      {
+        "object_id": 4,
+        "bbox": [
+          320.16,
+          275.05,
+          27.06,
+          104.53
+        ],
+        "category_id": 1,
+        "annotation_id": 236973
+      },
+      {
+        "object_id": 5,
+        "bbox": [
+          10.05,
+          302.96,
+          13.7,
+          25.69
+        ],
+        "category_id": 1,
+        "annotation_id": 237362
+      },
+      {
+        "object_id": 6,
+        "bbox": [
+          266.37,
+          293.13,
+          23.97,
+          88.96
+        ],
+        "category_id": 1,
+        "annotation_id": 240624
+      },
+      {
+        "object_id": 7,
+        "bbox": [
+          369.5,
+          278.52,
+          5.5,
+          45.65
+        ],
+        "category_id": 1,
+        "annotation_id": 1729065
+      },
+      {
+        "object_id": 8,
+        "bbox": [
+          345.6,
+          306.34,
+          27.16,
+          25.92
+        ],
+        "category_id": 4,
+        "annotation_id": 1789988
+      },
+      {
+        "object_id": 9,
+        "bbox": [
+          343.74,
+          296.41,
+          17.74,
+          10.65
+        ],
+        "category_id": 4,
+        "annotation_id": 1790096
+      },
+      {
+        "object_id": 10,
+        "bbox": [
+          0.0,
+          329.66,
+          35.78,
+          37.18
+        ],
+        "category_id": 4,
+        "annotation_id": 1790124
+      },
+      {
+        "object_id": 11,
+        "bbox": [
+          290.03,
+          299.79,
+          15.24,
+          19.87
+        ],
+        "category_id": 1,
+        "annotation_id": 2155199
+      },
+      {
+        "object_id": 12,
+        "bbox": [
+          302.2,
+          298.22,
+          12.73,
+          18.73
+        ],
+        "category_id": 1,
+        "annotation_id": 2161724
+      }
+    ]
+  },
+  "458054": {
+    "image_id": 458054,
+    "file_name": "000000458054.jpg",
+    "timestamp": "2026-02-07T21:06:20.479496",
+    "num_objects": 10,
+    "groups": [
+      [
+        0
+      ],
+      [
+        1
+      ],
+      [
+        2
+      ],
+      [
+        3
+      ],
+      [
+        4
+      ],
+      [
+        5
+      ],
+      [
+        6
+      ],
+      [
+        7
+      ],
+      [
+        8
+      ],
+      [
+        9
+      ]
+    ],
+    "annotations": [
+      {
+        "object_id": 0,
+        "bbox": [
+          33.27,
+          0.0,
+          303.17,
+          426.0
+        ],
+        "category_id": 70,
+        "annotation_id": 1093382
+      },
+      {
+        "object_id": 1,
+        "bbox": [
+          228.8,
+          172.38,
+          195.29,
+          180.93
+        ],
+        "category_id": 70,
+        "annotation_id": 1094138
+      },
+      {
+        "object_id": 2,
+        "bbox": [
+          236.35,
+          11.53,
+          268.75,
+          379.3
+        ],
+        "category_id": 70,
+        "annotation_id": 1094206
+      },
+      {
+        "object_id": 3,
+        "bbox": [
+          346.72,
+          73.55,
+          193.9,
+          239.74
+        ],
+        "category_id": 70,
+        "annotation_id": 1095322
+      },
+      {
+        "object_id": 4,
+        "bbox": [
+          448.38,
+          41.46,
+          138.27,
+          165.25
+        ],
+        "category_id": 70,
+        "annotation_id": 1623847
+      },
+      {
+        "object_id": 5,
+        "bbox": [
+          399.88,
+          28.4,
+          150.53,
+          212.71
+        ],
+        "category_id": 70,
+        "annotation_id": 1624061
+      },
+      {
+        "object_id": 6,
+        "bbox": [
+          539.94,
+          78.89,
+          100.06,
+          151.04
+        ],
+        "category_id": 70,
+        "annotation_id": 1624223
+      },
+      {
+        "object_id": 7,
+        "bbox": [
+          0.0,
+          0.0,
+          201.7,
+          426.0
+        ],
+        "category_id": 70,
+        "annotation_id": 1967478
+      },
+      {
+        "object_id": 8,
+        "bbox": [
+          504.25,
+          135.9,
+          52.6,
+          34.26
+        ],
+        "category_id": 70,
+        "annotation_id": 1967986
+      },
+      {
+        "object_id": 9,
+        "bbox": [
+          428.64,
+          129.32,
+          134.7,
+          103.95
+        ],
+        "category_id": 70,
+        "annotation_id": 1968032
+      }
+    ]
+  },
+  "491497": {
+    "image_id": 491497,
+    "file_name": "000000491497.jpg",
+    "timestamp": "2026-02-07T21:08:59.902408",
+    "num_objects": 12,
+    "groups": [
+      [
+        0
+      ],
+      [
+        11,
+        1
+      ],
+      [
+        10,
+        5,
+        3,
+        8
+      ],
+      [
+        2
+      ],
+      [
+        4,
+        6,
+        7,
+        9
+      ]
+    ],
+    "annotations": [
+      {
+        "object_id": 0,
+        "bbox": [
+          1.03,
+          180.41,
+          91.75,
+          186.6
+        ],
+        "category_id": 72,
+        "annotation_id": 34061
+      },
+      {
+        "object_id": 1,
+        "bbox": [
+          167.38,
+          293.56,
+          186.7,
+          198.5
+        ],
+        "category_id": 62,
+        "annotation_id": 101073
+      },
+      {
+        "object_id": 2,
+        "bbox": [
+          296.35,
+          217.67,
+          78.65,
+          50.01
+        ],
+        "category_id": 84,
+        "annotation_id": 1139808
+      },
+      {
+        "object_id": 3,
+        "bbox": [
+          343.38,
+          150.84,
+          10.1,
+          45.34
+        ],
+        "category_id": 84,
+        "annotation_id": 1144931
+      },
+      {
+        "object_id": 4,
+        "bbox": [
+          337.41,
+          276.9,
+          7.76,
+          55.81
+        ],
+        "category_id": 84,
+        "annotation_id": 1147469
+      },
+      {
+        "object_id": 5,
+        "bbox": [
+          338.07,
+          155.97,
+          6.91,
+          39.86
+        ],
+        "category_id": 84,
+        "annotation_id": 1149359
+      },
+      {
+        "object_id": 6,
+        "bbox": [
+          324.18,
+          276.62,
+          9.07,
+          54.35
+        ],
+        "category_id": 84,
+        "annotation_id": 1149403
+      },
+      {
+        "object_id": 7,
+        "bbox": [
+          349.19,
+          283.61,
+          6.13,
+          49.93
+        ],
+        "category_id": 84,
+        "annotation_id": 1150721
+      },
+      {
+        "object_id": 8,
+        "bbox": [
+          299.13,
+          147.37,
+          14.84,
+          49.04
+        ],
+        "category_id": 84,
+        "annotation_id": 1650065
+      },
+      {
+        "object_id": 9,
+        "bbox": [
+          319.85,
+          280.5,
+          7.38,
+          48.36
+        ],
+        "category_id": 84,
+        "annotation_id": 1652258
+      },
+      {
+        "object_id": 10,
+        "bbox": [
+          310.89,
+          146.49,
+          33.15,
+          51.08
+        ],
+        "category_id": 84,
+        "annotation_id": 2141542
+      },
+      {
+        "object_id": 11,
+        "bbox": [
+          165.77,
+          284.66,
+          190.26,
+          215.34
+        ],
+        "category_id": 63,
+        "annotation_id": 2223647
+      }
+    ]
+  },
+  "184791": {
+    "image_id": 184791,
+    "file_name": "000000184791.jpg",
+    "timestamp": "2026-02-07T21:09:25.158208",
+    "num_objects": 7,
+    "groups": [
+      [
+        2,
+        3
+      ],
+      [
+        0
+      ],
+      [
+        6
+      ],
+      [
+        1
+      ],
+      [
+        5
+      ],
+      [
+        4
+      ]
+    ],
+    "annotations": [
+      {
+        "object_id": 0,
+        "bbox": [
+          131.38,
+          311.5,
+          155.08,
+          87.53
+        ],
+        "category_id": 51,
+        "annotation_id": 716267
+      },
+      {
+        "object_id": 1,
+        "bbox": [
+          316.77,
+          273.44,
+          79.17,
+          75.4
+        ],
+        "category_id": 55,
+        "annotation_id": 1051385
+      },
+      {
+        "object_id": 2,
+        "bbox": [
+          92.25,
+          221.69,
+          63.74,
+          68.08
+        ],
+        "category_id": 55,
+        "annotation_id": 1051618
+      },
+      {
+        "object_id": 3,
+        "bbox": [
+          134.39,
+          199.35,
+          48.65,
+          38.02
+        ],
+        "category_id": 55,
+        "annotation_id": 1051940
+      },
+      {
+        "object_id": 4,
+        "bbox": [
+          347.45,
+          196.11,
+          95.85,
+          47.74
+        ],
+        "category_id": 51,
+        "annotation_id": 1902252
+      },
+      {
+        "object_id": 5,
+        "bbox": [
+          440.52,
+          251.35,
+          74.34,
+          69.42
+        ],
+        "category_id": 55,
+        "annotation_id": 1911914
+      },
+      {
+        "object_id": 6,
+        "bbox": [
+          267.05,
+          269.84,
+          24.04,
+          15.27
+        ],
+        "category_id": 55,
+        "annotation_id": 1912420
+      }
+    ]
+  },
+  "348881": {
+    "image_id": 348881,
+    "file_name": "000000348881.jpg",
+    "timestamp": "2026-02-07T21:09:32.744351",
+    "num_objects": 5,
+    "groups": [
+      [
+        1,
+        3
+      ],
+      [
+        0,
+        4
+      ],
+      [
+        2
+      ]
+    ],
+    "annotations": [
+      {
+        "object_id": 0,
+        "bbox": [
+          567.82,
+          273.1,
+          31.38,
+          74.11
+        ],
+        "category_id": 1,
+        "annotation_id": 185744
+      },
+      {
+        "object_id": 1,
+        "bbox": [
+          0.0,
+          1.66,
+          161.6,
+          264.15
+        ],
+        "category_id": 5,
+        "annotation_id": 247475
+      },
+      {
+        "object_id": 2,
+        "bbox": [
+          251.19,
+          106.42,
+          23.32,
+          61.72
+        ],
+        "category_id": 1,
+        "annotation_id": 1289668
+      },
+      {
+        "object_id": 3,
+        "bbox": [
+          0.0,
+          23.03,
+          30.65,
+          41.59
+        ],
+        "category_id": 5,
+        "annotation_id": 1363961
+      },
+      {
+        "object_id": 4,
+        "bbox": [
+          561.92,
+          313.6,
+          11.97,
+          19.95
+        ],
+        "category_id": 33,
+        "annotation_id": 1445296
+      }
+    ]
+  },
+  "522713": {
+    "image_id": 522713,
+    "file_name": "000000522713.jpg",
+    "timestamp": "2026-02-07T21:10:41.140231",
+    "num_objects": 13,
+    "groups": [
+      [
+        8
+      ],
+      [
+        3
+      ],
+      [
+        0,
+        1,
+        4,
+        6
+      ],
+      [
+        11,
+        7,
+        5
+      ],
+      [
+        10
+      ],
+      [
+        12,
+        2
+      ],
+      [
+        9
+      ]
+    ],
+    "annotations": [
+      {
+        "object_id": 0,
+        "bbox": [
+          384.26,
+          247.01,
+          16.39,
+          25.19
+        ],
+        "category_id": 9,
+        "annotation_id": 180535
+      },
+      {
+        "object_id": 1,
+        "bbox": [
+          406.2,
+          251.65,
+          13.11,
+          18.29
+        ],
+        "category_id": 9,
+        "annotation_id": 181409
+      },
+      {
+        "object_id": 2,
+        "bbox": [
+          437.18,
+          263.26,
+          30.65,
+          8.21
+        ],
+        "category_id": 9,
+        "annotation_id": 181816
+      },
+      {
+        "object_id": 3,
+        "bbox": [
+          306.78,
+          277.85,
+          10.74,
+          10.39
+        ],
+        "category_id": 1,
+        "annotation_id": 202862
+      },
+      {
+        "object_id": 4,
+        "bbox": [
+          359.73,
+          268.11,
+          16.69,
+          5.59
+        ],
+        "category_id": 9,
+        "annotation_id": 250107
+      },
+      {
+        "object_id": 5,
+        "bbox": [
+          514.46,
+          251.52,
+          15.07,
+          23.89
+        ],
+        "category_id": 9,
+        "annotation_id": 250807
+      },
+      {
+        "object_id": 6,
+        "bbox": [
+          392.73,
+          271.54,
+          15.04,
+          3.24
+        ],
+        "category_id": 9,
+        "annotation_id": 251016
+      },
+      {
+        "object_id": 7,
+        "bbox": [
+          510.03,
+          266.43,
+          11.56,
+          4.44
+        ],
+        "category_id": 9,
+        "annotation_id": 251108
+      },
+      {
+        "object_id": 8,
+        "bbox": [
+          410.45,
+          283.97,
+          150.57,
+          71.29
+        ],
+        "category_id": 15,
+        "annotation_id": 571702
+      },
+      {
+        "object_id": 9,
+        "bbox": [
+          480.41,
+          270.49,
+          21.35,
+          4.37
+        ],
+        "category_id": 9,
+        "annotation_id": 1804019
+      },
+      {
+        "object_id": 10,
+        "bbox": [
+          490.68,
+          269.32,
+          3.48,
+          3.41
+        ],
+        "category_id": 1,
+        "annotation_id": 2003690
+      },
+      {
+        "object_id": 11,
+        "bbox": [
+          522.23,
+          257.56,
+          2.25,
+          3.01
+        ],
+        "category_id": 9,
+        "annotation_id": 2054512
+      },
+      {
+        "object_id": 12,
+        "bbox": [
+          437.15,
+          263.5,
+          11.31,
+          3.91
+        ],
+        "category_id": 9,
+        "annotation_id": 2055320
+      }
+    ]
+  },
+  "460347": {
+    "image_id": 460347,
+    "file_name": "000000460347.jpg",
+    "timestamp": "2026-02-07T21:11:05.974720",
+    "num_objects": 7,
+    "groups": [
+      [
+        3,
+        5,
+        4
+      ],
+      [
+        6
+      ],
+      [
+        2
+      ],
+      [
+        1
+      ],
+      [
+        0
+      ]
+    ],
+    "annotations": [
+      {
+        "object_id": 0,
+        "bbox": [
+          328.04,
+          69.16,
+          54.68,
+          45.2
+        ],
+        "category_id": 3,
+        "annotation_id": 355237
+      },
+      {
+        "object_id": 1,
+        "bbox": [
+          338.61,
+          13.51,
+          38.02,
+          23.61
+        ],
+        "category_id": 3,
+        "annotation_id": 357238
+      },
+      {
+        "object_id": 2,
+        "bbox": [
+          258.63,
+          6.01,
+          42.65,
+          41.95
+        ],
+        "category_id": 3,
+        "annotation_id": 361923
+      },
+      {
+        "object_id": 3,
+        "bbox": [
+          148.2,
+          58.5,
+          120.68,
+          179.04
+        ],
+        "category_id": 6,
+        "annotation_id": 365799
+      },
+      {
+        "object_id": 4,
+        "bbox": [
+          220.36,
+          157.57,
+          25.89,
+          18.69
+        ],
+        "category_id": 1,
+        "annotation_id": 1215579
+      },
+      {
+        "object_id": 5,
+        "bbox": [
+          168.12,
+          155.96,
+          7.37,
+          10.42
+        ],
+        "category_id": 1,
+        "annotation_id": 1225679
+      },
+      {
+        "object_id": 6,
+        "bbox": [
+          153.58,
+          9.13,
+          42.09,
+          39.8
+        ],
+        "category_id": 3,
+        "annotation_id": 1772742
+      }
+    ]
+  },
+  "322864": {
+    "image_id": 322864,
+    "file_name": "000000322864.jpg",
+    "timestamp": "2026-02-07T21:11:53.047293",
+    "num_objects": 6,
+    "groups": [
+      [
+        1,
+        4,
+        5
+      ],
+      [
+        0
+      ],
+      [
+        2,
+        3
+      ]
+    ],
+    "annotations": [
+      {
+        "object_id": 0,
+        "bbox": [
+          0.0,
+          379.59,
+          427.0,
+          216.71
+        ],
+        "category_id": 3,
+        "annotation_id": 346253
+      },
+      {
+        "object_id": 1,
+        "bbox": [
+          292.54,
+          351.7,
+          81.63,
+          44.53
+        ],
+        "category_id": 3,
+        "annotation_id": 352337
+      },
+      {
+        "object_id": 2,
+        "bbox": [
+          1.29,
+          354.33,
+          22.7,
+          56.75
+        ],
+        "category_id": 3,
+        "annotation_id": 361216
+      },
+      {
+        "object_id": 3,
+        "bbox": [
+          12.54,
+          351.71,
+          60.54,
+          47.63
+        ],
+        "category_id": 3,
+        "annotation_id": 362322
+      },
+      {
+        "object_id": 4,
+        "bbox": [
+          286.64,
+          337.95,
+          15.08,
+          27.6
+        ],
+        "category_id": 1,
+        "annotation_id": 481621
+      },
+      {
+        "object_id": 5,
+        "bbox": [
+          315.26,
+          313.36,
+          111.74,
+          126.89
+        ],
+        "category_id": 3,
+        "annotation_id": 1788199
+      }
+    ]
+  },
+  "456496": {
+    "image_id": 456496,
+    "file_name": "000000456496.jpg",
+    "timestamp": "2026-02-07T21:12:10.861376",
+    "num_objects": 5,
+    "groups": [
+      [
+        3,
+        4
+      ],
+      [
+        2
+      ],
+      [
+        1
+      ],
+      [
+        0
+      ]
+    ],
+    "annotations": [
+      {
+        "object_id": 0,
+        "bbox": [
+          403.82,
+          332.04,
+          34.73,
+          66.56
+        ],
+        "category_id": 16,
+        "annotation_id": 37550
+      },
+      {
+        "object_id": 1,
+        "bbox": [
+          128.68,
+          289.09,
+          52.21,
+          54.95
+        ],
+        "category_id": 16,
+        "annotation_id": 40774
+      },
+      {
+        "object_id": 2,
+        "bbox": [
+          17.84,
+          291.74,
+          76.01,
+          45.99
+        ],
+        "category_id": 16,
+        "annotation_id": 42082
+      },
+      {
+        "object_id": 3,
+        "bbox": [
+          149.34,
+          67.81,
+          141.68,
+          238.37
+        ],
+        "category_id": 1,
+        "annotation_id": 191529
+      },
+      {
+        "object_id": 4,
+        "bbox": [
+          266.58,
+          179.14,
+          38.38,
+          52.66
+        ],
+        "category_id": 31,
+        "annotation_id": 1431731
+      }
+    ]
+  },
+  "565778": {
+    "image_id": 565778,
+    "file_name": "000000565778.jpg",
+    "timestamp": "2026-02-07T21:12:27.350736",
+    "num_objects": 7,
+    "groups": [
+      [
+        0,
+        1,
+        2
+      ],
+      [
+        4,
+        5
+      ],
+      [
+        3
+      ],
+      [
+        6
+      ]
+    ],
+    "annotations": [
+      {
+        "object_id": 0,
+        "bbox": [
+          159.1,
+          132.13,
+          345.17,
+          215.74
+        ],
+        "category_id": 7,
+        "annotation_id": 174719
+      },
+      {
+        "object_id": 1,
+        "bbox": [
+          422.46,
+          191.41,
+          16.18,
+          77.81
+        ],
+        "category_id": 1,
+        "annotation_id": 221923
+      },
+      {
+        "object_id": 2,
+        "bbox": [
+          405.77,
+          188.34,
+          21.03,
+          82.19
+        ],
+        "category_id": 1,
+        "annotation_id": 224745
+      },
+      {
+        "object_id": 3,
+        "bbox": [
+          395.74,
+          228.37,
+          10.1,
+          27.97
+        ],
+        "category_id": 1,
+        "annotation_id": 1216847
+      },
+      {
+        "object_id": 4,
+        "bbox": [
+          183.69,
+          324.95,
+          11.12,
+          10.19
+        ],
+        "category_id": 10,
+        "annotation_id": 1386148
+      },
+      {
+        "object_id": 5,
+        "bbox": [
+          183.94,
+          305.38,
+          9.58,
+          18.22
+        ],
+        "category_id": 10,
+        "annotation_id": 1386930
+      },
+      {
+        "object_id": 6,
+        "bbox": [
+          265.16,
+          232.53,
+          6.74,
+          15.67
+        ],
+        "category_id": 1,
+        "annotation_id": 2006174
+      }
+    ]
+  },
+  "239274": {
+    "image_id": 239274,
+    "file_name": "000000239274.jpg",
+    "timestamp": "2026-02-07T21:16:43.680127",
+    "num_objects": 14,
+    "groups": [
+      [
+        13,
+        5,
+        6
+      ],
+      [
+        0,
+        1,
+        2,
+        3,
+        4,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ]
+    ],
+    "annotations": [
+      {
+        "object_id": 0,
+        "bbox": [
+          69.03,
+          184.09,
+          336.54,
+          332.22
+        ],
+        "category_id": 9,
+        "annotation_id": 176328
+      },
+      {
+        "object_id": 1,
+        "bbox": [
+          267.83,
+          383.8,
+          15.05,
+          31.81
+        ],
+        "category_id": 1,
+        "annotation_id": 205696
+      },
+      {
+        "object_id": 2,
+        "bbox": [
+          280.42,
+          383.58,
+          18.86,
+          45.43
+        ],
+        "category_id": 1,
+        "annotation_id": 209137
+      },
+      {
+        "object_id": 3,
+        "bbox": [
+          316.26,
+          388.06,
+          22.22,
+          39.04
+        ],
+        "category_id": 1,
+        "annotation_id": 214084
+      },
+      {
+        "object_id": 4,
+        "bbox": [
+          324.12,
+          366.68,
+          10.63,
+          26.43
+        ],
+        "category_id": 1,
+        "annotation_id": 225672
+      },
+      {
+        "object_id": 5,
+        "bbox": [
+          524.64,
+          460.32,
+          21.69,
+          32.09
+        ],
+        "category_id": 1,
+        "annotation_id": 251991
+      },
+      {
+        "object_id": 6,
+        "bbox": [
+          558.84,
+          441.33,
+          21.53,
+          43.87
+        ],
+        "category_id": 1,
+        "annotation_id": 256160
+      },
+      {
+        "object_id": 7,
+        "bbox": [
+          295.56,
+          363.7,
+          12.79,
+          37.3
+        ],
+        "category_id": 1,
+        "annotation_id": 261691
+      },
+      {
+        "object_id": 8,
+        "bbox": [
+          342.94,
+          363.15,
+          13.6,
+          34.61
+        ],
+        "category_id": 1,
+        "annotation_id": 1210399
+      },
+      {
+        "object_id": 9,
+        "bbox": [
+          335.52,
+          359.7,
+          12.34,
+          28.01
+        ],
+        "category_id": 1,
+        "annotation_id": 1236265
+      },
+      {
+        "object_id": 10,
+        "bbox": [
+          353.84,
+          390.06,
+          17.91,
+          22.76
+        ],
+        "category_id": 1,
+        "annotation_id": 1236816
+      },
+      {
+        "object_id": 11,
+        "bbox": [
+          300.5,
+          349.87,
+          10.42,
+          33.32
+        ],
+        "category_id": 1,
+        "annotation_id": 2007734
+      },
+      {
+        "object_id": 12,
+        "bbox": [
+          127.91,
+          284.89,
+          4.7,
+          8.04
+        ],
+        "category_id": 1,
+        "annotation_id": 2008554
+      },
+      {
+        "object_id": 13,
+        "bbox": [
+          557.03,
+          431.49,
+          12.43,
+          35.18
+        ],
+        "category_id": 1,
+        "annotation_id": 2155578
+      }
+    ]
+  },
+  "286994": {
+    "image_id": 286994,
+    "file_name": "000000286994.jpg",
+    "timestamp": "2026-02-07T21:17:03.087224",
+    "num_objects": 9,
+    "groups": [
+      [
+        0
+      ],
+      [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ]
+    ],
+    "annotations": [
+      {
+        "object_id": 0,
+        "bbox": [
+          329.78,
+          312.75,
+          110.28,
+          72.17
+        ],
+        "category_id": 22,
+        "annotation_id": 1409124
+      },
+      {
+        "object_id": 1,
+        "bbox": [
+          297.46,
+          232.78,
+          33.04,
+          21.1
+        ],
+        "category_id": 22,
+        "annotation_id": 1410161
+      },
+      {
+        "object_id": 2,
+        "bbox": [
+          488.59,
+          224.05,
+          48.33,
+          23.54
+        ],
+        "category_id": 22,
+        "annotation_id": 1410254
+      },
+      {
+        "object_id": 3,
+        "bbox": [
+          114.78,
+          218.42,
+          52.11,
+          31.93
+        ],
+        "category_id": 22,
+        "annotation_id": 1410580
+      },
+      {
+        "object_id": 4,
+        "bbox": [
+          251.81,
+          241.68,
+          20.21,
+          12.44
+        ],
+        "category_id": 22,
+        "annotation_id": 1410628
+      },
+      {
+        "object_id": 5,
+        "bbox": [
+          271.26,
+          240.04,
+          24.07,
+          13.36
+        ],
+        "category_id": 22,
+        "annotation_id": 1410655
+      },
+      {
+        "object_id": 6,
+        "bbox": [
+          363.2,
+          240.13,
+          25.18,
+          10.43
+        ],
+        "category_id": 22,
+        "annotation_id": 1410706
+      },
+      {
+        "object_id": 7,
+        "bbox": [
+          51.55,
+          224.59,
+          35.41,
+          16.79
+        ],
+        "category_id": 22,
+        "annotation_id": 1410756
+      },
+      {
+        "object_id": 8,
+        "bbox": [
+          0.0,
+          217.09,
+          26.22,
+          20.47
+        ],
+        "category_id": 22,
+        "annotation_id": 1410832
+      }
+    ]
+  },
+  "301867": {
+    "image_id": 301867,
+    "file_name": "000000301867.jpg",
+    "timestamp": "2026-02-07T21:17:36.238792",
+    "num_objects": 7,
+    "groups": [
+      [
+        2,
+        4,
+        6
+      ],
+      [
+        0,
+        3
+      ],
+      [
+        5,
+        1
+      ]
+    ],
+    "annotations": [
+      {
+        "object_id": 0,
+        "bbox": [
+          208.79,
+          40.47,
+          238.92,
+          133.45
+        ],
+        "category_id": 28,
+        "annotation_id": 281970
+      },
+      {
+        "object_id": 1,
+        "bbox": [
+          429.3,
+          182.11,
+          106.79,
+          143.46
+        ],
+        "category_id": 31,
+        "annotation_id": 1177917
+      },
+      {
+        "object_id": 2,
+        "bbox": [
+          119.39,
+          174.01,
+          72.27,
+          160.72
+        ],
+        "category_id": 31,
+        "annotation_id": 1178733
+      },
+      {
+        "object_id": 3,
+        "bbox": [
+          255.92,
+          102.21,
+          133.27,
+          377.79
+        ],
+        "category_id": 1,
+        "annotation_id": 1739135
+      },
+      {
+        "object_id": 4,
+        "bbox": [
+          146.51,
+          108.86,
+          159.73,
+          371.14
+        ],
+        "category_id": 1,
+        "annotation_id": 1753039
+      },
+      {
+        "object_id": 5,
+        "bbox": [
+          351.63,
+          116.51,
+          137.64,
+          363.49
+        ],
+        "category_id": 1,
+        "annotation_id": 1762234
+      },
+      {
+        "object_id": 6,
+        "bbox": [
+          242.45,
+          348.7,
+          29.57,
+          68.87
+        ],
+        "category_id": 31,
+        "annotation_id": 1835090
+      }
+    ]
+  },
+  "185250": {
+    "image_id": 185250,
+    "file_name": "000000185250.jpg",
+    "timestamp": "2026-02-07T21:18:01.742237",
+    "num_objects": 5,
+    "groups": [
+      [
+        1,
+        4
+      ],
+      [
+        0
+      ],
+      [
+        2
+      ],
+      [
+        3
+      ]
+    ],
+    "annotations": [
+      {
+        "object_id": 0,
+        "bbox": [
+          167.33,
+          387.02,
+          108.94,
+          180.96
+        ],
+        "category_id": 18,
+        "annotation_id": 7431
+      },
+      {
+        "object_id": 1,
+        "bbox": [
+          114.71,
+          195.48,
+          103.26,
+          291.41
+        ],
+        "category_id": 1,
+        "annotation_id": 183125
+      },
+      {
+        "object_id": 2,
+        "bbox": [
+          125.21,
+          60.8,
+          40.87,
+          42.16
+        ],
+        "category_id": 34,
+        "annotation_id": 603316
+      },
+      {
+        "object_id": 3,
+        "bbox": [
+          0.0,
+          354.24,
+          10.87,
+          69.46
+        ],
+        "category_id": 1,
+        "annotation_id": 1723100
+      },
+      {
+        "object_id": 4,
+        "bbox": [
+          122.26,
+          364.9,
+          10.2,
+          36.02
+        ],
+        "category_id": 34,
+        "annotation_id": 2082162
+      }
+    ]
+  },
+  "356427": {
+    "image_id": 356427,
+    "file_name": "000000356427.jpg",
+    "timestamp": "2026-02-07T21:18:17.086702",
+    "num_objects": 8,
+    "groups": [
+      [
+        0
+      ],
+      [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ]
+    ],
+    "annotations": [
+      {
+        "object_id": 0,
+        "bbox": [
+          161.44,
+          66.01,
+          133.73,
+          356.31
+        ],
+        "category_id": 1,
+        "annotation_id": 452931
+      },
+      {
+        "object_id": 1,
+        "bbox": [
+          419.25,
+          268.81,
+          101.93,
+          53.43
+        ],
+        "category_id": 27,
+        "annotation_id": 1165475
+      },
+      {
+        "object_id": 2,
+        "bbox": [
+          371.31,
+          290.22,
+          99.6,
+          48.34
+        ],
+        "category_id": 27,
+        "annotation_id": 1166593
+      },
+      {
+        "object_id": 3,
+        "bbox": [
+          358.62,
+          372.26,
+          53.6,
+          54.74
+        ],
+        "category_id": 31,
+        "annotation_id": 1176682
+      },
+      {
+        "object_id": 4,
+        "bbox": [
+          408.79,
+          347.63,
+          70.17,
+          70.75
+        ],
+        "category_id": 31,
+        "annotation_id": 1181495
+      },
+      {
+        "object_id": 5,
+        "bbox": [
+          278.98,
+          332.67,
+          84.35,
+          93.22
+        ],
+        "category_id": 27,
+        "annotation_id": 1415746
+      },
+      {
+        "object_id": 6,
+        "bbox": [
+          300.94,
+          317.29,
+          87.35,
+          61.17
+        ],
+        "category_id": 27,
+        "annotation_id": 1418322
+      },
+      {
+        "object_id": 7,
+        "bbox": [
+          389.58,
+          315.59,
+          55.84,
+          34.0
+        ],
+        "category_id": 33,
+        "annotation_id": 1841867
+      }
+    ]
+  },
+  "516316": {
+    "image_id": 516316,
+    "file_name": "000000516316.jpg",
+    "timestamp": "2026-02-07T21:18:32.189338",
+    "num_objects": 11,
+    "groups": [
+      [
+        0,
+        1
+      ],
+      [
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ]
+    ],
+    "annotations": [
+      {
+        "object_id": 0,
+        "bbox": [
+          429.56,
+          271.07,
+          108.23,
+          70.28
+        ],
+        "category_id": 24,
+        "annotation_id": 588861
+      },
+      {
+        "object_id": 1,
+        "bbox": [
+          108.23,
+          272.81,
+          132.66,
+          81.64
+        ],
+        "category_id": 24,
+        "annotation_id": 592617
+      },
+      {
+        "object_id": 2,
+        "bbox": [
+          432.13,
+          150.05,
+          2.29,
+          4.96
+        ],
+        "category_id": 16,
+        "annotation_id": 2065773
+      },
+      {
+        "object_id": 3,
+        "bbox": [
+          334.77,
+          147.56,
+          1.99,
+          1.99
+        ],
+        "category_id": 16,
+        "annotation_id": 2066037
+      },
+      {
+        "object_id": 4,
+        "bbox": [
+          367.84,
+          146.9,
+          2.33,
+          5.3
+        ],
+        "category_id": 16,
+        "annotation_id": 2066186
+      },
+      {
+        "object_id": 5,
+        "bbox": [
+          325.01,
+          139.36,
+          4.96,
+          5.43
+        ],
+        "category_id": 16,
+        "annotation_id": 2066299
+      },
+      {
+        "object_id": 6,
+        "bbox": [
+          268.97,
+          149.46,
+          4.83,
+          3.91
+        ],
+        "category_id": 16,
+        "annotation_id": 2066333
+      },
+      {
+        "object_id": 7,
+        "bbox": [
+          258.56,
+          144.95,
+          5.4,
+          1.95
+        ],
+        "category_id": 16,
+        "annotation_id": 2066483
+      },
+      {
+        "object_id": 8,
+        "bbox": [
+          416.19,
+          146.4,
+          5.44,
+          4.49
+        ],
+        "category_id": 16,
+        "annotation_id": 2066542
+      },
+      {
+        "object_id": 9,
+        "bbox": [
+          142.75,
+          153.04,
+          2.31,
+          1.83
+        ],
+        "category_id": 16,
+        "annotation_id": 2066621
+      },
+      {
+        "object_id": 10,
+        "bbox": [
+          136.76,
+          144.13,
+          2.55,
+          2.37
+        ],
+        "category_id": 16,
+        "annotation_id": 2066704
+      }
+    ]
+  },
+  "349860": {
+    "image_id": 349860,
+    "file_name": "000000349860.jpg",
+    "timestamp": "2026-02-07T21:19:33.591732",
+    "num_objects": 8,
+    "groups": [
+      [
+        1,
+        3
+      ],
+      [
+        0,
+        2,
+        7
+      ],
+      [
+        6
+      ],
+      [
+        5
+      ],
+      [
+        4
+      ]
+    ],
+    "annotations": [
+      {
+        "object_id": 0,
+        "bbox": [
+          350.12,
+          349.22,
+          36.23,
+          29.2
+        ],
+        "category_id": 3,
+        "annotation_id": 344745
+      },
+      {
+        "object_id": 1,
+        "bbox": [
+          279.93,
+          13.34,
+          185.72,
+          152.22
+        ],
+        "category_id": 1,
+        "annotation_id": 488820
+      },
+      {
+        "object_id": 2,
+        "bbox": [
+          336.86,
+          369.28,
+          24.06,
+          17.69
+        ],
+        "category_id": 15,
+        "annotation_id": 579867
+      },
+      {
+        "object_id": 3,
+        "bbox": [
+          339.84,
+          107.88,
+          112.96,
+          89.03
+        ],
+        "category_id": 41,
+        "annotation_id": 639864
+      },
+      {
+        "object_id": 4,
+        "bbox": [
+          46.91,
+          341.76,
+          17.23,
+          36.37
+        ],
+        "category_id": 1,
+        "annotation_id": 1206737
+      },
+      {
+        "object_id": 5,
+        "bbox": [
+          217.93,
+          321.19,
+          9.59,
+          31.49
+        ],
+        "category_id": 1,
+        "annotation_id": 1711193
+      },
+      {
+        "object_id": 6,
+        "bbox": [
+          281.47,
+          349.8,
+          11.51,
+          28.39
+        ],
+        "category_id": 3,
+        "annotation_id": 1770582
+      },
+      {
+        "object_id": 7,
+        "bbox": [
+          368.05,
+          377.79,
+          15.38,
+          16.56
+        ],
+        "category_id": 15,
+        "annotation_id": 1811585
+      }
+    ]
+  },
+  "486438": {
+    "image_id": 486438,
+    "file_name": "000000486438.jpg",
+    "timestamp": "2026-02-07T21:19:51.455317",
+    "num_objects": 9,
+    "groups": [
+      [
+        0
+      ],
+      [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ]
+    ],
+    "annotations": [
+      {
+        "object_id": 0,
+        "bbox": [
+          73.26,
+          0.72,
+          519.53,
+          241.94
+        ],
+        "category_id": 1,
+        "annotation_id": 443826
+      },
+      {
+        "object_id": 1,
+        "bbox": [
+          202.47,
+          174.64,
+          176.55,
+          97.87
+        ],
+        "category_id": 60,
+        "annotation_id": 1079944
+      },
+      {
+        "object_id": 2,
+        "bbox": [
+          344.48,
+          314.57,
+          231.25,
+          108.43
+        ],
+        "category_id": 60,
+        "annotation_id": 1573021
+      },
+      {
+        "object_id": 3,
+        "bbox": [
+          121.86,
+          308.98,
+          222.62,
+          113.22
+        ],
+        "category_id": 60,
+        "annotation_id": 1574105
+      },
+      {
+        "object_id": 4,
+        "bbox": [
+          27.82,
+          245.97,
+          204.61,
+          130.39
+        ],
+        "category_id": 60,
+        "annotation_id": 1575007
+      },
+      {
+        "object_id": 5,
+        "bbox": [
+          444.4,
+          267.32,
+          181.56,
+          104.44
+        ],
+        "category_id": 60,
+        "annotation_id": 1575510
+      },
+      {
+        "object_id": 6,
+        "bbox": [
+          257.35,
+          262.13,
+          182.17,
+          115.3
+        ],
+        "category_id": 60,
+        "annotation_id": 1575531
+      },
+      {
+        "object_id": 7,
+        "bbox": [
+          156.71,
+          228.78,
+          134.94,
+          80.8
+        ],
+        "category_id": 60,
+        "annotation_id": 1575749
+      },
+      {
+        "object_id": 8,
+        "bbox": [
+          353.96,
+          191.2,
+          206.22,
+          106.05
+        ],
+        "category_id": 60,
+        "annotation_id": 1575941
+      }
+    ]
+  },
+  "400573": {
+    "image_id": 400573,
+    "file_name": "000000400573.jpg",
+    "timestamp": "2026-02-07T21:20:05.774612",
+    "num_objects": 5,
+    "groups": [
+      [
+        0,
+        3
+      ],
+      [
+        1,
+        2,
+        4
+      ]
+    ],
+    "annotations": [
+      {
+        "object_id": 0,
+        "bbox": [
+          1.44,
+          1.08,
+          478.56,
+          629.89
+        ],
+        "category_id": 1,
+        "annotation_id": 442987
+      },
+      {
+        "object_id": 1,
+        "bbox": [
+          343.08,
+          308.12,
+          8.68,
+          20.85
+        ],
+        "category_id": 1,
+        "annotation_id": 471767
+      },
+      {
+        "object_id": 2,
+        "bbox": [
+          317.84,
+          306.74,
+          11.16,
+          24.08
+        ],
+        "category_id": 1,
+        "annotation_id": 514945
+      },
+      {
+        "object_id": 3,
+        "bbox": [
+          195.6,
+          319.28,
+          212.85,
+          117.93
+        ],
+        "category_id": 60,
+        "annotation_id": 1078710
+      },
+      {
+        "object_id": 4,
+        "bbox": [
+          330.93,
+          308.69,
+          5.9,
+          16.19
+        ],
+        "category_id": 1,
+        "annotation_id": 2150028
+      }
+    ]
+  },
+  "515579": {
+    "image_id": 515579,
+    "file_name": "000000515579.jpg",
+    "timestamp": "2026-02-07T21:20:28.782254",
+    "num_objects": 7,
+    "groups": [
+      [
+        1,
+        6,
+        3
+      ],
+      [
+        0,
+        2,
+        4,
+        5
+      ]
+    ],
+    "annotations": [
+      {
+        "object_id": 0,
+        "bbox": [
+          335.73,
+          0.0,
+          163.39,
+          237.25
+        ],
+        "category_id": 64,
+        "annotation_id": 21294
+      },
+      {
+        "object_id": 1,
+        "bbox": [
+          9.79,
+          24.09,
+          226.6,
+          304.15
+        ],
+        "category_id": 1,
+        "annotation_id": 196121
+      },
+      {
+        "object_id": 2,
+        "bbox": [
+          292.8,
+          27.33,
+          35.61,
+          92.4
+        ],
+        "category_id": 1,
+        "annotation_id": 214850
+      },
+      {
+        "object_id": 3,
+        "bbox": [
+          14.55,
+          119.44,
+          24.84,
+          20.7
+        ],
+        "category_id": 37,
+        "annotation_id": 303761
+      },
+      {
+        "object_id": 4,
+        "bbox": [
+          264.88,
+          51.37,
+          78.06,
+          48.17
+        ],
+        "category_id": 15,
+        "annotation_id": 1395416
+      },
+      {
+        "object_id": 5,
+        "bbox": [
+          336.48,
+          20.37,
+          33.27,
+          65.4
+        ],
+        "category_id": 1,
+        "annotation_id": 2001390
+      },
+      {
+        "object_id": 6,
+        "bbox": [
+          207.08,
+          154.16,
+          23.46,
+          26.62
+        ],
+        "category_id": 40,
+        "annotation_id": 2090990
+      }
+    ]
+  },
+  "515445": {
+    "image_id": 515445,
+    "file_name": "000000515445.jpg",
+    "timestamp": "2026-02-07T21:20:40.382679",
+    "num_objects": 7,
+    "groups": [
+      [
+        0,
+        4
+      ],
+      [
+        1,
+        2,
+        3,
+        5
+      ],
+      [
+        6
+      ]
+    ],
+    "annotations": [
+      {
+        "object_id": 0,
+        "bbox": [
+          247.75,
+          375.57,
+          23.82,
+          60.98
+        ],
+        "category_id": 1,
+        "annotation_id": 453323
+      },
+      {
+        "object_id": 1,
+        "bbox": [
+          482.24,
+          380.96,
+          27.55,
+          51.43
+        ],
+        "category_id": 1,
+        "annotation_id": 494472
+      },
+      {
+        "object_id": 2,
+        "bbox": [
+          520.95,
+          372.45,
+          29.25,
+          61.5
+        ],
+        "category_id": 1,
+        "annotation_id": 497003
+      },
+      {
+        "object_id": 3,
+        "bbox": [
+          510.91,
+          372.77,
+          16.77,
+          58.67
+        ],
+        "category_id": 42,
+        "annotation_id": 651409
+      },
+      {
+        "object_id": 4,
+        "bbox": [
+          238.93,
+          391.01,
+          27.87,
+          20.96
+        ],
+        "category_id": 42,
+        "annotation_id": 652670
+      },
+      {
+        "object_id": 5,
+        "bbox": [
+          549.78,
+          373.26,
+          19.55,
+          61.79
+        ],
+        "category_id": 1,
+        "annotation_id": 1729106
+      },
+      {
+        "object_id": 6,
+        "bbox": [
+          408.58,
+          301.09,
+          11.5,
+          8.35
+        ],
+        "category_id": 1,
+        "annotation_id": 1737093
+      }
+    ]
+  },
+  "78915": {
+    "image_id": 78915,
+    "file_name": "000000078915.jpg",
+    "timestamp": "2026-02-07T21:21:32.328020",
+    "num_objects": 12,
+    "groups": [
+      [
+        0,
+        1,
+        2
+      ],
+      [
+        8
+      ],
+      [
+        10
+      ],
+      [
+        3,
+        4,
+        5,
+        6,
+        7,
+        9,
+        11
+      ]
+    ],
+    "annotations": [
+      {
+        "object_id": 0,
+        "bbox": [
+          135.63,
+          295.94,
+          18.5,
+          20.87
+        ],
+        "category_id": 37,
+        "annotation_id": 305530
+      },
+      {
+        "object_id": 1,
+        "bbox": [
+          155.52,
+          296.04,
+          52.87,
+          111.51
+        ],
+        "category_id": 43,
+        "annotation_id": 657839
+      },
+      {
+        "object_id": 2,
+        "bbox": [
+          131.59,
+          392.08,
+          169.73,
+          247.92
+        ],
+        "category_id": 1,
+        "annotation_id": 1213545
+      },
+      {
+        "object_id": 3,
+        "bbox": [
+          243.06,
+          5.75,
+          74.78,
+          79.1
+        ],
+        "category_id": 1,
+        "annotation_id": 1286461
+      },
+      {
+        "object_id": 4,
+        "bbox": [
+          357.09,
+          12.77,
+          60.62,
+          75.41
+        ],
+        "category_id": 1,
+        "annotation_id": 1293762
+      },
+      {
+        "object_id": 5,
+        "bbox": [
+          316.8,
+          4.79,
+          47.09,
+          81.78
+        ],
+        "category_id": 1,
+        "annotation_id": 1294426
+      },
+      {
+        "object_id": 6,
+        "bbox": [
+          190.45,
+          0.0,
+          114.82,
+          50.26
+        ],
+        "category_id": 1,
+        "annotation_id": 1308017
+      },
+      {
+        "object_id": 7,
+        "bbox": [
+          114.25,
+          0.09,
+          86.83,
+          53.16
+        ],
+        "category_id": 1,
+        "annotation_id": 1317450
+      },
+      {
+        "object_id": 8,
+        "bbox": [
+          256.92,
+          86.11,
+          73.17,
+          99.19
+        ],
+        "category_id": 1,
+        "annotation_id": 1688956
+      },
+      {
+        "object_id": 9,
+        "bbox": [
+          73.88,
+          0.0,
+          79.15,
+          36.96
+        ],
+        "category_id": 1,
+        "annotation_id": 1740189
+      },
+      {
+        "object_id": 10,
+        "bbox": [
+          458.86,
+          66.6,
+          22.14,
+          135.5
+        ],
+        "category_id": 1,
+        "annotation_id": 1750959
+      },
+      {
+        "object_id": 11,
+        "bbox": [
+          38.75,
+          0.0,
+          76.69,
+          46.36
+        ],
+        "category_id": 1,
+        "annotation_id": 1753152
+      }
+    ]
+  },
+  "524456": {
+    "image_id": 524456,
+    "file_name": "000000524456.jpg",
+    "timestamp": "2026-02-07T21:22:17.255466",
+    "num_objects": 6,
+    "groups": [
+      [
+        1,
+        4
+      ],
+      [
+        0,
+        2,
+        3,
+        5
+      ]
+    ],
+    "annotations": [
+      {
+        "object_id": 0,
+        "bbox": [
+          0.65,
+          2.7,
+          419.38,
+          255.42
+        ],
+        "category_id": 73,
+        "annotation_id": 1098469
+      },
+      {
+        "object_id": 1,
+        "bbox": [
+          368.9,
+          349.3,
+          215.73,
+          83.06
+        ],
+        "category_id": 74,
+        "annotation_id": 1105881
+      },
+      {
+        "object_id": 2,
+        "bbox": [
+          59.33,
+          83.13,
+          294.47,
+          158.56
+        ],
+        "category_id": 76,
+        "annotation_id": 1634140
+      },
+      {
+        "object_id": 3,
+        "bbox": [
+          120.89,
+          0.0,
+          515.55,
+          298.67
+        ],
+        "category_id": 1,
+        "annotation_id": 1743927
+      },
+      {
+        "object_id": 4,
+        "bbox": [
+          375.7,
+          269.86,
+          264.3,
+          181.33
+        ],
+        "category_id": 1,
+        "annotation_id": 1753413
+      },
+      {
+        "object_id": 5,
+        "bbox": [
+          517.16,
+          121.89,
+          80.61,
+          83.9
+        ],
+        "category_id": 31,
+        "annotation_id": 2079067
+      }
+    ]
+  }
+}

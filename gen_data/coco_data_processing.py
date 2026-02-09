@@ -2,6 +2,7 @@
 
 
 import json, os
+import shutil
 from urllib.parse import quote
 
 from typing import Optional, Iterable, Tuple
@@ -190,6 +191,156 @@ def build_labelstudio_subset_with_bboxes(
     return n_images, total_boxes
 
 
+def copy_corresponding_depth_files(
+        original_depth_dir: str,
+        selected_images_dir: str,
+        target_depth_dir: str
+) -> Tuple[int, int]:
+    """
+    Copy depth files that correspond to selected images from original depth_maps to target directory.
+    
+    Args:
+        original_depth_dir: Path to original depth_maps directory
+        selected_images_dir: Path to directory containing selected images
+        target_depth_dir: Path to target directory where depth files should be copied
+        depth_file_extension: Extension of depth files (default: .png)
+        
+    Returns:
+        Tuple of (copied_files_count, missing_depth_files_count)
+    """
+    print(f"Copying depth files from {original_depth_dir} to {target_depth_dir}")
+    print(f"Based on selected images in {selected_images_dir}")
+    
+    # Create target directory if it doesn't exist
+    os.makedirs(target_depth_dir, exist_ok=True)
+    
+    # Get list of selected image files
+    if not os.path.exists(selected_images_dir):
+        print(f"Selected images directory does not exist: {selected_images_dir}")
+        return 0, 0
+        
+    if not os.path.exists(original_depth_dir):
+        print(f"Original depth directory does not exist: {original_depth_dir}")
+        return 0, 0
+    
+    selected_images = [f for f in os.listdir(selected_images_dir) 
+                      if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+    
+    copied_count = 0
+    missing_count = 0
+    
+    for image_file in selected_images:
+        # Get base name without extension  
+        base_name = os.path.splitext(image_file)[0]
+        
+        # Three corresponding depth files for each image
+        depth_files = [
+            base_name + "_depth.npz",
+            base_name + "_depth.png", 
+            base_name + "_conf.png"
+        ]
+        
+        files_copied_for_image = 0
+        files_missing_for_image = 0
+        
+        for depth_file_name in depth_files:
+            original_depth_path = os.path.join(original_depth_dir, depth_file_name)
+            target_depth_path = os.path.join(target_depth_dir, depth_file_name)
+            
+            if os.path.exists(original_depth_path):
+                try:
+                    shutil.copy2(original_depth_path, target_depth_path)
+                    files_copied_for_image += 1
+                    copied_count += 1
+                except Exception as e:
+                    print(f"Error copying {original_depth_path} to {target_depth_path}: {e}")
+                    files_missing_for_image += 1
+                    missing_count += 1
+            else:
+                files_missing_for_image += 1
+                missing_count += 1
+        
+        # Progress indicator
+        if (copied_count + missing_count) % 300 == 0:  # Every 100 images (3 files each)
+            print(f"Processed {(copied_count + missing_count) // 3} images, copied {copied_count} depth files...")
+        
+        # Warn if not all 3 files were found for an image
+        if files_missing_for_image > 0:
+            print(f"Warning: Only {files_copied_for_image}/3 depth files found for {image_file}")
+    
+    print(f"Depth file copying completed: {copied_count} copied, {missing_count} missing")
+    return copied_count, missing_count
+
+
+def validate_and_clean_incomplete_samples(
+        selected_images_dir: str,
+        selected_depth_dir: str
+) -> Tuple[int, int]:
+    """
+    Validate that each sample has all required files (RGB .jpg + 3 depth files).
+    Remove any incomplete samples from the selected folders.
+    
+    Args:
+        selected_images_dir: Path to directory containing selected RGB images
+        selected_depth_dir: Path to directory containing selected depth files
+        
+    Returns:
+        Tuple of (complete_samples_count, removed_incomplete_samples_count)
+    """
+    print(f"Validating complete samples in {selected_images_dir} and {selected_depth_dir}")
+    
+    if not os.path.exists(selected_images_dir):
+        print(f"Selected images directory does not exist: {selected_images_dir}")
+        return 0, 0
+        
+    if not os.path.exists(selected_depth_dir):
+        print(f"Selected depth directory does not exist: {selected_depth_dir}")
+        return 0, 0
+    
+    # Get all RGB images
+    rgb_images = [f for f in os.listdir(selected_images_dir) 
+                  if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+    
+    complete_samples = 0
+    removed_samples = 0
+    
+    for image_file in rgb_images:
+        # Get base name without extension  
+        base_name = os.path.splitext(image_file)[0]
+        
+        # Check for all required files
+        rgb_path = os.path.join(selected_images_dir, image_file)
+        depth_files = [
+            os.path.join(selected_depth_dir, base_name + "_depth.npz"),
+            os.path.join(selected_depth_dir, base_name + "_depth.png"), 
+            os.path.join(selected_depth_dir, base_name + "_conf.png")
+        ]
+        
+        # Check if all files exist
+        all_files_exist = os.path.exists(rgb_path) and all(os.path.exists(f) for f in depth_files)
+        
+        if all_files_exist:
+            complete_samples += 1
+        else:
+            # Remove incomplete sample (all associated files)
+            files_to_remove = [rgb_path] + depth_files
+            removed_files_count = 0
+            
+            for file_path in files_to_remove:
+                if os.path.exists(file_path):
+                    try:
+                        os.remove(file_path)
+                        removed_files_count += 1
+                    except Exception as e:
+                        print(f"Error removing {file_path}: {e}")
+            
+            print(f"Removed incomplete sample {base_name}: {removed_files_count} files deleted")
+            removed_samples += 1
+    
+    print(f"Validation completed: {complete_samples} complete samples, {removed_samples} incomplete samples removed")
+    return complete_samples, removed_samples
+
+
 if __name__ == "__main__":
     args = args_utils.get_args()
     # coco_to_labelstudio(args)
@@ -205,3 +356,18 @@ if __name__ == "__main__":
         id_from_filename=False
     )
     print(f"Built {n_imgs} tasks with {n_boxes} boxes.")
+    
+    # Copy corresponding depth files for selected images
+    copied, missing = copy_corresponding_depth_files(
+        original_depth_dir=config.get_coco_path(args.remote) / "original" / "depth_maps",
+        selected_images_dir=config.get_coco_path(args.remote) / "selected" / "val2017",
+        target_depth_dir=config.get_coco_path(args.remote) / "selected" / "depth_maps"
+    )
+    print(f"Depth files: {copied} copied, {missing} missing.")
+    
+    # Validate and clean incomplete samples
+    complete, removed = validate_and_clean_incomplete_samples(
+        selected_images_dir=config.get_coco_path(args.remote) / "selected" / "val2017",
+        selected_depth_dir=config.get_coco_path(args.remote) / "selected" / "depth_maps"
+    )
+    print(f"Sample validation: {complete} complete samples, {removed} incomplete samples removed.")
