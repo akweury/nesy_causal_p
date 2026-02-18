@@ -39,7 +39,7 @@ docker build -t grm:latest .
 ``` 
 
 ```
-docker run -it --gpus all -v /home/ml-jsha/nesy_causal_p:/app -v /home/ml-jsha/storage/GRM_output/:/grm_output -v /home/ml-jsha/storage/GRM_Data/:/gen_data -v /home/ml-jsha/storage/ELVIS_Data/res_224_pin_False:/home/ml-jsha/storage/ELVIS_Data/res_224_pin_False  --rm grm:latest
+docker run -it --gpus all -u 1086:1086 -v /home/ml-jsha/nesy_causal_p:/app -v /home/ml-jsha/storage/GRM_output/:/grm_output -v /home/ml-jsha/storage/GRM_Data/:/gen_data  --rm grm:latest
 
 ``` 
 
@@ -131,7 +131,7 @@ python -m src.analysis_results --model principle --model GRM --principle continu
 
 ```
 ### Grp Comparison
-python -m src.elvis_exp.grp_comparison
+python -m src.elvis_exp.grp_comparison --remote --device 5
 
 
 ---

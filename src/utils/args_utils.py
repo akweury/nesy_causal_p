@@ -84,7 +84,7 @@ def get_args():
     elif args.device != "cpu":
         args.device = f"cuda:{int(args.device)}"
     
-    args.log_file = log_utils.create_log_file(args.logger, config.output / "logs")
+    # args.log_file = log_utils.create_log_file(args.logger, config.output / "logs")
     args.lark_path = str(config.lark_file)
 
     os.makedirs(config.output / f"{args.exp_name}", exist_ok=True)
