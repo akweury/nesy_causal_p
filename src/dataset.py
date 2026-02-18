@@ -113,6 +113,10 @@ def shape_to_id(name):
         n = bk.bk_shapes_2.index(name)
     return n
 
+def shape_to_id_clevr(name):
+    n = bk.bk_shapes_clevr.index(name)
+    return n
+
 class GrbDataset(Dataset):
     def __init__(self, folder_path: str, mode: str, val_split: float = 0.4, task_num=None):
         assert mode in ["train", "val", "test"]

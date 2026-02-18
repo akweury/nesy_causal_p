@@ -127,18 +127,17 @@ class MLP(nn.Module):
 # ----------------------------------------------------------------------
 class RelativeGeometry(nn.Module):
     """
-    Input: pos[N,2], color[N,3], size[N,1]
+    Input: pos[N,2], size[N,1]
     Output: rel_bias[N,N,rel_dim]
     """
     def __init__(self, rel_dim=64):
         super().__init__()
-        self.encoder = MLP(in_dim=1 + 1 + 1 + 3 + 1, out_dim=rel_dim)  # dist + dx + dy + color_diff + size_diff = 7
-        # distance, dx, dy, color_diff(3), size_diff
+        self.encoder = MLP(in_dim=1 + 1 + 1 + 1, out_dim=rel_dim)  # dist + dx + dy + size_diff = 4
+        # distance, dx, dy, size_diff
 
-    def forward(self, pos: Tensor, color: Tensor, size: Tensor):
+    def forward(self, pos: Tensor, size: Tensor):
         """
         pos:   (B, N, 2)
-        color: (B, N, 3)
         size:  (B, N, 1)
         """
         B, N, _ = pos.shape
@@ -148,16 +147,14 @@ class RelativeGeometry(nn.Module):
         dy = pos[:, :, None, 1] - pos[:, None, :, 1]
         dist = torch.sqrt(dx**2 + dy**2 + 1e-6)
 
-        color_diff = color[:, :, None, :] - color[:, None, :, :]  # (B,N,N,3)
         size_diff  = size[:, :, None, :] - size[:, None, :, :]    # (B,N,N,1)
 
         geom = torch.cat([
             dist[..., None],   # (B,N,N,1)
             dx[..., None],
             dy[..., None],
-            color_diff,        # (B,N,N,3)
             size_diff          # (B,N,N,1)
-        ], dim=-1)  # → (B,N,N,1+2+3+1 = 7)
+        ], dim=-1)  # → (B,N,N,1+2+1 = 4)
 
         rel = self.encoder(geom)  # (B,N,N,rel_dim)
         return rel
@@ -237,9 +234,7 @@ class GroupingTransformer(nn.Module):
     """
     Input:
         pos   : (B,N,2)
-        color : (B,N,3)
         size  : (B,N,1)
-        shape : (B,N,D_shape)
         optional appearance: (B,N,D_app)
 
     Output:
@@ -255,7 +250,7 @@ class GroupingTransformer(nn.Module):
         super().__init__()
 
         self.use_app = (app_dim > 0)
-        in_dim = 2 + 3 + 1 + shape_dim + app_dim  # pos+color+size+shape+app
+        in_dim = 2 + 1 + app_dim  # pos+size+app
 
         # Object-token encoder
         self.obj_encoder = MLP(in_dim, d_model)
@@ -276,7 +271,7 @@ class GroupingTransformer(nn.Module):
             nn.Linear(d_model, 1)
         )
 
-    def forward(self, pos, color, size, shape, appearance=None):
+    def forward(self, pos, size, appearance=None):
         """
         Returns:
             affinity: (B,N,N)
@@ -287,11 +282,11 @@ class GroupingTransformer(nn.Module):
             appearance = torch.zeros(B, N, 0, device=pos.device)
 
         # 1. Encode object tokens
-        x = torch.cat([pos, color, size, shape, appearance], dim=-1)
+        x = torch.cat([pos, size, appearance], dim=-1)
         x = self.obj_encoder(x)  # (B,N,D)
 
         # 2. Relative geometric embedding
-        rel = self.rel_geo(pos, color, size)  # (B,N,N,rel_dim)
+        rel = self.rel_geo(pos, size)  # (B,N,N,rel_dim)
 
         # 3. Transformer layers
         for blk in self.layers:

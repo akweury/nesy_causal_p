@@ -275,7 +275,7 @@ def diverse_shapes(objects: List[Dict], groups: List[Dict], device="cpu"):
 @group_predicate("unique_shapes")
 def unique_shapes(objects: List[Dict], groups: List[Dict], device="cpu"):
     """
-    Returns True if a group contains at least two different shapes.
+    Returns True if a group contains only one shape.
     """
     obj2idx = {o["id"]: i for i, o in enumerate(objects)}
     shape_ids = torch.tensor([o["s"]["shape"].argmax() - 1 for o in objects], dtype=torch.long, device=device)

@@ -113,17 +113,35 @@ def get_group_bounding_box(object_list, object_indices):
         if idx < len(object_list):
             obj = object_list[idx]
             if "s" in obj:
-                x, y, w, h = obj["s"]["x"], obj["s"]["y"], obj["s"]["w"], obj["s"]["h"]
-                x_mins.append(x)
-                y_mins.append(y)
-                x_maxs.append(x + w)
-                y_maxs.append(y + h)
+                # Handle objects with 's' key (structured format)
+                if "w" in obj["s"] and "h" in obj["s"]:
+                    x, y, w, h = obj["s"]["x"], obj["s"]["y"], obj["s"]["w"], obj["s"]["h"]
+                    x_mins.append(x)
+                    y_mins.append(y)
+                    x_maxs.append(x + w)
+                    y_maxs.append(y + h)
+                elif "size" in obj["s"]:
+                    # CLEVR format: x, y are center coordinates, size is width/height
+                    x, y, size = obj["s"]["x"], obj["s"]["y"], obj["s"]["size"]
+                    x_mins.append(x - size / 2)
+                    y_mins.append(y - size / 2)
+                    x_maxs.append(x + size / 2)
+                    y_maxs.append(y + size / 2)
             else:
-                x, y, w, h = obj["x"], obj["y"], obj["w"], obj["h"]
-                x_mins.append(x)
-                y_mins.append(y)
-                x_maxs.append(x + w)
-                y_maxs.append(y + h)
+                # Handle objects without 's' key (flat format)
+                if "w" in obj and "h" in obj:
+                    x, y, w, h = obj["x"], obj["y"], obj["w"], obj["h"]
+                    x_mins.append(x)
+                    y_mins.append(y)
+                    x_maxs.append(x + w)
+                    y_maxs.append(y + h)
+                elif "size" in obj:
+                    # CLEVR format: x, y are center coordinates, size is width/height
+                    x, y, size = obj["x"], obj["y"], obj["size"]
+                    x_mins.append(x - size / 2)
+                    y_mins.append(y - size / 2)
+                    x_maxs.append(x + size / 2)
+                    y_maxs.append(y + size / 2)
     if not x_mins:
         return None
     x_min = min(x_mins)
@@ -136,7 +154,13 @@ def get_group_bounding_box(object_list, object_indices):
 def extract_ground_truth_groups(gt_objects):
     groups = {}
     for i, obj in enumerate(gt_objects):
-        group_id = obj["group_id"].item()
+        group_id = obj.get("group_id", -1)
+        # Handle both tensor and int types
+        if hasattr(group_id, 'item'):
+            group_id = group_id.item()
+        elif group_id is None:
+            group_id = -1
+        
         if group_id != -1:
             if group_id not in groups:
                 groups[group_id] = []

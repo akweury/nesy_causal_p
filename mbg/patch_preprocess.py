@@ -858,7 +858,7 @@ def rgbs2patches(rgb_imgs, input_type):
 
 
 
-def patch2code(obj_patches, obj_labels, device):
+def patch2code(obj_patches, obj_labels, device, bk_shapes=bk.bk_shapes_2):
     shape_encoder = ShapeEmbedding(
         num_shapes=len(bk.bk_shapes_2),
         contour_dim=8,
@@ -867,7 +867,7 @@ def patch2code(obj_patches, obj_labels, device):
     ).to(device)
         
     objs_fd8 = torch.stack([contour_to_fd8(c) for c in obj_patches]).to(device)
-    shape_ids = torch.tensor([bk.bk_shapes_2.index(label) for label in obj_labels]).to(device)
+    shape_ids = torch.tensor([bk_shapes.index(label) for label in obj_labels]).to(device)
     
     shape_code = shape_encoder(shape_ids, objs_fd8)
 

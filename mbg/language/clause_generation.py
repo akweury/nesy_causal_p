@@ -894,16 +894,22 @@ def filter_group_universal_rules(
                 pos_ratios.append(min(ratio, 1.0))
 
         # negative image universal check
-        for j, support in enumerate(clause_to_neg_supports.get(clause, [])):
+        neg_supports_list = clause_to_neg_supports.get(clause, [])
+        for support in neg_supports_list:
             total = len(support)
             if total > 0:
                 ratio = support.sum().item() / total
                 neg_ratios.append(int(ratio == 1.0))
+            else:
+                neg_ratios.append(0)
+        
+        # If clause didn't appear in all negative images, add 0s for missing ones
+        missing_neg_images = len(neg_freqs) - len(neg_supports_list)
+        neg_ratios.extend([0] * missing_neg_images)
 
-        if pos_ratios and neg_ratios:
+        if pos_ratios:  # Only require positive ratios to be non-empty
             pos_support = sum(pos_ratios) / len(pos_freqs)
-            neg_support = sum(neg_ratios) / \
-                          len(neg_freqs) if neg_ratios else 0.0
+            neg_support = sum(neg_ratios) / len(neg_freqs) if neg_ratios else 0.0
             final_support = pos_support * (1.0 - neg_support)
             if final_support > 0:
                 results.append((clause, final_support))

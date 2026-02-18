@@ -73,6 +73,7 @@ def get_args():
     parser.add_argument("--line_min_size", type=int, default=6)
     parser.add_argument("--task_id", type=int, default=0)
     parser.add_argument("--principle", type=str, default="proximity")
+    parser.add_argument("--use_gt_groups", action="store_true", help="Use ground truth groups instead of trained group detector")
     args = parser.parse_args()
     args.logger = init_logger()
     if args.device != "cpu":

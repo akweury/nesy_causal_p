@@ -191,9 +191,7 @@ class GroupDataset(Dataset):
         item = self.data[idx]
 
         pos = torch.tensor(item["pos"], dtype=torch.float32)
-        color = torch.tensor(item["color"], dtype=torch.float32)
         size = torch.tensor(item["size"], dtype=torch.float32)
-        shape = torch.tensor(item["contour"], dtype=torch.float32)
         groups = torch.tensor(item["group"], dtype=torch.long)
 
         # Create ground-truth affinity matrix (N,N)
@@ -205,7 +203,7 @@ class GroupDataset(Dataset):
                     gt[i, j] = 1.0
         gt.fill_diagonal_(0.0)  # no self-links
 
-        return pos, color, size, shape, gt
+        return pos, size, gt
 
 
 def custom_collate_fn(batch):
@@ -269,21 +267,19 @@ def train_grouping(model,
         model.train()
         total_loss = 0.0
 
-        for batch_idx, (pos, color, size, shape, gt) in enumerate(train_loader):
+        for batch_idx, (pos, size, gt) in enumerate(train_loader):
             # Each scene has different N (number of objects)
-            # pos: (N, 2), color: (N, 3), size: (N, 1), shape: (N, D), gt: (N, N)
+            # pos: (N, 2), size: (N, 1), gt: (N, N)
             
             # Add batch dimension for single scene
-            pos = pos.unsqueeze(0).to(device)  # (1, N, 2)
-            color = color.unsqueeze(0).to(device)  # (1, N, 3)
-            size = size.unsqueeze(0).to(device)  # (1, N, 1)
-            shape = shape.unsqueeze(0).to(device)  # (1, N, D)
-            gt = gt.unsqueeze(0).to(device)  # (1, N, N)
+            pos = pos.squeeze().unsqueeze(0).to(device)  # (1, N, 2)
+            size = size.squeeze().unsqueeze(0).unsqueeze(2).to(device)  # (1, N, 1)
+            gt = gt.squeeze().unsqueeze(0).to(device)  # (1, N, N)
 
             optimizer.zero_grad()
 
             # Forward pass
-            pred = model(pos, color, size, shape)
+            pred = model(pos, size)
 
             loss = criterion(pred, gt)
             loss.backward()
@@ -291,9 +287,9 @@ def train_grouping(model,
 
             total_loss += loss.item()
 
-            if batch_idx % log_interval == 0:
-                print(
-                    f"Epoch {epoch} | Batch {batch_idx} | Loss {loss.item():.4f}")
+            # if batch_idx % log_interval == 0:
+            #     print(
+            #         f"Epoch {epoch} | Batch {batch_idx} | Loss {loss.item():.4f}")
 
         avg_loss = total_loss / len(train_loader)
 
@@ -302,15 +298,13 @@ def train_grouping(model,
         train_correct = 0
         train_total = 0
         with torch.no_grad():
-            for pos, color, size, shape, gt in train_loader:
+            for pos, size, gt in train_loader:
                 # Add batch dimension for single scene
-                pos = pos.unsqueeze(0).to(device)
-                color = color.unsqueeze(0).to(device)
-                size = size.unsqueeze(0).to(device)
-                shape = shape.unsqueeze(0).to(device)
-                gt = gt.unsqueeze(0).to(device)
+                pos = pos.squeeze().unsqueeze(0).to(device)  # (1, N, 2)
+                size = size.squeeze().unsqueeze(0).unsqueeze(2).to(device)  # (1, N, 1)
+                gt = gt.squeeze().unsqueeze(0).to(device)  # (1, N, N)
                 
-                pred = model(pos, color, size, shape)
+                pred = model(pos, size)
                 pred_binary = (torch.sigmoid(pred) > 0.5).float()
                 train_correct += (pred_binary == gt).sum().item()
                 train_total += gt.numel()
@@ -326,15 +320,13 @@ def train_grouping(model,
             test_total = 0
             test_loss_total = 0
             with torch.no_grad():
-                for pos, color, size, shape, gt in test_loader:
+                for pos, size, gt in test_loader:
                     # Add batch dimension for single scene
-                    pos = pos.unsqueeze(0).to(device)
-                    color = color.unsqueeze(0).to(device)
-                    size = size.unsqueeze(0).to(device)
-                    shape = shape.unsqueeze(0).to(device)
-                    gt = gt.unsqueeze(0).to(device)
+                    pos = pos.squeeze().unsqueeze(0).to(device)  # (1, N, 2)
+                    size = size.squeeze().unsqueeze(0).unsqueeze(2).to(device)  # (1, N, 1)
+                    gt = gt.squeeze().unsqueeze(0).to(device)  # (1, N, N)
                     
-                    pred = model(pos, color, size, shape)
+                    pred = model(pos, size)
                     loss = criterion(pred, gt)
                     test_loss_total += loss.item()
                     
@@ -353,7 +345,7 @@ def train_grouping(model,
             }
             if test_loader:
                 log_dict["test_accuracy"] = test_accuracy
-            wandb.log(log_dict)
+            # wandb.log(log_dict)
 
         # Save best model based on test accuracy if available, otherwise train loss
         current_metric = test_accuracy if test_loader else -avg_loss  # Use negative loss for minimization
@@ -452,12 +444,10 @@ def evaluate_model(model, test_loader, device="cuda"):
         for pos, color, size, shape, gt in test_loader:
             # Add batch dimension for single scene
             pos = pos.unsqueeze(0).to(device)
-            color = color.unsqueeze(0).to(device)
             size = size.unsqueeze(0).to(device)
-            shape = shape.unsqueeze(0).to(device)
             gt = gt.unsqueeze(0).to(device)
             
-            pred = model(pos, color, size, shape)
+            pred = model(pos, size)
             loss = criterion(pred, gt)
             total_loss += loss.item()
             

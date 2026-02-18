@@ -56,6 +56,27 @@ def get_coco_path(remote=False):
     return coco_path
 
 
+def get_clevr_path(remote=False):
+    if remote:
+        clevr_path = Path(os.getenv("DATA_ROOT", "/gen_data"))
+    else:
+        clevr_path = root / 'storage' / "dataset" / 'clevr'
+
+    if not os.path.exists(clevr_path):
+        os.makedirs(clevr_path, exist_ok=True)
+    return clevr_path
+
+def get_clevr_grp_path(remote=False):
+    if remote:
+        clevr_grp_path = Path(os.getenv("DATA_ROOT", "/gen_data"))
+    else:
+        clevr_grp_path = root / 'storage' / "dataset" / 'clevr_grp'
+
+    if not os.path.exists(clevr_grp_path):
+        os.makedirs(clevr_grp_path, exist_ok=True)
+    return clevr_grp_path
+
+
 def get_proj_output_path(remote=False):
     if remote:
         output_dir = Path(f"/grm_output/")
@@ -158,19 +179,24 @@ alpha_mode = {
     'og': 4
 }
 
-#### output dirs
+# output dirs
 mb_outlines = storage / "dataset" / "mb_outlines"
 os.makedirs(mb_outlines, exist_ok=True)
 
 ##############
 model_gestalt = models / "gestalt_rl"
 
-model_group_kp_line = storage / "output" / "kp_sy_line" / "line_detector_model.pth"
-model_group_kp_square = storage / "output" / "kp_sy_square" / "square_detector_model.pth"
-model_group_kp_circle = storage / "output" / "kp_sy_circle" / "circle_detector_model.pth"
-model_group_kp_triangle = storage / "output" / "kp_sy_triangle" / "triangle_detector_model.pth"
+model_group_kp_line = storage / "output" / \
+    "kp_sy_line" / "line_detector_model.pth"
+model_group_kp_square = storage / "output" / \
+    "kp_sy_square" / "square_detector_model.pth"
+model_group_kp_circle = storage / "output" / \
+    "kp_sy_circle" / "circle_detector_model.pth"
+model_group_kp_triangle = storage / "output" / \
+    "kp_sy_triangle" / "triangle_detector_model.pth"
 
-model_group_kp_triangle_only = storage / "output" / "kp_sy_triangle_only" / "triangle_only_detector_model.pth"
+model_group_kp_triangle_only = storage / "output" / \
+    "kp_sy_triangle_only" / "triangle_only_detector_model.pth"
 
 dpl_file_path = storage / "output" / "dpl_program.pl"
 # nn settings
@@ -242,10 +268,14 @@ def load_config() -> Config:
     co_img_val = os.getenv("COCO_VAL_IMAGES")
     co_ann_val = os.getenv("COCO_VAL_ANN")
 
-    coco_images = Path(co_img) if co_img else base["data_root"] / "coco" / "images" / "train2017"
-    coco_annotations = Path(co_ann) if co_ann else base["data_root"] / "coco" / "annotations" / "instances_train2017.json"
-    coco_images_val = Path(co_img_val) if co_img_val else base["data_root"] / "coco" / "images" / "val2017"
-    coco_annotations_val = Path(co_ann_val) if co_ann_val else base["data_root"] / "coco" / "annotations" / "instances_val2017.json"
+    coco_images = Path(
+        co_img) if co_img else base["data_root"] / "coco" / "images" / "train2017"
+    coco_annotations = Path(
+        co_ann) if co_ann else base["data_root"] / "coco" / "annotations" / "instances_train2017.json"
+    coco_images_val = Path(
+        co_img_val) if co_img_val else base["data_root"] / "coco" / "images" / "val2017"
+    coco_annotations_val = Path(
+        co_ann_val) if co_ann_val else base["data_root"] / "coco" / "annotations" / "instances_val2017.json"
     paths = Paths(
         data_root=base["data_root"],
         coco_images=coco_images,
@@ -263,7 +293,8 @@ def load_config() -> Config:
     if sys.platform == "darwin":
         device = "cpu"
     else:
-        device = os.getenv("DEVICE", "cuda:0" if os.getenv("CUDA_AVAILABLE", "1") == "1" else "cpu")
+        device = os.getenv("DEVICE", "cuda:0" if os.getenv(
+            "CUDA_AVAILABLE", "1") == "1" else "cpu")
     num_workers = int(os.getenv("NUM_WORKERS", "4"))
     # 确保目录存在
     for p in [paths.work_dir, paths.detections_dir, paths.graphs_dir, paths.models_dir, paths.outputs_dir]:

@@ -586,6 +586,219 @@ def eval_rules(val_data, obj_model, group_model, learned_rules, hyp_params, eval
     return metrics
 
 
+def eval_rules_clevr(val_data, obj_model, group_model, learned_rules, hyp_params, eval_principle, device, calibrator, use_gt_groups=False):
+    """Evaluate rules on CLEVR dataset using ground truth object information.
+    
+    If use_gt_groups=True, uses ground truth group annotations instead of trained model.
+    """
+    from src import bk
+    
+    patch_dim = hyp_params["patch_dim"]
+    conf_th = hyp_params["conf_th"]
+    top_k = hyp_params["top_k"]
+
+    task_id = val_data["task"]
+    all_data = val_data["positive"] + val_data["negative"]
+    gt_labels = [int(d["img_label"]) for d in all_data]
+
+    per_task_scores = defaultdict(list)
+    per_task_labels = defaultdict(list)
+
+    error_counters = {
+        "grouping_error": 0,
+        "object_error": 0,
+        "clause_mismatch": 0,
+        "total_errors": 0
+    }
+
+    analysis = {
+        "calibrated_scores": [],
+        "vanilla_scores": [],
+        "groundtruth_labels": [],
+        "rule_pool_has_good_clause": [],
+        "topk_clause_precision": [],
+    }
+
+    topk_hits = 0
+    topk_total_valid = 0
+    topk_precision_sum = 0
+    topk_precision_count = 0
+    
+    # Store groups for each image
+    all_groups = []
+
+    for i, data_sample in enumerate(all_data):
+        true_label = gt_labels[i]
+
+        # 1) Use ground truth objects from symbolic_data
+        symbolic_data = data_sample["symbolic_data"]
+        objs = []
+        for obj_idx, obj_gt in enumerate(symbolic_data):
+            # Convert shape ID to one-hot encoding
+            shape_one_hot = torch.zeros(len(bk.bk_shapes_clevr), dtype=torch.float32)
+            shape_id = obj_gt['shape']
+            if 0 <= shape_id < len(bk.bk_shapes_clevr):
+                shape_one_hot[shape_id] = 1.0
+            
+            obj = {
+                "id": obj_idx,
+                "s": {
+                    "shape": shape_one_hot,
+                    "color": [obj_gt['color_r'], obj_gt['color_g'], obj_gt['color_b']],
+                    "x": obj_gt['x'],
+                    "y": obj_gt['y'],
+                    "w": obj_gt['size'],
+                    "h": obj_gt['size'],
+                },
+                "h": torch.zeros((32, 2), dtype=torch.float32)
+            }
+            objs.append(obj)
+
+        # 2) Detect groups
+        if use_gt_groups:
+            # Use ground truth group IDs from symbolic data
+            gt_groups = defaultdict(list)
+            for obj_idx, obj_gt in enumerate(symbolic_data):
+                group_id = obj_gt.get('group_id', -1)
+                if group_id is not None and group_id >= 0:
+                    gt_groups[group_id].append(obj_idx)
+            
+            # Convert to group format expected by the pipeline
+            # Only include groups with 2 or more objects
+            groups = []
+            for g_idx, obj_indices in gt_groups.items():
+                if len(obj_indices) >= 2:  # Ensure group has at least 2 objects
+                    group_objs = [objs[i] for i in obj_indices]
+                    grp = {
+                        "id": g_idx,
+                        "child_obj_ids": obj_indices,
+                        "members": group_objs,
+                        "h": None,
+                        "principle": eval_principle
+                    }
+                    groups.append(grp)
+        else:
+            # Use trained group detector model
+            groups = eval_groups.eval_clevr_groups(objs, group_model, eval_principle, device, patch_dim)
+        
+        all_groups.append(groups)
+        
+        # Ground truth grouping code (for reference)
+        # gt_groups = defaultdict(list)
+        # for obj_idx, obj_gt in enumerate(symbolic_data):
+        #     group_id = obj_gt.get('group_id', -1)
+        #     if group_id is not None and group_id >= 0:
+        #         gt_groups[group_id].append(obj_idx)
+        # 
+        # # Convert to group format expected by the pipeline
+        # # Only include groups with 2 or more objects
+        # groups = []
+        # for g_idx, obj_indices in gt_groups.items():
+        #     if len(obj_indices) >= 2:  # Ensure group has at least 2 objects
+        #         group_objs = [objs[i] for i in obj_indices]
+        #         grp = {
+        #             "id": g_idx,
+        #             "child_obj_ids": obj_indices,
+        #             "members": group_objs,
+        #             "h": None,
+        #             "principle": eval_principle
+        #         }
+        #         groups.append(grp)
+        # all_groups.append(groups)
+
+        # 3) Ground symbolic facts
+        hard, soft = grounding.ground_facts(objs, groups)
+        
+        # Ensure no empty tensors in hard_facts - replace with appropriate size zero tensor
+        obj_num = len(objs)
+        group_num = len(groups)
+        
+        # Define group-level predicates that should have shape [G]
+        group_level_predicates = {"group_size", "principle"}
+        
+        for pred_name, pred_tensor in hard.items():
+            if pred_tensor.numel() == 0:  # Check if tensor is empty
+                # Special handling for in_group which is 2D [O, G]
+                if pred_name == "in_group":
+                    hard[pred_name] = torch.zeros(obj_num, group_num, dtype=pred_tensor.dtype, device=pred_tensor.device)
+                # Group-level predicates or predicates starting with group-level patterns
+                elif (pred_name in group_level_predicates or 
+                      pred_name.startswith("no_member_") or 
+                      pred_name.startswith("diverse_") or 
+                      pred_name.startswith("unique_")):
+                    hard[pred_name] = torch.zeros(group_num, dtype=pred_tensor.dtype, device=pred_tensor.device)
+                # Object-level predicates
+                else:
+                    hard[pred_name] = torch.zeros(obj_num, dtype=pred_tensor.dtype, device=pred_tensor.device)
+
+        # 4) Filter rules
+        kept_rules = [r for r in learned_rules if r.confidence >= conf_th]
+
+        # 5) Compute rule scores
+        rule_score_dict = apply_rules(kept_rules, hard, soft, objs, groups)
+        sorted_rules = sorted(rule_score_dict.items(), key=lambda x: x[1], reverse=True)
+        topk_rules = [r[0] for r in sorted_rules[:top_k]]
+        rule_score = [s for (_, s) in sorted_rules[:top_k]]
+        while len(rule_score) < top_k:
+            rule_score.append(0.0)
+
+        # 6) Compute image-level score
+        if calibrator:
+            calibrated_score = calibrator.predict_from_scores(rule_score, device)
+        else:
+            calibrated_score = None
+        vanilla_score = compute_image_score(kept_rules, rule_score_dict)
+
+        img_score = calibrated_score if calibrator else vanilla_score
+
+        per_task_scores[task_id].append(img_score)
+        per_task_labels[task_id].append(true_label)
+
+        # 7) Classification decision
+        predicted_label = int(img_score >= conf_th)
+        if predicted_label != true_label:
+            error_counters["total_errors"] += 1
+            # For CLEVR with ground truth, we skip detailed error analysis
+            error_counters["clause_mismatch"] += 1
+
+        # 8) Top-k clause selection analysis
+        correct_clauses = [r for r in kept_rules if r.confidence > conf_th]
+        if len(correct_clauses) > 0:
+            topk_total_valid += 1
+            if any(r in topk_rules for r in correct_clauses):
+                topk_hits += 1
+
+        if len(topk_rules) > 0:
+            correct_in_topk = sum(1 for r in topk_rules if bool(r.confidence > conf_th) == bool(true_label))
+            topk_precision_sum += correct_in_topk / top_k
+            topk_precision_count += 1
+            analysis["topk_clause_precision"].append(correct_in_topk / top_k)
+        else:
+            analysis["topk_clause_precision"].append(0.0)
+
+        # 9) Record analysis fields
+        analysis["calibrated_scores"].append(calibrated_score)
+        analysis["vanilla_scores"].append(vanilla_score)
+        analysis["groundtruth_labels"].append(true_label)
+        analysis["rule_pool_has_good_clause"].append(any(r.confidence > 0.5 for r in kept_rules))
+
+    # Compute metrics
+    metrics = {}
+    for task_id_key in per_task_scores:
+        scores_list = per_task_scores[task_id_key]
+        labels = per_task_labels[task_id_key]
+        metrics = compute_metrics(scores_list, labels, threshold=conf_th)
+    metrics["error_stats"] = error_counters
+
+    if topk_total_valid > 0:
+        metrics["topk_clause_recall"] = topk_hits / topk_total_valid
+    if topk_precision_count > 0:
+        metrics["topk_clause_precision"] = topk_precision_sum / topk_precision_count
+
+    metrics["analysis"] = analysis
+    return metrics, all_groups
+
+
 def eval_rules_legacy(val_data, obj_model, group_model, learned_rules, hyp_params, eval_principle, device, calibrator):
     patch_dim = hyp_params["patch_dim"]
     # we’ll collect per‐task true / pred

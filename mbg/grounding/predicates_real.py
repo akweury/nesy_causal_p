@@ -40,6 +40,7 @@ class Group:
     """
     gid: str
     members: List[int]  # list of object ids
+    gtype: str  # e.g., "proximity", "depth", "category", "ownership", "inter(proximity,depth)", etc.
 
 
 # =========================
@@ -64,24 +65,28 @@ def euclidean(p1, p2):
 # Object-level predicates
 # =========================
 
-def depth_bin(obj: ObjectInstance, bins: Optional[Tuple[float, float]] = None):
+def depth_bin(obj: ObjectInstance, bins: Optional[Tuple[float, float, float, float]] = None):
     """
-    Discretize depth into symbolic bins.
+    Discretize depth into 5 symbolic bins.
     
     Args:
         obj: ObjectInstance object
-        bins: Optional tuple of (near_mid_threshold, mid_far_threshold).
-              If None, uses default fixed bins (1.5, 4.0).
+        bins: Optional tuple of (very_near_threshold, near_threshold, mid_threshold, far_threshold).
+              If None, uses default fixed bins (1.0, 2.0, 3.0, 4.5).
     """
     if bins is None:
-        bins = (1.5, 4.0)
+        bins = (1.0, 2.0, 3.0, 4.5)
     
     if obj.depth < bins[0]:
-        return "near"
+        return "very_near"
     elif obj.depth < bins[1]:
+        return "near"
+    elif obj.depth < bins[2]:
         return "mid"
-    else:
+    elif obj.depth < bins[3]:
         return "far"
+    else:
+        return "very_far"
 
 
 # =========================
@@ -95,7 +100,7 @@ def group_size(group: Group) -> int:
 def group_depth(
     group: Group,
     objects: Dict[int, ObjectInstance],
-    bins: Optional[Tuple[float, float]] = None
+    bins: Optional[Tuple[float, float, float, float]] = None
 ) -> str:
     """
     Group depth = majority depth bin of its members.
@@ -103,7 +108,7 @@ def group_depth(
     Args:
         group: Group object
         objects: Dictionary of ObjectInstance objects
-        bins: Optional tuple of (near_mid_threshold, mid_far_threshold)
+        bins: Optional tuple of (very_near_threshold, near_threshold, mid_threshold, far_threshold)
     """
     depth_bins = [depth_bin(objects[oid], bins) for oid in group.members]
     return max(set(depth_bins), key=depth_bins.count)

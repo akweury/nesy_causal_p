@@ -16,6 +16,7 @@ from mbg.evaluation import evaluation
 from mbg.scorer.context_contour_scorer import ContextContourScorer
 from mbg.scorer.calibrator import ConfidenceCalibrator
 from mbg import patch_preprocess
+from src import bk
 
 
 def train_grouping_model(train_loader, device, epochs=10, LR=1e-3):
@@ -263,6 +264,148 @@ def ground_facts(train_data, obj_model, group_model, hyp_params, train_principle
 
         # --- 3. Fact grounding ---
         hard, soft = grounding.ground_facts(objs, groups, disable_hard=disable_hard, disable_soft=disable_soft)
+        hard_facts.append(hard)
+        soft_facts.append(soft)
+        t2 = time.time()
+        task_times[i] += t2 - t1
+
+    return hard_facts, soft_facts, group_nums, obj_lists, groups_list
+
+
+
+def ground_clevr_facts(train_data, obj_model, group_model, hyp_params, train_principle, device, ablation_flags, task_times, use_gt_groups=False):
+    """Ground facts for CLEVR dataset using ground truth object information.
+    
+    Uses symbolic_data from CLEVR instead of running object detection.
+    If use_gt_groups=True, uses ground truth group annotations instead of trained model.
+    """
+    if ablation_flags is None:
+        ablation_flags = {}
+    disable_soft = not ablation_flags.get("use_soft", True)
+    disable_hard = not ablation_flags.get("use_hard", True)
+    disable_group = not ablation_flags.get("use_group", True)
+    disable_object = not ablation_flags.get("use_obj", True)
+
+    hard_facts, soft_facts = [], []
+    obj_lists, groups_list = [], []
+    group_nums = []
+
+    all_data = train_data["positive"] + train_data["negative"]
+
+    for i, data_sample in enumerate(all_data):
+        t1 = time.time()
+        
+        # --- 1. Use ground truth objects from symbolic_data ---
+        if not disable_object:
+            symbolic_data = data_sample["symbolic_data"]
+            objs = []
+            for obj_idx, obj_gt in enumerate(symbolic_data):
+                # Convert shape ID to one-hot encoding
+                shape_one_hot = torch.zeros(len(bk.bk_shapes_clevr), dtype=torch.float32)
+                shape_id = obj_gt['shape']
+                if 0 <= shape_id < len(bk.bk_shapes_clevr):
+                    shape_one_hot[shape_id] = 1.0 
+                
+                # Create object in expected format
+                obj = {
+                    "id": obj_idx,
+                    "s": {
+                        "shape": shape_one_hot,
+                        "color": [obj_gt['color_r'], obj_gt['color_g'], obj_gt['color_b']],
+                        "x": obj_gt['x'],
+                        "y": obj_gt['y'],
+                        "w": obj_gt['size'],
+                        "h": obj_gt['size'],
+                    },
+                    "h": torch.zeros((32, 2), dtype=torch.float32)  # Dummy contour patches
+                }
+                objs.append(obj)
+        else:
+            objs = []  # no object-level facts
+        
+        obj_lists.append(objs)
+
+        # --- 2. Group detection ---
+        if not disable_group:
+            if use_gt_groups:
+                # Use ground truth group IDs from symbolic data
+                from collections import defaultdict
+                gt_groups = defaultdict(list)
+                for obj_idx, obj_gt in enumerate(symbolic_data):
+                    group_id = obj_gt.get('group_id', -1)
+                    if group_id is not None and group_id >= 0:
+                        gt_groups[group_id].append(obj_idx)
+                
+                # Convert to group format expected by the pipeline
+                # Only include groups with 2 or more objects
+                groups = []
+                for g_idx, obj_indices in gt_groups.items():
+                    if len(obj_indices) >= 2:  # Ensure group has at least 2 objects
+                        group_objs = [objs[i] for i in obj_indices]
+                        grp = {
+                            "id": g_idx,
+                            "child_obj_ids": obj_indices,
+                            "members": group_objs,
+                            "h": None,
+                            "principle": train_principle
+                        }
+                        groups.append(grp)
+            else:
+                # Use trained group detector model
+                groups = eval_groups.eval_clevr_groups(objs, group_model, train_principle, device, dim=hyp_params["patch_dim"])
+            
+            # Ground truth grouping code (for reference)
+            # from collections import defaultdict
+            # gt_groups = defaultdict(list)
+            # for obj_idx, obj_gt in enumerate(symbolic_data):
+            #     group_id = obj_gt.get('group_id', -1)
+            #     if group_id is not None and group_id >= 0:
+            #         gt_groups[group_id].append(obj_idx)
+            # 
+            # # Convert to group format expected by the pipeline
+            # # Only include groups with 2 or more objects
+            # groups = []
+            # for g_idx, obj_indices in gt_groups.items():
+            #     if len(obj_indices) >= 2:  # Ensure group has at least 2 objects
+            #         group_objs = [objs[i] for i in obj_indices]
+            #         grp = {
+            #             "id": g_idx,
+            #             "child_obj_ids": obj_indices,
+            #             "members": group_objs,
+            #             "h": None,
+            #             "principle": train_principle
+            #         }
+            #         groups.append(grp)
+        else:
+            groups = []
+        groups_list.append(groups)
+        group_nums.append(len(groups))
+
+        # --- 3. Fact grounding ---
+        hard, soft = grounding.ground_facts(objs, groups, disable_hard=disable_hard, disable_soft=disable_soft)
+        
+        # Ensure no empty tensors in hard_facts - replace with appropriate size zero tensor
+        obj_num = len(objs)
+        group_num = len(groups)
+        
+        # Define group-level predicates that should have shape [G]
+        group_level_predicates = {"group_size", "principle"}
+        
+        for pred_name, pred_tensor in hard.items():
+            if pred_tensor.numel() == 0:  # Check if tensor is empty
+                # Special handling for in_group which is 2D [O, G]
+                if pred_name == "in_group":
+                    hard[pred_name] = torch.zeros(obj_num, group_num, dtype=pred_tensor.dtype, device=pred_tensor.device)
+                # Group-level predicates or predicates starting with group-level patterns
+                elif (pred_name in group_level_predicates or 
+                      pred_name.startswith("no_member_") or 
+                      pred_name.startswith("diverse_") or 
+                      pred_name.startswith("unique_")):
+                    hard[pred_name] = torch.zeros(group_num, dtype=pred_tensor.dtype, device=pred_tensor.device)
+                # Object-level predicates
+                else:
+                    hard[pred_name] = torch.zeros(obj_num, dtype=pred_tensor.dtype, device=pred_tensor.device)
+        
         hard_facts.append(hard)
         soft_facts.append(soft)
         t2 = time.time()

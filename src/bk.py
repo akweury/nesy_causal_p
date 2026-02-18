@@ -198,6 +198,8 @@ rect_index = bk_shapes.index("rectangle") - 1
 cir_index = bk_shapes.index("circle") - 1
 
 bk_shapes_2 = ["none", "triangle", "square", "circle"]
+bk_shapes_clevr = ["none", "cube", "sphere", "cylinder"]
+
 gestalt_principles = [
     "proximity",
     "continuity",
