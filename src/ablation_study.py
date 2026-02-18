@@ -141,7 +141,7 @@ def main_ablation():
     principle_path = scorer_config.get_data_path(args.remote, train_principle)
     combined_loader = dataset.load_combined_dataset(principle_path)
     obj_model = eval_patch_classifier.load_model(args.device, args.remote)
-    # group_model = scorer_config.load_scorer_model(train_principle, args.device, args.remote)
+    group_model = scorer_config.load_scorer_model(train_principle, args.device, args.remote)
     group_model = load_gd_transformer_model(
         train_principle, args.device, args.remote)
 
