@@ -583,6 +583,7 @@ def main():
     
     # Load data
     principle_path = scorer_config.get_data_path(args.remote, train_principle)
+    print(f"Loading combined dataset from: {principle_path}")
     combined_loader = dataset.load_combined_dataset(principle_path)
     
     # Load object detection model
