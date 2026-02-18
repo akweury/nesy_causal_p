@@ -38,6 +38,7 @@ def init_logger():
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--device", help="cpu or cuda", default="cpu", type=str)
+    parser.add_argument("--gpu_id", help="GPU ID to use (overrides --device)", default=None, type=int)
     parser.add_argument("--exp_name", type=str, default=None)
     parser.add_argument("--th_group", type=float, default=0.01)
     parser.add_argument("--th_inv_nc", type=float, default=0.01)
@@ -76,8 +77,13 @@ def get_args():
     parser.add_argument("--use_gt_groups", action="store_true", help="Use ground truth groups instead of trained group detector")
     args = parser.parse_args()
     args.logger = init_logger()
-    if args.device != "cpu":
+    
+    # Handle GPU selection - gpu_id overrides device argument
+    if args.gpu_id is not None:
+        args.device = f"cuda:{args.gpu_id}"
+    elif args.device != "cpu":
         args.device = f"cuda:{int(args.device)}"
+    
     args.log_file = log_utils.create_log_file(args.logger, config.output / "logs")
     args.lark_path = str(config.lark_file)
 

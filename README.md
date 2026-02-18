@@ -130,6 +130,9 @@ python -m src.analysis_results --model principle --model GRM --principle symmetr
 python -m src.analysis_results --model principle --model GRM --principle continuity --img_num 3
 
 ```
+### Grp Comparison
+python -m src.elvis_exp.grp_comparison
+
 
 ---
 #### Others
