@@ -552,9 +552,10 @@ def main():
     args = args_utils.get_args()
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     args.mask_dims = ["color", "shape"]  # No masking for these models
+    # args.mask_dims = ["position"]  
     # Print device info
     print(f"Using device: {args.device}")
-    args.principle = "proximity"
+    args.principle = "closure"
     # Get principle (default to 'similarity' if not specified)
     train_principle = getattr(args, 'principle', 'similarity')
     
