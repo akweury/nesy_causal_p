@@ -88,5 +88,5 @@ def get_args():
     args.lark_path = str(config.lark_file)
 
     os.makedirs(config.output / f"{args.exp_name}", exist_ok=True)
-    args.batch_size = 1
+    # Note: batch_size default is 10, can be overridden via --batch_size argument
     return args

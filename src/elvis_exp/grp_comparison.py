@@ -8,18 +8,15 @@ import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 import wandb
 from collections import defaultdict
-from mbg.group import eval_groups
 from src.utils import args_utils
 from src import dataset
 from mbg.object import eval_patch_classifier
-from mbg.training import training
-from mbg.evaluation import evaluation
 import config
 from mbg.scorer import scorer_config
-from mbg.scorer import improved_calibrator
 from mbg import patch_preprocess
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 from itertools import combinations
+import os
 
 
 from mbg.scorer.simplified_position_scorer import SimplifiedPositionScorer
@@ -82,6 +79,9 @@ class PairwiseGroupDataset(Dataset):
         self.samples = []
         self.device = device
         
+        # Local cache to avoid repeating expensive object detection for same image
+        detection_cache = {}
+
         print("Preparing pairwise grouping dataset...")
         for task_idx, (train_data, val_data, test_data) in enumerate(data_loader):
             if task_idx >= max_tasks:
@@ -94,12 +94,14 @@ class PairwiseGroupDataset(Dataset):
                 img_path = sample["image_path"][0]
                 symbolic_data = sample["symbolic_data"]
                 
-                # Load and process image
-                img = patch_preprocess.load_images_fast([img_path], device=device)[0]
-                
-                # Detect objects
-                objs = eval_patch_classifier.evaluate_image(obj_model, img, device)
-                
+                # Load and process image (use cache to avoid repeated detection)
+                if img_path in detection_cache:
+                    objs = detection_cache[img_path]
+                else:
+                    img = patch_preprocess.load_images_fast([img_path], device=device)[0]
+                    objs = eval_patch_classifier.evaluate_image(obj_model, img, device)
+                    detection_cache[img_path] = objs
+
                 if len(objs) < 2:
                     continue
                 
@@ -124,14 +126,19 @@ class PairwiseGroupDataset(Dataset):
                     same_group = any(gt_i in group and gt_j in group for group in gt_groups)
                     label = 1.0 if same_group else 0.0
                     
-                    # Extract features: x, y, r, g, b, shape[4]
-                    feat_i = self._extract_features(objs[i])
-                    feat_j = self._extract_features(objs[j])
-                    
+                    # Extract features: x, y, r, g, b, shape[4], contour[64*2]
+                    # Need to pass symbolic_data for contour information
+                    feat_i = self._extract_features(objs[i], symbolic_data[gt_i])
+                    feat_j = self._extract_features(objs[j], symbolic_data[gt_j])
+
                     # Context: all objects except i and j
-                    context_feats = [self._extract_features(objs[k]) 
-                                    for k in range(len(objs)) if k != i and k != j]
-                    
+                    context_feats = []
+                    for k in range(len(objs)):
+                        if k != i and k != j:
+                            gt_k = obj_to_gt_mapping.get(k, -1)
+                            if gt_k != -1:
+                                context_feats.append(self._extract_features(objs[k], symbolic_data[gt_k]))
+
                     self.samples.append((feat_i, feat_j, context_feats, label))
             
             if (task_idx + 1) % 10 == 0:
@@ -176,8 +183,17 @@ class PairwiseGroupDataset(Dataset):
             gt_group_dict[group_id].append(idx)
         return list(gt_group_dict.values())
     
-    def _extract_features(self, obj):
-        """Extract features from object: x, y, r, g, b, shape[4]."""
+    def _extract_features(self, obj, sym_obj):
+        """
+        Extract features from object: x, y, r, g, b, shape[4], contour[128].
+
+        Args:
+            obj: Detected object with 's' (symbolic) data
+            sym_obj: Ground truth symbolic data with contour information
+
+        Returns:
+            List of features (total 137: 9 basic + 128 contour)
+        """
         symbolic = obj['s']
         x = symbolic['x']
         y = symbolic['y']
@@ -189,21 +205,33 @@ class PairwiseGroupDataset(Dataset):
         else:
             shape_list = list(shape)
         
-        # Concatenate: x, y, r, g, b, shape[4]
-        return [x, y, color[0], color[1], color[2]] + shape_list
-    
+        # Get contour from symbolic_data (shape: (64, 2) -> flatten to 128)
+        contour = sym_obj.get('contour', None)
+        if contour is not None:
+            if isinstance(contour, torch.Tensor):
+                contour_flat = contour.flatten().tolist()
+            else:
+                # numpy array
+                contour_flat = contour.flatten().tolist()
+        else:
+            # If no contour, use zeros (64 points * 2 coords = 128)
+            contour_flat = [0.0] * 128
+
+        # Concatenate: x, y, r, g, b, shape[4], contour[128]
+        return [x, y, color[0], color[1], color[2]] + shape_list + contour_flat
+
     def __len__(self):
         return len(self.samples)
     
     def __getitem__(self, idx):
         feat_i, feat_j, context_feats, label = self.samples[idx]
         
-        # Convert to tensors
+        # Convert to tensors (now with 137 features: 9 basic + 128 contour)
         pos_i = torch.tensor(feat_i, dtype=torch.float32)
         pos_j = torch.tensor(feat_j, dtype=torch.float32)
         
         if len(context_feats) == 0:
-            context = torch.zeros((0, 9), dtype=torch.float32)
+            context = torch.zeros((0, 137), dtype=torch.float32)
         else:
             context = torch.tensor(context_feats, dtype=torch.float32)
         
@@ -227,7 +255,7 @@ def collate_pairwise(batch):
     padded_contexts = []
     for ctx in context_list:
         if ctx.shape[0] < max_ctx_len:
-            padding = torch.zeros((max_ctx_len - ctx.shape[0], 9), dtype=torch.float32)
+            padding = torch.zeros((max_ctx_len - ctx.shape[0], 137), dtype=torch.float32)  # 137 features
             padded_ctx = torch.cat([ctx, padding], dim=0)
         else:
             padded_ctx = ctx
@@ -246,19 +274,29 @@ def train_scorer_model(model, train_loader, val_loader, device, epochs=20, lr=1e
     
     best_val_acc = 0.0
     
+    # Print batch info on first epoch
+    first_batch_logged = False
+
     for epoch in range(epochs):
         # Training
         model.train()
         total_loss = 0
         correct = 0
         total = 0
-        
-        for pos_i, pos_j, contexts, labels in train_loader:
+        num_batches = 0
+
+        for batch_idx, (pos_i, pos_j, contexts, labels) in enumerate(train_loader):
             pos_i = pos_i.to(device)
             pos_j = pos_j.to(device)
             contexts = contexts.to(device)
             labels = labels.to(device)
             
+            # Log first batch info to confirm batching is working
+            if not first_batch_logged:
+                print(f"  Batch info: pos_i.shape={pos_i.shape}, labels.shape={labels.shape}")
+                print(f"  Processing {len(train_loader)} batches per epoch")
+                first_batch_logged = True
+
             optimizer.zero_grad()
             logits = model(pos_i, pos_j, contexts).reshape(-1)
             loss = criterion(logits, labels)
@@ -269,7 +307,8 @@ def train_scorer_model(model, train_loader, val_loader, device, epochs=20, lr=1e
             preds = (torch.sigmoid(logits) > 0.5).float()
             correct += (preds == labels).sum().item()
             total += len(labels)
-        
+            num_batches += 1
+
         train_acc = correct / total if total > 0 else 0
         train_loss = total_loss / total if total > 0 else 0
         
@@ -404,7 +443,10 @@ def evaluate_model_on_dataset(model, model_name, obj_model, data_loader, princip
     # Track pairwise predictions
     all_probs = []
     all_true_labels = []
-    
+
+    # Cache detections per image to avoid repeated expensive evals
+    detection_cache = {}
+
     print(f"\nEvaluating {model_name} model...")
     
     for task_idx, (train_data, val_data, test_data) in enumerate(data_loader):
@@ -419,11 +461,13 @@ def evaluate_model_on_dataset(model, model_name, obj_model, data_loader, princip
             symbolic_data = sample["symbolic_data"]
             
             # Load and process image
-            img = patch_preprocess.load_images_fast([img_path], device=device)[0]
-            
-            # Detect objects
-            objs = eval_patch_classifier.evaluate_image(obj_model, img, device)    
-            
+            if img_path in detection_cache:
+                objs = detection_cache[img_path]
+            else:
+                img = patch_preprocess.load_images_fast([img_path], device=device)[0]
+                objs = eval_patch_classifier.evaluate_image(obj_model, img, device)
+                detection_cache[img_path] = objs
+
             if len(objs) == 0:
                 continue
             
@@ -436,20 +480,47 @@ def evaluate_model_on_dataset(model, model_name, obj_model, data_loader, princip
             gt_groups = extract_ground_truth_groups(symbolic_data)
             model.eval()
             with torch.no_grad():
+                # Extract features with contour for matched objects
                 features = []
-                for obj in objs:
-                    symbolic = obj['s']
-                    x = symbolic['x']
-                    y = symbolic['y']
-                    color = symbolic.get('color', [0.0, 0.0, 0.0])
-                    shape = symbolic.get('shape', torch.zeros(4))
-                    if isinstance(shape, torch.Tensor):
-                        shape_list = shape.tolist()
+                for obj_idx in range(len(objs)):
+                    gt_idx = obj_to_gt_mapping.get(obj_idx, -1)
+                    if gt_idx != -1:
+                        obj = objs[obj_idx]
+                        sym_obj = symbolic_data[gt_idx]
+
+                        symbolic = obj['s']
+                        x = symbolic['x']
+                        y = symbolic['y']
+                        color = symbolic.get('color', [0.0, 0.0, 0.0])
+                        shape = symbolic.get('shape', torch.zeros(4))
+                        if isinstance(shape, torch.Tensor):
+                            shape_list = shape.tolist()
+                        else:
+                            shape_list = list(shape)
+
+                        # Get contour from symbolic_data
+                        contour = sym_obj.get('contour', None)
+                        if contour is not None:
+                            if isinstance(contour, torch.Tensor):
+                                contour_flat = contour.flatten().tolist()
+                            else:
+                                # numpy array
+                                contour_flat = contour.flatten().tolist()
+                        else:
+                            contour_flat = [0.0] * 128
+
+                        feat = [x, y, color[0], color[1], color[2]] + shape_list + contour_flat
+                        features.append(feat)
                     else:
-                        shape_list = list(shape)
-                    feat = [x, y, color[0], color[1], color[2]] + shape_list
-                    features.append(feat)
-                
+                        # If object not matched, use zeros
+                        features.append([0.0] * 137)
+
+                # Build batches for all valid pairs in this image to avoid per-pair forward calls
+                pos_i_batch = []
+                pos_j_batch = []
+                contexts_batch = []
+                labels_batch = []
+
                 for i, j in combinations(range(len(objs)), 2):
                     gt_i = obj_to_gt_mapping.get(i, -1)
                     gt_j = obj_to_gt_mapping.get(j, -1)
@@ -457,24 +528,35 @@ def evaluate_model_on_dataset(model, model_name, obj_model, data_loader, princip
                     if gt_i == -1 or gt_j == -1:
                         continue
                     
-                    # Get model prediction
-                    pos_i = torch.tensor([features[i]], dtype=torch.float32).to(device)
-                    pos_j = torch.tensor([features[j]], dtype=torch.float32).to(device)
+                    pos_i_batch.append(features[i])
+                    pos_j_batch.append(features[j])
                     context_features = [features[k] for k in range(len(objs)) if k != i and k != j]
-                    if len(context_features) == 0:
-                        ctx_tensor = torch.zeros((1, 0, 9), dtype=torch.float32, device=device)
-                    else:
-                        ctx_tensor = torch.tensor([context_features], dtype=torch.float32).to(device)
-                    
-                    logit = model(pos_i, pos_j, ctx_tensor)
-                    prob = torch.sigmoid(logit).item()
-                    
-                    # True label
+                    contexts_batch.append(context_features)
                     same_group = any(gt_i in group and gt_j in group for group in gt_groups)
-                    
-                    all_probs.append(prob)
-                    all_true_labels.append(1.0 if same_group else 0.0)
-        
+                    labels_batch.append(1.0 if same_group else 0.0)
+
+                if len(pos_i_batch) > 0:
+                    pos_i_tensor = torch.tensor(pos_i_batch, dtype=torch.float32, device=device)
+                    pos_j_tensor = torch.tensor(pos_j_batch, dtype=torch.float32, device=device)
+                    # Pad contexts to max length
+                    max_ctx_len = max(len(c) for c in contexts_batch)
+                    padded_ctxs = []
+                    for c in contexts_batch:
+                        if len(c) < max_ctx_len:
+                            padding = [[0.0]*137] * (max_ctx_len - len(c))  # 137 features
+                            padded = c + padding
+                        else:
+                            padded = c
+                        padded_ctxs.append(padded)
+                    ctx_tensor = torch.tensor(padded_ctxs, dtype=torch.float32, device=device)
+
+                    # Forward in one batch
+                    logits = model(pos_i_tensor, pos_j_tensor, ctx_tensor).reshape(-1)
+                    probs = torch.sigmoid(logits).cpu().numpy()
+
+                    all_probs.extend(probs.tolist())
+                    all_true_labels.extend(labels_batch)
+
         if (task_idx + 1) % 10 == 0:
             print(f"  Processed {task_idx + 1} tasks...")
     
@@ -552,18 +634,16 @@ def main():
     args = args_utils.get_args()
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     # args.mask_dims = ["color", "shape"]  # No masking for these models
-    args.mask_dims = ["position"]  
+    args.mask_dims = ["shape", "color"]  # Mask shape and label to force reliance on position and color
     # Print device info
     print(f"Using device: {args.device}")
-    # args.principle = "closure"
-    args.principle = "similarity"
     # Get principle (default to 'similarity' if not specified)
     train_principle = getattr(args, 'principle', 'similarity')
     
     # Get wandb setting (default to False)
     use_wandb = getattr(args, 'use_wandb', False)
     
-    # Get training settings
+    # Get training settingsd
     train_epochs = getattr(args, 'train_epochs', 100)
     max_train_samples = getattr(args, 'max_train_samples', 10)
     max_eval_samples = getattr(args, 'max_eval_samples', 10)
@@ -586,7 +666,7 @@ def main():
     # Load data
     principle_path = scorer_config.get_data_path(args.remote, train_principle)
     print(f"Loading combined dataset from: {principle_path}")
-    combined_loader = dataset.load_combined_dataset(principle_path)
+    combined_loader = dataset.load_combined_dataset(principle_path, task_num=max(max_train_samples, max_eval_samples))
     
     # Load object detection model
     obj_model = eval_patch_classifier.load_model(args.device, args.remote)
@@ -603,7 +683,7 @@ def main():
     # 1. Train SimplifiedNN
     print("\n[1/2] Training SimplifiedNN...")
     nn_model = SimplifiedPositionScorer(
-        position_dim=9,
+        position_dim=137,  # 9 basic features + 128 contour features (64 points * 2 coords)
         hidden_dim=64,
         context_embed_dim=32,
         mask_dims=args.mask_dims
@@ -622,16 +702,34 @@ def main():
         train_dataset, [train_size, val_size]
     )
     
-    train_loader = DataLoader(train_split, batch_size=args.batch_size, shuffle=True, collate_fn=collate_pairwise)
-    val_loader = DataLoader(val_split, batch_size=args.batch_size, shuffle=False, collate_fn=collate_pairwise)
-    
+    # Configure DataLoader workers and pin_memory for faster loading
+    # On Windows, multiprocessing with DataLoader can cause issues, so use num_workers=0
+    import platform
+    if platform.system() == 'Windows':
+        num_workers = 0
+        print("  Note: Using num_workers=0 on Windows to avoid multiprocessing issues")
+    else:
+        num_workers = getattr(args, 'num_workers', max(1, min(4, os.cpu_count() - 1)))
+
+    pin_memory = True if ('cuda' in str(args.device).lower()) else False
+
+    # Add persistent_workers flag when using workers
+    persistent_workers = (num_workers > 0)
+
+    train_loader = DataLoader(train_split, batch_size=args.batch_size, shuffle=True,
+                              collate_fn=collate_pairwise, num_workers=num_workers,
+                              pin_memory=pin_memory, persistent_workers=persistent_workers)
+    val_loader = DataLoader(val_split, batch_size=args.batch_size, shuffle=False,
+                            collate_fn=collate_pairwise, num_workers=num_workers,
+                            pin_memory=pin_memory, persistent_workers=persistent_workers)
+
     nn_acc = train_scorer_model(nn_model, train_loader, val_loader, args.device, epochs=train_epochs)
     trained_models["SimplifiedNN"] = {"model": nn_model, "train_acc": nn_acc}
     
     # 2. Train TransformerScorer
     print("\n[2/2] Training TransformerScorer...")
     transformer_model = TransformerPositionScorer(
-        position_dim=9,
+        position_dim=137,  # 9 basic features + 128 contour features (64 points * 2 coords)
         hidden_dim=64,
         context_embed_dim=32,
         mask_dims=args.mask_dims,
@@ -657,7 +755,7 @@ def main():
     print("="*60)
     
     # Reload data for evaluation
-    combined_loader_eval = dataset.load_combined_dataset(principle_path)
+    combined_loader_eval = dataset.load_combined_dataset(principle_path, task_num=max_eval_samples)
     
     # Store results
     all_results = {}
@@ -745,3 +843,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

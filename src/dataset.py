@@ -117,6 +117,135 @@ def shape_to_id_clevr(name):
     n = bk.bk_shapes_clevr.index(name)
     return n
 
+
+def extract_object_contour(image_path, object_data, num_points=64):
+    """
+    Extract contour keypoints for an object from an image and normalize to fixed length.
+
+    Args:
+        image_path: Path to the image file
+        object_data: Dictionary containing object information (x, y, size, etc.)
+                    All values are normalized (0-1 range)
+        num_points: Number of points to sample from the contour (default: 64)
+
+    Returns:
+        numpy.ndarray: Array of shape (num_points, 2) containing normalized (x, y) coordinates in 0-1 range
+                      Returns zeros if contour extraction fails
+    """
+    try:
+        # Load image
+        img = cv2.imread(str(image_path))
+        if img is None:
+            return np.zeros((num_points, 2), dtype=np.float32)
+
+        img_height, img_width = img.shape[:2]
+
+        # Convert normalized coordinates to pixel coordinates
+        center_x_norm = float(object_data['x'])
+        center_y_norm = float(object_data['y'])
+        size_norm = float(object_data['size'])
+
+        center_x = int(center_x_norm * img_width)
+        center_y = int(center_y_norm * img_height)
+        # Size is normalized, convert to pixels (assuming size is relative to image dimensions)
+        size = int(size_norm * min(img_width, img_height))
+
+        # Define ROI around object (with some padding)
+        padding = int(size * 0.3)  # 30% padding
+        x1 = max(0, center_x - size - padding)
+        y1 = max(0, center_y - size - padding)
+        x2 = min(img_width, center_x + size + padding)
+        y2 = min(img_height, center_y + size + padding)
+
+        # Extract ROI
+        roi = img[y1:y2, x1:x2]
+        if roi.size == 0:
+            return np.zeros((num_points, 2), dtype=np.float32)
+
+        # Convert to grayscale
+        gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+
+        # Apply threshold to get binary image
+        # Use adaptive threshold for better results with varying lighting
+        binary = cv2.adaptiveThreshold(
+            gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY_INV, 11, 2
+        )
+
+        # Find contours
+        contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+
+        if not contours:
+            return np.zeros((num_points, 2), dtype=np.float32)
+
+        # Get the largest contour (assumed to be the object)
+        largest_contour = max(contours, key=cv2.contourArea)
+
+        # Reshape contour to (N, 2)
+        contour_points = largest_contour.reshape(-1, 2).astype(np.float32)
+
+        # Adjust coordinates back to original image space (pixel coordinates)
+        contour_points[:, 0] += x1
+        contour_points[:, 1] += y1
+
+        # Resample contour to fixed number of points (still in pixel coordinates)
+        contour_resampled = resample_contour(contour_points, num_points)
+
+        # Normalize contour coordinates to 0-1 range
+        contour_normalized = contour_resampled.copy()
+        contour_normalized[:, 0] /= img_width   # Normalize x
+        contour_normalized[:, 1] /= img_height  # Normalize y
+
+        return contour_normalized
+
+    except Exception as e:
+        # If any error occurs, return zeros
+        print(f"Warning: Failed to extract contour from {image_path}: {e}")
+        return np.zeros((num_points, 2), dtype=np.float32)
+
+
+def resample_contour(contour_points, num_points):
+    """
+    Resample a contour to a fixed number of points using interpolation.
+
+    Args:
+        contour_points: Array of shape (N, 2) with original contour points
+        num_points: Desired number of points
+
+    Returns:
+        numpy.ndarray: Array of shape (num_points, 2) with resampled points
+    """
+    if len(contour_points) == 0:
+        return np.zeros((num_points, 2), dtype=np.float32)
+
+    # If contour has fewer points than desired, use interpolation
+    if len(contour_points) < num_points:
+        # Compute cumulative distance along contour
+        distances = np.sqrt(np.sum(np.diff(contour_points, axis=0)**2, axis=1))
+        cumulative_distances = np.concatenate([[0], np.cumsum(distances)])
+
+        # Create evenly spaced sample points
+        total_length = cumulative_distances[-1]
+        if total_length == 0:
+            # Degenerate case: all points are the same
+            return np.tile(contour_points[0], (num_points, 1))
+
+        sample_distances = np.linspace(0, total_length, num_points)
+
+        # Interpolate x and y separately
+        x_interp = np.interp(sample_distances, cumulative_distances, contour_points[:, 0])
+        y_interp = np.interp(sample_distances, cumulative_distances, contour_points[:, 1])
+
+        resampled = np.stack([x_interp, y_interp], axis=1).astype(np.float32)
+
+    else:
+        # If contour has more points, sample uniformly
+        indices = np.linspace(0, len(contour_points) - 1, num_points).astype(int)
+        resampled = contour_points[indices].astype(np.float32)
+
+    return resampled
+
+
 class GrbDataset(Dataset):
     def __init__(self, folder_path: str, mode: str, val_split: float = 0.4, task_num=None):
         assert mode in ["train", "val", "test"]
@@ -177,6 +306,7 @@ class GrbDataset(Dataset):
                         'color_b': od['color_b'],
                         'shape': shape_to_id(od["shape"]),
                         "group_id": od["group_id"] if "group_id" in od else None,
+                        "contour": extract_object_contour(img_path, od),  # Now enabled
                     } for od in json_data["img_data"]]
 
                     entry = {

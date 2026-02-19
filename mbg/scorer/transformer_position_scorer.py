@@ -8,26 +8,28 @@ import torch.nn as nn
 
 class TransformerPositionScorer(nn.Module):
     """
-    A transformer-based scorer that takes (x, y) positions, RGB colors, and shape labels of objects.
+    A transformer-based scorer that takes (x, y) positions, RGB colors, shape labels, and contours of objects.
     Uses attention mechanism to aggregate context information instead of mean pooling.
     
     Input shapes:
-        - pos_i: (batch, 9) - position, color, and shape of object i (x, y, r, g, b, shape_one_hot[4])
-        - pos_j: (batch, 9) - position, color, and shape of object j (x, y, r, g, b, shape_one_hot[4])
-        - context_positions: (batch, N, 9) - positions, colors, and shapes of context objects
-    
+        - pos_i: (batch, 137) - position, color, shape, and contour of object i
+                 (x, y, r, g, b, shape_one_hot[4], contour[128])
+        - pos_j: (batch, 137) - position, color, shape, and contour of object j
+        - context_positions: (batch, N, 137) - positions, colors, shapes, and contours of context objects
+
     Output:
         - logits: (batch,) - score for whether objects i and j belong to same group
     
     Dimension masking:
         - mask_dims: list of strings specifying which dimensions to mask during training/testing
-        - Options: 'position' (x,y), 'color' (r,g,b), 'shape' (one-hot)
+        - Options: 'position' (x,y), 'color' (r,g,b), 'shape' (one-hot), 'contour' (128 values)
         - Example: ['position'] will zero out x,y dimensions
         - Example: ['position', 'color'] will zero out x,y,r,g,b dimensions
+        - Example: ['contour'] will zero out contour features
     """
     def __init__(
         self,
-        position_dim: int = 9,
+        position_dim: int = 137,  # 9 basic + 128 contour
         hidden_dim: int = 64,
         context_embed_dim: int = 32,
         mask_dims: list = None,
@@ -41,8 +43,8 @@ class TransformerPositionScorer(nn.Module):
         self.num_heads = num_heads
         
         # Create mask for dimensions
-        # Dimension layout: [x, y, r, g, b, shape_0, shape_1, shape_2, shape_3]
-        # Indices: position=0:2, color=2:5, shape=5:9
+        # Dimension layout: [x, y, r, g, b, shape_0, shape_1, shape_2, shape_3, contour[128]]
+        # Indices: position=0:2, color=2:5, shape=5:9, contour=9:137
         self.mask = torch.ones(position_dim)
         if 'position' in self.mask_dims:
             self.mask[0:2] = 0  # Mask x, y
@@ -50,7 +52,9 @@ class TransformerPositionScorer(nn.Module):
             self.mask[2:5] = 0  # Mask r, g, b
         if 'shape' in self.mask_dims:
             self.mask[5:9] = 0  # Mask shape one-hot
-        
+        if 'contour' in self.mask_dims:
+            self.mask[9:137] = 0  # Mask contour features
+
         # Encoder for individual object positions
         self.position_encoder = nn.Sequential(
             nn.Linear(position_dim, hidden_dim),
@@ -95,18 +99,19 @@ class TransformerPositionScorer(nn.Module):
 
     def forward(
         self,
-        pos_i: torch.Tensor,           # (batch, 9)
-        pos_j: torch.Tensor,           # (batch, 9)
-        context_positions: torch.Tensor  # (batch, N, 9) where N is number of context objects
+        pos_i: torch.Tensor,           # (batch, 137)
+        pos_j: torch.Tensor,           # (batch, 137)
+        context_positions: torch.Tensor  # (batch, N, 137) where N is number of context objects
     ) -> torch.Tensor:
         """
         Forward pass for the transformer position scorer.
         
         Args:
-            pos_i: Position, color, and shape of object i, shape (batch, 9) - (x, y, r, g, b, shape_one_hot[4])
-            pos_j: Position, color, and shape of object j, shape (batch, 9) - (x, y, r, g, b, shape_one_hot[4])
-            context_positions: Positions, colors, and shapes of context objects, shape (batch, N, 9)
-        
+            pos_i: Position, color, shape, and contour of object i, shape (batch, 137)
+                   (x, y, r, g, b, shape_one_hot[4], contour[128])
+            pos_j: Position, color, shape, and contour of object j, shape (batch, 137)
+            context_positions: Positions, colors, shapes, and contours of context objects, shape (batch, N, 137)
+
         Returns:
             Logits for grouping score, shape (batch,)
         """
@@ -116,8 +121,10 @@ class TransformerPositionScorer(nn.Module):
         mask = self.mask.to(pos_i.device)
         pos_i = pos_i * mask
         pos_j = pos_j * mask
-        context_positions = context_positions * mask
-        
+        # Only apply mask to context if it has objects (avoid broadcast error when N=0)
+        if context_positions.size(1) > 0:
+            context_positions = context_positions * mask
+
         # Encode positions of the two objects
         emb_i = self.position_encoder(pos_i)  # (batch, context_embed_dim)
         emb_j = self.position_encoder(pos_j)  # (batch, context_embed_dim)
