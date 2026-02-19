@@ -551,11 +551,12 @@ def evaluate_model_on_dataset(model, model_name, obj_model, data_loader, princip
 def main():
     args = args_utils.get_args()
     timestamp = time.strftime("%Y%m%d_%H%M%S")
-    args.mask_dims = ["color", "shape"]  # No masking for these models
-    # args.mask_dims = ["position"]  
+    # args.mask_dims = ["color", "shape"]  # No masking for these models
+    args.mask_dims = ["position"]  
     # Print device info
     print(f"Using device: {args.device}")
-    args.principle = "closure"
+    # args.principle = "closure"
+    args.principle = "similarity"
     # Get principle (default to 'similarity' if not specified)
     train_principle = getattr(args, 'principle', 'similarity')
     
