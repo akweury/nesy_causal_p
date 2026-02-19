@@ -260,7 +260,7 @@ def train_scorer_model(model, train_loader, val_loader, device, epochs=20, lr=1e
             labels = labels.to(device)
             
             optimizer.zero_grad()
-            logits = model(pos_i, pos_j, contexts).squeeze(-1)
+            logits = model(pos_i, pos_j, contexts).reshape(-1)
             loss = criterion(logits, labels)
             loss.backward()
             optimizer.step()
@@ -562,8 +562,8 @@ def main():
     use_wandb = getattr(args, 'use_wandb', False)
     
     # Get training settings
-    train_epochs = getattr(args, 'train_epochs', 1000)
-    max_train_samples = getattr(args, 'max_train_samples', 100)
+    train_epochs = getattr(args, 'train_epochs', 100)
+    max_train_samples = getattr(args, 'max_train_samples', 10)
     max_eval_samples = getattr(args, 'max_eval_samples', 10)
     
     # Initialize wandb if enabled
@@ -604,7 +604,7 @@ def main():
         position_dim=9,
         hidden_dim=64,
         context_embed_dim=32,
-        mask_dims=[]  # No masking
+        mask_dims=args.mask_dims
     ).to(args.device)
     
     # Prepare datasets
@@ -620,8 +620,8 @@ def main():
         train_dataset, [train_size, val_size]
     )
     
-    train_loader = DataLoader(train_split, batch_size=32, shuffle=True, collate_fn=collate_pairwise)
-    val_loader = DataLoader(val_split, batch_size=32, shuffle=False, collate_fn=collate_pairwise)
+    train_loader = DataLoader(train_split, batch_size=args.batch_size, shuffle=True, collate_fn=collate_pairwise)
+    val_loader = DataLoader(val_split, batch_size=args.batch_size, shuffle=False, collate_fn=collate_pairwise)
     
     nn_acc = train_scorer_model(nn_model, train_loader, val_loader, args.device, epochs=train_epochs)
     trained_models["SimplifiedNN"] = {"model": nn_model, "train_acc": nn_acc}
@@ -632,7 +632,7 @@ def main():
         position_dim=9,
         hidden_dim=64,
         context_embed_dim=32,
-        mask_dims=[],  # No masking
+        mask_dims=args.mask_dims,
         num_heads=4,
         num_layers=2
     ).to(args.device)
