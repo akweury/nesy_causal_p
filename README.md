@@ -131,7 +131,7 @@ python -m src.analysis_results --model principle --model GRM --principle continu
 
 ```
 ### Grp Comparison
-python -m src.elvis_exp.grp_comparison --remote --device 5
+python -m src.elvis_exp.grp_comparison --remote --device 6
 
 
 ---

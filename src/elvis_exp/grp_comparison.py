@@ -576,12 +576,6 @@ def evaluate_model_on_dataset(model, model_name, obj_model, data_loader, princip
         recall = recall_score(all_labels_np, pairwise_preds, zero_division=0)
         f1 = f1_score(all_labels_np, pairwise_preds, zero_division=0)
         
-        metrics['accuracy'] = accuracy
-        metrics['precision'] = precision
-        metrics['recall'] = recall
-        metrics['f1'] = f1
-        metrics['total_pairs'] = len(all_probs)
-        
         # Find optimal threshold for diagnostics
         best_threshold = 0.5
         best_acc = 0
@@ -592,16 +586,43 @@ def evaluate_model_on_dataset(model, model_name, obj_model, data_loader, princip
                 best_acc = acc
                 best_threshold = thresh
         
-        print(f"\n{model_name} Pairwise Results:")
-        if total_detected > 0:
-            print(f"  Object Matching: {total_matched}/{total_detected} ({total_matched/total_detected*100:.1f}%)")
-        print(f"  Total Pairs Evaluated: {len(all_probs)}")
-        
         # Diagnostic: Check label and prediction distributions
         num_true_positive = int(all_labels_np.sum())
         num_true_negative = len(all_labels_np) - num_true_positive
         num_pred_positive = int(pairwise_preds.sum())
         num_pred_negative = len(pairwise_preds) - num_pred_positive
+
+        # Compute confusion matrix elements
+        tp = ((pairwise_preds == 1) & (all_labels_np == 1)).sum()
+        fp = ((pairwise_preds == 1) & (all_labels_np == 0)).sum()
+        tn = ((pairwise_preds == 0) & (all_labels_np == 0)).sum()
+        fn = ((pairwise_preds == 0) & (all_labels_np == 1)).sum()
+
+        # Store all metrics
+        metrics['accuracy'] = accuracy
+        metrics['precision'] = precision
+        metrics['recall'] = recall
+        metrics['f1'] = f1
+        metrics['total_pairs'] = len(all_probs)
+        metrics['num_pred_positive'] = num_pred_positive
+        metrics['num_pred_negative'] = num_pred_negative
+        metrics['num_true_positive'] = num_true_positive
+        metrics['num_true_negative'] = num_true_negative
+        metrics['avg_prob'] = float(all_probs_np.mean())
+        metrics['std_prob'] = float(all_probs_np.std())
+        metrics['min_prob'] = float(all_probs_np.min())
+        metrics['max_prob'] = float(all_probs_np.max())
+        metrics['tp'] = int(tp)
+        metrics['fp'] = int(fp)
+        metrics['tn'] = int(tn)
+        metrics['fn'] = int(fn)
+        metrics['best_threshold'] = float(best_threshold)
+        metrics['best_acc'] = float(best_acc)
+
+        print(f"\n{model_name} Pairwise Results:")
+        if total_detected > 0:
+            print(f"  Object Matching: {total_matched}/{total_detected} ({total_matched/total_detected*100:.1f}%)")
+        print(f"  Total Pairs Evaluated: {len(all_probs)}")
         
         print(f"\n  Distribution Analysis:")
         print(f"    True Labels:  Positive={num_true_positive} ({num_true_positive/len(all_labels_np)*100:.1f}%), "
@@ -611,13 +632,31 @@ def evaluate_model_on_dataset(model, model_name, obj_model, data_loader, princip
         print(f"    Avg Probability: {all_probs_np.mean():.4f} (std: {all_probs_np.std():.4f})")
         print(f"    Prob Range: [{all_probs_np.min():.4f}, {all_probs_np.max():.4f}]")
         
+
+        print(f"\n  Confusion Matrix:")
+        print(f"    True Positives (TP):  {tp}")
+        print(f"    False Positives (FP): {fp}")
+        print(f"    True Negatives (TN):  {tn}")
+        print(f"    False Negatives (FN): {fn}")
+        print(f"    --> Model predicting everything as negative: {num_pred_positive == 0}")
+
         print(f"\n  Metrics:")
-        print(f"    Accuracy:  {accuracy:.4f}")
-        print(f"    Precision: {precision:.4f}")
-        print(f"    Recall:    {recall:.4f}")
+        print(f"    Accuracy:  {accuracy:.4f} = (TP + TN) / Total = ({tp} + {tn}) / {len(all_labels_np)}")
+        print(f"    Precision: {precision:.4f} = TP / (TP + FP) = {tp} / ({tp} + {fp})")
+        print(f"    Recall:    {recall:.4f} = TP / (TP + FN) = {tp} / ({tp} + {fn})")
         print(f"    F1 Score:  {f1:.4f}")
         print(f"  Current Threshold: {grp_threshold:.1f}")
         print(f"  Optimal Threshold: {best_threshold:.1f} (Acc: {best_acc:.4f})")
+
+        # Critical warning if model is not predicting positives
+        if num_pred_positive == 0:
+            print(f"\n  ⚠️  CRITICAL WARNING: Model is predicting ALL pairs as negative (different groups)!")
+            print(f"     This means all probabilities are below threshold {grp_threshold}")
+            print(f"     Possible causes:")
+            print(f"       1. Model hasn't learned to predict positive pairs")
+            print(f"       2. Threshold {grp_threshold} is too high")
+            print(f"       3. Train/test distribution mismatch")
+            print(f"       4. Model outputs are collapsed/saturated")
     else:
         # No pairwise data
         metrics['accuracy'] = 0.0
@@ -634,18 +673,19 @@ def main():
     args = args_utils.get_args()
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     # args.mask_dims = ["color", "shape"]  # No masking for these models
-    args.mask_dims = ["shape", "color"]  # Mask shape and label to force reliance on position and color
+    args.mask_dims = ["contour"]  # Mask shape and label to force reliance on position and color
     # Print device info
     print(f"Using device: {args.device}")
     # Get principle (default to 'similarity' if not specified)
+    args.principle = "closure"
     train_principle = getattr(args, 'principle', 'similarity')
     
     # Get wandb setting (default to False)
     use_wandb = getattr(args, 'use_wandb', False)
     
     # Get training settingsd
-    train_epochs = getattr(args, 'train_epochs', 100)
-    max_train_samples = getattr(args, 'max_train_samples', 10)
+    train_epochs = getattr(args, 'train_epochs', 50)
+    max_train_samples = getattr(args, 'max_train_samples', 100)
     max_eval_samples = getattr(args, 'max_eval_samples', 10)
     
     # Initialize wandb if enabled
@@ -805,6 +845,30 @@ def main():
               f"{metrics['accuracy']:<12.4f} {metrics['precision']:<12.4f} "
               f"{metrics['recall']:<12.4f} {metrics['f1']:<12.4f}")
     
+    # Print detailed diagnosis
+    print("\n" + "="*80)
+    print("DETAILED DIAGNOSIS - CONFUSION MATRIX & PREDICTIONS")
+    print("="*80)
+    for model_name, metrics in all_results.items():
+        print(f"\n{model_name}:")
+        print(f"  Confusion Matrix: TP={metrics.get('tp', 0)}, FP={metrics.get('fp', 0)}, "
+              f"TN={metrics.get('tn', 0)}, FN={metrics.get('fn', 0)}")
+        print(f"  Predictions: Positive={metrics.get('num_pred_positive', 0)}, "
+              f"Negative={metrics.get('num_pred_negative', 0)}")
+        print(f"  Ground Truth: Positive={metrics.get('num_true_positive', 0)}, "
+              f"Negative={metrics.get('num_true_negative', 0)}")
+        print(f"  Probability Stats: Mean={metrics.get('avg_prob', 0):.4f}, "
+              f"Std={metrics.get('std_prob', 0):.4f}, "
+              f"Range=[{metrics.get('min_prob', 0):.4f}, {metrics.get('max_prob', 0):.4f}]")
+        print(f"  Best Threshold: {metrics.get('best_threshold', 0.5):.2f} "
+              f"(Acc={metrics.get('best_acc', 0):.4f})")
+
+        # Identify issues
+        if metrics.get('num_pred_positive', 0) == 0:
+            print(f"  ⚠️  Issue: Model predicts ALL negatives (all probs < 0.5)")
+        if metrics.get('tp', 0) == 0:
+            print(f"  ⚠️  Issue: Zero true positives - model never correctly predicts same-group pairs")
+
     # Find best models
     best_f1 = max(all_results.items(), key=lambda x: x[1]['f1'])
     best_acc = max(all_results.items(), key=lambda x: x[1]['accuracy'])

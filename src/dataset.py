@@ -306,7 +306,7 @@ class GrbDataset(Dataset):
                         'color_b': od['color_b'],
                         'shape': shape_to_id(od["shape"]),
                         "group_id": od["group_id"] if "group_id" in od else None,
-                        "contour": extract_object_contour(img_path, od),  # Now enabled
+                        # "contour": extract_object_contour(img_path, od),  # Now enabled
                     } for od in json_data["img_data"]]
 
                     entry = {
