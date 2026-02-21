@@ -41,10 +41,17 @@ class TransformerPositionScorer(nn.Module):
         self.context_embed_dim = context_embed_dim
         self.mask_dims = mask_dims if mask_dims is not None else []
         self.num_heads = num_heads
-        
+
+        # Base (non-contour) dimensions: x,y,r,g,b + one-hot shape(4)
+        self.base_dim = 9
+        rem = self.position_dim - self.base_dim
+        if rem < 0 or (rem % 2) != 0:
+            raise ValueError(f"position_dim must be >= {self.base_dim} and have even leftover for contour (got {self.position_dim})")
+        self.contour_points = rem // 2
+
         # Create mask for dimensions
-        # Dimension layout: [x, y, r, g, b, shape_0, shape_1, shape_2, shape_3, contour[128]]
-        # Indices: position=0:2, color=2:5, shape=5:9, contour=9:137
+        # Dimension layout: [x, y, r, g, b, shape_0, shape_1, shape_2, shape_3, contour[2*num_points]]
+        # Indices: position=0:2, color=2:5, shape=5:9, contour=9:position_dim
         self.mask = torch.ones(position_dim)
         if 'position' in self.mask_dims:
             self.mask[0:2] = 0  # Mask x, y
@@ -53,7 +60,7 @@ class TransformerPositionScorer(nn.Module):
         if 'shape' in self.mask_dims:
             self.mask[5:9] = 0  # Mask shape one-hot
         if 'contour' in self.mask_dims:
-            self.mask[9:137] = 0  # Mask contour features
+            self.mask[self.base_dim:self.position_dim] = 0  # Mask contour features
 
         # Encoder for individual object positions
         self.position_encoder = nn.Sequential(

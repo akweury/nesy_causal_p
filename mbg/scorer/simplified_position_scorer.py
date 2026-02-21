@@ -37,11 +37,19 @@ class SimplifiedPositionScorer(nn.Module):
         self.position_dim = position_dim
         self.context_embed_dim = context_embed_dim
         self.mask_dims = mask_dims if mask_dims is not None else []
-        
+
+        # Base (non-contour) dimensions: x,y,r,g,b + one-hot shape(4)
+        self.base_dim = 9
+        # Validate position_dim => remaining dims must be even (x,y per contour point)
+        rem = self.position_dim - self.base_dim
+        if rem < 0 or (rem % 2) != 0:
+            raise ValueError(f"position_dim must be >= {self.base_dim} and have even leftover for contour (got {self.position_dim})")
+        self.contour_points = rem // 2
+
         # Create mask for dimensions
-        # Dimension layout: [x, y, r, g, b, shape_0, shape_1, shape_2, shape_3, contour[128]]
-        # Indices: position=0:2, color=2:5, shape=5:9, contour=9:137
-        self.mask = torch.ones(position_dim)
+        # Dimension layout: [x, y, r, g, b, shape_0, shape_1, shape_2, shape_3, contour[2*num_points]]
+        # Indices: position=0:2, color=2:5, shape=5:9, contour=9:position_dim
+        self.mask = torch.ones(self.position_dim)
         print(f"mask_dims: {self.mask_dims}")
         if 'position' in self.mask_dims:
             self.mask[0:2] = 0  # Mask x, y
@@ -50,11 +58,11 @@ class SimplifiedPositionScorer(nn.Module):
         if 'shape' in self.mask_dims:
             self.mask[5:9] = 0  # Mask shape one-hot
         if 'contour' in self.mask_dims:
-            self.mask[9:137] = 0  # Mask contour features
+            self.mask[self.base_dim:self.position_dim] = 0  # Mask contour features
 
         # Encoder for individual object positions
         self.position_encoder = nn.Sequential(
-            nn.Linear(position_dim, hidden_dim),
+            nn.Linear(self.position_dim, hidden_dim),
             nn.ReLU(inplace=True),
             nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU(inplace=True),
@@ -63,7 +71,7 @@ class SimplifiedPositionScorer(nn.Module):
         
         # Context aggregator
         self.context_aggregator = nn.Sequential(
-            nn.Linear(position_dim, hidden_dim),
+            nn.Linear(self.position_dim, hidden_dim),
             nn.ReLU(inplace=True),
             nn.Linear(hidden_dim, context_embed_dim),
         )

@@ -118,7 +118,7 @@ def shape_to_id_clevr(name):
     return n
 
 
-def extract_object_contour(image_path, object_data, num_points=64):
+def extract_object_contour(image_path, object_data, num_points=16):
     """
     Extract contour keypoints for an object from an image and normalize to fixed length.
 
@@ -133,7 +133,7 @@ def extract_object_contour(image_path, object_data, num_points=64):
                       Returns zeros if contour extraction fails
     """
     try:
-        # Load image
+        # Load image (BGR)
         img = cv2.imread(str(image_path))
         if img is None:
             return np.zeros((num_points, 2), dtype=np.float32)
@@ -141,21 +141,24 @@ def extract_object_contour(image_path, object_data, num_points=64):
         img_height, img_width = img.shape[:2]
 
         # Convert normalized coordinates to pixel coordinates
-        center_x_norm = float(object_data['x'])
-        center_y_norm = float(object_data['y'])
-        size_norm = float(object_data['size'])
+        center_x_norm = float(object_data.get('x', 0.5))
+        center_y_norm = float(object_data.get('y', 0.5))
+        size_norm = float(object_data.get('size', 0.1))
 
         center_x = int(center_x_norm * img_width)
         center_y = int(center_y_norm * img_height)
-        # Size is normalized, convert to pixels (assuming size is relative to image dimensions)
+        # Size is normalized, convert to pixels (assume size is relative to min(img_w, img_h))
         size = int(size_norm * min(img_width, img_height))
+        if size <= 0:
+            size = max(4, int(min(img_width, img_height) * 0.05))
 
-        # Define ROI around object (with some padding)
-        padding = int(size * 0.3)  # 30% padding
-        x1 = max(0, center_x - size - padding)
-        y1 = max(0, center_y - size - padding)
-        x2 = min(img_width, center_x + size + padding)
-        y2 = min(img_height, center_y + size + padding)
+        # Define ROI around object (with some padding). Use half-size to better center ROI.
+        half = max(1, size // 2)
+        padding = max(2, int(size * 0.3))  # 30% padding at least 2 pixels
+        x1 = max(0, center_x - half - padding)
+        y1 = max(0, center_y - half - padding)
+        x2 = min(img_width, center_x + half + padding)
+        y2 = min(img_height, center_y + half + padding)
 
         # Extract ROI
         roi = img[y1:y2, x1:x2]
@@ -165,23 +168,29 @@ def extract_object_contour(image_path, object_data, num_points=64):
         # Convert to grayscale
         gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
 
-        # Apply threshold to get binary image
-        # Use adaptive threshold for better results with varying lighting
-        binary = cv2.adaptiveThreshold(
-            gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-            cv2.THRESH_BINARY_INV, 11, 2
-        )
+        # Create binary mask using the project's bg value convention (background ~211)
+        # foreground pixels will be 255, background 0
+        binary = np.where(gray == 211, 0, 255).astype(np.uint8)
+
+        # If binary is mostly background, try a fallback adaptive threshold
+        if np.count_nonzero(binary) < 3:
+            binary = cv2.adaptiveThreshold(
+                gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                cv2.THRESH_BINARY_INV, 11, 2
+            )
 
         # Find contours
         contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-
         if not contours:
             return np.zeros((num_points, 2), dtype=np.float32)
 
-        # Get the largest contour (assumed to be the object)
-        largest_contour = max(contours, key=cv2.contourArea)
+        # Choose the largest contour by area (fallback to longest if area degenerate)
+        try:
+            largest_contour = max(contours, key=cv2.contourArea)
+        except Exception:
+            largest_contour = max(contours, key=lambda c: c.shape[0])
 
-        # Reshape contour to (N, 2)
+        # Reshape contour to (N, 2) and convert to float32
         contour_points = largest_contour.reshape(-1, 2).astype(np.float32)
 
         # Adjust coordinates back to original image space (pixel coordinates)
@@ -192,9 +201,12 @@ def extract_object_contour(image_path, object_data, num_points=64):
         contour_resampled = resample_contour(contour_points, num_points)
 
         # Normalize contour coordinates to 0-1 range
-        contour_normalized = contour_resampled.copy()
-        contour_normalized[:, 0] /= img_width   # Normalize x
-        contour_normalized[:, 1] /= img_height  # Normalize y
+        contour_normalized = contour_resampled.copy().astype(np.float32)
+        contour_normalized[:, 0] = contour_normalized[:, 0] / float(img_width)
+        contour_normalized[:, 1] = contour_normalized[:, 1] / float(img_height)
+
+        # Clip to [0,1]
+        np.clip(contour_normalized, 0.0, 1.0, out=contour_normalized)
 
         return contour_normalized
 
@@ -246,10 +258,103 @@ def resample_contour(contour_points, num_points):
     return resampled
 
 
+def extract_object_contour_from_image(img, object_data, num_points=64):
+    """
+    Like extract_object_contour but accepts a preloaded BGR image (numpy array) to avoid repeated disk IO.
+    """
+    try:
+        if img is None:
+            return np.zeros((num_points, 2), dtype=np.float32)
+
+        img_height, img_width = img.shape[:2]
+
+        # Convert normalized coordinates to pixel coordinates
+        center_x_norm = float(object_data.get('x', 0.5))
+        center_y_norm = float(object_data.get('y', 0.5))
+        size_norm = float(object_data.get('size', 0.1))
+
+        center_x = int(center_x_norm * img_width)
+        center_y = int(center_y_norm * img_height)
+        # Size is normalized, convert to pixels (assume size is relative to min(img_w, img_h))
+        size = int(size_norm * min(img_width, img_height))
+        if size <= 0:
+            size = max(4, int(min(img_width, img_height) * 0.05))
+
+        # Define ROI around object (with some padding). Use half-size to better center ROI.
+        half = max(1, size // 2)
+        padding = max(2, int(size * 0.3))  # 30% padding at least 2 pixels
+        x1 = max(0, center_x - half - padding)
+        y1 = max(0, center_y - half - padding)
+        x2 = min(img_width, center_x + half + padding)
+        y2 = min(img_height, center_y + half + padding)
+
+        # Extract ROI
+        roi = img[y1:y2, x1:x2]
+        if roi.size == 0:
+            return np.zeros((num_points, 2), dtype=np.float32)
+
+        # Convert to grayscale
+        gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+
+        # Create binary mask using the project's bg value convention (background ~211)
+        # foreground pixels will be 255, background 0
+        binary = np.where(gray == 211, 0, 255).astype(np.uint8)
+
+        # If binary is mostly background, try a fallback adaptive threshold
+        if np.count_nonzero(binary) < 3:
+            binary = cv2.adaptiveThreshold(
+                gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                cv2.THRESH_BINARY_INV, 11, 2
+            )
+
+        # Find contours
+        contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        if not contours:
+            return np.zeros((num_points, 2), dtype=np.float32)
+
+        # Choose the largest contour by area (fallback to longest if area degenerate)
+        try:
+            largest_contour = max(contours, key=cv2.contourArea)
+        except Exception:
+            largest_contour = max(contours, key=lambda c: c.shape[0])
+
+        # Reshape contour to (N, 2) and convert to float32
+        contour_points = largest_contour.reshape(-1, 2).astype(np.float32)
+
+        # Adjust coordinates back to original image space (pixel coordinates)
+        contour_points[:, 0] += x1
+        contour_points[:, 1] += y1
+
+        # Resample contour to fixed number of points (still in pixel coordinates)
+        contour_resampled = resample_contour(contour_points, num_points)
+
+        # Normalize contour coordinates to 0-1 range
+        contour_normalized = contour_resampled.copy().astype(np.float32)
+        contour_normalized[:, 0] = contour_normalized[:, 0] / float(img_width)
+        contour_normalized[:, 1] = contour_normalized[:, 1] / float(img_height)
+
+        # Clip to [0,1]
+        np.clip(contour_normalized, 0.0, 1.0, out=contour_normalized)
+
+        return contour_normalized
+
+    except Exception as e:
+        # If any error occurs, return zeros
+        print(f"Warning: Failed to extract contour from image: {e}")
+        return np.zeros((num_points, 2), dtype=np.float32)
+
+
 class GrbDataset(Dataset):
-    def __init__(self, folder_path: str, mode: str, val_split: float = 0.4, task_num=None):
+    def __init__(self, folder_path: str, mode: str, val_split: float = 0.4, task_num=None, position_dim: int = 137):
         assert mode in ["train", "val", "test"]
         self.samples = []
+        # position_dim defines the full feature vector length per object: base 9 + 2*contour_points
+        self.position_dim = position_dim
+        self.base_dim = 9
+        rem = self.position_dim - self.base_dim
+        if rem < 0 or (rem % 2) != 0:
+            raise ValueError(f"position_dim must be >= {self.base_dim} and have even leftover for contour (got {self.position_dim})")
+        self.contour_points = rem // 2
         if task_num is None:
             task_num = len(os.listdir(folder_path))
 
@@ -294,20 +399,30 @@ class GrbDataset(Dataset):
                         task_data["prop_color"] = json_data["prop_color"]
                         task_data["prop_size"] = json_data["prop_size"]
                         task_data["prop_count"] = json_data["prop_count"]
-                        
+
                         meta_data_loaded = True
 
-                    sym_data = [{
-                        'x': od['x'],
-                        'y': od['y'],
-                        'size': od['size'],
-                        'color_r': od['color_r'],
-                        'color_g': od['color_g'],
-                        'color_b': od['color_b'],
-                        'shape': shape_to_id(od["shape"]),
-                        "group_id": od["group_id"] if "group_id" in od else None,
-                        # "contour": extract_object_contour(img_path, od),  # Now enabled
-                    } for od in json_data["img_data"]]
+                    # Load image once per file to avoid repeated disk IO in extract_object_contour
+                    img = cv2.imread(img_path)
+                    if img is None:
+                        # fallback: skip this sample
+                        continue
+
+                    sym_data = []
+                    for od in json_data["img_data"]:
+                        # extract contour with number of points matching position_dim
+                        contour = extract_object_contour_from_image(img, od, num_points=self.contour_points)
+                        sym_data.append({
+                            'x': od['x'],
+                            'y': od['y'],
+                            'size': od['size'],
+                            'color_r': od['color_r'],
+                            'color_g': od['color_g'],
+                            'color_b': od['color_b'],
+                            'shape': shape_to_id(od["shape"]),
+                            "group_id": od["group_id"] if "group_id" in od else None,
+                            "contour": contour,
+                        })
 
                     entry = {
                         "image_path": img_path,
@@ -479,9 +594,9 @@ class MultiSplitTaskLoader(Dataset):
         )
 
 
-def load_combined_dataset(principle_path, task_num=None):
-    combined_dataset = MultiSplitTaskLoader(GrbDataset(principle_path / "train", "train", task_num=task_num),
-                                            GrbDataset(principle_path / "train", "val", task_num =task_num),
-                                            GrbDataset(principle_path / "test", "test", task_num = task_num))
+def load_combined_dataset(principle_path, task_num=None, position_dim: int = 137):
+    combined_dataset = MultiSplitTaskLoader(GrbDataset(principle_path / "train", "train", task_num=task_num, position_dim=position_dim),
+                                            GrbDataset(principle_path / "train", "val", task_num =task_num, position_dim=position_dim),
+                                            GrbDataset(principle_path / "test", "test", task_num = task_num, position_dim=position_dim))
     combined_loader = DataLoader(combined_dataset, batch_size=1, shuffle=False)
     return combined_loader

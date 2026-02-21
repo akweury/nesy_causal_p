@@ -142,8 +142,7 @@ def main_ablation():
     combined_loader = dataset.load_combined_dataset(principle_path)
     obj_model = eval_patch_classifier.load_model(args.device, args.remote)
     group_model = scorer_config.load_scorer_model(train_principle, args.device, args.remote)
-    group_model = load_gd_transformer_model(
-        train_principle, args.device, args.remote)
+    group_model = load_gd_transformer_model(train_principle, args.device, args.remote)
 
     wandb.init(project=f"neumann_{train_principle}",
                config=args.__dict__, name=args.exp_name)

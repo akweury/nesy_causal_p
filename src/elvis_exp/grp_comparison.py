@@ -66,9 +66,13 @@ def match_objects_to_gt(detected_objs, symbolic_data):
 
 
 class PairwiseGroupDataset(Dataset):
-    """Dataset for training pairwise grouping models (SimplifiedPositionScorer, TransformerPositionScorer)."""
-    
-    def __init__(self, data_loader, obj_model, device, max_tasks=100):
+    """Dataset for training pairwise grouping models (SimplifiedPositionScorer, TransformerPositionScorer).
+
+    Args:
+        position_dim: total feature length per object (9 base + 2*num_contour_points)
+    """
+
+    def __init__(self, data_loader, obj_model, device, max_tasks=100, position_dim: int = 137):
         """
         Args:
             data_loader: Combined data loader with train/val/test splits
@@ -78,7 +82,14 @@ class PairwiseGroupDataset(Dataset):
         """
         self.samples = []
         self.device = device
-        
+        self.position_dim = int(position_dim)
+        # base dims: x,y + r,g,b + shape_one_hot(4)
+        self.base_dim = 9
+        rem = self.position_dim - self.base_dim
+        if rem < 0 or (rem % 2) != 0:
+            raise ValueError(f"position_dim must be >= {self.base_dim} and have even leftover for contour (got {self.position_dim})")
+        self.contour_points = rem // 2
+
         # Local cache to avoid repeating expensive object detection for same image
         detection_cache = {}
 
@@ -126,7 +137,7 @@ class PairwiseGroupDataset(Dataset):
                     same_group = any(gt_i in group and gt_j in group for group in gt_groups)
                     label = 1.0 if same_group else 0.0
                     
-                    # Extract features: x, y, r, g, b, shape[4], contour[64*2]
+                    # Extract features: x, y, r, g, b, shape[4], contour[self.contour_points*2]
                     # Need to pass symbolic_data for contour information
                     feat_i = self._extract_features(objs[i], symbolic_data[gt_i])
                     feat_j = self._extract_features(objs[j], symbolic_data[gt_j])
@@ -185,14 +196,14 @@ class PairwiseGroupDataset(Dataset):
     
     def _extract_features(self, obj, sym_obj):
         """
-        Extract features from object: x, y, r, g, b, shape[4], contour[128].
+        Extract features from object: x, y, r, g, b, shape[4], contour[2*self.contour_points].
 
         Args:
             obj: Detected object with 's' (symbolic) data
             sym_obj: Ground truth symbolic data with contour information
 
         Returns:
-            List of features (total 137: 9 basic + 128 contour)
+            List of features (total self.position_dim)
         """
         symbolic = obj['s']
         x = symbolic['x']
@@ -205,19 +216,23 @@ class PairwiseGroupDataset(Dataset):
         else:
             shape_list = list(shape)
         
-        # Get contour from symbolic_data (shape: (64, 2) -> flatten to 128)
+        # Get contour from symbolic_data, flatten and pad/truncate to expected length
+        expected_len = self.contour_points * 2
         contour = sym_obj.get('contour', None)
         if contour is not None:
             if isinstance(contour, torch.Tensor):
                 contour_flat = contour.flatten().tolist()
             else:
-                # numpy array
-                contour_flat = contour.flatten().tolist()
+                contour_flat = np.asarray(contour).flatten().tolist()
+            # Adjust length
+            if len(contour_flat) < expected_len:
+                contour_flat = contour_flat + [0.0] * (expected_len - len(contour_flat))
+            elif len(contour_flat) > expected_len:
+                contour_flat = contour_flat[:expected_len]
         else:
-            # If no contour, use zeros (64 points * 2 coords = 128)
-            contour_flat = [0.0] * 128
+            contour_flat = [0.0] * expected_len
 
-        # Concatenate: x, y, r, g, b, shape[4], contour[128]
+        # Concatenate: x, y, r, g, b, shape[4], contour[2*contour_points]
         return [x, y, color[0], color[1], color[2]] + shape_list + contour_flat
 
     def __len__(self):
@@ -231,7 +246,7 @@ class PairwiseGroupDataset(Dataset):
         pos_j = torch.tensor(feat_j, dtype=torch.float32)
         
         if len(context_feats) == 0:
-            context = torch.zeros((0, 137), dtype=torch.float32)
+            context = torch.zeros((0, self.position_dim), dtype=torch.float32)
         else:
             context = torch.tensor(context_feats, dtype=torch.float32)
         
@@ -251,11 +266,12 @@ def collate_pairwise(batch):
     # Contexts have variable lengths - we'll process them separately in the model
     # For now, pad to max length in batch
     max_ctx_len = max(ctx.shape[0] for ctx in context_list)
-    
+    # derive feature dimension from pos_i tensors
+    feature_dim = pos_i_list[0].shape[0]
     padded_contexts = []
     for ctx in context_list:
         if ctx.shape[0] < max_ctx_len:
-            padding = torch.zeros((max_ctx_len - ctx.shape[0], 137), dtype=torch.float32)  # 137 features
+            padding = torch.zeros((max_ctx_len - ctx.shape[0], feature_dim), dtype=torch.float32)
             padded_ctx = torch.cat([ctx, padding], dim=0)
         else:
             padded_ctx = ctx
@@ -435,7 +451,7 @@ def evaluate_grouping_predictions(pred_groups_list, gt_groups_list, iou_threshol
     }
 
 
-def evaluate_model_on_dataset(model, model_name, obj_model, data_loader, principle, device, grp_threshold=0.5, max_samples=50):
+def evaluate_model_on_dataset(model, model_name, obj_model, data_loader, principle, device, grp_threshold=0.5, max_samples=50, position_dim: int = None):
     """Evaluate a model on pairwise grouping predictions."""
     total_detected = 0
     total_matched = 0
@@ -449,6 +465,18 @@ def evaluate_model_on_dataset(model, model_name, obj_model, data_loader, princip
 
     print(f"\nEvaluating {model_name} model...")
     
+    # Determine position_dim and contour_points (base dims: x,y,r,g,b + shape_one_hot(4) = 9)
+    if position_dim is None:
+        if hasattr(model, 'position_dim'):
+            position_dim = int(model.position_dim)
+        else:
+            position_dim = 137
+    base_dim = 9
+    rem = position_dim - base_dim
+    if rem < 0 or (rem % 2) != 0:
+        raise ValueError(f"position_dim must be >= {base_dim} and have even leftover for contour (got {position_dim})")
+    contour_points = rem // 2
+
     for task_idx, (train_data, val_data, test_data) in enumerate(data_loader):
         if task_idx >= max_samples:
             break
@@ -498,22 +526,26 @@ def evaluate_model_on_dataset(model, model_name, obj_model, data_loader, princip
                         else:
                             shape_list = list(shape)
 
-                        # Get contour from symbolic_data
+                        # Get contour from symbolic_data and flatten/pad/truncate to expected length
+                        expected_len = contour_points * 2
                         contour = sym_obj.get('contour', None)
                         if contour is not None:
                             if isinstance(contour, torch.Tensor):
                                 contour_flat = contour.flatten().tolist()
                             else:
-                                # numpy array
-                                contour_flat = contour.flatten().tolist()
+                                contour_flat = np.asarray(contour).flatten().tolist()
+                            if len(contour_flat) < expected_len:
+                                contour_flat = contour_flat + [0.0] * (expected_len - len(contour_flat))
+                            elif len(contour_flat) > expected_len:
+                                contour_flat = contour_flat[:expected_len]
                         else:
-                            contour_flat = [0.0] * 128
+                            contour_flat = [0.0] * expected_len
 
                         feat = [x, y, color[0], color[1], color[2]] + shape_list + contour_flat
                         features.append(feat)
                     else:
                         # If object not matched, use zeros
-                        features.append([0.0] * 137)
+                        features.append([0.0] * position_dim)
 
                 # Build batches for all valid pairs in this image to avoid per-pair forward calls
                 pos_i_batch = []
@@ -543,7 +575,7 @@ def evaluate_model_on_dataset(model, model_name, obj_model, data_loader, princip
                     padded_ctxs = []
                     for c in contexts_batch:
                         if len(c) < max_ctx_len:
-                            padding = [[0.0]*137] * (max_ctx_len - len(c))  # 137 features
+                            padding = [[0.0]*position_dim] * (max_ctx_len - len(c))  # position_dim features
                             padded = c + padding
                         else:
                             padded = c
@@ -673,11 +705,11 @@ def main():
     args = args_utils.get_args()
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     # args.mask_dims = ["color", "shape"]  # No masking for these models
-    args.mask_dims = ["contour"]  # Mask shape and label to force reliance on position and color
+    args.mask_dims = []  # Mask shape and label to force reliance on position and color
     # Print device info
     print(f"Using device: {args.device}")
     # Get principle (default to 'similarity' if not specified)
-    args.principle = "closure"
+    # args.principle = "closure"
     train_principle = getattr(args, 'principle', 'similarity')
     
     # Get wandb setting (default to False)
@@ -687,7 +719,14 @@ def main():
     train_epochs = getattr(args, 'train_epochs', 50)
     max_train_samples = getattr(args, 'max_train_samples', 100)
     max_eval_samples = getattr(args, 'max_eval_samples', 10)
-    
+    # Position dimension config (total features per object): default 137
+    position_dim = int(getattr(args, 'position_dim', 137))
+    base_dim = 9
+    rem = position_dim - base_dim
+    if rem < 0 or (rem % 2) != 0:
+        raise ValueError(f"position_dim must be >= {base_dim} and have even leftover for contour (got {position_dim})")
+    contour_points = rem // 2
+
     # Initialize wandb if enabled
     if use_wandb:
         wandb.init(
@@ -706,8 +745,8 @@ def main():
     # Load data
     principle_path = scorer_config.get_data_path(args.remote, train_principle)
     print(f"Loading combined dataset from: {principle_path}")
-    combined_loader = dataset.load_combined_dataset(principle_path, task_num=max(max_train_samples, max_eval_samples))
-    
+    combined_loader = dataset.load_combined_dataset(principle_path, task_num=max(max_train_samples, max_eval_samples), position_dim=position_dim)
+
     # Load object detection model
     obj_model = eval_patch_classifier.load_model(args.device, args.remote)
     
@@ -723,7 +762,7 @@ def main():
     # 1. Train SimplifiedNN
     print("\n[1/2] Training SimplifiedNN...")
     nn_model = SimplifiedPositionScorer(
-        position_dim=137,  # 9 basic features + 128 contour features (64 points * 2 coords)
+        position_dim=position_dim,
         hidden_dim=64,
         context_embed_dim=32,
         mask_dims=args.mask_dims
@@ -732,7 +771,7 @@ def main():
     # Prepare datasets
     print("  Preparing training data...")
     train_dataset = PairwiseGroupDataset(
-        combined_loader, obj_model, args.device, max_tasks=max_train_samples
+        combined_loader, obj_model, args.device, max_tasks=max_train_samples, position_dim=position_dim
     )
     
     # Split into train/val
@@ -769,7 +808,7 @@ def main():
     # 2. Train TransformerScorer
     print("\n[2/2] Training TransformerScorer...")
     transformer_model = TransformerPositionScorer(
-        position_dim=137,  # 9 basic features + 128 contour features (64 points * 2 coords)
+        position_dim=position_dim,
         hidden_dim=64,
         context_embed_dim=32,
         mask_dims=args.mask_dims,
@@ -795,8 +834,8 @@ def main():
     print("="*60)
     
     # Reload data for evaluation
-    combined_loader_eval = dataset.load_combined_dataset(principle_path, task_num=max_eval_samples)
-    
+    combined_loader_eval = dataset.load_combined_dataset(principle_path, task_num=max_eval_samples, position_dim=position_dim)
+
     # Store results
     all_results = {}
     
@@ -907,4 +946,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
